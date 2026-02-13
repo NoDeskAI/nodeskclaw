@@ -39,7 +39,15 @@ export OPENCLAW_LOG_LEVEL="${OPENCLAW_LOG_LEVEL:-info}"
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
   OPENCLAW_GATEWAY_TOKEN=$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")
   export OPENCLAW_GATEWAY_TOKEN
-  echo "[entrypoint] 未指定 OPENCLAW_GATEWAY_TOKEN，已自动生成: ${OPENCLAW_GATEWAY_TOKEN}"
+  echo "[entrypoint] =================================================="
+  echo "[entrypoint] 未指定 OPENCLAW_GATEWAY_TOKEN，已自动生成"
+  echo "[entrypoint] Token: ${OPENCLAW_GATEWAY_TOKEN}"
+  echo "[entrypoint]"
+  echo "[entrypoint] 访问控制台: http://localhost:${OPENCLAW_GATEWAY_PORT}/"
+  echo "[entrypoint] 登录时输入上面的 Token 即可"
+  echo "[entrypoint]"
+  echo "[entrypoint] 如需固定 Token，启动时加 -e OPENCLAW_GATEWAY_TOKEN=<你的Token>"
+  echo "[entrypoint] =================================================="
 fi
 
 if [ "${OPENCLAW_FORCE_RECONFIG:-false}" = "true" ]; then
