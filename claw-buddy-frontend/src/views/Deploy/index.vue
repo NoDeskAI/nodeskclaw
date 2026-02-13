@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
 import { useInstanceStore } from '@/stores/instance'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ import api, { API_BASE } from '@/services/api'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const instanceStore = useInstanceStore()
 
@@ -37,13 +39,27 @@ const form = ref({
   cpu_request: '500m',
   cpu_limit: '2000m',
   mem_request: '512Mi',
-  mem_limit: '2Gi',
+  mem_limit: '4Gi',
   service_type: 'ClusterIP',
   ingress_domain: '',
   storage_size: '100Gi',
   quota_cpu: '4',
   quota_mem: '8Gi',
 })
+
+/** 根据用户邮箱前缀 + 已有实例数量生成默认实例名称 */
+function generateDefaultName() {
+  const user = authStore.user
+  if (!user) return
+  let prefix = 'instance'
+  if (user.email) {
+    prefix = user.email.split('@')[0].replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  } else if (user.name) {
+    prefix = user.name.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  }
+  const count = instanceStore.instances.length + 1
+  form.value.name = `${prefix}_${count}`
+}
 
 // ── Quota presets ──
 const quotaPreset = ref<string>('medium')
@@ -130,10 +146,18 @@ const availableInstances = computed(() =>
   instanceStore.instances.map((i) => ({ id: i.id, name: i.name }))
 )
 
-onMounted(() => {
-  clusterStore.fetchClusters()
-  instanceStore.fetchInstances()
-  fetchImageTags()
+onMounted(async () => {
+  await Promise.all([
+    clusterStore.fetchClusters(),
+    instanceStore.fetchInstances(),
+    fetchImageTags(),
+  ])
+  // 自动生成实例名称
+  generateDefaultName()
+  // 默认选中最新的镜像 tag
+  if (imageTags.value.length > 0) {
+    form.value.image_version = imageTags.value[0]
+  }
 })
 
 function buildPayload() {
@@ -381,7 +405,9 @@ const yamlPreview = computed(() => {
           </div>
           <div>
             <label class="text-sm font-medium mb-1.5 block">副本数</label>
-            <Input v-model.number="form.replicas" type="number" min="1" max="10" />
+            <div class="h-9 flex items-center px-3 rounded-md border border-border bg-muted/30 text-sm font-mono">
+              {{ form.replicas }}
+            </div>
           </div>
         </div>
       </CardContent>
