@@ -9,6 +9,8 @@ set -euo pipefail
 #   2. 凭证注入   - 将环境变量中的凭证写入文件
 #   3. 缓存清理   - 清理 jiti 编译缓存
 #   4. 前台启动   - exec 让 Node.js 成为 PID 1，接收 K8s SIGTERM
+#
+# 注意: 不依赖 apt 包，用 node 替代 envsubst
 # =============================================================================
 
 OPENCLAW_DIR="/root/.openclaw"
@@ -18,26 +20,34 @@ CREDENTIALS_DIR="${OPENCLAW_DIR}/credentials"
 
 # ---- 1. 配置初始化 ----
 
-# 设置 envsubst 占位符的默认值（环境变量未设置时用这些）
+# 用 node 实现 envsubst（替换模板中的 ${VAR} 占位符）
+envsubst_node() {
+  node -e "
+    const fs = require('fs');
+    let t = fs.readFileSync('$1', 'utf8');
+    t = t.replace(/\\\$\{([^}]+)\}/g, (_, k) => process.env[k] ?? '');
+    fs.writeFileSync('$2', t);
+  "
+}
+
+# 设置默认值
 export OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 export OPENCLAW_GATEWAY_BIND="${OPENCLAW_GATEWAY_BIND:-lan}"
 export OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 export OPENCLAW_LOG_LEVEL="${OPENCLAW_LOG_LEVEL:-info}"
 
 if [ "${OPENCLAW_FORCE_RECONFIG:-false}" = "true" ]; then
-  # 强制重建：从模板重新生成配置（用于配置更新场景）
   echo "[entrypoint] OPENCLAW_FORCE_RECONFIG=true，从模板重新生成配置..."
   if [ -f "${TEMPLATE_FILE}" ]; then
-    envsubst < "${TEMPLATE_FILE}" > "${CONFIG_FILE}"
+    envsubst_node "${TEMPLATE_FILE}" "${CONFIG_FILE}"
     echo "[entrypoint] 配置已重新生成: ${CONFIG_FILE}"
   else
     echo "[entrypoint] 警告: 模板文件不存在 ${TEMPLATE_FILE}，跳过配置生成"
   fi
 elif [ ! -f "${CONFIG_FILE}" ]; then
-  # 首次部署：配置文件不存在，从模板生成
   echo "[entrypoint] 首次启动，从模板生成配置..."
   if [ -f "${TEMPLATE_FILE}" ]; then
-    envsubst < "${TEMPLATE_FILE}" > "${CONFIG_FILE}"
+    envsubst_node "${TEMPLATE_FILE}" "${CONFIG_FILE}"
     echo "[entrypoint] 配置已生成: ${CONFIG_FILE}"
   else
     echo "[entrypoint] 警告: 模板文件不存在 ${TEMPLATE_FILE}，将以无配置模式启动"
@@ -66,5 +76,4 @@ echo "[entrypoint]   绑定: ${OPENCLAW_GATEWAY_BIND}"
 echo "[entrypoint]   日志级别: ${OPENCLAW_LOG_LEVEL}"
 
 # exec 替换当前 shell 进程，让 Node.js 成为 PID 1
-# K8s 发 SIGTERM 时进程能正确接收并优雅关闭
 exec openclaw gateway --allow-unconfigured --bind lan
