@@ -14,18 +14,12 @@ _TIMEOUT = 10.0
 
 
 async def _get_registry_auth(db: AsyncSession) -> tuple[str, str] | None:
-    """从数据库读取镜像仓库的认证凭证，密码解密后返回 (username, password)。"""
+    """从数据库读取镜像仓库的认证凭证，返回 (username, password)。"""
     username = await get_config("registry_username", db)
-    encrypted_password = await get_config("registry_password", db)
-    if not username or not encrypted_password:
+    password = await get_config("registry_password", db)
+    if not username or not password:
         return None
-    try:
-        from app.core.security import decrypt_kubeconfig
-        password = decrypt_kubeconfig(encrypted_password)
-        return (username, password)
-    except Exception as e:
-        logger.warning("解密镜像仓库密码失败: %s", e)
-        return None
+    return (username, password)
 
 
 async def list_image_tags(

@@ -50,12 +50,6 @@ async def update_setting(
     if key not in _ALLOWED_KEYS:
         raise HTTPException(status_code=400, detail=f"不支持的配置项: {key}")
 
-    value = body.value
-    # 敏感字段加密存储
-    if key in _SENSITIVE_KEYS and value:
-        from app.core.security import encrypt_kubeconfig
-        value = encrypt_kubeconfig(value)
-
-    row = await config_service.set_config(key, value, db)
+    row = await config_service.set_config(key, body.value, db)
     display_value = "******" if key in _SENSITIVE_KEYS and row.value else row.value
     return ApiResponse(data={"key": row.key, "value": display_value})
