@@ -1,9 +1,0 @@
-# ClawBuddy 命名空间
-# 用途: ClawBuddy 管理平台自身运行的命名空间
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: clawbuddy
-  labels:
-    app.kubernetes.io/name: clawbuddy
-    app.kubernetes.io/managed-by: kubectl
