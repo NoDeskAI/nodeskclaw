@@ -1,0 +1,43 @@
+[project]
+name = "claw-buddy-backend"
+version = "0.1.0"
+description = "ClawBuddy - K8s visual management console for OpenClaw"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.18",
+    # Database (PostgreSQL)
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    # HTTP client (飞书 SSO)
+    "httpx>=0.28.0",
+    # Config
+    "pydantic-settings>=2.7.0",
+    # Encryption (KubeConfig AES-256-GCM)
+    "cryptography>=44.0.0",
+    # K8s
+    "kubernetes-asyncio>=31.1.0",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

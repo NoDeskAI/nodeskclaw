@@ -1,0 +1,55 @@
+---
+description: Git 提交规范
+globs: 
+alwaysApply: true
+---
+
+# Git 提交规范
+
+## 自动提交
+
+**每次完成一个有意义的改动后，主动提交 commit，不需要用户手动要求。**
+
+触发提交的时机：
+- 修复了一个 bug
+- 完成了一个功能
+- 完成了一次重构或优化
+- 修改了配置/规则文件
+
+## Commit Message 格式
+
+```
+<type>(<scope>): <subject>
+```
+
+- 冒号后面有空格
+- subject 必须使用中文
+- scope 选填，表示作用范围（如 frontend、backend、deploy、cluster、instance 等）
+
+### type 类型
+
+- `feat` - 新功能
+- `fix` - 修复 bug
+- `docs` - 文档注释
+- `style` - 代码格式（不影响运行的变动）
+- `refactor` - 重构、优化（既不增加新功能也不修复 bug）
+- `perf` - 性能优化
+- `test` - 增加测试
+- `chore` - 构建过程或辅助工具的变动
+- `revert` - 回退
+- `build` - 打包
+
+### 示例
+
+```
+feat(instance): 实例列表新增搜索和过滤功能
+fix(deploy): 修复 env_vars 存数据库未序列化的问题
+refactor(frontend): SSE 流 baseURL 统一走配置常量
+chore: 移除 Alembic 依赖，改用 create_all 建表
+```
+
+## 注意事项
+
+- 不要提交 `.env` 文件（包含密钥）
+- 不要提交 `node_modules/`、`__pycache__/`、`.venv/` 等
+- 一次 commit 尽量只做一件事，保持原子性

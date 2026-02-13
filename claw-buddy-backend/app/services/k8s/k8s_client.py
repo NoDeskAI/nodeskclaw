@@ -1,0 +1,343 @@
+"""K8sClient: single-cluster operation wrapper around kubernetes-asyncio."""
+
+import logging
+from datetime import datetime, timezone
+from typing import AsyncIterator
+
+from kubernetes_asyncio import client as k8s_client, watch
+
+logger = logging.getLogger(__name__)
+
+
+class K8sClient:
+    """Wraps kubernetes-asyncio APIs for a single cluster."""
+
+    def __init__(self, api_client: k8s_client.ApiClient):
+        self._api = api_client
+        self.core = k8s_client.CoreV1Api(api_client)
+        self.apps = k8s_client.AppsV1Api(api_client)
+        self.networking = k8s_client.NetworkingV1Api(api_client)
+        self.version_api = k8s_client.VersionApi(api_client)
+        self.custom = k8s_client.CustomObjectsApi(api_client)
+
+    # ── Cluster-level ────────────────────────────────
+
+    async def test_connection(self) -> dict:
+        info = await self.version_api.get_code()
+        return {"version": info.git_version, "platform": info.platform}
+
+    async def get_cluster_overview(self) -> dict:
+        nodes = await self.core.list_node()
+        pods = await self.core.list_pod_for_all_namespaces()
+
+        node_count = len(nodes.items)
+        node_ready = sum(
+            1
+            for n in nodes.items
+            if any(c.type == "Ready" and c.status == "True" for c in (n.status.conditions or []))
+        )
+
+        cpu_total = sum(_parse_cpu(n.status.capacity.get("cpu", "0")) for n in nodes.items)
+        mem_total = sum(_parse_memory(n.status.capacity.get("memory", "0")) for n in nodes.items)
+        cpu_alloc = sum(_parse_cpu(n.status.allocatable.get("cpu", "0")) for n in nodes.items)
+        mem_alloc = sum(_parse_memory(n.status.allocatable.get("memory", "0")) for n in nodes.items)
+        cpu_used = cpu_total - cpu_alloc
+        mem_used = mem_total - mem_alloc
+
+        return {
+            "node_count": node_count,
+            "node_ready": node_ready,
+            "cpu_total": f"{cpu_total}m",
+            "cpu_used": f"{cpu_used}m",
+            "cpu_percent": round(cpu_used / max(cpu_total, 1) * 100, 1),
+            "memory_total": f"{mem_total}Mi",
+            "memory_used": f"{mem_used}Mi",
+            "memory_percent": round(mem_used / max(mem_total, 1) * 100, 1),
+            "pod_count": len(pods.items),
+        }
+
+    async def list_nodes(self) -> list[dict]:
+        """列出集群所有节点及其资源使用概况。"""
+        nodes = await self.core.list_node()
+        # 尝试获取 metrics
+        node_metrics: dict[str, dict] = {}
+        try:
+            metrics_data = await self.custom.list_cluster_custom_object(
+                "metrics.k8s.io", "v1beta1", "nodes"
+            )
+            for item in metrics_data.get("items", []):
+                name = item["metadata"]["name"]
+                usage = item.get("usage", {})
+                node_metrics[name] = {
+                    "cpu_used": _parse_cpu(usage.get("cpu", "0")),
+                    "mem_used": _parse_memory(usage.get("memory", "0")),
+                }
+        except Exception:
+            pass  # metrics-server may not be available
+
+        results = []
+        for n in nodes.items:
+            name = n.metadata.name
+            conditions = n.status.conditions or []
+            is_ready = any(c.type == "Ready" and c.status == "True" for c in conditions)
+            addresses = n.status.addresses or []
+            internal_ip = next(
+                (a.address for a in addresses if a.type == "InternalIP"), None
+            )
+
+            cpu_cap = _parse_cpu(n.status.capacity.get("cpu", "0"))
+            mem_cap = _parse_memory(n.status.capacity.get("memory", "0"))
+
+            metrics = node_metrics.get(name, {})
+
+            results.append({
+                "name": name,
+                "status": "Ready" if is_ready else "NotReady",
+                "ip": internal_ip,
+                "cpu_capacity": f"{cpu_cap}m",
+                "cpu_used": f"{metrics.get('cpu_used', 0)}m",
+                "mem_capacity": f"{mem_cap}Mi",
+                "mem_used": f"{metrics.get('mem_used', 0)}Mi",
+                "os": n.status.node_info.os_image if n.status.node_info else None,
+                "kubelet_version": n.status.node_info.kubelet_version if n.status.node_info else None,
+            })
+        return results
+
+    # ── Namespace ────────────────────────────────────
+
+    async def list_namespaces(self) -> list[str]:
+        ns_list = await self.core.list_namespace()
+        return [ns.metadata.name for ns in ns_list.items]
+
+    async def ensure_namespace(self, name: str):
+        try:
+            await self.core.read_namespace(name)
+        except k8s_client.ApiException as e:
+            if e.status == 404:
+                body = k8s_client.V1Namespace(
+                    metadata=k8s_client.V1ObjectMeta(
+                        name=name,
+                        labels={"app.kubernetes.io/managed-by": "clawbuddy"},
+                    )
+                )
+                await self.core.create_namespace(body)
+            else:
+                raise
+
+    # ── Deployment ───────────────────────────────────
+
+    async def get_deployment(self, ns: str, name: str):
+        return await self.apps.read_namespaced_deployment(name, ns)
+
+    async def get_deployment_status(self, ns: str, name: str) -> dict:
+        dep = await self.apps.read_namespaced_deployment_status(name, ns)
+        status = dep.status
+        return {
+            "replicas": status.replicas or 0,
+            "ready_replicas": status.ready_replicas or 0,
+            "updated_replicas": status.updated_replicas or 0,
+            "available_replicas": status.available_replicas or 0,
+            "conditions": [
+                {"type": c.type, "status": c.status, "message": c.message}
+                for c in (status.conditions or [])
+            ],
+        }
+
+    async def scale_deployment(self, ns: str, name: str, replicas: int):
+        body = {"spec": {"replicas": replicas}}
+        await self.apps.patch_namespaced_deployment_scale(name, ns, body)
+
+    async def restart_deployment(self, ns: str, name: str):
+        """Trigger rolling restart by patching annotation."""
+        body = {
+            "spec": {
+                "template": {
+                    "metadata": {
+                        "annotations": {
+                            "clawbuddy/restartedAt": datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                }
+            }
+        }
+        await self.apps.patch_namespaced_deployment(name, ns, body)
+
+    async def update_deployment_image(self, ns: str, name: str, image: str):
+        body = {"spec": {"template": {"spec": {"containers": [{"name": name, "image": image}]}}}}
+        await self.apps.patch_namespaced_deployment(name, ns, body)
+
+    # ── Pod ──────────────────────────────────────────
+
+    async def list_pods(self, ns: str, label_selector: str = "") -> list[dict]:
+        resp = await self.core.list_namespaced_pod(ns, label_selector=label_selector)
+        results = []
+        for pod in resp.items:
+            containers = []
+            for cs in pod.status.container_statuses or []:
+                containers.append(
+                    {
+                        "name": cs.name,
+                        "ready": cs.ready,
+                        "restart_count": cs.restart_count,
+                        "state": _container_state(cs.state),
+                    }
+                )
+            results.append(
+                {
+                    "name": pod.metadata.name,
+                    "phase": pod.status.phase,
+                    "node": pod.spec.node_name,
+                    "ip": pod.status.pod_ip,
+                    "containers": containers,
+                    "created_at": pod.metadata.creation_timestamp.isoformat() if pod.metadata.creation_timestamp else None,
+                }
+            )
+        return results
+
+    async def get_pod_logs(
+        self, ns: str, pod: str, container: str | None = None, tail_lines: int = 200
+    ) -> str:
+        return await self.core.read_namespaced_pod_log(
+            pod, ns, container=container, tail_lines=tail_lines
+        )
+
+    async def stream_pod_logs(
+        self, ns: str, pod: str, container: str | None = None, tail_lines: int = 50,
+        since_seconds: int | None = None, since_time: str | None = None,
+    ) -> AsyncIterator[str]:
+        """Yield log lines as async iterator, with optional time range."""
+        kwargs: dict = {
+            "container": container,
+            "follow": True,
+            "_preload_content": False,
+        }
+        if since_seconds:
+            kwargs["since_seconds"] = since_seconds
+        elif since_time:
+            # K8s API accepts RFC3339 timestamp
+            kwargs["since_time"] = since_time
+        else:
+            kwargs["tail_lines"] = tail_lines
+
+        resp = await self.core.read_namespaced_pod_log(pod, ns, **kwargs)
+        async for line in resp.content:
+            yield line.decode("utf-8", errors="replace").rstrip("\n")
+
+    # ── Watch ────────────────────────────────────────
+
+    async def watch_pods(self, ns: str, label_selector: str = "") -> AsyncIterator[dict]:
+        w = watch.Watch()
+        async for event in w.stream(
+            self.core.list_namespaced_pod, ns, label_selector=label_selector, timeout_seconds=0
+        ):
+            yield {"type": event["type"], "pod": event["object"].metadata.name, "phase": event["object"].status.phase}
+
+    async def watch_events(self, ns: str) -> AsyncIterator[dict]:
+        w = watch.Watch()
+        async for event in w.stream(
+            self.core.list_namespaced_event, ns, timeout_seconds=0
+        ):
+            obj = event["object"]
+            yield {
+                "type": event["type"],
+                "reason": obj.reason,
+                "message": obj.message,
+                "involved": obj.involved_object.name if obj.involved_object else None,
+                "count": obj.count,
+                "last_timestamp": obj.last_timestamp.isoformat() if obj.last_timestamp else None,
+            }
+
+    # ── Metrics ──────────────────────────────────────
+
+    async def list_pod_metrics(self, ns: str) -> list[dict]:
+        try:
+            data = await self.custom.list_namespaced_custom_object(
+                "metrics.k8s.io", "v1beta1", ns, "pods"
+            )
+            results = []
+            for item in data.get("items", []):
+                containers = item.get("containers", [])
+                results.append(
+                    {
+                        "name": item["metadata"]["name"],
+                        "cpu": sum(_parse_cpu(c.get("usage", {}).get("cpu", "0")) for c in containers),
+                        "memory": sum(
+                            _parse_memory(c.get("usage", {}).get("memory", "0")) for c in containers
+                        ),
+                    }
+                )
+            return results
+        except Exception:
+            return []
+
+    # ── Service / Ingress ────────────────────────────
+
+    async def get_service(self, ns: str, name: str):
+        return await self.core.read_namespaced_service(name, ns)
+
+    async def get_ingress(self, ns: str, name: str):
+        return await self.networking.read_namespaced_ingress(name, ns)
+
+    # ── Helpers ──────────────────────────────────────
+
+    async def create_or_skip(self, create_fn, *args, **kwargs):
+        """Create a resource; skip if already exists (409)."""
+        try:
+            return await create_fn(*args, **kwargs)
+        except k8s_client.ApiException as e:
+            if e.status == 409:
+                logger.info("Resource already exists, skipping.")
+            else:
+                raise
+
+    async def apply(self, create_fn, patch_fn, ns: str, name: str, body):
+        """Create or update (idempotent)."""
+        try:
+            return await create_fn(ns, body)
+        except k8s_client.ApiException as e:
+            if e.status == 409:
+                return await patch_fn(name, ns, body)
+            raise
+
+
+# ── Utility functions ────────────────────────────────
+
+def _parse_cpu(value: str) -> int:
+    """Parse CPU to millicores."""
+    if value.endswith("m"):
+        return int(value[:-1])
+    if value.endswith("n"):
+        return int(value[:-1]) // 1_000_000
+    try:
+        return int(float(value) * 1000)
+    except ValueError:
+        return 0
+
+
+def _parse_memory(value: str) -> int:
+    """Parse memory to MiB."""
+    value = value.strip()
+    if value.endswith("Ki"):
+        return int(value[:-2]) // 1024
+    if value.endswith("Mi"):
+        return int(value[:-2])
+    if value.endswith("Gi"):
+        return int(value[:-2]) * 1024
+    if value.endswith("Ti"):
+        return int(value[:-2]) * 1024 * 1024
+    try:
+        return int(value) // (1024 * 1024)
+    except ValueError:
+        return 0
+
+
+def _container_state(state) -> str:
+    if state is None:
+        return "unknown"
+    if state.running:
+        return "running"
+    if state.waiting:
+        return state.waiting.reason or "waiting"
+    if state.terminated:
+        return state.terminated.reason or "terminated"
+    return "unknown"

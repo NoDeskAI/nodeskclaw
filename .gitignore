@@ -1,0 +1,61 @@
+# ========================
+# 排除的子项目（独立仓库）
+# ========================
+openclaw/
+vibecraft/
+
+# ========================
+# 环境 & 密钥
+# ========================
+.env
+.env.local
+.env.*.local
+
+# ========================
+# Python / 后端
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+.eggs/
+*.egg
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ========================
+# Node / 前端
+# ========================
+node_modules/
+dist/
+dist-ssr/
+*.local
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================
+# 编辑器 & 系统
+# ========================
+.DS_Store
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# ========================
+# 数据文件
+# ========================
+*.db
+*.sqlite3
+data/

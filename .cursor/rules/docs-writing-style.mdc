@@ -1,0 +1,55 @@
+---
+description: 设计文档写作规范 — 重架构轻代码
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# 设计文档写作规范
+
+## 核心原则
+
+文档的目的是**讲清楚设计决策和架构**，不是提前写代码。代码到实现阶段再写。
+
+## 该写什么
+
+- 架构图、流程图（ASCII / Mermaid）
+- 模块职责划分、分层关系
+- 数据模型（ER 图、字段表格）
+- API 接口约定（路径、请求/响应 Schema）
+- 调用链路、时序关系
+- 关键设计决策和取舍理由
+- 配置项、环境变量清单
+
+## 不该写什么
+
+- 完整的类/函数实现代码
+- 超过 10 行的代码块
+- 逐行注释的代码示例
+
+## 代码使用原则
+
+- 代码只用于**说明接口签名或数据结构**，不写实现逻辑
+- 每个代码块不超过 10 行，只展示关键签名
+- 用伪代码或文字描述代替完整实现
+
+```python
+# ✅ 好 — 只展示接口签名
+class K8sClientManager:
+    async def get_or_create(cluster_id, kubeconfig_enc) -> ApiClient: ...
+    async def rebuild(cluster_id, kubeconfig_enc) -> ApiClient: ...
+    async def remove(cluster_id): ...
+
+# ❌ 坏 — 在文档里写完整实现
+class K8sClientManager:
+    def __init__(self, crypto):
+        self._crypto = crypto
+        self._entries = {}
+        self._lock = asyncio.Lock()
+
+    async def get_or_create(self, cluster_id, kubeconfig_enc):
+        async with self._lock:
+            entry = self._entries.get(cluster_id)
+            if entry is None:
+                entry = await self._create_entry(...)
+            # ... 50 more lines ...
+```
