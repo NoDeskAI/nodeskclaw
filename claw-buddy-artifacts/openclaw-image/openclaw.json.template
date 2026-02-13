@@ -1,0 +1,21 @@
+{
+  // OpenClaw 配置模板
+  // 由 docker-entrypoint.sh 通过 envsubst 替换 ${} 占位符后生成 openclaw.json
+  // 完整 schema: src/config/zod-schema.ts (OpenClawSchema)
+
+  "gateway": {
+    "port": ${OPENCLAW_GATEWAY_PORT},
+    "bind": "${OPENCLAW_GATEWAY_BIND}",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "controlUi": {
+      "enabled": true
+    }
+  },
+
+  "logging": {
+    "level": "${OPENCLAW_LOG_LEVEL}"
+  }
+}
