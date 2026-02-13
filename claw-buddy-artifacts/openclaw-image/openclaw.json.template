@@ -11,7 +11,8 @@
       "token": "${OPENCLAW_GATEWAY_TOKEN}"
     },
     "controlUi": {
-      "enabled": true
+      "enabled": true,
+      "allowInsecureAuth": true
     }
   },
 
