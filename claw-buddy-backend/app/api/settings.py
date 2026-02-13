@@ -13,7 +13,10 @@ from app.services import config_service
 router = APIRouter()
 
 # 允许通过 API 管理的配置 key 白名单
-_ALLOWED_KEYS = {"image_registry"}
+_ALLOWED_KEYS = {"image_registry", "registry_username", "registry_password"}
+
+# 敏感字段：读取时脱敏，写入时加密
+_SENSITIVE_KEYS = {"registry_password"}
 
 
 class ConfigUpdateBody(PydanticBaseModel):
@@ -29,6 +32,10 @@ async def get_settings(
     all_configs = await config_service.get_all_configs(db)
     # 只返回白名单内的 key
     filtered = {k: v for k, v in all_configs.items() if k in _ALLOWED_KEYS}
+    # 敏感字段脱敏：有值显示 "******"，无值显示 None
+    for k in _SENSITIVE_KEYS:
+        if k in filtered and filtered[k]:
+            filtered[k] = "******"
     return ApiResponse(data=filtered)
 
 
@@ -43,5 +50,12 @@ async def update_setting(
     if key not in _ALLOWED_KEYS:
         raise HTTPException(status_code=400, detail=f"不支持的配置项: {key}")
 
-    row = await config_service.set_config(key, body.value, db)
-    return ApiResponse(data={"key": row.key, "value": row.value})
+    value = body.value
+    # 敏感字段加密存储
+    if key in _SENSITIVE_KEYS and value:
+        from app.core.security import encrypt_kubeconfig
+        value = encrypt_kubeconfig(value)
+
+    row = await config_service.set_config(key, value, db)
+    display_value = "******" if key in _SENSITIVE_KEYS and row.value else row.value
+    return ApiResponse(data={"key": row.key, "value": display_value})

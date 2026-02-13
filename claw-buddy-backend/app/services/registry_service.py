@@ -13,6 +13,21 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 10.0
 
 
+async def _get_registry_auth(db: AsyncSession) -> tuple[str, str] | None:
+    """从数据库读取镜像仓库的认证凭证，密码解密后返回 (username, password)。"""
+    username = await get_config("registry_username", db)
+    encrypted_password = await get_config("registry_password", db)
+    if not username or not encrypted_password:
+        return None
+    try:
+        from app.core.security import decrypt_kubeconfig
+        password = decrypt_kubeconfig(encrypted_password)
+        return (username, password)
+    except Exception as e:
+        logger.warning("解密镜像仓库密码失败: %s", e)
+        return None
+
+
 async def list_image_tags(
     db: AsyncSession,
     registry_url: str | None = None,
@@ -20,7 +35,7 @@ async def list_image_tags(
     """
     Query a Docker Registry v2 for available tags.
     Returns list of {"tag": str, "digest": str | None}.
-    优先使用 registry_url 参数，其次从数据库/环境变量读取 image_registry 配置。
+    优先使用 registry_url 参数，其次从数据库读取 image_registry 配置。
     """
     if not registry_url:
         registry_url = await get_config("image_registry", db)
@@ -29,7 +44,7 @@ async def list_image_tags(
     if not registry:
         return []
 
-    # Parse registry URL: expect format like "registry.example.com/repo"
+    # Parse registry URL: expect format like "registry.example.com/namespace/repo"
     if "://" in registry:
         url = registry
     else:
@@ -48,9 +63,15 @@ async def list_image_tags(
 
     tags_url = f"{base_url}/v2/{repo}/tags/list"
 
+    # 从数据库读取认证凭证
+    auth = await _get_registry_auth(db)
+
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, verify=False) as client:
-            resp = await client.get(tags_url)
+            kwargs: dict = {}
+            if auth:
+                kwargs["auth"] = auth
+            resp = await client.get(tags_url, **kwargs)
             resp.raise_for_status()
             data = resp.json()
 

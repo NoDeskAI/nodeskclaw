@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { LogOut, User, Package, Save, Plug, Loader2 } from 'lucide-vue-next'
+import { LogOut, User, Package, Save, Plug, Loader2, Lock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import api from '@/services/api'
 
@@ -15,7 +15,10 @@ const router = useRouter()
 
 // ── 镜像仓库配置 ──
 const registryUrl = ref('')
-const registryUrlDirty = ref(false)
+const registryUsername = ref('')
+const registryPassword = ref('')
+const registryHasPassword = ref(false)
+const registryDirty = ref(false)
 const registrySaving = ref(false)
 const registryTesting = ref(false)
 const registryTags = ref<string[]>([])
@@ -36,7 +39,11 @@ async function loadSettings() {
     const res = await api.get('/settings')
     const data = res.data.data as Record<string, string | null>
     registryUrl.value = data.image_registry || ''
-    registryUrlDirty.value = false
+    registryUsername.value = data.registry_username || ''
+    // 密码后端返回 "******" 表示已配置
+    registryHasPassword.value = data.registry_password === '******'
+    registryPassword.value = ''
+    registryDirty.value = false
   } catch {
     // 首次可能没有配置，不报错
   } finally {
@@ -44,15 +51,26 @@ async function loadSettings() {
   }
 }
 
-/** 保存镜像仓库地址到数据库 */
+/** 保存镜像仓库全部配置到数据库 */
 async function handleSaveRegistry() {
   registrySaving.value = true
   try {
-    await api.put('/settings/image_registry', {
-      value: registryUrl.value.trim() || null,
-    })
-    registryUrlDirty.value = false
-    toast.success('镜像仓库地址已保存')
+    // 并行保存三项配置
+    const promises = [
+      api.put('/settings/image_registry', { value: registryUrl.value.trim() || null }),
+      api.put('/settings/registry_username', { value: registryUsername.value.trim() || null }),
+    ]
+    // 密码只在用户填了新值时才保存（空值 = 不修改已有密码）
+    if (registryPassword.value) {
+      promises.push(api.put('/settings/registry_password', { value: registryPassword.value }))
+    }
+    await Promise.all(promises)
+    registryDirty.value = false
+    registryPassword.value = ''
+    if (registryUsername.value.trim()) {
+      registryHasPassword.value = true
+    }
+    toast.success('镜像仓库配置已保存')
     // 保存后自动测试连接
     await handleTestRegistry()
   } catch {
@@ -89,9 +107,8 @@ async function handleTestRegistry() {
   }
 }
 
-function onRegistryInput(val: string | number) {
-  registryUrl.value = String(val)
-  registryUrlDirty.value = true
+function onRegistryFieldChange() {
+  registryDirty.value = true
 }
 
 onMounted(async () => {
@@ -158,39 +175,69 @@ onMounted(async () => {
         <!-- 地址输入 -->
         <div>
           <label class="text-sm font-medium mb-1.5 block">仓库地址</label>
-          <div class="flex gap-2">
-            <Input
-              :model-value="registryUrl"
-              placeholder="如：registry.example.com/org/image"
-              class="flex-1 font-mono text-sm"
-              :disabled="settingsLoading"
-              @update:model-value="onRegistryInput"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="registryTesting || !registryUrl.trim()"
-              class="shrink-0"
-              @click="handleTestRegistry"
-            >
-              <Loader2 v-if="registryTesting" class="w-3.5 h-3.5 mr-1 animate-spin" />
-              <Plug v-else class="w-3.5 h-3.5 mr-1" />
-              测试连接
-            </Button>
-            <Button
-              size="sm"
-              :disabled="registrySaving || !registryUrlDirty"
-              class="shrink-0"
-              @click="handleSaveRegistry"
-            >
-              <Loader2 v-if="registrySaving" class="w-3.5 h-3.5 mr-1 animate-spin" />
-              <Save v-else class="w-3.5 h-3.5 mr-1" />
-              保存
-            </Button>
-          </div>
+          <Input
+            v-model="registryUrl"
+            placeholder="如：registry.example.com/namespace/repo"
+            class="font-mono text-sm"
+            :disabled="settingsLoading"
+            @update:model-value="onRegistryFieldChange"
+          />
           <p class="text-xs text-muted-foreground mt-1">
-            Docker Registry v2 地址，如 https://registry.example.com/org/image
+            Docker Registry v2 地址，如 nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-base
           </p>
+        </div>
+
+        <!-- 认证凭证 -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">用户名</label>
+            <Input
+              v-model="registryUsername"
+              placeholder="Registry 用户名"
+              class="font-mono text-sm"
+              :disabled="settingsLoading"
+              @update:model-value="onRegistryFieldChange"
+            />
+          </div>
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">
+              密码
+              <span v-if="registryHasPassword" class="text-xs text-muted-foreground font-normal ml-1">
+                (已配置，留空不修改)
+              </span>
+            </label>
+            <Input
+              v-model="registryPassword"
+              type="password"
+              :placeholder="registryHasPassword ? '留空不修改' : 'Registry 密码'"
+              class="font-mono text-sm"
+              :disabled="settingsLoading"
+              @update:model-value="onRegistryFieldChange"
+            />
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="registryTesting || !registryUrl.trim()"
+            @click="handleTestRegistry"
+          >
+            <Loader2 v-if="registryTesting" class="w-3.5 h-3.5 mr-1 animate-spin" />
+            <Plug v-else class="w-3.5 h-3.5 mr-1" />
+            测试连接
+          </Button>
+          <Button
+            size="sm"
+            :disabled="registrySaving || !registryDirty"
+            @click="handleSaveRegistry"
+          >
+            <Loader2 v-if="registrySaving" class="w-3.5 h-3.5 mr-1 animate-spin" />
+            <Save v-else class="w-3.5 h-3.5 mr-1" />
+            保存
+          </Button>
         </div>
 
         <!-- 连接状态 -->
