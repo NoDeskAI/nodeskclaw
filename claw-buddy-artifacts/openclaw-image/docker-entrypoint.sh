@@ -33,8 +33,14 @@ envsubst_node() {
 # 设置默认值
 export OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 export OPENCLAW_GATEWAY_BIND="${OPENCLAW_GATEWAY_BIND:-lan}"
-export OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 export OPENCLAW_LOG_LEVEL="${OPENCLAW_LOG_LEVEL:-info}"
+
+# 未指定 Token 时自动生成一个随机 Token
+if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  OPENCLAW_GATEWAY_TOKEN=$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")
+  export OPENCLAW_GATEWAY_TOKEN
+  echo "[entrypoint] 未指定 OPENCLAW_GATEWAY_TOKEN，已自动生成: ${OPENCLAW_GATEWAY_TOKEN}"
+fi
 
 if [ "${OPENCLAW_FORCE_RECONFIG:-false}" = "true" ]; then
   echo "[entrypoint] OPENCLAW_FORCE_RECONFIG=true，从模板重新生成配置..."
