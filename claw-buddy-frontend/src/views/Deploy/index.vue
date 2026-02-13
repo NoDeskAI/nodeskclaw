@@ -54,12 +54,30 @@ const quotaPresets = [
   { key: 'custom', label: '自定义', cpu: '', mem: '' },
 ]
 
+// 预设档位对应的容器资源配置
+const presetResources: Record<string, { cpu_request: string; cpu_limit: string; mem_request: string; mem_limit: string; storage_size: string }> = {
+  small:  { cpu_request: '250m',  cpu_limit: '1000m', mem_request: '256Mi', mem_limit: '1Gi',  storage_size: '50Gi' },
+  medium: { cpu_request: '500m',  cpu_limit: '2000m', mem_request: '512Mi', mem_limit: '4Gi',  storage_size: '100Gi' },
+  large:  { cpu_request: '1000m', cpu_limit: '4000m', mem_request: '1Gi',   mem_limit: '8Gi',  storage_size: '200Gi' },
+}
+
+const isCustomQuota = computed(() => quotaPreset.value === 'custom')
+
 function selectQuotaPreset(key: string) {
   quotaPreset.value = key
   const preset = quotaPresets.find((p) => p.key === key)
   if (preset && key !== 'custom') {
     form.value.quota_cpu = preset.cpu
     form.value.quota_mem = preset.mem
+    // 联动更新容器资源
+    const res = presetResources[key]
+    if (res) {
+      form.value.cpu_request = res.cpu_request
+      form.value.cpu_limit = res.cpu_limit
+      form.value.mem_request = res.mem_request
+      form.value.mem_limit = res.mem_limit
+      form.value.storage_size = res.storage_size
+    }
   }
 }
 
@@ -396,39 +414,56 @@ const yamlPreview = computed(() => {
           </div>
         </div>
 
-        <div v-if="quotaPreset === 'custom'" class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Quota CPU</label>
-            <Input v-model="form.quota_cpu" placeholder="4" />
+        <!-- 自定义模式：可编辑 -->
+        <template v-if="isCustomQuota">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">Namespace CPU 配额</label>
+              <Input v-model="form.quota_cpu" placeholder="4" />
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">Namespace 内存配额</label>
+              <Input v-model="form.quota_mem" placeholder="8Gi" />
+            </div>
           </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Quota Memory</label>
-            <Input v-model="form.quota_mem" placeholder="8Gi" />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">CPU Request</label>
+              <Input v-model="form.cpu_request" placeholder="500m" />
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">CPU Limit</label>
+              <Input v-model="form.cpu_limit" placeholder="2000m" />
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">Memory Request</label>
+              <Input v-model="form.mem_request" placeholder="512Mi" />
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">Memory Limit</label>
+              <Input v-model="form.mem_limit" placeholder="2Gi" />
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">存储大小</label>
+              <Input v-model="form.storage_size" placeholder="100Gi" />
+            </div>
           </div>
-        </div>
+        </template>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">CPU Request</label>
-            <Input v-model="form.cpu_request" placeholder="500m" />
+        <!-- 预设模式：只读展示 -->
+        <template v-else>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm bg-muted/30 rounded-lg p-4">
+            <div class="text-muted-foreground">Namespace 配额</div>
+            <div class="font-medium font-mono">{{ form.quota_cpu }}c / {{ form.quota_mem }}</div>
+            <div class="text-muted-foreground">CPU (Request / Limit)</div>
+            <div class="font-medium font-mono">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
+            <div class="text-muted-foreground">内存 (Request / Limit)</div>
+            <div class="font-medium font-mono">{{ form.mem_request }} / {{ form.mem_limit }}</div>
+            <div class="text-muted-foreground">存储大小</div>
+            <div class="font-medium font-mono">{{ form.storage_size }}</div>
           </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">CPU Limit</label>
-            <Input v-model="form.cpu_limit" placeholder="2000m" />
-          </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Memory Request</label>
-            <Input v-model="form.mem_request" placeholder="512Mi" />
-          </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Memory Limit</label>
-            <Input v-model="form.mem_limit" placeholder="2Gi" />
-          </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Storage Size</label>
-            <Input v-model="form.storage_size" placeholder="100Gi" />
-          </div>
-        </div>
+          <p class="text-xs text-muted-foreground">选择"自定义"可手动修改资源配额</p>
+        </template>
       </CardContent>
     </Card>
 
