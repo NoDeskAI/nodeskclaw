@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
@@ -67,7 +67,6 @@ const quotaPresets = [
   { key: 'small', label: '小型', cpu: '2', mem: '4Gi' },
   { key: 'medium', label: '中型', cpu: '4', mem: '8Gi' },
   { key: 'large', label: '大型', cpu: '8', mem: '16Gi' },
-  { key: 'custom', label: '自定义', cpu: '', mem: '' },
 ]
 
 // 预设档位对应的容器资源配置
@@ -77,12 +76,10 @@ const presetResources: Record<string, { cpu_request: string; cpu_limit: string; 
   large:  { cpu_request: '1000m', cpu_limit: '4000m', mem_request: '1Gi',   mem_limit: '8Gi',  storage_size: '200Gi' },
 }
 
-const isCustomQuota = computed(() => quotaPreset.value === 'custom')
-
 function selectQuotaPreset(key: string) {
   quotaPreset.value = key
   const preset = quotaPresets.find((p) => p.key === key)
-  if (preset && key !== 'custom') {
+  if (preset) {
     form.value.quota_cpu = preset.cpu
     form.value.quota_mem = preset.mem
     // 联动更新容器资源
@@ -420,7 +417,7 @@ const yamlPreview = computed(() => {
         <!-- Quota presets -->
         <div>
           <label class="text-sm font-medium mb-2 block">Namespace 配额档位</label>
-          <div class="grid grid-cols-4 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <button
               v-for="preset in quotaPresets"
               :key="preset.key"
@@ -440,56 +437,17 @@ const yamlPreview = computed(() => {
           </div>
         </div>
 
-        <!-- 自定义模式：可编辑 -->
-        <template v-if="isCustomQuota">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">Namespace CPU 配额</label>
-              <Input v-model="form.quota_cpu" placeholder="4" />
-            </div>
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">Namespace 内存配额</label>
-              <Input v-model="form.quota_mem" placeholder="8Gi" />
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">CPU Request</label>
-              <Input v-model="form.cpu_request" placeholder="500m" />
-            </div>
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">CPU Limit</label>
-              <Input v-model="form.cpu_limit" placeholder="2000m" />
-            </div>
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">Memory Request</label>
-              <Input v-model="form.mem_request" placeholder="512Mi" />
-            </div>
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">Memory Limit</label>
-              <Input v-model="form.mem_limit" placeholder="2Gi" />
-            </div>
-            <div>
-              <label class="text-sm font-medium mb-1.5 block">存储大小</label>
-              <Input v-model="form.storage_size" placeholder="100Gi" />
-            </div>
-          </div>
-        </template>
-
-        <!-- 预设模式：只读展示 -->
-        <template v-else>
-          <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm bg-muted/30 rounded-lg p-4">
-            <div class="text-muted-foreground">Namespace 配额</div>
-            <div class="font-medium font-mono">{{ form.quota_cpu }}c / {{ form.quota_mem }}</div>
-            <div class="text-muted-foreground">CPU (Request / Limit)</div>
-            <div class="font-medium font-mono">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
-            <div class="text-muted-foreground">内存 (Request / Limit)</div>
-            <div class="font-medium font-mono">{{ form.mem_request }} / {{ form.mem_limit }}</div>
-            <div class="text-muted-foreground">存储大小</div>
-            <div class="font-medium font-mono">{{ form.storage_size }}</div>
-          </div>
-          <p class="text-xs text-muted-foreground">选择"自定义"可手动修改资源配额</p>
-        </template>
+        <!-- 只读展示当前配额 -->
+        <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm bg-muted/30 rounded-lg p-4">
+          <div class="text-muted-foreground">Namespace 配额</div>
+          <div class="font-medium font-mono">{{ form.quota_cpu }}c / {{ form.quota_mem }}</div>
+          <div class="text-muted-foreground">CPU (Request / Limit)</div>
+          <div class="font-medium font-mono">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
+          <div class="text-muted-foreground">内存 (Request / Limit)</div>
+          <div class="font-medium font-mono">{{ form.mem_request }} / {{ form.mem_limit }}</div>
+          <div class="text-muted-foreground">存储大小</div>
+          <div class="font-medium font-mono">{{ form.storage_size }}</div>
+        </div>
       </CardContent>
     </Card>
 
