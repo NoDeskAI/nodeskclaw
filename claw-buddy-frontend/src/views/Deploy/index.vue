@@ -14,7 +14,7 @@ import {
 import AdvancedConfigPanel from '@/components/AdvancedConfigPanel.vue'
 import {
   Rocket, CheckCircle, XCircle, AlertTriangle, Loader2,
-  ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, RefreshCw,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import api from '@/services/api'
@@ -101,17 +101,30 @@ function selectQuotaPreset(key: string) {
 const imageTags = ref<string[]>([])
 const loadingTags = ref(false)
 
-async function fetchImageTags() {
+async function fetchImageTags(autoSelect = false) {
   loadingTags.value = true
   try {
     const res = await api.get('/registry/tags')
     const tags = res.data.data as { tag: string }[]
     imageTags.value = tags.map((t) => t.tag)
+    // 自动选中最新 tag（第一个，后端已按倒序排好）
+    if (autoSelect && imageTags.value.length > 0) {
+      form.value.image_version = imageTags.value[0] ?? ''
+    }
   } catch {
     // Registry not configured or unreachable -- allow manual input
     imageTags.value = []
   } finally {
     loadingTags.value = false
+  }
+}
+
+async function refreshImageTags() {
+  await fetchImageTags(true)
+  if (imageTags.value.length > 0) {
+    toast.info(`已刷新，最新版本: ${imageTags.value[0]}`)
+  } else {
+    toast.warning('未获取到镜像 Tag')
   }
 }
 
@@ -200,16 +213,12 @@ onMounted(async () => {
   await Promise.all([
     clusterStore.fetchClusters(),
     instanceStore.fetchInstances(),
-    fetchImageTags(),
+    fetchImageTags(true),
     fetchBaseDomain(),
     fetchStorageClasses(),
   ])
   // 自动生成实例名称
   generateDefaultName()
-  // 默认选中最新的镜像 tag
-  if (imageTags.value.length > 0) {
-    form.value.image_version = imageTags.value[0]
-  }
 })
 
 function buildPayload() {
@@ -454,19 +463,35 @@ const yamlPreview = computed(() => {
             <Input v-model="form.name" placeholder="如: prod-main" />
           </div>
           <div>
-            <label class="text-sm font-medium mb-1.5 block">镜像版本 *</label>
-            <div class="relative">
-              <Input
-                v-model="form.image_version"
-                :placeholder="loadingTags ? '加载中...' : '选择或输入版本'"
-                list="image-tag-list"
-              />
-              <datalist id="image-tag-list">
-                <option v-for="tag in imageTags" :key="tag" :value="tag" />
-              </datalist>
+            <div class="flex items-center gap-1.5 mb-1.5">
+              <label class="text-sm font-medium">镜像版本 *</label>
+              <button
+                class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-muted transition-colors"
+                :class="{ 'animate-spin': loadingTags }"
+                :disabled="loadingTags"
+                title="刷新镜像版本列表"
+                @click="refreshImageTags"
+              >
+                <RefreshCw class="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
             </div>
+            <Select v-if="imageTags.length > 0" v-model="form.image_version" :key="imageTags.length">
+              <SelectTrigger class="w-full font-mono text-sm">
+                <SelectValue placeholder="选择镜像版本" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="tag in imageTags" :key="tag" :value="tag">
+                  {{ tag }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              v-else
+              v-model="form.image_version"
+              :placeholder="loadingTags ? '加载中...' : '手动输入版本号'"
+            />
             <p v-if="imageTags.length === 0 && !loadingTags" class="text-xs text-muted-foreground mt-1">
-              未配置镜像仓库，请手动输入版本号
+              未配置镜像仓库或无可用 Tag，请手动输入
             </p>
           </div>
           <div>

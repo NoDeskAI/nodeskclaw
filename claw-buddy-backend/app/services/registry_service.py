@@ -132,14 +132,17 @@ async def list_image_tags(
             raw_tags = data.get("tags") or []
 
             def _sort_key(t: str) -> tuple:
+                """排序: latest 最前，其余按字符串倒序（日期类 tag 新的在前）。"""
                 if t == "latest":
-                    return (0, t)
-                if t.startswith("v") and any(c.isdigit() for c in t):
-                    return (1, t)
-                return (2, t)
+                    return (0, "")
+                return (1, t)
 
-            raw_tags.sort(key=_sort_key)
-            return [{"tag": t, "digest": None} for t in raw_tags]
+            raw_tags.sort(key=_sort_key, reverse=False)
+            # 除 latest 外倒序排列，让最新 tag 排在最前
+            latest = [t for t in raw_tags if t == "latest"]
+            others = sorted([t for t in raw_tags if t != "latest"], reverse=True)
+            sorted_tags = latest + others
+            return [{"tag": t, "digest": None} for t in sorted_tags]
 
     except httpx.HTTPStatusError as e:
         logger.warning("Registry 返回错误 %s: %s", e.response.status_code, tags_url)
