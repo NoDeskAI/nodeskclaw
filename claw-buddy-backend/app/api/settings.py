@@ -15,7 +15,7 @@ router = APIRouter()
 # 允许通过 API 管理的配置 key 白名单
 _ALLOWED_KEYS = {
     "image_registry", "registry_username", "registry_password",
-    "ingress_base_domain", "tls_secret_name",
+    "ingress_base_domain", "ingress_subdomain_suffix", "tls_secret_name",
     "allowed_storage_classes",
 }
 

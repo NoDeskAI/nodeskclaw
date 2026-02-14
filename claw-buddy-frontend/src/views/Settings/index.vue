@@ -46,6 +46,7 @@ async function loadSettings() {
     registryDirty.value = false
     // 网络路由配置
     ingressBaseDomain.value = data.ingress_base_domain || ''
+    ingressSubdomainSuffix.value = data.ingress_subdomain_suffix || ''
     tlsSecretName.value = data.tls_secret_name || ''
     networkDirty.value = false
   } catch {
@@ -117,6 +118,7 @@ function onRegistryFieldChange() {
 
 // ── 网络路由配置 ──
 const ingressBaseDomain = ref('')
+const ingressSubdomainSuffix = ref('')
 const tlsSecretName = ref('')
 const networkDirty = ref(false)
 const networkSaving = ref(false)
@@ -130,6 +132,7 @@ async function handleSaveNetwork() {
   try {
     await Promise.all([
       api.put('/settings/ingress_base_domain', { value: ingressBaseDomain.value.trim() || null }),
+      api.put('/settings/ingress_subdomain_suffix', { value: ingressSubdomainSuffix.value.trim() || null }),
       api.put('/settings/tls_secret_name', { value: tlsSecretName.value.trim() || null }),
     ])
     networkDirty.value = false
@@ -361,33 +364,48 @@ onMounted(async () => {
       </CardHeader>
       <CardContent class="space-y-4">
         <p class="text-xs text-muted-foreground">
-          配置子域名自动路由，部署实例时自动生成 Ingress 规则（如 instance.nodesk.tech）
+          配置子域名自动路由，部署实例时自动生成 Ingress 规则
         </p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">基础域名</label>
-            <Input
-              v-model="ingressBaseDomain"
-              placeholder="如：nodesk.tech"
-              class="font-mono text-sm"
-              :disabled="settingsLoading"
-              @update:model-value="onNetworkFieldChange"
-            />
-            <p class="text-xs text-muted-foreground mt-1">
-              需提前配置 DNS 泛解析 *.域名 指向火山云 SLB
-            </p>
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">基础域名</label>
+              <Input
+                v-model="ingressBaseDomain"
+                placeholder="如：nodesk.tech"
+                class="font-mono text-sm"
+                :disabled="settingsLoading"
+                @update:model-value="onNetworkFieldChange"
+              />
+              <p class="text-xs text-muted-foreground mt-1">
+                需提前配置 DNS 泛解析 *.域名 指向 CLB
+              </p>
+            </div>
+            <div>
+              <label class="text-sm font-medium mb-1.5 block">子域名后缀（可选）</label>
+              <Input
+                v-model="ingressSubdomainSuffix"
+                placeholder="如：clawbuddy"
+                class="font-mono text-sm"
+                :disabled="settingsLoading"
+                @update:model-value="onNetworkFieldChange"
+              />
+              <p class="text-xs text-muted-foreground mt-1">
+                设置后域名格式为 {name}-{suffix}.{domain}
+              </p>
+            </div>
           </div>
           <div>
             <label class="text-sm font-medium mb-1.5 block">TLS Secret 名称</label>
             <Input
               v-model="tlsSecretName"
               placeholder="如：wildcard-nodesk-tls"
-              class="font-mono text-sm"
+              class="font-mono text-sm w-1/2"
               :disabled="settingsLoading"
               @update:model-value="onNetworkFieldChange"
             />
             <p class="text-xs text-muted-foreground mt-1">
-              K8s 中通配符证书 Secret 的名称
+              K8s 中通配符证书 Secret 的名称（Ingress Controller 的 --default-ssl-certificate 参数指定）
             </p>
           </div>
         </div>
@@ -403,7 +421,7 @@ onMounted(async () => {
           </Button>
         </div>
         <div v-if="ingressBaseDomain" class="text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
-          实例部署后访问地址示例：<span class="font-mono text-foreground">https://&lt;instance-name&gt;.{{ ingressBaseDomain }}</span>
+          实例部署后访问地址示例：<span class="font-mono text-foreground">https://&lt;instance-name&gt;{{ ingressSubdomainSuffix ? `-${ingressSubdomainSuffix}` : '' }}.{{ ingressBaseDomain }}</span>
         </div>
       </CardContent>
     </Card>

@@ -422,9 +422,13 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             # Step 7: 创建 Ingress（自动子域名路由）
             _publish(7, DEPLOY_STEPS[6])
             ingress_base_domain = await get_config("ingress_base_domain", db)
+            subdomain_suffix = await get_config("ingress_subdomain_suffix", db)
             tls_secret_name = await get_config("tls_secret_name", db)
             if ingress_base_domain:
-                ingress_host = f"{ctx.name}.{ingress_base_domain}"
+                if subdomain_suffix:
+                    ingress_host = f"{ctx.name}-{subdomain_suffix}.{ingress_base_domain}"
+                else:
+                    ingress_host = f"{ctx.name}.{ingress_base_domain}"
                 ing = build_ingress(
                     ctx.name, ctx.namespace, ingress_host, labels,
                     tls_secret_name=tls_secret_name,

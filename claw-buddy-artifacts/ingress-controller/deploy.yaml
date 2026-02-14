@@ -188,6 +188,9 @@ spec:
             - --ingress-class=nginx
             - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
             - --watch-ingress-without-class=true
+            # 默认 TLS 证书：解决跨 Namespace 引用 Secret 的问题
+            # 所有 Ingress 自动使用此证书，无需在每个实例 Namespace 重复创建
+            - --default-ssl-certificate=ingress-nginx/wildcard-nodesk-tls
           env:
             - name: POD_NAME
               valueFrom:

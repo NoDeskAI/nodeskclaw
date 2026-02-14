@@ -130,14 +130,17 @@ async function refreshImageTags() {
 
 // ── 基础域名（从 Settings 加载，用于展示访问地址）──
 const baseDomain = ref('')
+const subdomainSuffix = ref('')
 
 async function fetchBaseDomain() {
   try {
     const res = await api.get('/settings')
     const data = res.data.data as Record<string, string | null>
     baseDomain.value = data.ingress_base_domain || ''
+    subdomainSuffix.value = data.ingress_subdomain_suffix || ''
   } catch {
     baseDomain.value = ''
+    subdomainSuffix.value = ''
   }
 }
 
@@ -175,8 +178,10 @@ async function fetchStorageClasses() {
 
 const accessUrl = computed(() => {
   if (!form.value.name || !baseDomain.value) return ''
-  const proto = baseDomain.value ? 'https' : 'http'
-  return `${proto}://${form.value.name}.${baseDomain.value}`
+  const host = subdomainSuffix.value
+    ? `${form.value.name}-${subdomainSuffix.value}.${baseDomain.value}`
+    : `${form.value.name}.${baseDomain.value}`
+  return `https://${host}`
 })
 
 // ── Env vars ──
