@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 async def list_instances(db: AsyncSession, cluster_id: str | None = None) -> list[InstanceInfo]:
-    query = select(Instance).order_by(Instance.created_at.desc())
+    query = select(Instance).where(Instance.deleted_at.is_(None)).order_by(Instance.created_at.desc())
     if cluster_id:
         query = query.where(Instance.cluster_id == cluster_id)
     result = await db.execute(query)
@@ -29,7 +29,9 @@ async def list_instances(db: AsyncSession, cluster_id: str | None = None) -> lis
 
 
 async def get_instance(instance_id: str, db: AsyncSession) -> Instance:
-    result = await db.execute(select(Instance).where(Instance.id == instance_id))
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, Instance.deleted_at.is_(None))
+    )
     instance = result.scalar_one_or_none()
     if not instance:
         raise NotFoundError("实例不存在")
@@ -41,7 +43,9 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
     instance = await get_instance(instance_id, db)
 
     # Get cluster for k8s connection
-    cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = cluster_result.scalar_one_or_none()
 
     detail = InstanceDetail(
@@ -86,36 +90,44 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
 
 
 async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool = True):
-    """Delete instance from DB and optionally from K8s."""
+    """逻辑删除实例：标记 deleted_at，从 K8s 删除整个命名空间（级联删除所有资源）。"""
     instance = await get_instance(instance_id, db)
 
     if delete_k8s:
-        cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+        cluster_result = await db.execute(
+            select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+        )
         cluster = cluster_result.scalar_one_or_none()
         if cluster and cluster.kubeconfig_encrypted:
             try:
                 api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
                 k8s = K8sClient(api_client)
-                # Delete deployment and service
+                # 删除整个命名空间（级联删除 Deployment、Service、Ingress、PVC、ConfigMap 等所有资源）
                 try:
-                    await k8s.apps.delete_namespaced_deployment(instance.name, instance.namespace)
+                    await k8s.core.delete_namespace(instance.namespace)
+                    logger.info("已删除命名空间 %s（实例 %s）", instance.namespace, instance.name)
                 except Exception:
-                    pass
-                try:
-                    await k8s.core.delete_namespaced_service(instance.name, instance.namespace)
-                except Exception:
-                    pass
-                # PVC is NOT deleted by default (user data protection)
+                    # 命名空间可能已不存在，忽略
+                    logger.warning("删除命名空间 %s 失败，可能已不存在", instance.namespace)
             except Exception as e:
-                logger.warning("Failed to delete K8s resources for %s: %s", instance.name, e)
+                logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
 
-    await db.delete(instance)
+    # 逻辑删除实例
+    instance.soft_delete()
+    # 级联逻辑删除关联的部署记录
+    await db.execute(
+        update(DeployRecord)
+        .where(DeployRecord.instance_id == instance.id, DeployRecord.deleted_at.is_(None))
+        .values(deleted_at=func.now())
+    )
     await db.commit()
 
 
 async def scale_instance(instance_id: str, replicas: int, db: AsyncSession):
     instance = await get_instance(instance_id, db)
-    cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -130,7 +142,9 @@ async def scale_instance(instance_id: str, replicas: int, db: AsyncSession):
 
 async def restart_instance(instance_id: str, db: AsyncSession):
     instance = await get_instance(instance_id, db)
-    cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -143,7 +157,7 @@ async def restart_instance(instance_id: str, db: AsyncSession):
 async def get_deploy_history(instance_id: str, db: AsyncSession) -> list[DeployRecordInfo]:
     result = await db.execute(
         select(DeployRecord)
-        .where(DeployRecord.instance_id == instance_id)
+        .where(DeployRecord.instance_id == instance_id, DeployRecord.deleted_at.is_(None))
         .order_by(DeployRecord.created_at.desc())
     )
     return [DeployRecordInfo.model_validate(r) for r in result.scalars().all()]
@@ -153,7 +167,9 @@ async def get_pod_logs(
     instance_id: str, pod_name: str, db: AsyncSession, container: str | None = None, tail_lines: int = 200
 ) -> str:
     instance = await get_instance(instance_id, db)
-    cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -232,7 +248,9 @@ async def _execute_config_update(
     instance: Instance, req: UpdateConfigRequest, user_id: str, db: AsyncSession
 ) -> InstanceInfo:
     """内部方法: 真正执行配置变更 + K8s 滚动更新。"""
-    cluster_result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -284,7 +302,7 @@ async def _execute_config_update(
     # 创建部署记录
     max_rev = await db.execute(
         select(func.coalesce(func.max(DeployRecord.revision), 0)).where(
-            DeployRecord.instance_id == instance.id
+            DeployRecord.instance_id == instance.id, DeployRecord.deleted_at.is_(None)
         )
     )
     next_rev = max_rev.scalar() + 1
@@ -378,6 +396,7 @@ async def rollback_instance(
         select(DeployRecord).where(
             DeployRecord.instance_id == instance_id,
             DeployRecord.revision == target_revision,
+            DeployRecord.deleted_at.is_(None),
         )
     )
     target_record = result.scalar_one_or_none()

@@ -166,7 +166,9 @@ async def pod_logs_stream(
 ):
     """SSE 流: 实时 Pod 日志，支持时间范围筛选。"""
     instance = await instance_service.get_instance(instance_id, db)
-    result = await db.execute(select(Cluster).where(Cluster.id == instance.cluster_id))
+    result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")

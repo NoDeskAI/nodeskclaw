@@ -39,4 +39,4 @@ class Cluster(BaseModel):
 
     # relationships
     creator = relationship("User", back_populates="clusters", foreign_keys=[created_by])
-    instances = relationship("Instance", back_populates="cluster", cascade="all, delete-orphan")
+    instances = relationship("Instance", back_populates="cluster", cascade="save-update, merge")

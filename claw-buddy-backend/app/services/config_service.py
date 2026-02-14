@@ -16,7 +16,9 @@ async def get_config(key: str, db: AsyncSession) -> str | None:
     Returns:
         配置值，如果没有则返回 None
     """
-    row = (await db.execute(select(SystemConfig).where(SystemConfig.key == key))).scalar_one_or_none()
+    row = (await db.execute(
+        select(SystemConfig).where(SystemConfig.key == key, SystemConfig.deleted_at.is_(None))
+    )).scalar_one_or_none()
     if row is not None and row.value:
         return row.value
     return None
@@ -33,7 +35,9 @@ async def set_config(key: str, value: str | None, db: AsyncSession) -> SystemCon
     Returns:
         更新后的 SystemConfig 记录
     """
-    row = (await db.execute(select(SystemConfig).where(SystemConfig.key == key))).scalar_one_or_none()
+    row = (await db.execute(
+        select(SystemConfig).where(SystemConfig.key == key, SystemConfig.deleted_at.is_(None))
+    )).scalar_one_or_none()
     if row:
         row.value = value
     else:
@@ -52,7 +56,9 @@ async def get_all_configs(db: AsyncSession) -> dict[str, str | None]:
         {key: value} 字典
     """
     result: dict[str, str | None] = {}
-    rows = (await db.execute(select(SystemConfig))).scalars().all()
+    rows = (await db.execute(
+        select(SystemConfig).where(SystemConfig.deleted_at.is_(None))
+    )).scalars().all()
     for row in rows:
         result[row.key] = row.value
     return result

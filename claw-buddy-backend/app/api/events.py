@@ -29,7 +29,9 @@ async def events_stream(
     _current_user: User = Depends(get_current_user),
 ):
     """SSE 流: 实时推送 K8s 事件。"""
-    result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
+    result = await db.execute(
+        select(Cluster).where(Cluster.id == cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")

@@ -23,10 +23,25 @@ class TimestampMixin:
 
 
 class BaseModel(Base, TimestampMixin):
-    """Abstract base with UUID pk + timestamps."""
+    """Abstract base with UUID pk + timestamps + soft delete."""
 
     __abstract__ = True
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, index=True
+    )
+
+    def soft_delete(self) -> None:
+        """标记为已删除（逻辑删除）。"""
+        self.deleted_at = func.now()
+
+
+def not_deleted(model: type[BaseModel]):
+    """返回排除已删除记录的 where 条件，用于查询过滤。
+
+    用法: select(Instance).where(not_deleted(Instance))
+    """
+    return model.deleted_at.is_(None)

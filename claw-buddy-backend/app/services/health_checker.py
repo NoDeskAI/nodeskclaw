@@ -50,7 +50,10 @@ class HealthChecker:
     async def _check_all(self):
         async with self._session_factory() as db:
             result = await db.execute(
-                select(Cluster).where(Cluster.status == ClusterStatus.connected)
+                select(Cluster).where(
+                    Cluster.status == ClusterStatus.connected,
+                    Cluster.deleted_at.is_(None),
+                )
             )
             clusters = result.scalars().all()
 
@@ -102,7 +105,9 @@ class HealthChecker:
 
 async def get_cluster_health(cluster_id: str, db) -> dict:
     """Return health details for a single cluster."""
-    result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
+    result = await db.execute(
+        select(Cluster).where(Cluster.id == cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = result.scalar_one_or_none()
     if not cluster:
         from app.core.exceptions import NotFoundError

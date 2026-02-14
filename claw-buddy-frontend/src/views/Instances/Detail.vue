@@ -261,8 +261,16 @@ function formatTime(ts: string | null): string {
                     : 'unknown'
                   " />
                 </div>
-                <div class="flex justify-between"><span class="text-muted-foreground">服务类型</span><span>{{ detail.service_type }}</span></div>
-                <div class="flex justify-between"><span class="text-muted-foreground">域名</span><span>{{ detail.ingress_domain || '-' }}</span></div>
+                <div class="flex justify-between">
+                  <span class="text-muted-foreground">访问地址</span>
+                  <a
+                    v-if="detail.ingress_domain"
+                    :href="`https://${detail.ingress_domain}`"
+                    target="_blank"
+                    class="text-primary hover:underline font-mono text-xs"
+                  >{{ detail.ingress_domain }}</a>
+                  <span v-else class="text-muted-foreground">-</span>
+                </div>
               </CardContent>
             </Card>
             <Card>
@@ -272,6 +280,8 @@ function formatTime(ts: string | null): string {
                 <div class="flex justify-between"><span class="text-muted-foreground">CPU Limit</span><span>{{ detail.cpu_limit }}</span></div>
                 <div class="flex justify-between"><span class="text-muted-foreground">内存 Request</span><span>{{ detail.mem_request }}</span></div>
                 <div class="flex justify-between"><span class="text-muted-foreground">内存 Limit</span><span>{{ detail.mem_limit }}</span></div>
+                <div class="flex justify-between"><span class="text-muted-foreground">存储类型</span><span class="font-mono">{{ detail.storage_class || '-' }}</span></div>
+                <div class="flex justify-between"><span class="text-muted-foreground">存储大小</span><span class="font-mono">{{ detail.storage_size }}</span></div>
               </CardContent>
             </Card>
             <Card>
@@ -542,9 +552,14 @@ function formatTime(ts: string | null): string {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>删除实例</AlertDialogTitle>
-          <AlertDialogDescription>
-            此操作不可撤销。将删除实例 <strong>{{ detail?.name }}</strong> 及其 K8s 资源（PVC 保留）。
-            请输入实例名称以确认。
+          <AlertDialogDescription class="space-y-2">
+            <p>此操作<strong class="text-destructive">不可撤销</strong>。将删除实例 <strong>{{ detail?.name }}</strong> 对应的整个命名空间 <code class="text-xs bg-muted px-1 py-0.5 rounded">{{ detail?.namespace }}</code> 及其下所有 K8s 资源，包括：</p>
+            <ul class="text-xs list-disc list-inside text-muted-foreground">
+              <li>Deployment、Service、Ingress（实例将完全不可访问）</li>
+              <li>PVC 持久化存储（聊天记录、配置等数据将永久丢失）</li>
+              <li>ConfigMap、Secret 等配置资源</li>
+            </ul>
+            <p>请输入实例名称 <strong>{{ detail?.name }}</strong> 以确认删除。</p>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div class="py-2">

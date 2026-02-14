@@ -1,24 +1,30 @@
 """Cluster service: CRUD, KubeConfig encryption, connection test."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import decrypt_kubeconfig, encrypt_kubeconfig
 from app.models.cluster import Cluster, ClusterStatus
+from app.models.deploy_record import DeployRecord
+from app.models.instance import Instance
 from app.models.user import User
 from app.schemas.cluster import ClusterCreate, ClusterInfo, ClusterUpdate, ConnectionTestResult
 
 
 async def list_clusters(db: AsyncSession) -> list[ClusterInfo]:
-    result = await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))
+    result = await db.execute(
+        select(Cluster).where(Cluster.deleted_at.is_(None)).order_by(Cluster.created_at.desc())
+    )
     clusters = result.scalars().all()
     return [ClusterInfo.model_validate(c) for c in clusters]
 
 
 async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> ClusterInfo:
-    # Check name uniqueness
-    existing = await db.execute(select(Cluster).where(Cluster.name == data.name))
+    # Check name uniqueness（已删除的名称可复用）
+    existing = await db.execute(
+        select(Cluster).where(Cluster.name == data.name, Cluster.deleted_at.is_(None))
+    )
     if existing.scalar_one_or_none():
         raise ConflictError(f"集群名称 '{data.name}' 已存在")
 
@@ -41,7 +47,9 @@ async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> C
 
 
 async def get_cluster(cluster_id: str, db: AsyncSession) -> Cluster:
-    result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
+    result = await db.execute(
+        select(Cluster).where(Cluster.id == cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -60,8 +68,31 @@ async def update_cluster(cluster_id: str, data: ClusterUpdate, db: AsyncSession)
 
 
 async def delete_cluster(cluster_id: str, db: AsyncSession) -> None:
+    """逻辑删除集群，级联逻辑删除其下所有实例和部署记录。"""
     cluster = await get_cluster(cluster_id, db)
-    await db.delete(cluster)
+
+    # 查询该集群下所有未删除的实例
+    inst_result = await db.execute(
+        select(Instance).where(Instance.cluster_id == cluster.id, Instance.deleted_at.is_(None))
+    )
+    instance_ids = [inst.id for inst in inst_result.scalars().all()]
+
+    # 级联逻辑删除部署记录
+    if instance_ids:
+        await db.execute(
+            update(DeployRecord)
+            .where(DeployRecord.instance_id.in_(instance_ids), DeployRecord.deleted_at.is_(None))
+            .values(deleted_at=func.now())
+        )
+        # 级联逻辑删除实例
+        await db.execute(
+            update(Instance)
+            .where(Instance.cluster_id == cluster.id, Instance.deleted_at.is_(None))
+            .values(deleted_at=func.now())
+        )
+
+    # 逻辑删除集群自身
+    cluster.soft_delete()
     await db.commit()
 
 
@@ -71,7 +102,26 @@ async def update_kubeconfig(cluster_id: str, kubeconfig: str, db: AsyncSession) 
     cluster.kubeconfig_encrypted = encrypt_kubeconfig(kubeconfig)
     cluster.auth_type = auth_type
     cluster.api_server_url = api_server_url
-    cluster.status = ClusterStatus.disconnected
+
+    # 清除旧的 K8s 客户端缓存，使用新 KubeConfig 重新连接
+    from app.services.k8s.client_manager import k8s_manager
+    await k8s_manager.remove(cluster_id)
+
+    # 自动测试新 KubeConfig 的连通性
+    try:
+        from app.services.k8s.client_manager import create_temp_client
+        from kubernetes_asyncio.client import VersionApi
+
+        async with create_temp_client(kubeconfig) as api_client:
+            info = await VersionApi(api_client).get_code()
+
+        cluster.status = ClusterStatus.connected
+        cluster.k8s_version = info.git_version
+        cluster.health_status = "healthy"
+    except Exception:
+        cluster.status = ClusterStatus.disconnected
+        cluster.health_status = "unhealthy"
+
     await db.commit()
     await db.refresh(cluster)
     return ClusterInfo.model_validate(cluster)
