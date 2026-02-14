@@ -28,6 +28,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Deploy/index.vue'),
   },
   {
+    path: '/deploy/progress/:deployId',
+    name: 'DeployProgress',
+    component: () => import('@/views/Deploy/DeployProgress.vue'),
+  },
+  {
     path: '/instances/:id/logs',
     name: 'Logs',
     component: () => import('@/views/Logs/index.vue'),
