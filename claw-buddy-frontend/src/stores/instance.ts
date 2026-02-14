@@ -13,6 +13,7 @@ export interface InstanceInfo {
   status: string
   service_type: string
   ingress_domain: string | null
+  storage_class: string
   storage_size: string
   advanced_config: string | null
   pending_config: string | null

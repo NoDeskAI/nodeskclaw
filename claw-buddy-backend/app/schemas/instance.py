@@ -16,7 +16,8 @@ class InstanceInfo(BaseModel):
     status: str
     service_type: str
     ingress_domain: str | None = None
-    storage_size: str = "100Gi"
+    storage_class: str = "nas-subpath"
+    storage_size: str = "80Gi"
     advanced_config: str | None = None
     pending_config: str | None = None  # 待应用的配置（两步操作）
     created_by: str

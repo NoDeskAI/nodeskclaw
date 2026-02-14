@@ -1,5 +1,8 @@
 """ResourceBuilder: construct K8s resource manifests for OpenClaw instances."""
 
+import base64
+import json
+
 from kubernetes_asyncio.client import (
     V1ConfigMap,
     V1ConfigMapVolumeSource,
@@ -18,8 +21,10 @@ from kubernetes_asyncio.client import (
     V1IngressRule,
     V1IngressSpec,
     V1IngressServiceBackend,
+    V1IngressTLS,
     V1KeyToPath,
     V1LabelSelector,
+    V1LocalObjectReference,
     V1ObjectMeta,
     V1PersistentVolumeClaim,
     V1PersistentVolumeClaimSpec,
@@ -28,6 +33,7 @@ from kubernetes_asyncio.client import (
     V1ResourceQuota,
     V1ResourceQuotaSpec,
     V1ResourceRequirements,
+    V1Secret,
     V1SecretVolumeSource,
     V1Service,
     V1ServiceBackendPort,
@@ -52,6 +58,44 @@ def build_labels(instance_name: str, instance_id: str, image_tag: str = "") -> d
     if image_tag:
         labels["clawbuddy/image-tag"] = image_tag
     return labels
+
+
+REGISTRY_SECRET_NAME = "clawbuddy-registry"
+
+
+def build_registry_secret(
+    namespace: str,
+    registry_url: str,
+    username: str,
+    password: str,
+) -> V1Secret:
+    """构建 Docker Registry 认证 Secret（kubernetes.io/dockerconfigjson 类型）。
+
+    用于 imagePullSecrets，让 K8s 能从私有镜像仓库拉取镜像。
+    """
+    # 从完整镜像地址中提取 registry 主机（如 cr-xxx.volces.com）
+    # 注意：不加 https:// 前缀，containerd 按纯域名匹配 imagePullSecrets
+    server = registry_url.split("/")[0] if "/" in registry_url else registry_url
+
+    docker_config = {
+        "auths": {
+            server: {
+                "username": username,
+                "password": password,
+                "auth": base64.b64encode(f"{username}:{password}".encode()).decode(),
+            }
+        }
+    }
+
+    return V1Secret(
+        metadata=V1ObjectMeta(name=REGISTRY_SECRET_NAME, namespace=namespace),
+        type="kubernetes.io/dockerconfigjson",
+        data={
+            ".dockerconfigjson": base64.b64encode(
+                json.dumps(docker_config).encode()
+            ).decode(),
+        },
+    )
 
 
 def _merge_custom_labels(base_labels: dict, custom_labels: dict | None) -> dict:
@@ -85,7 +129,7 @@ def build_pvc(
     return V1PersistentVolumeClaim(
         metadata=V1ObjectMeta(name=name, namespace=namespace, labels=labels),
         spec=V1PersistentVolumeClaimSpec(
-            access_modes=["ReadWriteOnce"],
+            access_modes=["ReadWriteMany"],
             resources=V1ResourceRequirements(requests={"storage": storage_size}),
             storage_class_name=storage_class,
         ),
@@ -184,9 +228,10 @@ def build_deployment(
     cpu_limit: str = "2",
     mem_request: str = "512Mi",
     mem_limit: str = "2Gi",
-    port: int = 8080,
+    port: int = 18789,
     env_vars: dict[str, str] | None = None,
     advanced_config: dict | None = None,
+    image_pull_secret: str | None = None,
 ) -> V1Deployment:
     """Build OpenClaw Deployment manifest with optional advanced config."""
 
@@ -212,6 +257,7 @@ def build_deployment(
         volume_mounts.append(V1VolumeMount(name="root-data", mount_path="/root"))
 
     # Init container for first-time setup
+    # 注意：当命名空间有 ResourceQuota（设置了 limits）时，所有容器必须指定 resource limits
     init_containers = []
     if pvc_name:
         init_containers.append(
@@ -227,6 +273,10 @@ def build_deployment(
                     "fi"
                 ],
                 volume_mounts=[V1VolumeMount(name="root-data", mount_path="/init-data")],
+                resources=V1ResourceRequirements(
+                    requests={"cpu": "50m", "memory": "64Mi"},
+                    limits={"cpu": "200m", "memory": "256Mi"},
+                ),
             )
         )
 
@@ -302,6 +352,9 @@ def build_deployment(
     pod_labels = _merge_custom_labels(labels, custom_labels)
     pod_annotations: dict[str, str] | None = custom_annotations if custom_annotations else None
 
+    # 镜像拉取凭据
+    pull_secrets = [V1LocalObjectReference(name=image_pull_secret)] if image_pull_secret else None
+
     return V1Deployment(
         metadata=V1ObjectMeta(name=name, namespace=namespace, labels=labels),
         spec=V1DeploymentSpec(
@@ -313,6 +366,7 @@ def build_deployment(
                     init_containers=init_containers or None,
                     containers=all_containers,
                     volumes=volumes or None,
+                    image_pull_secrets=pull_secrets,
                 ),
             ),
         ),
@@ -349,15 +403,15 @@ def build_service(
     name: str,
     namespace: str,
     labels: dict,
-    port: int = 8080,
-    service_type: str = "ClusterIP",
+    port: int = 18789,
 ) -> V1Service:
+    """构建 ClusterIP Service，端口默认 18789（OpenClaw Gateway 端口）。"""
     return V1Service(
         metadata=V1ObjectMeta(name=name, namespace=namespace, labels=labels),
         spec=V1ServiceSpec(
             selector={"app.kubernetes.io/name": labels["app.kubernetes.io/name"]},
             ports=[V1ServicePort(port=port, target_port=port, protocol="TCP")],
-            type=service_type,
+            type="ClusterIP",
         ),
     )
 
@@ -368,17 +422,42 @@ def build_ingress(
     host: str,
     labels: dict,
     service_name: str | None = None,
-    port: int = 8080,
+    port: int = 18789,
+    tls_secret_name: str | None = None,
 ) -> V1Ingress:
+    """构建 Ingress 资源，支持子域名路由 + TLS + WebSocket。
+
+    Args:
+        host: 完整域名，如 ``prod-1.nodesk.tech``
+        tls_secret_name: 通配符证书 Secret 名称，如 ``wildcard-nodesk-tls``
+    """
     svc_name = service_name or name
+
+    annotations: dict[str, str] = {
+        # WebSocket 长连接支持（OpenClaw 需要 WebSocket）
+        "nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
+        # 允许 WebSocket 升级
+        "nginx.ingress.kubernetes.io/proxy-set-headers": "ingress-nginx/custom-headers",
+    }
+
+    # TLS 配置
+    tls: list[V1IngressTLS] | None = None
+    if tls_secret_name:
+        tls = [V1IngressTLS(hosts=[host], secret_name=tls_secret_name)]
+        annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
+
     return V1Ingress(
         metadata=V1ObjectMeta(
             name=name,
             namespace=namespace,
             labels=labels,
-            annotations={"kubernetes.io/ingress.class": "nginx"},
+            annotations=annotations,
         ),
         spec=V1IngressSpec(
+            ingress_class_name="nginx",
+            tls=tls,
             rules=[
                 V1IngressRule(
                     host=host,
@@ -397,6 +476,6 @@ def build_ingress(
                         ]
                     ),
                 )
-            ]
+            ],
         ),
     )

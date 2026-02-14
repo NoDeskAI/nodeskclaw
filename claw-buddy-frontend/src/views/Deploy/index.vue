@@ -8,14 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import AdvancedConfigPanel from '@/components/AdvancedConfigPanel.vue'
 import {
   Rocket, CheckCircle, XCircle, AlertTriangle, Loader2,
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import api, { API_BASE } from '@/services/api'
-import { fetchEventSource } from '@microsoft/fetch-event-source'
+import api from '@/services/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -27,7 +29,7 @@ const currentStep = ref(0)
 const steps = [
   { title: '基本信息', description: '名称、镜像版本、集群' },
   { title: '资源配额', description: 'CPU、内存、存储' },
-  { title: '网络与环境', description: '服务类型、环境变量' },
+  { title: '环境变量', description: '运行时环境变量' },
   { title: '确认部署', description: '预检与高级配置' },
 ]
 
@@ -40,14 +42,13 @@ const form = ref({
   cpu_limit: '2000m',
   mem_request: '512Mi',
   mem_limit: '4Gi',
-  service_type: 'ClusterIP',
-  ingress_domain: '',
-  storage_size: '100Gi',
+  storage_class: 'nas-subpath',
+  storage_size: '80Gi',
   quota_cpu: '4',
   quota_mem: '8Gi',
 })
 
-/** 根据用户邮箱前缀 + 已有实例数量生成默认实例名称 */
+/** 根据用户邮箱前缀 + 已有实例数量生成默认实例名称（RFC 1123 格式） */
 function generateDefaultName() {
   const user = authStore.user
   if (!user) return
@@ -57,8 +58,10 @@ function generateDefaultName() {
   } else if (user.name) {
     prefix = user.name.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   }
+  // 去除首尾 - 和连续 -
+  prefix = prefix.replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-') || 'instance'
   const count = instanceStore.instances.length + 1
-  form.value.name = `${prefix}_${count}`
+  form.value.name = `${prefix}-${count}`
 }
 
 // ── Quota presets ──
@@ -71,9 +74,9 @@ const quotaPresets = [
 
 // 预设档位对应的容器资源配置
 const presetResources: Record<string, { cpu_request: string; cpu_limit: string; mem_request: string; mem_limit: string; storage_size: string }> = {
-  small:  { cpu_request: '250m',  cpu_limit: '1000m', mem_request: '256Mi', mem_limit: '1Gi',  storage_size: '50Gi' },
-  medium: { cpu_request: '500m',  cpu_limit: '2000m', mem_request: '512Mi', mem_limit: '4Gi',  storage_size: '100Gi' },
-  large:  { cpu_request: '1000m', cpu_limit: '4000m', mem_request: '1Gi',   mem_limit: '8Gi',  storage_size: '200Gi' },
+  small:  { cpu_request: '250m',  cpu_limit: '1000m', mem_request: '256Mi', mem_limit: '1Gi',  storage_size: '40Gi' },
+  medium: { cpu_request: '500m',  cpu_limit: '2000m', mem_request: '512Mi', mem_limit: '4Gi',  storage_size: '80Gi' },
+  large:  { cpu_request: '1000m', cpu_limit: '4000m', mem_request: '1Gi',   mem_limit: '8Gi',  storage_size: '160Gi' },
 }
 
 function selectQuotaPreset(key: string) {
@@ -112,6 +115,57 @@ async function fetchImageTags() {
   }
 }
 
+// ── 基础域名（从 Settings 加载，用于展示访问地址）──
+const baseDomain = ref('')
+
+async function fetchBaseDomain() {
+  try {
+    const res = await api.get('/settings')
+    const data = res.data.data as Record<string, string | null>
+    baseDomain.value = data.ingress_base_domain || ''
+  } catch {
+    baseDomain.value = ''
+  }
+}
+
+// ── StorageClass 列表（仅管理员启用的）──
+interface StorageClassItem {
+  name: string
+  provisioner: string
+  reclaim_policy: string | null
+  allow_volume_expansion: boolean
+  is_default: boolean
+  enabled: boolean
+}
+const storageClasses = ref<StorageClassItem[]>([])
+const loadingStorageClasses = ref(false)
+
+async function fetchStorageClasses() {
+  loadingStorageClasses.value = true
+  try {
+    const res = await api.get('/storage-classes')
+    storageClasses.value = res.data.data as StorageClassItem[]
+    // 如果当前选中的 storage_class 不在列表中，选默认或第一个
+    if (storageClasses.value.length > 0) {
+      const names = storageClasses.value.map((sc) => sc.name)
+      if (!names.includes(form.value.storage_class)) {
+        const defaultSc = storageClasses.value.find((sc) => sc.is_default)
+        form.value.storage_class = defaultSc ? defaultSc.name : storageClasses.value[0].name
+      }
+    }
+  } catch {
+    storageClasses.value = []
+  } finally {
+    loadingStorageClasses.value = false
+  }
+}
+
+const accessUrl = computed(() => {
+  if (!form.value.name || !baseDomain.value) return ''
+  const proto = baseDomain.value ? 'https' : 'http'
+  return `${proto}://${form.value.name}.${baseDomain.value}`
+})
+
 // ── Env vars ──
 const envPairs = ref<{ key: string; value: string }[]>([])
 function addEnv() {
@@ -136,7 +190,6 @@ const advancedConfig = ref({
 const precheckResult = ref<{passed: boolean; items: {name: string; status: string; message: string}[]} | null>(null)
 const checking = ref(false)
 const deploying = ref(false)
-const progress = ref<{step: number; total_steps: number; current_step: string; status: string; percent: number; message?: string} | null>(null)
 
 const selectedCluster = computed(() => clusterStore.currentCluster)
 const availableInstances = computed(() =>
@@ -148,6 +201,8 @@ onMounted(async () => {
     clusterStore.fetchClusters(),
     instanceStore.fetchInstances(),
     fetchImageTags(),
+    fetchBaseDomain(),
+    fetchStorageClasses(),
   ])
   // 自动生成实例名称
   generateDefaultName()
@@ -180,7 +235,6 @@ function buildPayload() {
   return {
     ...form.value,
     cluster_id: selectedCluster.value?.id,
-    ingress_domain: form.value.ingress_domain || undefined,
     env_vars: Object.keys(envVars).length > 0 ? envVars : {},
     advanced_config: hasAdvanced
       ? { ...advancedConfig.value, init_containers: initContainers }
@@ -208,32 +262,21 @@ async function runPrecheck() {
 async function handleDeploy() {
   if (!selectedCluster.value) return
   deploying.value = true
-  progress.value = null
 
   try {
     const res = await api.post('/deploy', buildPayload())
     const deployId = res.data.data.deploy_id
+    toast.info('部署任务已提交，正在执行...')
 
-    const token = localStorage.getItem('token')
-    await fetchEventSource(`${API_BASE}/deploy/progress/${deployId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      onmessage(ev) {
-        if (ev.event === 'deploy_progress') {
-          const data = JSON.parse(ev.data)
-          progress.value = data
-          if (data.status === 'success') {
-            toast.success('部署成功')
-          } else if (data.status === 'failed') {
-            toast.error(`部署失败: ${data.message || ''}`)
-          }
-        }
-      },
-      onerror() { /* auto-reconnect */ },
+    // 跳转到独立的部署进度页
+    router.push({
+      name: 'DeployProgress',
+      params: { deployId },
+      query: { name: form.value.name },
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '部署请求失败'
     toast.error(msg)
-  } finally {
     deploying.value = false
   }
 }
@@ -269,7 +312,7 @@ const yamlPreview = computed(() => {
   lines.push('kind: Deployment')
   lines.push('metadata:')
   lines.push(`  name: ${p.name || '<name>'}`)
-  lines.push(`  namespace: oc-${p.name || '<name>'}`)
+  lines.push(`  namespace: clawbuddy-${p.name || '<name>'}`)
   lines.push('spec:')
   lines.push(`  replicas: ${p.replicas}`)
   lines.push('  template:')
@@ -326,12 +369,38 @@ const yamlPreview = computed(() => {
   lines.push('apiVersion: v1')
   lines.push('kind: Service')
   lines.push('metadata:')
-  lines.push(`  name: ${p.name || '<name>'}-svc`)
+  lines.push(`  name: ${p.name || '<name>'}`)
   lines.push('spec:')
-  lines.push(`  type: ${p.service_type}`)
+  lines.push('  type: ClusterIP')
   lines.push('  ports:')
-  lines.push('    - port: 80')
-  lines.push('      targetPort: 8080')
+  lines.push('    - port: 18789')
+  lines.push('      targetPort: 18789')
+  if (baseDomain.value && p.name) {
+    const host = `${p.name}.${baseDomain.value}`
+    lines.push('---')
+    lines.push('apiVersion: networking.k8s.io/v1')
+    lines.push('kind: Ingress')
+    lines.push('metadata:')
+    lines.push(`  name: ${p.name}`)
+    lines.push('  annotations:')
+    lines.push('    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"')
+    lines.push('    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"')
+    lines.push('spec:')
+    lines.push('  ingressClassName: nginx')
+    lines.push('  tls:')
+    lines.push(`    - hosts: ["${host}"]`)
+    lines.push('  rules:')
+    lines.push(`    - host: ${host}`)
+    lines.push('      http:')
+    lines.push('        paths:')
+    lines.push('          - path: /')
+    lines.push('            pathType: Prefix')
+    lines.push('            backend:')
+    lines.push('              service:')
+    lines.push(`                name: ${p.name}`)
+    lines.push('                port:')
+    lines.push('                  number: 18789')
+  }
 
   return lines.join('\n')
 })
@@ -445,42 +514,67 @@ const yamlPreview = computed(() => {
           <div class="font-medium font-mono">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
           <div class="text-muted-foreground">内存 (Request / Limit)</div>
           <div class="font-medium font-mono">{{ form.mem_request }} / {{ form.mem_limit }}</div>
-          <div class="text-muted-foreground">存储大小</div>
-          <div class="font-medium font-mono">{{ form.storage_size }}</div>
+        </div>
+
+        <!-- 存储配置 -->
+        <div class="border-t pt-4">
+          <label class="text-sm font-medium mb-2 block">存储配置</label>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-muted-foreground mb-1.5 block">存储类型 (StorageClass)</label>
+              <Select v-model="form.storage_class" :key="storageClasses.length">
+                <SelectTrigger class="w-full font-mono text-sm">
+                  <SelectValue placeholder="选择 StorageClass" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-if="storageClasses.length === 0"
+                    value="nas-subpath"
+                  >
+                    nas-subpath
+                  </SelectItem>
+                  <SelectItem
+                    v-for="sc in storageClasses"
+                    :key="sc.name"
+                    :value="sc.name"
+                  >
+                    <div class="flex items-center justify-between w-full gap-4">
+                      <span class="font-mono">{{ sc.name }}</span>
+                      <Badge v-if="sc.is_default" variant="secondary" class="text-[10px] px-1.5 py-0">默认</Badge>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="loadingStorageClasses" class="text-xs text-muted-foreground mt-1">加载中...</p>
+              <p v-else-if="storageClasses.length === 0" class="text-xs text-muted-foreground mt-1">
+                未获取到集群 StorageClass，使用默认值
+              </p>
+              <p v-else class="text-xs text-muted-foreground mt-1">
+                {{ storageClasses.find(sc => sc.name === form.storage_class)?.provisioner || '' }}
+              </p>
+            </div>
+            <div>
+              <label class="text-xs text-muted-foreground mb-1.5 block">存储大小</label>
+              <div class="h-9 flex items-center px-3 rounded-md border border-border bg-muted/30 text-sm font-mono">
+                {{ form.storage_size }}
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
 
-    <!-- Step 2: 网络与环境 -->
+    <!-- Step 2: 环境变量 -->
     <Card v-show="currentStep === 2">
-      <CardHeader><CardTitle>网络与环境变量</CardTitle></CardHeader>
+      <CardHeader><CardTitle>环境变量</CardTitle></CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Service 类型</label>
-            <select
-              v-model="form.service_type"
-              class="w-full h-9 rounded-md bg-card border border-border px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="ClusterIP">ClusterIP</option>
-              <option value="NodePort">NodePort</option>
-              <option value="LoadBalancer">LoadBalancer</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-sm font-medium mb-1.5 block">Ingress Domain (可选)</label>
-            <Input v-model="form.ingress_domain" placeholder="如: openclaw.example.com" />
-          </div>
-        </div>
-
-        <!-- Env vars -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium">环境变量</label>
+            <label class="text-sm font-medium">运行时环境变量</label>
             <Button variant="outline" size="sm" @click="addEnv">+ 添加</Button>
           </div>
           <div v-if="envPairs.length === 0" class="text-xs text-muted-foreground">
-            暂无环境变量
+            暂无环境变量，可直接跳过此步
           </div>
           <div v-for="(pair, idx) in envPairs" :key="idx" class="grid grid-cols-[1fr_1fr_auto] gap-2 mb-2">
             <Input v-model="pair.key" placeholder="KEY" class="text-xs" />
@@ -512,12 +606,15 @@ const yamlPreview = computed(() => {
             <div class="font-medium">{{ form.quota_cpu }}c / {{ form.quota_mem }}</div>
             <div class="text-muted-foreground">CPU</div>
             <div class="font-medium">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
-            <div class="text-muted-foreground">Memory</div>
+            <div class="text-muted-foreground">内存</div>
             <div class="font-medium">{{ form.mem_request }} / {{ form.mem_limit }}</div>
-            <div class="text-muted-foreground">Service</div>
-            <div class="font-medium">{{ form.service_type }}</div>
-            <div v-if="form.ingress_domain" class="text-muted-foreground">Ingress</div>
-            <div v-if="form.ingress_domain" class="font-medium">{{ form.ingress_domain }}</div>
+            <div class="text-muted-foreground">存储类型</div>
+            <div class="font-medium font-mono">{{ form.storage_class }}</div>
+            <div class="text-muted-foreground">存储大小</div>
+            <div class="font-medium font-mono">{{ form.storage_size }}</div>
+            <div class="text-muted-foreground">访问地址</div>
+            <div v-if="accessUrl" class="font-medium font-mono text-primary">{{ accessUrl }}</div>
+            <div v-else class="text-muted-foreground text-xs">请在 Settings 页面配置基础域名</div>
           </div>
         </CardContent>
       </Card>
@@ -588,32 +685,6 @@ const yamlPreview = computed(() => {
         </CardContent>
       </Card>
 
-      <!-- Deploy progress -->
-      <Card v-if="progress">
-        <CardHeader><CardTitle>部署进度</CardTitle></CardHeader>
-        <CardContent>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between text-sm">
-              <span>{{ progress.current_step }}</span>
-              <span>{{ progress.step }} / {{ progress.total_steps }}</span>
-            </div>
-            <div class="w-full h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-300"
-                :class="{
-                  'bg-primary': progress.status === 'in_progress',
-                  'bg-green-500': progress.status === 'success',
-                  'bg-red-500': progress.status === 'failed',
-                }"
-                :style="{ width: `${progress.percent}%` }"
-              />
-            </div>
-            <p v-if="progress.message" class="text-sm text-muted-foreground">
-              {{ progress.message }}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </template>
 
     <!-- Navigation + Actions -->

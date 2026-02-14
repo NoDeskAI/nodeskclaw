@@ -44,8 +44,18 @@ interface OverviewSummary {
   pod_count: number
 }
 
+interface StorageClassInfo {
+  name: string
+  provisioner: string
+  reclaim_policy: string | null
+  allow_volume_expansion: boolean
+  is_default: boolean
+  enabled: boolean
+}
+
 const summary = ref<OverviewSummary | null>(null)
 const nodes = ref<NodeInfo[]>([])
+const storageClasses = ref<StorageClassInfo[]>([])
 
 onMounted(async () => {
   // Find cluster from store
@@ -65,6 +75,7 @@ onMounted(async () => {
     const data = res.data.data
     summary.value = data.summary
     nodes.value = data.nodes
+    storageClasses.value = data.storage_classes || []
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '获取集群概览失败'
   } finally {
@@ -261,6 +272,45 @@ async function handleTestConnection() {
                     </div>
                   </td>
                   <td class="py-2.5 pr-4 text-xs text-muted-foreground">{{ node.kubelet_version || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- StorageClass 列表 -->
+      <Card v-if="storageClasses.length > 0">
+        <CardHeader>
+          <CardTitle>StorageClass</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left text-muted-foreground">
+                  <th class="py-2 pr-4">名称</th>
+                  <th class="py-2 pr-4">Provisioner</th>
+                  <th class="py-2 pr-4">回收策略</th>
+                  <th class="py-2 pr-4">允许扩容</th>
+                  <th class="py-2 pr-4">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="sc in storageClasses"
+                  :key="sc.name"
+                  class="border-b border-border/50"
+                >
+                  <td class="py-2.5 pr-4 font-mono text-xs">{{ sc.name }}</td>
+                  <td class="py-2.5 pr-4 text-muted-foreground text-xs">{{ sc.provisioner }}</td>
+                  <td class="py-2.5 pr-4 text-xs">{{ sc.reclaim_policy || '-' }}</td>
+                  <td class="py-2.5 pr-4 text-xs">{{ sc.allow_volume_expansion ? '是' : '否' }}</td>
+                  <td class="py-2.5 pr-4 flex gap-1">
+                    <Badge v-if="sc.enabled" variant="default" class="text-xs">已启用</Badge>
+                    <Badge v-else variant="secondary" class="text-xs">未启用</Badge>
+                    <Badge v-if="sc.is_default" variant="outline" class="text-xs">集群默认</Badge>
+                  </td>
                 </tr>
               </tbody>
             </table>

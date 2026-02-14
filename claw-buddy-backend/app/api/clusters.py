@@ -94,7 +94,9 @@ async def cluster_overview(
     _current_user: User = Depends(get_current_user),
 ):
     """集群概览: 资源汇总 + 节点列表。"""
-    result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
+    result = await db.execute(
+        select(Cluster).where(Cluster.id == cluster_id, Cluster.deleted_at.is_(None))
+    )
     cluster = result.scalar_one_or_none()
     if not cluster:
         raise NotFoundError("集群不存在")
@@ -105,7 +107,39 @@ async def cluster_overview(
     summary = await k8s.get_cluster_overview()
     nodes = await k8s.list_nodes()
 
-    return ApiResponse(data={"summary": summary, "nodes": nodes})
+    # 获取 StorageClass 列表（标记哪些被 ClawBuddy 启用）
+    storage_classes = []
+    try:
+        import json as _json
+        from kubernetes_asyncio.client import StorageV1Api
+        from app.services.config_service import get_config
+
+        storage_api = StorageV1Api(api_client)
+        sc_list = await storage_api.list_storage_class()
+
+        allowed_raw = await get_config("allowed_storage_classes", db)
+        allowed_names: set[str] = set()
+        if allowed_raw:
+            try:
+                allowed_names = set(_json.loads(allowed_raw))
+            except (_json.JSONDecodeError, TypeError):
+                pass
+
+        for sc in sc_list.items:
+            ann = sc.metadata.annotations or {}
+            is_default = ann.get("storageclass.kubernetes.io/is-default-class") == "true"
+            storage_classes.append({
+                "name": sc.metadata.name,
+                "provisioner": sc.provisioner or "",
+                "reclaim_policy": sc.reclaim_policy,
+                "allow_volume_expansion": sc.allow_volume_expansion or False,
+                "is_default": is_default,
+                "enabled": sc.metadata.name in allowed_names,
+            })
+    except Exception:
+        pass  # StorageClass 获取失败不影响概览
+
+    return ApiResponse(data={"summary": summary, "nodes": nodes, "storage_classes": storage_classes})
 
 
 @router.post("/{cluster_id}/test", response_model=ApiResponse[ConnectionTestResult])

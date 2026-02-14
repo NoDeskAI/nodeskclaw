@@ -13,7 +13,11 @@ from app.services import config_service
 router = APIRouter()
 
 # 允许通过 API 管理的配置 key 白名单
-_ALLOWED_KEYS = {"image_registry", "registry_username", "registry_password"}
+_ALLOWED_KEYS = {
+    "image_registry", "registry_username", "registry_password",
+    "ingress_base_domain", "tls_secret_name",
+    "allowed_storage_classes",
+}
 
 # 敏感字段：读取时脱敏，写入时加密
 _SENSITIVE_KEYS = {"registry_password"}

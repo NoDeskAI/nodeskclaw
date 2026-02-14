@@ -15,12 +15,11 @@ class DeployRequest(BaseModel):
     cpu_limit: str = "2000m"
     mem_request: str = "512Mi"
     mem_limit: str = "2Gi"
-    service_type: str = "ClusterIP"
-    ingress_domain: str | None = None
     env_vars: dict[str, str] = {}
     quota_cpu: str = "4"
     quota_mem: str = "8Gi"
-    storage_size: str = "100Gi"
+    storage_class: str = "nas-subpath"
+    storage_size: str = "80Gi"
     advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
 
 
@@ -43,6 +42,7 @@ class DeployProgress(BaseModel):
     status: str  # in_progress / success / failed
     message: str | None = None
     percent: float = 0.0
+    logs: list[str] | None = None  # 当前步骤的诊断日志行
 
 
 class DeployRecordInfo(BaseModel):

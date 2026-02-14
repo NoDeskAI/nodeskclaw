@@ -9,6 +9,7 @@ from app.api.events import router as events_router
 from app.api.instances import router as instance_router
 from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
+from app.api.storage import router as storage_router
 
 api_router = APIRouter()
 
@@ -26,3 +27,4 @@ api_router.include_router(events_router, prefix="/events", tags=["事件"])
 api_router.include_router(instance_router, prefix="/instances", tags=["实例"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])
+api_router.include_router(storage_router, prefix="/storage-classes", tags=["存储"])

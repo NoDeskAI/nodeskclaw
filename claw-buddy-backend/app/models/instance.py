@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -26,8 +26,12 @@ class ServiceType(str, Enum):
 
 class Instance(BaseModel):
     __tablename__ = "instances"
+    __table_args__ = (
+        # 仅对未删除记录生效的唯一约束（兼容软删除）
+        Index("uq_instances_name_active", "name", unique=True, postgresql_where="deleted_at IS NULL"),
+    )
 
-    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
     cluster_id: Mapped[str] = mapped_column(String(36), ForeignKey("clusters.id"), nullable=False)
     namespace: Mapped[str] = mapped_column(String(128), nullable=False)
     image_version: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -52,7 +56,8 @@ class Instance(BaseModel):
     quota_max_pods: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
 
     # Storage
-    storage_size: Mapped[str] = mapped_column(String(16), default="100Gi", nullable=False)
+    storage_class: Mapped[str] = mapped_column(String(64), default="nas-subpath", nullable=False)
+    storage_size: Mapped[str] = mapped_column(String(16), default="80Gi", nullable=False)
 
     # Advanced config (JSON)
     advanced_config: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -73,4 +78,4 @@ class Instance(BaseModel):
     # relationships
     cluster = relationship("Cluster", back_populates="instances")
     creator = relationship("User", back_populates="instances", foreign_keys=[created_by])
-    deploy_records = relationship("DeployRecord", back_populates="instance", cascade="all, delete-orphan")
+    deploy_records = relationship("DeployRecord", back_populates="instance", cascade="save-update, merge")
