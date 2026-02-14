@@ -1,16 +1,22 @@
 # claw-buddy-artifacts
 
-ClawBuddy 部署到 K8s 的制品仓库 -- 存放需要构建成 Docker 镜像并在集群中运行的文件。
+ClawBuddy 部署到 K8s 的制品仓库 -- 存放 Docker 镜像构建文件和集群基础设施部署清单。
 
 ## 目录结构
 
 ```
 claw-buddy-artifacts/
-└── openclaw-image/              # OpenClaw 定制镜像
-    ├── Dockerfile               # 基于 node:24-bookworm-slim，npm 全局安装 openclaw
-    ├── docker-entrypoint.sh     # 容器启动脚本（配置生成 + 凭证注入 + 前台启动）
-    ├── init-container.sh        # Init Container 脚本（PVC 数据初始化 + 版本升级）
-    └── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
+├── openclaw-image/              # OpenClaw 定制镜像
+│   ├── Dockerfile               # 基于 node:24-bookworm-slim，npm 全局安装 openclaw
+│   ├── docker-entrypoint.sh     # 容器启动脚本（配置生成 + 凭证注入 + 前台启动）
+│   ├── init-container.sh        # Init Container 脚本（PVC 数据初始化 + 版本升级）
+│   └── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
+├── ingress-controller/          # Nginx Ingress Controller 部署清单
+│   ├── deploy.yaml              # 完整 K8s 资源（Namespace、RBAC、Deployment、Service）
+│   ├── tls-secret.yaml          # 通配符 TLS 证书 Secret 模板
+│   └── README.md                # 部署说明
+└── k8s/                         # 集群基础设施 YAML 模板
+    └── nas-storageclass.yaml    # NAS 极速型 StorageClass（NFS subpath 动态供给）
 ```
 
 ## OpenClaw 镜像
@@ -77,6 +83,72 @@ docker run --rm <image> which openclaw           # /usr/local/bin/openclaw
 docker run --rm <image> ls /root/.openclaw/      # 目录结构完整
 docker run --rm <image> cat /root/.openclaw-version  # 版本标记正确
 ```
+
+## Nginx Ingress Controller
+
+### 这是什么
+
+ClawBuddy 使用 Nginx Ingress Controller 实现 OpenClaw 实例的子域名自动路由。每个实例部署时自动创建 Ingress 规则，用户通过 `{instance-name}.{base-domain}` 访问对应实例。
+
+### 架构
+
+```
+用户浏览器 → *.nodesk.tech DNS → 火山云 SLB → K8s Ingress Controller (NodePort 30080/30443) → ClusterIP Service (:18789) → OpenClaw Pod
+```
+
+### 部署
+
+```bash
+cd claw-buddy-artifacts/ingress-controller
+
+# 1. 部署 Ingress Controller
+kubectl apply -f deploy.yaml
+
+# 2. 创建 TLS Secret（通配符证书）
+kubectl create secret tls wildcard-nodesk-tls \
+  --cert=fullchain.pem --key=privkey.pem -n ingress-nginx
+
+# 3. 配置火山云 SLB 转发 80→30080, 443→30443
+```
+
+详细说明见 `ingress-controller/README.md`。
+
+## NAS StorageClass
+
+### 这是什么
+
+OpenClaw 实例需要持久化存储（PVC）来保存运行数据。使用火山云 NAS 极速型 + NFS CSI 动态供给（subpath 模式），每个 PVC 自动创建独立子目录。
+
+### 前提
+
+- VKE 集群已安装 `csi-nas` 组件（集群 -> 组件管理 -> 存储）
+- 已购买火山云 NAS 极速型并创建挂载点
+
+### 部署
+
+```bash
+# 一次性操作：创建 StorageClass
+kubectl apply -f k8s/nas-storageclass.yaml
+
+# 验证
+kubectl get sc nas-subpath
+```
+
+### 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `volumeAs: subpath` | subpath 模式：共享同一 NAS，每个 PVC 自动创建子目录 |
+| `server` | NAS 挂载地址（IP:路径），按实际 NAS 实例替换 |
+| `archiveOnDelete: "true"` | 删除 PVC 时将子目录归档（重命名），不物理删除 |
+| `reclaimPolicy: Retain` | 即使 PVC 被删除，NAS 上的数据也保留 |
+| `allowVolumeExpansion: true` | 允许后续扩容 PVC |
+
+### 添加新存储类型
+
+未来购买新 NAS（如容量型），创建新的 StorageClass YAML 并 `kubectl apply` 即可。ClawBuddy 前端部署页会自动从集群读取可用的 StorageClass 列表供用户选择。
+
+---
 
 ## 与其他项目的关系
 

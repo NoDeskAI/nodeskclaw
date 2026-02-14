@@ -114,7 +114,7 @@ cp .env.example .env
 ### 启动
 
 ```bash
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000 --timeout-graceful-shutdown 3
 ```
 
 ### Docker 构建
@@ -124,6 +124,34 @@ docker build -t clawbuddy-backend:latest .
 docker run -d -p 8000:8000 --env-file .env clawbuddy-backend:latest
 ```
 
+## 日志
+
+后端启用了本地滚动日志，日志文件位于 `logs/` 目录：
+
+```
+logs/
+├── clawbuddy.log       # 当前日志文件
+├── clawbuddy.log.1     # 上一个滚动文件
+├── clawbuddy.log.2     # ...
+└── ...                 # 最多保留 5 个历史文件
+```
+
+- **单文件大小**：10MB，超出后自动滚动
+- **保留数量**：5 个历史文件（加当前文件共约 60MB）
+- **日志格式**：`时间 级别 [模块名] 消息`
+- **输出目标**：同时输出到文件和控制台
+
+`logs/` 目录已在 `.gitignore` 中排除，不会提交到仓库。
+
 ## 数据库
 
 使用火山云 RDS PostgreSQL，首次启动时通过 `Base.metadata.create_all` 自动建表，无需手动迁移。
+
+### 软删除
+
+所有数据模型（User、Cluster、Instance、DeployRecord、SystemConfig）均采用逻辑删除，通过 `deleted_at` 字段标记：
+
+- `deleted_at = NULL`：正常记录
+- `deleted_at = 时间戳`：已删除记录
+
+**数据库迁移**：升级到软删除版本后，首次启动时后端会自动检测并为已有表添加 `deleted_at` 列和索引，无需手动执行 SQL。

@@ -17,17 +17,6 @@ alwaysApply: true
 3. **Review 文档** → 让用户确认文档变更
 4. **再写代码** → 文档确认后才开始实现
 
-## 涉及文档对照表
-
-| 变更类型 | 需要更新的文档 |
-|----------|----------------|
-| 新 API / 修改 API | `docs/后端架构设计.md` |
-| 新页面 / 修改页面 | `docs/页面线框图.md`、`docs/PRD-ClawBuddy产品需求文档.md` |
-| K8s 资源变更 | `docs/K8s交互层实现设计.md`、`docs/VKE部署方案.md` |
-| 部署 / 镜像变更 | `docs/VKE部署方案.md`、`docs/OpenClaw镜像构建规范.md` |
-| 技术栈 / 架构变更 | `docs/PRD-ClawBuddy产品需求文档.md`、`docs/后端架构设计.md` |
-| 数据模型变更 | `docs/后端架构设计.md` |
-
 ## README 规则
 
 **任何新建的目录/项目/模块，必须包含 README。** 没有 README 不算完成。
@@ -37,9 +26,43 @@ alwaysApply: true
 - README 内容至少包含：项目/模块用途、目录结构、使用方法
 - 已有目录补 README 时，随改动一并提交
 
+## 代码变更必须同步文档
+
+**每次改完代码，在同一轮操作中必须更新所有受影响的文档。** 不是"下次补"，是"这次就补"。
+
+文档分两类，**都要检查**：
+
+### 1. docs/ 设计文档（按对照表更新）
+
+| 变更内容 | 必须更新 |
+|----------|----------|
+| 新增/修改 API、路由、中间件 | `docs/后端架构设计.md` |
+| 新增/修改页面、交互流程 | `docs/页面线框图.md`、`docs/PRD-ClawBuddy产品需求文档.md` |
+| K8s 资源定义变更（Deployment/Service/Ingress 等） | `docs/K8s交互层实现设计.md`、`docs/VKE部署方案.md` |
+| 部署流程、镜像构建变更 | `docs/VKE部署方案.md`、`docs/OpenClaw镜像构建规范.md` |
+| 技术栈、整体架构变更 | `docs/PRD-ClawBuddy产品需求文档.md`、`docs/后端架构设计.md` |
+| 数据库模型、表结构变更 | `docs/后端架构设计.md` |
+| 新增基础设施组件（如日志、Ingress Controller） | `docs/后端架构设计.md`、`docs/VKE部署方案.md` |
+
+### 2. README 文档（按影响范围更新）
+
+- **根 README** (`README.md`)：整体架构、项目结构变更时更新
+- **后端 README** (`claw-buddy-backend/README.md`)：后端配置项、启动方式、目录结构、新功能模块变更时更新
+- **前端 README** (`claw-buddy-frontend/README.md`)：前端配置项、启动方式变更时更新
+- **制品 README** (`claw-buddy-artifacts/README.md`)：部署制品、镜像变更时更新
+- **子目录 README**：新建目录时必须创建
+
+### 3. 注释 / docstring
+
+- 函数签名、参数变了 → 同步更新注释和 docstring
+
+**判断标准**：如果一个新人看了文档但没看代码，会不会被误导？会就说明文档没更新到位。
+
 ## 禁止行为
 
 - 不准在文档没更新的情况下创建新文件或目录
 - 不准先写代码再"补"文档
 - 不准跳过文档确认直接进入实现阶段
 - 不准新建目录后不写 README
+- **不准改了代码不更新文档** — 代码和文档必须在同一次操作中同步完成
+- **不准说"后续再更新文档"** — 没有后续，当下就更新
