@@ -106,7 +106,7 @@ kubectl apply -f deploy.yaml
 
 # 2. 创建 TLS Secret（通配符证书）
 kubectl create secret tls wildcard-nodesk-tls \
-  --cert=fullchain.pem --key=privkey.pem -n ingress-nginx
+  --cert=fullchain.pem --key=privkey.pem -n clawbuddy-system
 
 # 3. 配置火山云 SLB 转发 80→30080, 443→30443
 ```

@@ -12,7 +12,7 @@ ClawBuddy 使用 Nginx Ingress Controller 实现 OpenClaw 实例的子域名自�
   |
   v
 K8s Nginx Ingress Controller (NodePort 30080/30443)
-  | 按 Host 匹配: {instance-name}.nodesk.tech
+  | 按 Host 匹配: {instance-name}-clawbuddy.nodesk.tech
   v
 实例 ClusterIP Service (:18789)
   |
@@ -40,8 +40,8 @@ kubectl apply -f deploy.yaml
 验证部署状态：
 
 ```bash
-kubectl get pods -n ingress-nginx
-# 确认 ingress-nginx-controller Pod 为 Running 状态
+kubectl get pods -n clawbuddy-system
+# 确认 clawbuddy-system-controller Pod 为 Running 状态
 ```
 
 ### 2. 创建 TLS Secret
@@ -52,7 +52,7 @@ kubectl get pods -n ingress-nginx
 kubectl create secret tls wildcard-nodesk-tls \
   --cert=fullchain.pem \
   --key=privkey.pem \
-  -n ingress-nginx
+  -n clawbuddy-system
 ```
 
 方式二：编辑 `tls-secret.yaml` 填入 base64 编码后的证书
@@ -79,9 +79,10 @@ kubectl apply -f tls-secret.yaml
 在 ClawBuddy 的 Settings 页面配置：
 
 - **基础域名**: `nodesk.tech`
+- **子域名后缀**: `clawbuddy`
 - **TLS Secret 名称**: `wildcard-nodesk-tls`
 
-配置完成后，每次部署 OpenClaw 实例时，ClawBuddy 会自动创建 Ingress 规则，实现子域名路由。
+配置完成后，每次部署 OpenClaw 实例时，ClawBuddy 会自动创建 Ingress 规则，域名格式为 `{name}-clawbuddy.nodesk.tech`。
 
 ## 文件说明
 
@@ -97,10 +98,10 @@ kubectl apply -f tls-secret.yaml
 
 ```bash
 # 检查 Controller Pod
-kubectl get pods -n ingress-nginx
+kubectl get pods -n clawbuddy-system
 
 # 检查 Service NodePort
-kubectl get svc -n ingress-nginx
+kubectl get svc -n clawbuddy-system
 
 # 检查 IngressClass
 kubectl get ingressclass
