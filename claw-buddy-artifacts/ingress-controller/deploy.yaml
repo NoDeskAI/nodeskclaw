@@ -241,18 +241,16 @@ metadata:
     app.kubernetes.io/name: clawbuddy-system
     app.kubernetes.io/component: controller
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
     - name: http
       port: 80
       targetPort: http
       protocol: TCP
-      nodePort: 30080
     - name: https
       port: 443
       targetPort: https
       protocol: TCP
-      nodePort: 30443
   selector:
     app.kubernetes.io/name: clawbuddy-system
     app.kubernetes.io/component: controller
