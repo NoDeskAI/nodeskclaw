@@ -123,10 +123,40 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 4. 全部满足才继续执行
 5. 不要假设用户已经配好了任何东西，不要跳过检查直接干
 
+## Docker 镜像架构规则
+
+**所有 Docker 镜像操作必须显式指定 `linux/amd64` 平台，因为开发机是 Apple Silicon（arm64），而目标 K8s 集群（火山云 VKE）运行 `amd64` 节点。**
+
+这个问题已经反复出现过多次，必须严格遵守。
+
+### 必须做
+
+- `docker build` 必须加 `--platform linux/amd64`
+- `docker pull`（用于搬运镜像到私有仓库时）必须加 `--platform linux/amd64`
+- 编写 Dockerfile、构建脚本、文档中涉及 `docker build` / `docker pull` 的地方，都要包含平台参数
+- 给用户提供 Docker 命令时，始终带上 `--platform linux/amd64`
+
+### 严禁
+
+- **禁止省略 `--platform`**：不要假设默认架构正确，Mac 默认拉 arm64，推到 CR 后 amd64 节点拉不了
+- **禁止事后才想起来**：写命令的第一时间就加上，不要等用户踩坑后再补
+
+### 示例
+
+```bash
+# 正确
+docker pull --platform linux/amd64 registry.k8s.io/ingress-nginx/controller:v1.12.0
+docker build --platform linux/amd64 -t my-image:latest .
+
+# 错误 - 缺少 --platform，Mac 上会拉/构建 arm64
+docker pull registry.k8s.io/ingress-nginx/controller:v1.12.0
+docker build -t my-image:latest .
+```
+
 ## 基础设施约束
 
 - **数据库**：火山云 RDS PostgreSQL，不用本地 SQLite，不自建 Docker PostgreSQL 容器
-- **K8s**：火山云 VKE，M1 单集群
+- **K8s**：火山云 VKE，M1 单集群，节点架构 `linux/amd64`
 - **不准擅自引入新的基础设施依赖**（如本地数据库容器、消息队列、Redis 等），必须先跟用户确认
 
 ## 软删除规则

@@ -177,9 +177,11 @@ spec:
     spec:
       serviceAccountName: clawbuddy-system
       terminationGracePeriodSeconds: 300
+      imagePullSecrets:
+        - name: cr-pull-secret
       containers:
         - name: controller
-          image: registry.k8s.io/clawbuddy-system/controller:v1.12.0
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nginx-ingress-controller:v1.12.0
           args:
             - /nginx-ingress-controller
             - --publish-service=$(POD_NAMESPACE)/clawbuddy-system-controller
