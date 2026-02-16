@@ -2,12 +2,40 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class FeishuCallbackRequest(BaseModel):
     code: str
     redirect_uri: str | None = None
+
+
+class EmailRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str = ""
+
+
+class EmailLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class SmsSendRequest(BaseModel):
+    phone: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        v = v.strip()
+        if not v or len(v) < 8:
+            raise ValueError("手机号格式不正确")
+        return v
+
+
+class SmsLoginRequest(BaseModel):
+    phone: str
+    code: str
 
 
 class TokenResponse(BaseModel):
@@ -23,9 +51,10 @@ class RefreshTokenRequest(BaseModel):
 
 class UserInfo(BaseModel):
     id: str
-    feishu_uid: str
+    feishu_uid: str | None = None
     name: str
     email: str | None = None
+    phone: str | None = None
     avatar_url: str | None = None
     role: str
     is_super_admin: bool = False

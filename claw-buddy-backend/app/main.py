@@ -170,6 +170,50 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 clusters 表添加 org_id 列")
 
+        # ── 迁移 6: 邮箱/手机/密码登录字段 ──────────────
+
+        # 6a: feishu_uid 改为可空
+        col = await conn.execute(text(
+            "SELECT is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'feishu_uid'"
+        ))
+        row = col.first()
+        if row and row[0] == 'NO':
+            await conn.execute(text("ALTER TABLE users ALTER COLUMN feishu_uid DROP NOT NULL"))
+            logger.info("自动迁移：feishu_uid 改为可空")
+
+        # 6b: phone 列
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'phone'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN phone VARCHAR(32) UNIQUE"
+            ))
+            logger.info("自动迁移：已为 users 表添加 phone 列")
+
+        # 6c: password_hash 列
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'password_hash'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN password_hash VARCHAR(256)"
+            ))
+            logger.info("自动迁移：已为 users 表添加 password_hash 列")
+
+        # 6d: email 加 unique（如果还没有）
+        idx = await conn.execute(text(
+            "SELECT 1 FROM pg_indexes WHERE tablename = 'users' AND indexname = 'uq_users_email'"
+        ))
+        if idx.first() is None:
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email) WHERE email IS NOT NULL AND deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：已为 users.email 添加 partial unique index")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
@@ -179,7 +223,7 @@ async def lifespan(app: FastAPI):
 
         # 检查是否已有组织（幂等）
         org_result = await db.execute(
-            select(Organization).where(Organization.slug == "default")
+            select(Organization).where(Organization.slug.in_(["default", "nodesk-ai"]))
         )
         default_org = org_result.scalar_one_or_none()
 
@@ -188,8 +232,8 @@ async def lifespan(app: FastAPI):
             default_org_id = str(uuid.uuid4())
             default_org = Organization(
                 id=default_org_id,
-                name="默认组织",
-                slug="default",
+                name="NoDesk AI",
+                slug="nodesk-ai",
                 plan="pro",
                 max_instances=50,
                 max_cpu_total="200",

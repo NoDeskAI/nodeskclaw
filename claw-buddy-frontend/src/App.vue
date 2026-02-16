@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch, type Component } from 'vue'
+import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
 import { Notify } from '@/components/ui/notify'
@@ -15,8 +15,9 @@ import {
   Activity,
   Server,
   Settings,
-  Search,
   Bell,
+  PanelLeftClose,
+  PanelLeftOpen,
   PawPrint,
   Building2,
   CreditCard,
@@ -86,6 +87,8 @@ function isActive(path: string) {
   return route.path.startsWith(path)
 }
 
+const sidebarCollapsed = ref(false)
+
 function navigateTo(path: string) {
   router.push(path)
 }
@@ -101,15 +104,20 @@ function navigateTo(path: string) {
   <template v-else>
     <div class="flex h-screen overflow-hidden">
       <!-- 侧边栏 -->
-      <aside class="w-[200px] shrink-0 border-r border-border bg-card flex flex-col">
+      <aside
+        :class="[
+          'shrink-0 border-r border-border bg-card flex flex-col transition-all duration-200',
+          sidebarCollapsed ? 'w-[56px]' : 'w-[200px]',
+        ]"
+      >
         <!-- Logo -->
-        <div class="h-14 flex items-center gap-2 px-4 border-b border-border">
-          <PawPrint class="w-5 h-5 text-primary" />
-          <span class="font-bold text-base">ClawBuddy</span>
+        <div class="h-14 flex items-center gap-2 px-4 border-b border-border overflow-hidden">
+          <PawPrint class="w-5 h-5 text-primary shrink-0" />
+          <span v-if="!sidebarCollapsed" class="font-bold text-base whitespace-nowrap">ClawBuddy</span>
         </div>
 
         <!-- 组织切换 -->
-        <div v-if="orgStore.orgs.length > 1" class="px-2 pt-2">
+        <div v-if="orgStore.orgs.length > 1 && !sidebarCollapsed" class="px-2 pt-2">
           <Select
             :model-value="orgStore.currentOrgId ?? undefined"
             @update:model-value="(v: string) => orgStore.switchOrg(v)"
@@ -131,36 +139,41 @@ function navigateTo(path: string) {
           <button
             v-for="item in mainNavItems"
             :key="item.path"
+            :title="sidebarCollapsed ? item.label : undefined"
             :class="[
-              'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-150',
+              'w-full flex items-center rounded-md text-sm transition-colors duration-150',
+              sidebarCollapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
               isActive(item.path)
                 ? 'bg-sidebar-accent text-primary font-medium'
                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
             ]"
             @click="navigateTo(item.path)"
           >
-            <component :is="item.icon" class="w-4 h-4" />
-            {{ item.label }}
+            <component :is="item.icon" class="w-4 h-4 shrink-0" />
+            <span v-if="!sidebarCollapsed">{{ item.label }}</span>
           </button>
 
           <!-- 平台管理（超管可见） -->
           <template v-if="platformNavItems.length > 0">
-            <div class="pt-4 pb-1 px-3">
-              <span class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">平台管理</span>
+            <div class="pt-4 pb-1" :class="sidebarCollapsed ? 'px-0' : 'px-3'">
+              <span v-if="!sidebarCollapsed" class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">平台管理</span>
+              <div v-else class="border-t border-border mx-2" />
             </div>
             <button
               v-for="item in platformNavItems"
               :key="item.path"
+              :title="sidebarCollapsed ? item.label : undefined"
               :class="[
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-150',
+                'w-full flex items-center rounded-md text-sm transition-colors duration-150',
+                sidebarCollapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
                 isActive(item.path)
                   ? 'bg-sidebar-accent text-primary font-medium'
                   : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
               ]"
               @click="navigateTo(item.path)"
             >
-              <component :is="item.icon" class="w-4 h-4" />
-              {{ item.label }}
+              <component :is="item.icon" class="w-4 h-4 shrink-0" />
+              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
             </button>
           </template>
         </nav>
@@ -170,42 +183,18 @@ function navigateTo(path: string) {
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- 顶栏 -->
         <header class="h-14 flex items-center justify-between px-6 border-b border-border bg-background/80 backdrop-blur-sm">
-          <div class="flex items-center gap-4">
-            <!-- 集群选择 -->
-            <div v-if="clusterStore.clusters.length > 0" class="flex items-center">
-              <Select
-                :model-value="clusterStore.currentClusterId ?? undefined"
-                @update:model-value="(v: string) => clusterStore.selectCluster(v)"
-              >
-                <SelectTrigger class="h-8 w-auto gap-2 border-none bg-transparent shadow-none text-sm font-medium focus:ring-0 px-2">
-                  <Server class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="选择集群" />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  <SelectItem v-for="c in clusterStore.clusters" :key="c.id" :value="c.id">
-                    <div class="flex items-center gap-2">
-                      <span
-                        class="w-1.5 h-1.5 rounded-full shrink-0"
-                        :class="c.status === 'connected' ? 'bg-green-400' : c.status === 'connecting' ? 'bg-yellow-400' : 'bg-red-400'"
-                      />
-                      <span>{{ c.name }}</span>
-                      <span v-if="c.k8s_version" class="text-xs text-muted-foreground ml-1">{{ c.k8s_version }}</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div v-else class="flex items-center gap-2 text-sm text-muted-foreground px-2">
-              <Server class="w-3.5 h-3.5" />
-              <span>无集群</span>
-            </div>
+          <div class="flex items-center gap-3">
+            <button
+              class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              :title="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              @click="sidebarCollapsed = !sidebarCollapsed"
+            >
+              <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" />
+              <PanelLeftClose v-else class="w-4 h-4" />
+            </button>
+            <span class="text-sm font-medium text-muted-foreground">管理后台</span>
           </div>
           <div class="flex items-center gap-4">
-            <!-- 搜索 -->
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-card border border-border text-sm text-muted-foreground w-56 cursor-pointer">
-              <Search class="w-4 h-4" />
-              <span>搜索实例...</span>
-            </div>
             <!-- 通知 -->
             <button class="relative text-muted-foreground hover:text-foreground transition-colors" @click="router.push('/events')">
               <Bell class="w-4 h-4" />

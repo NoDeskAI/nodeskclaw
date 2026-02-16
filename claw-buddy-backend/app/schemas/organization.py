@@ -31,6 +31,7 @@ class OrgInfo(BaseModel):
     max_mem_total: str
     cluster_id: str | None = None
     is_active: bool
+    member_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -44,6 +45,7 @@ class MemberInfo(BaseModel):
     role: str
     user_name: str | None = None
     user_email: str | None = None
+    user_avatar_url: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

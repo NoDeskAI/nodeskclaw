@@ -4,9 +4,10 @@ import api from '@/services/api'
 
 export interface UserInfo {
   id: string
-  feishu_uid: string
+  feishu_uid: string | null
   name: string
   email: string | null
+  phone: string | null
   avatar_url: string | null
   role: string
   is_super_admin: boolean

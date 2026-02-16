@@ -27,6 +27,16 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
   },
+  {
+    path: '/members',
+    name: 'OrgMembers',
+    component: () => import('@/views/OrgMembers.vue'),
+  },
+  {
+    path: '/usage',
+    name: 'OrgUsage',
+    component: () => import('@/views/OrgUsage.vue'),
+  },
 ]
 
 const router = createRouter({

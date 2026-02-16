@@ -131,10 +131,14 @@ const planLabels: Record<string, string> = {
               {{ planLabels[org.plan] || org.plan }}
             </Badge>
           </div>
-          <p class="text-xs text-muted-foreground font-mono">{{ org.slug }}</p>
+          <p class="text-xs text-muted-foreground"><span class="opacity-60">标识符:</span> <span class="font-mono">{{ org.slug }}</span></p>
         </CardHeader>
         <CardContent class="space-y-3">
           <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span class="text-muted-foreground">成员</span>
+              <span class="ml-1 font-medium">{{ org.member_count ?? 0 }} 人</span>
+            </div>
             <div>
               <span class="text-muted-foreground">实例上限</span>
               <span class="ml-1 font-medium">{{ org.max_instances }}</span>
@@ -146,10 +150,6 @@ const planLabels: Record<string, string> = {
             <div>
               <span class="text-muted-foreground">内存上限</span>
               <span class="ml-1 font-medium">{{ org.max_mem_total }}</span>
-            </div>
-            <div>
-              <span class="text-muted-foreground">专属集群</span>
-              <span class="ml-1 font-medium">{{ org.cluster_id ? '是' : '共享' }}</span>
             </div>
           </div>
           <div class="flex items-center gap-2 pt-2 border-t border-border">
@@ -167,7 +167,6 @@ const planLabels: Record<string, string> = {
               成员
             </Button>
             <Button
-              v-if="org.slug !== 'default'"
               variant="ghost"
               size="sm"
               class="h-7 text-xs text-red-400 hover:text-red-300"
@@ -193,8 +192,8 @@ const planLabels: Record<string, string> = {
             <Input v-model="createForm.name" placeholder="e.g. 我的团队" />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Slug（URL 标识，小写字母/数字/短横线）</label>
-            <Input v-model="createForm.slug" placeholder="e.g. my-team" />
+            <label class="text-sm font-medium">标识符（小写字母/数字/短横线，创建后不可更改）</label>
+            <Input v-model="createForm.slug" placeholder="如 my-team" />
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium">套餐</label>

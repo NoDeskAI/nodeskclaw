@@ -19,11 +19,25 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$")
 
 
 async def list_orgs(db: AsyncSession) -> list[OrgInfo]:
-    """列出所有组织（超管使用）。"""
-    result = await db.execute(
-        select(Organization).where(not_deleted(Organization)).order_by(Organization.created_at.desc())
+    """列出所有组织（超管使用），附带成员数。"""
+    member_count_sub = (
+        select(func.count(OrgMembership.id))
+        .where(OrgMembership.org_id == Organization.id, not_deleted(OrgMembership))
+        .correlate(Organization)
+        .scalar_subquery()
+        .label("member_count")
     )
-    return [OrgInfo.model_validate(o) for o in result.scalars().all()]
+    result = await db.execute(
+        select(Organization, member_count_sub)
+        .where(not_deleted(Organization))
+        .order_by(Organization.created_at.desc())
+    )
+    orgs = []
+    for org, count in result.all():
+        info = OrgInfo.model_validate(org)
+        info.member_count = count or 0
+        orgs.append(info)
+    return orgs
 
 
 async def get_org(org_id: str, db: AsyncSession) -> Organization:
@@ -78,10 +92,26 @@ async def update_org(org_id: str, body: OrgUpdate, db: AsyncSession) -> OrgInfo:
 
 
 async def delete_org(org_id: str, db: AsyncSession) -> None:
-    """软删除组织。"""
+    """软删除组织（仍有运行中实例时禁止删除）。"""
+    from app.models.instance import Instance, InstanceStatus
+
     org = await get_org(org_id, db)
-    if org.slug == "default":
-        raise ForbiddenError("默认组织不可删除")
+
+    active_statuses = {
+        InstanceStatus.running, InstanceStatus.creating,
+        InstanceStatus.deploying, InstanceStatus.pending, InstanceStatus.updating,
+    }
+    result = await db.execute(
+        select(func.count()).select_from(Instance).where(
+            Instance.org_id == org_id,
+            Instance.deleted_at.is_(None),
+            Instance.status.in_(active_statuses),
+        )
+    )
+    count = result.scalar() or 0
+    if count > 0:
+        raise ForbiddenError(f"该组织下仍有 {count} 个活跃实例，请先删除或停止所有实例")
+
     org.soft_delete()
     await db.commit()
 
@@ -104,6 +134,7 @@ async def list_members(org_id: str, db: AsyncSession) -> list[MemberInfo]:
             role=membership.role,
             user_name=user.name,
             user_email=user.email,
+            user_avatar_url=user.avatar_url,
             created_at=membership.created_at,
         ))
     return members
@@ -147,6 +178,7 @@ async def add_member(org_id: str, user_id: str, role: str, db: AsyncSession) -> 
         role=membership.role,
         user_name=user.name,
         user_email=user.email,
+        user_avatar_url=user.avatar_url,
         created_at=membership.created_at,
     )
 
@@ -177,6 +209,7 @@ async def update_member_role(org_id: str, membership_id: str, role: str, db: Asy
         role=membership.role,
         user_name=user.name,
         user_email=user.email,
+        user_avatar_url=user.avatar_url,
         created_at=membership.created_at,
     )
 
@@ -230,12 +263,19 @@ async def switch_org(user: User, org_id: str, db: AsyncSession) -> OrgInfo:
 
 
 async def list_user_orgs(user: User, db: AsyncSession) -> list[OrgInfo]:
-    """列出用户所属的所有组织。"""
+    """列出用户所属的所有组织，附带成员数。"""
     if user.is_super_admin:
         return await list_orgs(db)
 
+    member_count_sub = (
+        select(func.count(OrgMembership.id))
+        .where(OrgMembership.org_id == Organization.id, not_deleted(OrgMembership))
+        .correlate(Organization)
+        .scalar_subquery()
+        .label("member_count")
+    )
     result = await db.execute(
-        select(Organization)
+        select(Organization, member_count_sub)
         .join(OrgMembership, OrgMembership.org_id == Organization.id)
         .where(
             OrgMembership.user_id == user.id,
@@ -244,4 +284,9 @@ async def list_user_orgs(user: User, db: AsyncSession) -> list[OrgInfo]:
         )
         .order_by(Organization.created_at.desc())
     )
-    return [OrgInfo.model_validate(o) for o in result.scalars().all()]
+    orgs = []
+    for org, count in result.all():
+        info = OrgInfo.model_validate(org)
+        info.member_count = count or 0
+        orgs.append(info)
+    return orgs

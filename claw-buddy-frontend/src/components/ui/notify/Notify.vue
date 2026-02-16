@@ -27,14 +27,14 @@ const colorMap: Record<string, string> = {
           v-for="item in queue"
           :key="item.id"
           :class="[
-            'pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-lg border shadow-lg backdrop-blur-sm',
+            'pointer-events-auto flex items-start gap-2.5 px-4 py-2.5 rounded-lg border shadow-lg backdrop-blur-sm',
             'text-sm font-medium min-w-[200px] max-w-[380px]',
             colorMap[item.type],
             item.leaving ? 'notify-leave-active' : '',
           ]"
         >
-          <component :is="iconMap[item.type]" class="w-4 h-4 shrink-0" />
-          <span class="flex-1 truncate">{{ item.message }}</span>
+          <component :is="iconMap[item.type]" class="w-4 h-4 shrink-0 mt-0.5" />
+          <span class="flex-1 break-words">{{ item.message }}</span>
           <button
             class="shrink-0 opacity-50 hover:opacity-100 transition-opacity"
             @click="dismiss(item.id)"

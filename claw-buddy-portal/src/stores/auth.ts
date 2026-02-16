@@ -6,6 +6,7 @@ export interface PortalUser {
   id: string
   name: string
   email: string | null
+  phone: string | null
   avatar_url: string | null
   is_super_admin: boolean
   current_org_id: string | null
@@ -59,5 +60,39 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { token, refreshToken, user, isLoggedIn, setTokens, clearAuth, feishuLogin, fetchUser, logout }
+  async function emailRegister(email: string, password: string, name: string) {
+    const res = await api.post('/auth/register', { email, password, name })
+    const data = res.data.data
+    setTokens(data.access_token, data.refresh_token)
+    user.value = data.user
+    return data
+  }
+
+  async function emailLogin(email: string, password: string) {
+    const res = await api.post('/auth/login', { email, password })
+    const data = res.data.data
+    setTokens(data.access_token, data.refresh_token)
+    user.value = data.user
+    return data
+  }
+
+  async function sendSmsCode(phone: string) {
+    const res = await api.post('/auth/sms/send', { phone })
+    return res.data
+  }
+
+  async function smsLogin(phone: string, code: string) {
+    const res = await api.post('/auth/sms/login', { phone, code })
+    const data = res.data.data
+    setTokens(data.access_token, data.refresh_token)
+    user.value = data.user
+    return data
+  }
+
+  return {
+    token, refreshToken, user, isLoggedIn,
+    setTokens, clearAuth,
+    feishuLogin, emailRegister, emailLogin, sendSmsCode, smsLogin,
+    fetchUser, logout,
+  }
 })

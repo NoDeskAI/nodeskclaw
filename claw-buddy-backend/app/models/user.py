@@ -17,9 +17,11 @@ class UserRole(str, Enum):
 class User(BaseModel):
     __tablename__ = "users"
 
-    feishu_uid: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    feishu_uid: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(256), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(256), unique=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default=UserRole.user, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

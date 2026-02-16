@@ -17,6 +17,8 @@ dependencies = [
     "httpx>=0.28.0",
     # Config
     "pydantic-settings>=2.7.0",
+    # Email validation (for EmailStr)
+    "email-validator>=2.1.0",
     # Encryption (KubeConfig AES-256-GCM)
     "cryptography>=44.0.0",
     # K8s

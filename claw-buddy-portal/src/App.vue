@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Home, Plus, Settings, LogOut } from 'lucide-vue-next'
+import { PawPrint, Home, Plus, Settings, LogOut, Users, BarChart3 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +56,26 @@ function handleLogout() {
             >
               <Plus class="w-4 h-4 inline mr-1.5" />
               创建实例
+            </button>
+            <button
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
+                route.path === '/members' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+              ]"
+              @click="router.push('/members')"
+            >
+              <Users class="w-4 h-4 inline mr-1.5" />
+              成员
+            </button>
+            <button
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
+                route.path === '/usage' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+              ]"
+              @click="router.push('/usage')"
+            >
+              <BarChart3 class="w-4 h-4 inline mr-1.5" />
+              用量
             </button>
             <button
               :class="[
