@@ -175,3 +175,10 @@ docker build -t my-image:latest .
 - **禁止 `db.delete()`**：不允许调用 SQLAlchemy 的物理删除方法
 - **禁止 `DELETE FROM`**：不允许原生 SQL 物理删除
 - **禁止遗漏过滤**：新增查询必须包含 `deleted_at.is_(None)` 条件，否则会查到已删除的数据
+
+## 导入完整性规则
+
+**在函数/代码块内使用模型或工具类时，必须确保该作用域内有对应的 import。**
+
+- `main.py` 的 `lifespan` 函数中延迟导入了部分模型（如 `Cluster`），但新增的迁移代码使用了其他模型（如 `User`、`Instance`）时，必须在同一作用域内补上 `from app.models.xxx import Xxx`
+- 不要假设外层已经导入了某个符号——每个 `async with` 块都是独立作用域，需要各自导入依赖

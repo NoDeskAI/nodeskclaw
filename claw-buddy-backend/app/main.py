@@ -175,6 +175,7 @@ async def lifespan(app: FastAPI):
         from app.models.org_membership import OrgMembership, OrgRole
         from app.models.organization import Organization
         from app.models.plan import Plan
+        from app.models.user import User
 
         # 检查是否已有组织（幂等）
         org_result = await db.execute(
