@@ -41,11 +41,16 @@ async def check_name(
 @router.get("", response_model=ApiResponse[list[InstanceInfo]])
 async def list_instances(
     cluster_id: str | None = Query(None),
+    org_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """实例列表。"""
-    data = await instance_service.list_instances(db, cluster_id)
+    """实例列表（按组织过滤，非超管只能看自己组织的）。"""
+    # 非超管强制按当前组织过滤
+    effective_org_id = org_id
+    if not current_user.is_super_admin:
+        effective_org_id = current_user.current_org_id
+    data = await instance_service.list_instances(db, cluster_id, org_id=effective_org_id)
     return ApiResponse(data=data)
 
 

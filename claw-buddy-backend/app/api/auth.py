@@ -1,9 +1,10 @@
-"""Auth endpoints: Feishu SSO, token refresh, user info, logout."""
+"""Auth endpoints: Feishu SSO, token refresh, user info, logout, user management."""
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db
+from app.core.deps import get_db, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
@@ -43,3 +44,16 @@ async def me(current_user: User = Depends(get_current_user)):
 async def logout(current_user: User = Depends(get_current_user)):
     """登出（客户端清除 Token 即可，服务端无需额外操作）。"""
     return ApiResponse(message="已登出")
+
+
+@router.get("/users", response_model=ApiResponse[list[UserInfo]])
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_super_admin_dep),
+):
+    """列出所有用户（超管）。"""
+    result = await db.execute(
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
+    )
+    users = [UserInfo.model_validate(u) for u in result.scalars().all()]
+    return ApiResponse(data=users)

@@ -109,16 +109,16 @@ class K8sClient:
         ns_list = await self.core.list_namespace()
         return [ns.metadata.name for ns in ns_list.items]
 
-    async def ensure_namespace(self, name: str):
+    async def ensure_namespace(self, name: str, extra_labels: dict[str, str] | None = None):
+        labels = {"app.kubernetes.io/managed-by": "clawbuddy"}
+        if extra_labels:
+            labels.update(extra_labels)
         try:
             await self.core.read_namespace(name)
         except k8s_client.ApiException as e:
             if e.status == 404:
                 body = k8s_client.V1Namespace(
-                    metadata=k8s_client.V1ObjectMeta(
-                        name=name,
-                        labels={"app.kubernetes.io/managed-by": "clawbuddy"},
-                    )
+                    metadata=k8s_client.V1ObjectMeta(name=name, labels=labels)
                 )
                 await self.core.create_namespace(body)
             else:

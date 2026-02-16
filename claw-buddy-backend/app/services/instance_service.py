@@ -59,10 +59,16 @@ async def check_name_conflict(
     return {"conflict": False, "reason": ""}
 
 
-async def list_instances(db: AsyncSession, cluster_id: str | None = None) -> list[InstanceInfo]:
+async def list_instances(
+    db: AsyncSession,
+    cluster_id: str | None = None,
+    org_id: str | None = None,
+) -> list[InstanceInfo]:
     query = select(Instance).where(Instance.deleted_at.is_(None)).order_by(Instance.created_at.desc())
     if cluster_id:
         query = query.where(Instance.cluster_id == cluster_id)
+    if org_id:
+        query = query.where(Instance.org_id == org_id)
     result = await db.execute(query)
     return [InstanceInfo.model_validate(i) for i in result.scalars().all()]
 

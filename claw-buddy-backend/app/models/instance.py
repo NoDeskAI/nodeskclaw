@@ -74,8 +74,12 @@ class Instance(BaseModel):
 
     # FK
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    org_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=True, index=True
+    )
 
     # relationships
     cluster = relationship("Cluster", back_populates="instances")
     creator = relationship("User", back_populates="instances", foreign_keys=[created_by])
+    organization = relationship("Organization", back_populates="instances")
     deploy_records = relationship("DeployRecord", back_populates="instance", cascade="save-update, merge")

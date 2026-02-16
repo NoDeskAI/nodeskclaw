@@ -378,23 +378,42 @@ def build_network_policy(
     namespace: str,
     labels: dict,
     peer_namespaces: list[str],
+    org_id: str | None = None,
 ) -> dict:
-    """Build NetworkPolicy to allow cross-instance traffic."""
-    ingress_from = []
+    """Build NetworkPolicy for multi-tenant isolation.
+
+    默认策略:
+    - 允许来自同 Namespace 内的 Pod 访问
+    - 允许来自 Ingress Controller 命名空间（clawbuddy-system）的流量
+    - 允许同组织其他 Namespace 的流量（通过 peer_namespaces）
+    - 拒绝其他所有入站流量
+    """
+    ingress_from: list[dict] = [
+        # 同 Namespace 内 Pod 互访
+        {"podSelector": {}},
+        # 允许 Ingress Controller 访问
+        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "clawbuddy-system"}}},
+    ]
+
+    # 同组织其他实例的命名空间
     for ns in peer_namespaces:
         ingress_from.append({
             "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": ns}},
             "podSelector": {"matchLabels": {"app.kubernetes.io/managed-by": MANAGED_BY}},
         })
 
+    policy_labels = dict(labels)
+    if org_id:
+        policy_labels["clawbuddy.io/org-id"] = org_id
+
     return {
         "apiVersion": "networking.k8s.io/v1",
         "kind": "NetworkPolicy",
-        "metadata": {"name": name, "namespace": namespace, "labels": labels},
+        "metadata": {"name": name, "namespace": namespace, "labels": policy_labels},
         "spec": {
-            "podSelector": {"matchLabels": {"app.kubernetes.io/name": labels.get("app.kubernetes.io/name")}},
+            "podSelector": {},  # 作用于整个 Namespace
             "policyTypes": ["Ingress"],
-            "ingress": [{"from": ingress_from}] if ingress_from else [],
+            "ingress": [{"from": ingress_from}],
         },
     }
 

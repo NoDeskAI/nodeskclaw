@@ -111,6 +111,149 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已将 instances.name 唯一约束替换为 partial unique index")
 
+        # ── 迁移 5: SaaS 多租户字段 ──────────────────────
+
+        # 5a: users 表新增 is_super_admin
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'is_super_admin'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN is_super_admin BOOLEAN NOT NULL DEFAULT false"
+            ))
+            # 把现有 admin 用户提升为 super_admin
+            await conn.execute(text(
+                "UPDATE users SET is_super_admin = true WHERE role = 'admin'"
+            ))
+            logger.info("自动迁移：已为 users 表添加 is_super_admin 列")
+
+        # 5b: users 表新增 current_org_id
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'current_org_id'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN current_org_id VARCHAR(36) "
+                "REFERENCES organizations(id)"
+            ))
+            logger.info("自动迁移：已为 users 表添加 current_org_id 列")
+
+        # 5c: instances 表新增 org_id
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'org_id'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN org_id VARCHAR(36) "
+                "REFERENCES organizations(id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_instances_org_id ON instances(org_id)"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 org_id 列")
+
+        # 5d: clusters 表新增 org_id
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'clusters' AND column_name = 'org_id'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE clusters ADD COLUMN org_id VARCHAR(36) "
+                "REFERENCES organizations(id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_clusters_org_id ON clusters(org_id)"
+            ))
+            logger.info("自动迁移：已为 clusters 表添加 org_id 列")
+
+    # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
+    async with async_session_factory() as db:
+        from app.models.org_membership import OrgMembership, OrgRole
+        from app.models.organization import Organization
+        from app.models.plan import Plan
+
+        # 检查是否已有组织（幂等）
+        org_result = await db.execute(
+            select(Organization).where(Organization.slug == "default")
+        )
+        default_org = org_result.scalar_one_or_none()
+
+        if default_org is None:
+            import uuid
+            default_org_id = str(uuid.uuid4())
+            default_org = Organization(
+                id=default_org_id,
+                name="默认组织",
+                slug="default",
+                plan="pro",
+                max_instances=50,
+                max_cpu_total="200",
+                max_mem_total="400Gi",
+            )
+            db.add(default_org)
+            await db.flush()
+
+            # 把现有用户全部归入默认组织
+            users_result = await db.execute(
+                select(User).where(User.deleted_at.is_(None))
+            )
+            for u in users_result.scalars().all():
+                membership = OrgMembership(
+                    user_id=u.id,
+                    org_id=default_org.id,
+                    role=OrgRole.admin if u.role == "admin" else OrgRole.member,
+                )
+                db.add(membership)
+                u.current_org_id = default_org.id
+
+            # 把现有实例归入默认组织
+            from app.models.instance import Instance
+            inst_result = await db.execute(
+                select(Instance).where(
+                    Instance.org_id.is_(None),
+                    Instance.deleted_at.is_(None),
+                )
+            )
+            for inst in inst_result.scalars().all():
+                inst.org_id = default_org.id
+
+            await db.commit()
+            logger.info("自动迁移：已创建默认组织并迁移现有数据")
+
+        # 种子套餐（幂等）
+        plan_result = await db.execute(select(Plan).limit(1))
+        if plan_result.scalar_one_or_none() is None:
+            seed_plans = [
+                Plan(
+                    name="free", display_name="免费版",
+                    max_instances=1,
+                    max_cpu_per_instance="2000m", max_mem_per_instance="4Gi",
+                    allowed_specs='["small"]',
+                    dedicated_cluster=False, price_monthly=0,
+                ),
+                Plan(
+                    name="pro", display_name="专业版",
+                    max_instances=10,
+                    max_cpu_per_instance="4000m", max_mem_per_instance="8Gi",
+                    allowed_specs='["small","medium"]',
+                    dedicated_cluster=False, price_monthly=9900,
+                ),
+                Plan(
+                    name="enterprise", display_name="企业版",
+                    max_instances=50,
+                    max_cpu_per_instance="8000m", max_mem_per_instance="16Gi",
+                    allowed_specs='["small","medium","large"]',
+                    dedicated_cluster=True, price_monthly=49900,
+                ),
+            ]
+            db.add_all(seed_plans)
+            await db.commit()
+            logger.info("自动迁移：已种子化 3 个套餐")
+
     # 预热 K8s 连接池：从 DB 加载所有已连接集群
     async with async_session_factory() as db:
         result = await db.execute(

@@ -40,7 +40,9 @@ async def deploy(
 ):
     """执行部署：同步创建记录后立即返回，K8s 管道在后台异步执行。"""
     try:
-        deploy_id, ctx = await deploy_service.deploy_instance(body, current_user, db)
+        deploy_id, ctx = await deploy_service.deploy_instance(
+            body, current_user, db, org_id=current_user.current_org_id
+        )
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail=f"实例名称 '{body.name}' 已存在，请更换名称")

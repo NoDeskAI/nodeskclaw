@@ -28,6 +28,8 @@ class UserInfo(BaseModel):
     email: str | None = None
     avatar_url: str | None = None
     role: str
+    is_super_admin: bool = False
+    current_org_id: str | None = None
     last_login_at: datetime | None = None
 
     model_config = {"from_attributes": True}

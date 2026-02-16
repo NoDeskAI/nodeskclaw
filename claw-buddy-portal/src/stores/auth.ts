@@ -2,38 +2,35 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
-export interface UserInfo {
+export interface PortalUser {
   id: string
-  feishu_uid: string
   name: string
   email: string | null
   avatar_url: string | null
-  role: string
   is_super_admin: boolean
   current_org_id: string | null
-  last_login_at: string | null
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('token'))
-  const refreshToken = ref<string | null>(localStorage.getItem('refresh_token'))
-  const user = ref<UserInfo | null>(null)
+  const token = ref<string | null>(localStorage.getItem('portal_token'))
+  const refreshToken = ref<string | null>(localStorage.getItem('portal_refresh_token'))
+  const user = ref<PortalUser | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
 
   function setTokens(access: string, refresh: string) {
     token.value = access
     refreshToken.value = refresh
-    localStorage.setItem('token', access)
-    localStorage.setItem('refresh_token', refresh)
+    localStorage.setItem('portal_token', access)
+    localStorage.setItem('portal_refresh_token', refresh)
   }
 
   function clearAuth() {
     token.value = null
     refreshToken.value = null
     user.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('portal_token')
+    localStorage.removeItem('portal_refresh_token')
   }
 
   async function feishuLogin(code: string) {
@@ -62,15 +59,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return {
-    token,
-    refreshToken,
-    user,
-    isLoggedIn,
-    setTokens,
-    clearAuth,
-    feishuLogin,
-    fetchUser,
-    logout,
-  }
+  return { token, refreshToken, user, isLoggedIn, setTokens, clearAuth, feishuLogin, fetchUser, logout }
 })

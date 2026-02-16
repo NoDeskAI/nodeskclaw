@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { Notify } from '@/components/ui/notify'
 import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
+import { useOrgStore } from '@/stores/org'
 import { useGlobalSSE } from '@/composables/useGlobalSSE'
 import { useTokenAlert } from '@/composables/useTokenAlert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -17,16 +18,21 @@ import {
   Search,
   Bell,
   PawPrint,
+  Building2,
+  CreditCard,
+  Users,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const clusterStore = useClusterStore()
+const orgStore = useOrgStore()
 const { sseConnected, clusterConnected, startGlobalSSE } = useGlobalSSE()
 const { tokenWarning, startTokenAlert, stopTokenAlert } = useTokenAlert()
 
 const isLoginPage = computed(() => route.path === '/login')
+const isSuperAdmin = computed(() => authStore.user?.is_super_admin === true)
 
 onMounted(async () => {
   if (authStore.isLoggedIn && !authStore.user) {
@@ -34,6 +40,7 @@ onMounted(async () => {
   }
   if (authStore.isLoggedIn) {
     await clusterStore.fetchClusters()
+    await orgStore.fetchMyOrgs()
   }
 })
 
@@ -57,13 +64,22 @@ interface NavItem {
   path: string
 }
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
   { label: '总览', icon: LayoutGrid, path: '/' },
   { label: '实例', icon: Box, path: '/instances' },
   { label: '事件', icon: Activity, path: '/events' },
   { label: '集群', icon: Server, path: '/cluster' },
   { label: '设置', icon: Settings, path: '/settings' },
 ]
+
+const platformNavItems = computed<NavItem[]>(() => {
+  if (!isSuperAdmin.value) return []
+  return [
+    { label: '组织管理', icon: Building2, path: '/platform/orgs' },
+    { label: '用户管理', icon: Users, path: '/platform/users' },
+    { label: '套餐管理', icon: CreditCard, path: '/platform/plans' },
+  ]
+})
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
@@ -85,17 +101,35 @@ function navigateTo(path: string) {
   <template v-else>
     <div class="flex h-screen overflow-hidden">
       <!-- 侧边栏 -->
-      <aside class="w-[200px] flex-shrink-0 border-r border-border bg-card flex flex-col">
+      <aside class="w-[200px] shrink-0 border-r border-border bg-card flex flex-col">
         <!-- Logo -->
         <div class="h-14 flex items-center gap-2 px-4 border-b border-border">
           <PawPrint class="w-5 h-5 text-primary" />
           <span class="font-bold text-base">ClawBuddy</span>
         </div>
 
+        <!-- 组织切换 -->
+        <div v-if="orgStore.orgs.length > 1" class="px-2 pt-2">
+          <Select
+            :model-value="orgStore.currentOrgId ?? undefined"
+            @update:model-value="(v: string) => orgStore.switchOrg(v)"
+          >
+            <SelectTrigger class="h-8 w-full text-xs border-dashed">
+              <Building2 class="w-3 h-3 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="选择组织" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="o in orgStore.orgs" :key="o.id" :value="o.id">
+                {{ o.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <!-- 导航 -->
         <nav class="flex-1 py-2 space-y-0.5 px-2">
           <button
-            v-for="item in navItems"
+            v-for="item in mainNavItems"
             :key="item.path"
             :class="[
               'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-150',
@@ -108,6 +142,27 @@ function navigateTo(path: string) {
             <component :is="item.icon" class="w-4 h-4" />
             {{ item.label }}
           </button>
+
+          <!-- 平台管理（超管可见） -->
+          <template v-if="platformNavItems.length > 0">
+            <div class="pt-4 pb-1 px-3">
+              <span class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">平台管理</span>
+            </div>
+            <button
+              v-for="item in platformNavItems"
+              :key="item.path"
+              :class="[
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-150',
+                isActive(item.path)
+                  ? 'bg-sidebar-accent text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+              ]"
+              @click="navigateTo(item.path)"
+            >
+              <component :is="item.icon" class="w-4 h-4" />
+              {{ item.label }}
+            </button>
+          </template>
         </nav>
       </aside>
 

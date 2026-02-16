@@ -67,6 +67,27 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: () => import('@/views/Settings/index.vue'),
   },
+  // ── 平台管理（超管） ──
+  {
+    path: '/platform/orgs',
+    name: 'PlatformOrgs',
+    component: () => import('@/views/Platform/Organizations.vue'),
+  },
+  {
+    path: '/platform/orgs/:orgId/members',
+    name: 'PlatformOrgMembers',
+    component: () => import('@/views/Platform/OrgMembers.vue'),
+  },
+  {
+    path: '/platform/users',
+    name: 'PlatformUsers',
+    component: () => import('@/views/Platform/Users.vue'),
+  },
+  {
+    path: '/platform/plans',
+    name: 'PlatformPlans',
+    component: () => import('@/views/Platform/Plans.vue'),
+  },
 ]
 
 const router = createRouter({
