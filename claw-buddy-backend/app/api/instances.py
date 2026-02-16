@@ -139,6 +139,17 @@ async def rollback_instance(
     return ApiResponse(data=data)
 
 
+@router.post("/{instance_id}/sync-token", response_model=ApiResponse[dict])
+async def sync_token(
+    instance_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """从运行中的 Pod 获取 Gateway Token 并回填到 DB。"""
+    token = await instance_service.sync_gateway_token(instance_id, db)
+    return ApiResponse(data={"token": token})
+
+
 @router.get("/{instance_id}/pods/{pod_name}/logs", response_model=ApiResponse[str])
 async def pod_logs(
     instance_id: str,

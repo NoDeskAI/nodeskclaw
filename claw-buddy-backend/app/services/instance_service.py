@@ -385,6 +385,79 @@ async def _execute_config_update(
     return InstanceInfo.model_validate(instance)
 
 
+async def sync_gateway_token(instance_id: str, db: AsyncSession) -> str:
+    """从运行中的 Pod 读取 OPENCLAW_GATEWAY_TOKEN 并回填到 DB 和 ConfigMap。"""
+    instance = await get_instance(instance_id, db)
+
+    # 如果 DB 中已有 Token，直接返回
+    env_vars = json.loads(instance.env_vars) if instance.env_vars else {}
+    if env_vars.get("OPENCLAW_GATEWAY_TOKEN"):
+        return env_vars["OPENCLAW_GATEWAY_TOKEN"]
+
+    # 获取集群连接
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
+    cluster = cluster_result.scalar_one_or_none()
+    if not cluster:
+        raise NotFoundError("集群不存在")
+
+    api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
+    k8s = K8sClient(api_client)
+
+    # 找一个 Running 的 Pod
+    label_selector = f"app.kubernetes.io/name={instance.name}"
+    pods = await k8s.list_pods(instance.namespace, label_selector)
+    logger.info("sync_gateway_token: found %d pods (label=%s)", len(pods), label_selector)
+    running_pods = [p for p in pods if p["phase"] == "Running"]
+    if not running_pods:
+        phases = [p["phase"] for p in pods]
+        raise NotFoundError(f"没有运行中的 Pod，无法获取 Token（当前状态: {phases}）")
+
+    pod_name = running_pods[0]["name"]
+    logger.info("sync_gateway_token: reading logs from pod %s", pod_name)
+
+    # 从 Pod 启动日志中解析 Token（entrypoint 会打印 "[entrypoint] Token: xxx"）
+    # 使用 limit_bytes 从头部读取（Token 在容器启动时输出，tail_lines 取不到）
+    import re as _re
+    try:
+        logs = await k8s.core.read_namespaced_pod_log(
+            pod_name, instance.namespace, limit_bytes=65536,
+        )
+    except Exception as e:
+        logger.exception("sync_gateway_token: get_pod_logs failed")
+        raise NotFoundError(f"读取 Pod 日志失败: {e}")
+
+    match = _re.search(r"\[entrypoint\] Token: (\S+)", logs)
+    if not match:
+        raise NotFoundError(
+            "Pod 日志中未找到 Gateway Token（容器可能使用了用户指定的 Token 而未打印）"
+        )
+    token = match.group(1)
+
+    # 回填到 DB
+    env_vars["OPENCLAW_GATEWAY_TOKEN"] = token
+    instance.env_vars = json.dumps(env_vars)
+
+    # 回填到 ConfigMap
+    try:
+        labels = build_labels(instance.name, instance.id, instance.image_version)
+        cm = build_configmap(f"{instance.name}-config", instance.namespace, env_vars, labels)
+        try:
+            await k8s.core.replace_namespaced_config_map(
+                f"{instance.name}-config", instance.namespace, cm
+            )
+        except Exception:
+            await k8s.create_or_skip(
+                k8s.core.create_namespaced_config_map, instance.namespace, cm
+            )
+    except Exception as e:
+        logger.warning("回填 ConfigMap 失败: %s", e)
+
+    await db.commit()
+    return token
+
+
 async def rollback_instance(
     instance_id: str, target_revision: int, user_id: str, db: AsyncSession
 ) -> InstanceInfo:

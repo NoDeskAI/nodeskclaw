@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re as _re
 import json as _json
+import secrets as _secrets
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
@@ -227,6 +228,11 @@ async def deploy_instance(
     safe_name = _re.sub(r"-{2,}", "-", safe_name)
     namespace = req.namespace or f"clawbuddy-{safe_name}"
 
+    # 自动注入 OPENCLAW_GATEWAY_TOKEN（用户未提供时自动生成）
+    env_vars = dict(req.env_vars) if req.env_vars else {}
+    if "OPENCLAW_GATEWAY_TOKEN" not in env_vars:
+        env_vars["OPENCLAW_GATEWAY_TOKEN"] = _secrets.token_hex(24)
+
     # 创建实例记录
     instance = Instance(
         name=req.name,
@@ -240,7 +246,7 @@ async def deploy_instance(
         mem_limit=req.mem_limit,
         service_type="ClusterIP",
         ingress_domain=None,
-        env_vars=_json.dumps(req.env_vars) if req.env_vars else None,
+        env_vars=_json.dumps(env_vars),
         advanced_config=_json.dumps(req.advanced_config) if req.advanced_config else None,
         storage_class=req.storage_class,
         storage_size=req.storage_size,
@@ -288,7 +294,7 @@ async def deploy_instance(
         storage_size=req.storage_size,
         quota_cpu=req.quota_cpu,
         quota_mem=req.quota_mem,
-        env_vars=req.env_vars,
+        env_vars=env_vars,
         advanced_config=req.advanced_config,
         kubeconfig_encrypted=cluster.kubeconfig_encrypted,
     )

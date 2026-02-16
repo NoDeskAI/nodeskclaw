@@ -438,8 +438,7 @@ def build_ingress(
         "nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
         "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
         "nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
-        # 允许 WebSocket 升级
-        "nginx.ingress.kubernetes.io/proxy-set-headers": "ingress-nginx/custom-headers",
+        # WebSocket 升级头由 Ingress Controller 全局配置处理，无需单独指定 proxy-set-headers
     }
 
     # TLS 配置

@@ -21,13 +21,15 @@ import {
 import StatusDot from '@/components/StatusDot.vue'
 import {
   ArrowLeft, RefreshCw, FileText, MoreVertical, Scale, Trash2, RotateCw,
-  ArrowUpCircle, Cpu, MemoryStick, HardDrive, Globe, Container,
+  ArrowUpCircle, Cpu, MemoryStick, HardDrive, Globe, Container, Copy,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useNotify } from '@/components/ui/notify'
 
 const route = useRoute()
 const router = useRouter()
 const instanceStore = useInstanceStore()
+const notify = useNotify()
 
 const detail = ref<IDetail | null>(null)
 const loading = ref(true)
@@ -174,6 +176,45 @@ async function viewLogs(podName: string) {
   }
 }
 
+// Gateway Token
+const gatewayToken = computed(() => detail.value?.env_vars?.OPENCLAW_GATEWAY_TOKEN || '')
+const consoleUrl = computed(() => {
+  if (!detail.value?.ingress_domain || !gatewayToken.value) return ''
+  return `https://${detail.value.ingress_domain}/?token=${gatewayToken.value}`
+})
+const syncingToken = ref(false)
+
+async function handleSyncToken() {
+  syncingToken.value = true
+  try {
+    await instanceStore.syncToken(instanceId)
+    detail.value = await instanceStore.fetchDetail(instanceId)
+    toast.success('Token 获取成功')
+  } catch {
+    toast.error('获取 Token 失败，请确保实例 Pod 正在运行')
+  } finally {
+    syncingToken.value = false
+  }
+}
+
+async function copyEnvVar(key: string, val: string) {
+  const text = `${key}=${val}`
+  try {
+    await navigator.clipboard.writeText(text)
+    notify.success(`已复制 ${key}`)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    notify.success(`已复制 ${key}`)
+  }
+}
+
 const canDelete = computed(() => deleteConfirmName.value === detail.value?.name)
 
 function formatTime(ts: string | null): string {
@@ -271,6 +312,27 @@ function formatTime(ts: string | null): string {
                   >{{ detail.ingress_domain }}</a>
                   <span v-else class="text-muted-foreground">-</span>
                 </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-muted-foreground">OpenClaw 控制台</span>
+                  <a
+                    v-if="consoleUrl"
+                    :href="consoleUrl"
+                    target="_blank"
+                    class="text-primary hover:underline font-mono text-xs truncate max-w-[220px]"
+                  >打开控制台</a>
+                  <Button
+                    v-else-if="detail.ingress_domain"
+                    variant="ghost"
+                    size="sm"
+                    class="h-6 text-xs px-2"
+                    :disabled="syncingToken"
+                    @click="handleSyncToken"
+                  >
+                    <RefreshCw v-if="syncingToken" class="w-3 h-3 mr-1 animate-spin" />
+                    {{ syncingToken ? '获取中...' : '获取 Token' }}
+                  </Button>
+                  <span v-else class="text-muted-foreground">-</span>
+                </div>
               </CardContent>
             </Card>
             <Card>
@@ -296,11 +358,13 @@ function formatTime(ts: string | null): string {
                   <div
                     v-for="(val, key) in detail.env_vars"
                     :key="key"
-                    class="flex gap-2 text-xs font-mono"
+                    class="group flex items-center gap-2 text-xs font-mono min-w-0 rounded px-1 -mx-1 hover:bg-muted/50 cursor-pointer"
+                    @click="copyEnvVar(String(key), String(val))"
                   >
-                    <span class="text-muted-foreground">{{ key }}</span>
-                    <span>=</span>
-                    <span>{{ val }}</span>
+                    <span class="text-muted-foreground shrink-0">{{ key }}</span>
+                    <span class="shrink-0">=</span>
+                    <span class="truncate" :title="String(val)">{{ val }}</span>
+                    <Copy class="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
                   </div>
                 </div>
               </CardContent>

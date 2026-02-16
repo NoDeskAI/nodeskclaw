@@ -223,6 +223,27 @@ class K8sClient:
         async for line in resp.content:
             yield line.decode("utf-8", errors="replace").rstrip("\n")
 
+    # ── Exec ──────────────────────────────────────────
+
+    async def exec_in_pod(
+        self, ns: str, pod: str, command: list[str], container: str | None = None
+    ) -> str:
+        """Execute a command in a pod and return stdout."""
+        from kubernetes_asyncio.stream import WsApiClient
+
+        async with WsApiClient(self._api.configuration) as ws_api:
+            core_ws = k8s_client.CoreV1Api(api_client=ws_api)
+            resp = await core_ws.connect_get_namespaced_pod_exec(
+                pod, ns,
+                command=command,
+                container=container,
+                stderr=True,
+                stdin=False,
+                stdout=True,
+                tty=False,
+            )
+        return resp.strip() if resp else ""
+
     # ── Watch ────────────────────────────────────────
 
     async def watch_pods(self, ns: str, label_selector: str = "") -> AsyncIterator[dict]:

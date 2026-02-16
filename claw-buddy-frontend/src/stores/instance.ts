@@ -136,6 +136,11 @@ export const useInstanceStore = defineStore('instance', () => {
     return res.data.data
   }
 
+  async function syncToken(id: string): Promise<string> {
+    const res = await api.post(`/instances/${id}/sync-token`)
+    return res.data.data.token
+  }
+
   async function getLogs(id: string, podName: string, container?: string) {
     const params: Record<string, string | number> = {}
     if (container) params.container = container
@@ -156,6 +161,7 @@ export const useInstanceStore = defineStore('instance', () => {
     updateConfig,
     rollback,
     getHistory,
+    syncToken,
     getLogs,
   }
 })

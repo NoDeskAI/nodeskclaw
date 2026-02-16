@@ -2,6 +2,7 @@
 import { computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
+import { Notify } from '@/components/ui/notify'
 import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
 import { useGlobalSSE } from '@/composables/useGlobalSSE'
@@ -226,5 +227,7 @@ function navigateTo(path: string) {
 
     <!-- Toast (Sonner) -->
     <Toaster position="top-right" :theme="'dark'" />
+    <!-- Notify -->
+    <Notify />
   </template>
 </template>
