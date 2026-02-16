@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re as _re
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, update
@@ -18,6 +19,44 @@ from app.services.k8s.k8s_client import K8sClient
 from app.services.k8s.resource_builder import build_configmap, build_labels
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_name(name: str) -> str:
+    """将实例名称清洗为 RFC 1123 格式（与 deploy_service 逻辑保持一致）。"""
+    safe = _re.sub(r"[^a-z0-9-]", "-", name.lower()).strip("-")
+    return _re.sub(r"-{2,}", "-", safe)
+
+
+async def check_name_conflict(
+    name: str, cluster_id: str, db: AsyncSession
+) -> dict:
+    """
+    检查实例名称是否与现有实例冲突。
+    同时检查原始名称和清洗后的 namespace 是否冲突。
+    """
+    safe_name = _sanitize_name(name)
+    namespace = f"clawbuddy-{safe_name}"
+
+    # 查找同集群中未删除的实例，名称或 namespace 冲突
+    result = await db.execute(
+        select(Instance).where(
+            Instance.cluster_id == cluster_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    instances = result.scalars().all()
+
+    for inst in instances:
+        if inst.name == name:
+            return {"conflict": True, "reason": f"实例名称 \"{name}\" 已存在"}
+        inst_safe = _sanitize_name(inst.name)
+        if inst_safe == safe_name:
+            return {
+                "conflict": True,
+                "reason": f"名称清洗后与已有实例 \"{inst.name}\" 的命名空间冲突（均为 {namespace}）",
+            }
+
+    return {"conflict": False, "reason": ""}
 
 
 async def list_instances(db: AsyncSession, cluster_id: str | None = None) -> list[InstanceInfo]:
@@ -419,7 +458,6 @@ async def sync_gateway_token(instance_id: str, db: AsyncSession) -> str:
 
     # 从 Pod 启动日志中解析 Token（entrypoint 会打印 "[entrypoint] Token: xxx"）
     # 使用 limit_bytes 从头部读取（Token 在容器启动时输出，tail_lines 取不到）
-    import re as _re
     try:
         logs = await k8s.core.read_namespaced_pod_log(
             pod_name, instance.namespace, limit_bytes=65536,

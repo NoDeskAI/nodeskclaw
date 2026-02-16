@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/check-name", response_model=ApiResponse[dict])
+async def check_name(
+    name: str = Query(..., min_length=1),
+    cluster_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """检查实例名称是否与现有实例冲突。"""
+    data = await instance_service.check_name_conflict(name, cluster_id, db)
+    return ApiResponse(data=data)
+
+
 @router.get("", response_model=ApiResponse[list[InstanceInfo]])
 async def list_instances(
     cluster_id: str | None = Query(None),

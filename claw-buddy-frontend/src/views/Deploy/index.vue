@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
@@ -14,7 +14,7 @@ import {
 import AdvancedConfigPanel from '@/components/AdvancedConfigPanel.vue'
 import {
   Rocket, CheckCircle, XCircle, AlertTriangle, Loader2,
-  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, RefreshCw,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, RefreshCw, CircleAlert,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import api from '@/services/api'
@@ -63,6 +63,38 @@ function generateDefaultName() {
   const count = instanceStore.instances.length + 1
   form.value.name = `${prefix}-${count}`
 }
+
+// ── 名称冲突检测（防抖）──
+const nameConflict = ref<{ conflict: boolean; reason: string }>({ conflict: false, reason: '' })
+const checkingName = ref(false)
+let nameCheckTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  () => form.value.name,
+  (name) => {
+    // 清除上一次定时器
+    if (nameCheckTimer) clearTimeout(nameCheckTimer)
+    // 空名称直接重置
+    if (!name || !selectedCluster.value) {
+      nameConflict.value = { conflict: false, reason: '' }
+      return
+    }
+    // 防抖 400ms
+    nameCheckTimer = setTimeout(async () => {
+      checkingName.value = true
+      try {
+        const res = await api.get('/instances/check-name', {
+          params: { name, cluster_id: selectedCluster.value!.id },
+        })
+        nameConflict.value = res.data.data
+      } catch {
+        nameConflict.value = { conflict: false, reason: '' }
+      } finally {
+        checkingName.value = false
+      }
+    }, 400)
+  },
+)
 
 // ── Quota presets ──
 const quotaPreset = ref<string>('medium')
@@ -311,7 +343,7 @@ function prevStep() {
 
 // ── Step validation ──
 const canProceedStep0 = computed(() =>
-  !!form.value.name && !!form.value.image_version && !!selectedCluster.value
+  !!form.value.name && !!form.value.image_version && !!selectedCluster.value && !nameConflict.value.conflict && !checkingName.value
 )
 const canProceedStep1 = computed(() =>
   !!form.value.quota_cpu && !!form.value.quota_mem
@@ -465,7 +497,21 @@ const yamlPreview = computed(() => {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium mb-1.5 block">实例名称 *</label>
-            <Input v-model="form.name" placeholder="如: prod-main" />
+            <div class="relative">
+              <Input
+                v-model="form.name"
+                placeholder="如: prod-main"
+                :class="nameConflict.conflict ? 'border-red-400 focus-visible:ring-red-400/30' : ''"
+              />
+              <Loader2
+                v-if="checkingName"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin"
+              />
+            </div>
+            <p v-if="nameConflict.conflict" class="flex items-center gap-1 text-xs text-red-400 mt-1">
+              <CircleAlert class="w-3.5 h-3.5 shrink-0" />
+              {{ nameConflict.reason }}
+            </p>
           </div>
           <div>
             <div class="flex items-center gap-1.5 mb-1.5">
