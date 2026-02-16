@@ -18,6 +18,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import api from '@/services/api'
 import StatusDot from '@/components/StatusDot.vue'
 import {
   ArrowLeft, RefreshCw, FileText, MoreVertical, Scale, Trash2, RotateCw,
@@ -74,6 +78,23 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+// ── 镜像版本列表 ──
+const imageTags = ref<string[]>([])
+const loadingTags = ref(false)
+
+async function fetchImageTags() {
+  loadingTags.value = true
+  try {
+    const res = await api.get('/registry/tags')
+    const tags = res.data.data as { tag: string }[]
+    imageTags.value = tags.map((t) => t.tag)
+  } catch {
+    imageTags.value = []
+  } finally {
+    loadingTags.value = false
+  }
+}
 
 function podStatusToDot(phase: string) {
   if (phase === 'Running') return 'running' as const
@@ -237,7 +258,7 @@ function formatTime(ts: string | null): string {
         </Badge>
       </div>
       <div v-if="detail" class="flex items-center gap-2">
-        <Button variant="outline" size="sm" @click="showUpdateDialog = true">
+        <Button variant="outline" size="sm" @click="showUpdateDialog = true; fetchImageTags()">
           <ArrowUpCircle class="w-4 h-4 mr-1" />
           滚动更新
         </Button>
@@ -445,7 +466,7 @@ function formatTime(ts: string | null): string {
               <CardHeader>
                 <div class="flex items-center justify-between">
                   <CardTitle>当前配置</CardTitle>
-                  <Button variant="outline" size="sm" @click="showUpdateDialog = true">
+                  <Button variant="outline" size="sm" @click="showUpdateDialog = true; fetchImageTags()">
                     <ArrowUpCircle class="w-4 h-4 mr-1" /> 修改配置
                   </Button>
                 </div>
@@ -647,8 +668,29 @@ function formatTime(ts: string | null): string {
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div>
-            <Label>镜像版本</Label>
-            <Input v-model="updateForm.image_version" class="mt-1" />
+            <div class="flex items-center gap-1.5">
+              <Label>镜像版本</Label>
+              <button
+                class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-muted transition-colors"
+                :class="{ 'animate-spin': loadingTags }"
+                :disabled="loadingTags"
+                title="刷新镜像版本列表"
+                @click="fetchImageTags()"
+              >
+                <RefreshCw class="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+            <Select v-if="imageTags.length > 0" v-model="updateForm.image_version" class="mt-1">
+              <SelectTrigger class="w-full font-mono text-sm mt-1">
+                <SelectValue placeholder="选择镜像版本" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="tag in imageTags" :key="tag" :value="tag">
+                  {{ tag }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-else v-model="updateForm.image_version" class="mt-1" :placeholder="loadingTags ? '加载中...' : '手动输入版本号'" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>

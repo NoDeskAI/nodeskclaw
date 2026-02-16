@@ -19,13 +19,17 @@ FEISHU_USER_TOKEN_URL = "https://open.feishu.cn/open-apis/authen/v2/oauth/token"
 FEISHU_USER_INFO_URL = "https://open.feishu.cn/open-apis/authen/v1/user_info"
 
 
-async def exchange_code_for_user(code: str) -> dict:
+async def exchange_code_for_user(code: str, redirect_uri: str | None = None) -> dict:
     """
     用 OAuth code 换取用户信息。
 
     流程（参考飞书文档）：
     1. code + client_id + client_secret → user_access_token
     2. user_access_token → user_info
+
+    Args:
+        code: 飞书 OAuth 授权码
+        redirect_uri: 前端实际使用的回调地址（优先使用，保证和授权时一致）
 
     Returns:
         {
@@ -36,6 +40,9 @@ async def exchange_code_for_user(code: str) -> dict:
             "avatar_url": str | None,
         }
     """
+    # 优先使用前端传来的 redirect_uri，保证和授权时一致
+    actual_redirect_uri = redirect_uri or settings.FEISHU_REDIRECT_URI
+
     async with httpx.AsyncClient(timeout=10) as client:
         # Step 1: code → user_access_token
         resp = await client.post(
@@ -45,7 +52,7 @@ async def exchange_code_for_user(code: str) -> dict:
                 "client_id": settings.FEISHU_APP_ID,
                 "client_secret": settings.FEISHU_APP_SECRET,
                 "code": code,
-                "redirect_uri": settings.FEISHU_REDIRECT_URI,
+                "redirect_uri": actual_redirect_uri,
             },
         )
         token_data = resp.json()

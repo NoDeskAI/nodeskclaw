@@ -22,7 +22,7 @@ router = APIRouter()
 @router.post("/feishu/callback", response_model=ApiResponse[LoginResponse])
 async def feishu_callback(body: FeishuCallbackRequest, db: AsyncSession = Depends(get_db)):
     """飞书 SSO 回调：用临时 code 换取 JWT。"""
-    result = await feishu_login(body.code, db)
+    result = await feishu_login(body.code, db, redirect_uri=body.redirect_uri)
     return ApiResponse(data=result)
 
 

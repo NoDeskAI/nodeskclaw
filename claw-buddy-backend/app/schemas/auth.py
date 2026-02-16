@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class FeishuCallbackRequest(BaseModel):
     code: str
+    redirect_uri: str | None = None
 
 
 class TokenResponse(BaseModel):
