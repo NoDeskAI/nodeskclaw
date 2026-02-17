@@ -77,7 +77,7 @@ const platformNavItems = computed<NavItem[]>(() => {
   if (!isSuperAdmin.value) return []
   return [
     { label: '组织管理', icon: Building2, path: '/platform/orgs' },
-    { label: '用户管理', icon: Users, path: '/platform/users' },
+    { label: '运维人员', icon: Users, path: '/platform/users' },
     { label: '套餐管理', icon: CreditCard, path: '/platform/plans' },
   ]
 })

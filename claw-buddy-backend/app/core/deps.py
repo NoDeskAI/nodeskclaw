@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncGenerator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -72,6 +72,7 @@ async def require_super_admin_dep(
 
 
 async def require_org_admin(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
@@ -79,12 +80,16 @@ async def require_org_admin(
     from app.models.org_membership import OrgMembership, OrgRole
     from app.models.organization import Organization
 
+    # 优先从 URL 路径参数中取 org_id，否则用 current_org_id
+    path_org_id = request.path_params.get("org_id")
+    target_org_id = path_org_id or user.current_org_id
+
     if user.is_super_admin:
         # 超管天然拥有所有组织的 admin 权限
-        if user.current_org_id:
+        if target_org_id:
             result = await db.execute(
                 select(Organization).where(
-                    Organization.id == user.current_org_id,
+                    Organization.id == target_org_id,
                     Organization.deleted_at.is_(None),
                 )
             )
@@ -93,13 +98,13 @@ async def require_org_admin(
                 return user, org
         raise HTTPException(status_code=400, detail="超管需先选择要操作的组织")
 
-    if user.current_org_id is None:
+    if target_org_id is None:
         raise HTTPException(status_code=400, detail="用户未加入任何组织")
 
     result = await db.execute(
         select(OrgMembership).where(
             OrgMembership.user_id == user.id,
-            OrgMembership.org_id == user.current_org_id,
+            OrgMembership.org_id == target_org_id,
             OrgMembership.deleted_at.is_(None),
         )
     )
@@ -109,7 +114,7 @@ async def require_org_admin(
 
     result = await db.execute(
         select(Organization).where(
-            Organization.id == user.current_org_id,
+            Organization.id == target_org_id,
             Organization.deleted_at.is_(None),
         )
     )
@@ -118,6 +123,7 @@ async def require_org_admin(
 
 
 async def require_org_member(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
@@ -125,10 +131,13 @@ async def require_org_member(
     from app.models.org_membership import OrgMembership
     from app.models.organization import Organization
 
-    if user.is_super_admin and user.current_org_id:
+    path_org_id = request.path_params.get("org_id")
+    target_org_id = path_org_id or user.current_org_id
+
+    if user.is_super_admin and target_org_id:
         result = await db.execute(
             select(Organization).where(
-                Organization.id == user.current_org_id,
+                Organization.id == target_org_id,
                 Organization.deleted_at.is_(None),
             )
         )
@@ -136,13 +145,13 @@ async def require_org_member(
         if org:
             return user, org
 
-    if user.current_org_id is None:
+    if target_org_id is None:
         raise HTTPException(status_code=400, detail="用户未加入任何组织")
 
     result = await db.execute(
         select(OrgMembership).where(
             OrgMembership.user_id == user.id,
-            OrgMembership.org_id == user.current_org_id,
+            OrgMembership.org_id == target_org_id,
             OrgMembership.deleted_at.is_(None),
         )
     )
@@ -152,7 +161,7 @@ async def require_org_member(
 
     result = await db.execute(
         select(Organization).where(
-            Organization.id == user.current_org_id,
+            Organization.id == target_org_id,
             Organization.deleted_at.is_(None),
         )
     )
