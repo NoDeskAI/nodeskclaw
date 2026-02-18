@@ -142,19 +142,21 @@ def build_resource_quota(
     cpu: str,
     mem: str,
     max_pods: int = 20,
+    storage: str | None = None,
 ) -> V1ResourceQuota:
     """Build a Namespace-level ResourceQuota."""
+    hard = {
+        "requests.cpu": cpu,
+        "requests.memory": mem,
+        "limits.cpu": cpu,
+        "limits.memory": mem,
+        "pods": str(max_pods),
+    }
+    if storage:
+        hard["requests.storage"] = storage
     return V1ResourceQuota(
         metadata=V1ObjectMeta(name=name, namespace=namespace),
-        spec=V1ResourceQuotaSpec(
-            hard={
-                "requests.cpu": cpu,
-                "requests.memory": mem,
-                "limits.cpu": cpu,
-                "limits.memory": mem,
-                "pods": str(max_pods),
-            }
-        ),
+        spec=V1ResourceQuotaSpec(hard=hard),
     )
 
 

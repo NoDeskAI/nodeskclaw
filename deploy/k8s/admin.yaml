@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clawbuddy-admin
+  namespace: clawbuddy-system
+  labels:
+    app: clawbuddy-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clawbuddy-admin
+  template:
+    metadata:
+      labels:
+        app: clawbuddy-admin
+    spec:
+      imagePullSecrets:
+        - name: cr-pull-secret
+      containers:
+        - name: clawbuddy-admin
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-admin:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clawbuddy-admin
+  namespace: clawbuddy-system
+  labels:
+    app: clawbuddy-admin
+spec:
+  type: ClusterIP
+  selector:
+    app: clawbuddy-admin
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP

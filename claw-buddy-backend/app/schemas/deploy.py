@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class DeployRequest(BaseModel):
@@ -21,6 +21,23 @@ class DeployRequest(BaseModel):
     storage_class: str = "nas-subpath"
     storage_size: str = "80Gi"
     advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
+
+    @field_validator("storage_size")
+    @classmethod
+    def validate_min_storage(cls, v: str) -> str:
+        val = v.strip()
+        gi = 0.0
+        if val.endswith("Ti"):
+            gi = float(val[:-2]) * 1024
+        elif val.endswith("Gi"):
+            gi = float(val[:-2])
+        elif val.endswith("Mi"):
+            gi = float(val[:-2]) / 1024
+        else:
+            gi = float(val) if val else 0.0
+        if gi < 20:
+            raise ValueError("存储空间最低为 20Gi")
+        return v
 
 
 class PrecheckItem(BaseModel):

@@ -26,6 +26,8 @@ class OrgUsage(BaseModel):
     cpu_limit: str
     mem_used: str
     mem_limit: str
+    storage_used: str
+    storage_limit: str
 
 
 class UpgradeRequest(BaseModel):

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useOrgStore } from '@/stores/org'
-import { BarChart3, Loader2, Box, Cpu, HardDrive, Sparkles } from 'lucide-vue-next'
+import { BarChart3, Loader2, Box, Cpu, HardDrive, Database, Sparkles } from 'lucide-vue-next'
 
 const orgStore = useOrgStore()
 const loading = ref(true)
@@ -48,6 +48,23 @@ const memPercent = computed(() => {
   return Math.min(100, Math.round((used / limit) * 100))
 })
 
+const storagePercent = computed(() => {
+  if (!orgStore.usage) return 0
+  const used = parseStorage(orgStore.usage.storage_used)
+  const limit = parseStorage(orgStore.usage.storage_limit)
+  if (!limit) return 0
+  return Math.min(100, Math.round((used / limit) * 100))
+})
+
+function parseStorage(val: string | undefined | null): number {
+  if (!val) return 0
+  const s = String(val)
+  if (s.endsWith('Ti')) return parseFloat(s) * 1024
+  if (s.endsWith('Gi')) return parseFloat(s)
+  if (s.endsWith('Mi')) return parseFloat(s) / 1024
+  return parseFloat(s) || 0
+}
+
 function barColor(percent: number): string {
   if (percent >= 90) return 'bg-red-500'
   if (percent >= 70) return 'bg-amber-500'
@@ -90,7 +107,7 @@ function barColor(percent: number): string {
       </div>
 
       <!-- Usage Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Instances -->
         <div class="p-5 rounded-xl border border-border bg-card space-y-3">
           <div class="flex items-center gap-2 text-sm font-medium">
@@ -149,6 +166,26 @@ function barColor(percent: number): string {
             />
           </div>
           <p class="text-xs text-muted-foreground">{{ memPercent }}% 已使用</p>
+        </div>
+
+        <!-- Storage -->
+        <div class="p-5 rounded-xl border border-border bg-card space-y-3">
+          <div class="flex items-center gap-2 text-sm font-medium">
+            <Database class="w-4 h-4 text-orange-400" />
+            存储
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span class="text-2xl font-bold">{{ orgStore.usage?.storage_used ?? '0' }}</span>
+            <span class="text-sm text-muted-foreground">/ {{ orgStore.usage?.storage_limit ?? '0' }}</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-500"
+              :class="barColor(storagePercent)"
+              :style="{ width: storagePercent + '%' }"
+            />
+          </div>
+          <p class="text-xs text-muted-foreground">{{ storagePercent }}% 已使用</p>
         </div>
       </div>
     </template>

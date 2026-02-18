@@ -17,6 +17,7 @@ class OrgUpdate(BaseModel):
     max_instances: int | None = None
     max_cpu_total: str | None = None
     max_mem_total: str | None = None
+    max_storage_total: str | None = None
     cluster_id: str | None = None  # 绑定/解绑专属集群
     is_active: bool | None = None
 
@@ -29,6 +30,7 @@ class OrgInfo(BaseModel):
     max_instances: int
     max_cpu_total: str
     max_mem_total: str
+    max_storage_total: str
     cluster_id: str | None = None
     is_active: bool
     member_count: int = 0

@@ -11,6 +11,7 @@ export interface OrgInfo {
   max_instances: number
   max_cpu_total: string
   max_mem_total: string
+  max_storage_total: string
   cluster_id: string | null
   is_active: boolean
   member_count: number
@@ -36,6 +37,8 @@ export interface OrgUsage {
   cpu_limit: string
   mem_used: string
   mem_limit: string
+  storage_used: string
+  storage_limit: string
 }
 
 export const useOrgStore = defineStore('org', () => {

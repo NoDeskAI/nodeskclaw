@@ -226,7 +226,12 @@ async def deploy_instance(
         )
         org = org_result.scalar_one_or_none()
         if org:
-            await check_deploy_quota(org, db)
+            await check_deploy_quota(
+                org, db,
+                cpu_request=req.cpu_limit,
+                mem_request=req.mem_limit,
+                storage_size=req.storage_size,
+            )
             # 如果组织绑定了专属集群，强制使用该集群
             if org.cluster_id:
                 effective_cluster_id = org.cluster_id
@@ -382,6 +387,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             rq = build_resource_quota(
                 f"{ctx.namespace}-quota", ctx.namespace,
                 cpu=ctx.quota_cpu, mem=ctx.quota_mem,
+                storage=ctx.storage_size,
             )
             await k8s.create_or_skip(k8s.core.create_namespaced_resource_quota, ctx.namespace, rq)
 

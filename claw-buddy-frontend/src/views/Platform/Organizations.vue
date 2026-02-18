@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Building2, Plus, Trash2, Pencil, Users } from 'lucide-vue-next'
+import { Building2, Plus, Trash2, Pencil, Users, Database } from 'lucide-vue-next'
 import { useOrgStore, type OrgInfo } from '@/stores/org'
 import { useNotify } from '@/components/ui/notify'
 import { useRouter } from 'vue-router'
@@ -32,7 +32,7 @@ const showEdit = ref(false)
 const editingOrg = ref<OrgInfo | null>(null)
 
 const createForm = ref({ name: '', slug: '', plan: 'free' })
-const editForm = ref({ name: '', plan: '', max_instances: 0, cluster_id: '' })
+const editForm = ref({ name: '', plan: '', max_instances: 0, max_storage_total: '', cluster_id: '' })
 
 onMounted(() => {
   orgStore.fetchAllOrgs()
@@ -55,6 +55,7 @@ function openEdit(org: OrgInfo) {
     name: org.name,
     plan: org.plan,
     max_instances: org.max_instances,
+    max_storage_total: org.max_storage_total || '500Gi',
     cluster_id: org.cluster_id || '',
   }
   showEdit.value = true
@@ -68,6 +69,8 @@ async function handleUpdate() {
     if (editForm.value.plan !== editingOrg.value.plan) data.plan = editForm.value.plan
     if (editForm.value.max_instances !== editingOrg.value.max_instances)
       data.max_instances = editForm.value.max_instances
+    if (editForm.value.max_storage_total !== (editingOrg.value.max_storage_total || '500Gi'))
+      data.max_storage_total = editForm.value.max_storage_total
     if (editForm.value.cluster_id !== (editingOrg.value.cluster_id || ''))
       data.cluster_id = editForm.value.cluster_id || null
 
@@ -150,6 +153,10 @@ const planLabels: Record<string, string> = {
             <div>
               <span class="text-muted-foreground">内存上限</span>
               <span class="ml-1 font-medium">{{ org.max_mem_total }}</span>
+            </div>
+            <div class="col-span-2">
+              <span class="text-muted-foreground">存储上限</span>
+              <span class="ml-1 font-medium">{{ org.max_storage_total }}</span>
             </div>
           </div>
           <div class="flex items-center gap-2 pt-2 border-t border-border">
@@ -239,6 +246,10 @@ const planLabels: Record<string, string> = {
           <div class="space-y-2">
             <label class="text-sm font-medium">实例上限</label>
             <Input v-model.number="editForm.max_instances" type="number" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">存储上限</label>
+            <Input v-model="editForm.max_storage_total" placeholder="如 500Gi" />
           </div>
         </div>
         <DialogFooter>

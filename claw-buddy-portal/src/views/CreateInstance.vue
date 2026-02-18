@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PawPrint, Loader2, Rocket, ChevronRight } from 'lucide-vue-next'
+import { PawPrint, Loader2, Rocket, ChevronRight, Database } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -9,8 +9,11 @@ const router = useRouter()
 const name = ref('')
 const description = ref('')
 const selectedSpec = ref('medium')
+const storageGi = ref(40)
 const deploying = ref(false)
 const error = ref('')
+
+const storageAnchors = [20, 40, 80, 160]
 
 // 从后端获取可用镜像版本和集群
 const imageTags = ref<string[]>([])
@@ -23,11 +26,34 @@ const specs = [
   { key: 'large', label: '高性能', desc: '适合大规模使用', cpu: '8 核', mem: '16 GB' },
 ]
 
-const specResources: Record<string, { cpu_req: string; cpu_lim: string; mem_req: string; mem_lim: string; quota_cpu: string; quota_mem: string }> = {
-  small: { cpu_req: '1000m', cpu_lim: '2000m', mem_req: '2Gi', mem_lim: '4Gi', quota_cpu: '2', quota_mem: '4Gi' },
-  medium: { cpu_req: '2000m', cpu_lim: '4000m', mem_req: '4Gi', mem_lim: '8Gi', quota_cpu: '4', quota_mem: '8Gi' },
-  large: { cpu_req: '4000m', cpu_lim: '8000m', mem_req: '8Gi', mem_lim: '16Gi', quota_cpu: '8', quota_mem: '16Gi' },
+const specResources: Record<string, { cpu_req: string; cpu_lim: string; mem_req: string; mem_lim: string; quota_cpu: string; quota_mem: string; storage: number }> = {
+  small: { cpu_req: '1000m', cpu_lim: '2000m', mem_req: '2Gi', mem_lim: '4Gi', quota_cpu: '2', quota_mem: '4Gi', storage: 20 },
+  medium: { cpu_req: '2000m', cpu_lim: '4000m', mem_req: '4Gi', mem_lim: '8Gi', quota_cpu: '4', quota_mem: '8Gi', storage: 40 },
+  large: { cpu_req: '4000m', cpu_lim: '8000m', mem_req: '8Gi', mem_lim: '16Gi', quota_cpu: '8', quota_mem: '16Gi', storage: 80 },
 }
+
+function selectSpec(key: string) {
+  selectedSpec.value = key
+  storageGi.value = specResources[key]?.storage ?? 40
+}
+
+function snapStorage(val: number) {
+  let closest = storageAnchors[0]
+  let minDiff = Math.abs(val - closest)
+  for (const a of storageAnchors) {
+    const diff = Math.abs(val - a)
+    if (diff < minDiff) {
+      minDiff = diff
+      closest = a
+    }
+  }
+  storageGi.value = closest
+}
+
+const storageSliderVal = computed({
+  get: () => storageGi.value,
+  set: (v: number) => snapStorage(v),
+})
 
 onMounted(async () => {
   try {
@@ -71,6 +97,7 @@ async function handleDeploy() {
       mem_limit: res_spec.mem_lim,
       quota_cpu: res_spec.quota_cpu,
       quota_mem: res_spec.quota_mem,
+      storage_size: `${storageGi.value}Gi`,
       description: description.value || undefined,
     })
 
@@ -124,7 +151,7 @@ async function handleDeploy() {
                 ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                 : 'border-border bg-card hover:border-primary/20',
             ]"
-            @click="selectedSpec = spec.key"
+            @click="selectSpec(spec.key)"
           >
             <div class="font-medium text-sm">{{ spec.label }}</div>
             <div class="text-xs text-muted-foreground mt-0.5">{{ spec.desc }}</div>
@@ -133,6 +160,39 @@ async function handleDeploy() {
               <span>{{ spec.mem }}</span>
             </div>
           </button>
+        </div>
+      </div>
+
+      <!-- 存储空间 -->
+      <div class="space-y-3">
+        <label class="text-sm font-medium flex items-center gap-1.5">
+          <Database class="w-4 h-4 text-orange-400" />
+          存储空间
+        </label>
+        <div class="space-y-2">
+          <input
+            type="range"
+            :min="20"
+            :max="160"
+            :step="1"
+            :value="storageGi"
+            class="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-muted"
+            @input="(e: Event) => snapStorage(Number((e.target as HTMLInputElement).value))"
+          />
+          <div class="flex justify-between text-xs text-muted-foreground px-0.5">
+            <button
+              v-for="anchor in storageAnchors"
+              :key="anchor"
+              class="px-2 py-0.5 rounded transition-colors"
+              :class="storageGi === anchor ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-muted'"
+              @click="storageGi = anchor"
+            >
+              {{ anchor }}Gi
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            当前：<span class="font-medium text-foreground">{{ storageGi }}Gi</span>，最低 20Gi
+          </p>
         </div>
       </div>
 

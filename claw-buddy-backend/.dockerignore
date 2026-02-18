@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+data/
+*.md
+.vscode
+.cursor

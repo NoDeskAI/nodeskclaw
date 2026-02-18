@@ -112,6 +112,7 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
                 {
                     "name": p["name"],
                     "status": p["phase"],
+                    "ready": all(c.get("ready", False) for c in p.get("containers", [])) and len(p.get("containers", [])) > 0,
                     "node": p.get("node"),
                     "ip": p.get("ip"),
                     "restart_count": sum(c.get("restart_count", 0) for c in p.get("containers", [])),

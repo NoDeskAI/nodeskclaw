@@ -215,12 +215,14 @@ spec:
 
 部署表单提供预设档位（用户可自定义）：
 
-| 档位 | CPU 配额 | 内存配额 | 最大 Pod 数 | 适用场景 |
-|------|---------|---------|-----------|---------|
-| 小型 | 2c | 4Gi | 10 | 开发/测试 |
-| 中型 | 4c | 8Gi | 20 | 预发/小规模生产 |
-| 大型 | 8c | 16Gi | 50 | 生产主力 |
-| 自定义 | 用户填写 | 用户填写 | 用户填写 | 特殊需求 |
+| 档位 | CPU 配额 | 内存配额 | 存储空间 | 最大 Pod 数 | 适用场景 |
+|------|---------|---------|---------|-----------|---------|
+| 小型 | 2c | 4Gi | 20Gi | 10 | 开发/测试 |
+| 中型 | 4c | 8Gi | 80Gi | 20 | 预发/小规模生产 |
+| 大型 | 8c | 16Gi | 160Gi | 50 | 生产主力 |
+| 自定义 | 用户填写 | 用户填写 | 用户填写（>=20Gi） | 用户填写 | 特殊需求 |
+
+> **存储配额说明**：每个实例最低存储空间为 **20Gi**。组织级别通过 `max_storage_total` 字段限制总存储用量。套餐默认存储配额：免费版 100Gi、专业版 500Gi、企业版 2000Gi。部署时会校验实例数 + CPU + 内存 + 存储是否超出组织配额。K8s 层面通过 ResourceQuota 的 `requests.storage` 字段进行兜底限制。
 
 ### 3.4 LimitRange（兜底默认值）
 
@@ -1221,42 +1223,64 @@ CLAWBUDDY_IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
 
 ## 九、ClawBuddy 自身的 VKE 部署
 
-### 9.1 一次性手工部署
+### 9.0 CI/CD 自动化脚本
+
+项目提供了统一的构建部署脚本 `deploy/deploy.sh`，支持三个独立组件的镜像构建、推送和 K8s 滚动更新：
+
+```
+deploy/
+├── deploy.sh         # 统一构建推送部署脚本
+├── init-secrets.sh   # 首次部署初始化
+└── k8s/
+    ├── backend.yaml  # 后端 Deployment + Service
+    ├── admin.yaml    # Admin 前端 Deployment + Service
+    └── portal.yaml   # Portal 前端 Deployment + Service
+```
+
+三个组件均部署在 `clawbuddy-system` Namespace，镜像推送到火山云 CR `nodesk-center-cn-beijing.cr.volces.com/base-image/`：
+
+| 组件 | 镜像名 | Dockerfile | 端口 |
+|------|--------|-----------|------|
+| backend | `clawbuddy-backend:TAG` | `claw-buddy-backend/Dockerfile` | 8000 |
+| admin | `clawbuddy-admin:TAG` | `claw-buddy-frontend/Dockerfile` (多阶段 Node+Nginx) | 80 |
+| portal | `clawbuddy-portal:TAG` | `claw-buddy-portal/Dockerfile` (多阶段 Node+Nginx) | 80 |
+
+Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://clawbuddy-backend:8000`（K8s Service DNS），Admin 额外代理 `/stream`（SSE 事件流）。
+
+```bash
+# 日常更新：构建 + 推送 + K8s 滚动更新
+./deploy/deploy.sh all              # 全量
+./deploy/deploy.sh backend          # 仅后端
+./deploy/deploy.sh admin            # 仅 Admin 前端
+./deploy/deploy.sh portal           # 仅 Portal 前端
+
+# 高级用法
+./deploy/deploy.sh backend --build-only    # 仅构建推送，不更新 K8s
+./deploy/deploy.sh admin --deploy-only --tag 20260218-b0f6ad1  # 仅更新到指定版本
+./deploy/deploy.sh portal --no-cache       # 不使用 Docker 缓存
+```
+
+镜像标签格式：`YYYYMMDD-<git-short-hash>`（如 `20260218-b0f6ad1`）
+
+### 9.1 首次部署
 
 ```bash
 # 1. 连接 VKE 集群
 export KUBECONFIG=~/.kube/vke-prod.yaml
 
-# 2. 创建命名空间
-kubectl create namespace clawbuddy
+# 2. 确保 Namespace 和镜像拉取密钥已存在
+kubectl create namespace clawbuddy-system   # 如果不存在
+# cr-pull-secret 应已在集群中创建
 
-# 3. 创建 Secret（敏感配置）
-kubectl create secret generic clawbuddy-secret \
-  --namespace clawbuddy \
-  --from-literal=JWT_SECRET=your-jwt-secret \
-  --from-literal=ENCRYPTION_KEY=your-aes-256-key-hex \
-  --from-literal=FEISHU_APP_SECRET=your-feishu-secret
+# 3. 初始化：从 .env 创建 K8s Secret + 应用部署清单
+./deploy/init-secrets.sh
 
-# 4. 创建 ConfigMap（非敏感配置）
-kubectl create configmap clawbuddy-config \
-  --namespace clawbuddy \
-  --from-literal=FEISHU_APP_ID=cli_xxxx \
-  --from-literal=FEISHU_REDIRECT_URI=https://clawbuddy.example.com/api/v1/auth/feishu/callback \
-  --from-literal=VKE_SUBNET_ID=subnet-xxx \
-  --from-literal=IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
+# 4. 构建、推送、部署全部组件
+./deploy/deploy.sh all
 
-# 5. 部署 RBAC
-kubectl apply -f deploy/k8s/rbac.yaml
-
-# 6. 部署应用
-kubectl apply -f deploy/k8s/deployment.yaml
-kubectl apply -f deploy/k8s/service.yaml
-kubectl apply -f deploy/k8s/ingress.yaml
-
-# 7. 验证
-kubectl -n clawbuddy get pods
-kubectl -n clawbuddy get svc
-kubectl -n clawbuddy get ingress
+# 5. 验证
+kubectl -n clawbuddy-system get pods
+kubectl -n clawbuddy-system get svc
 ```
 
 ### 9.2 ClawBuddy 自身的 Deployment YAML

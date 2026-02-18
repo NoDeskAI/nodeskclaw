@@ -106,7 +106,7 @@ const quotaPresets = [
 
 // 预设档位对应的容器资源配置
 const presetResources: Record<string, { cpu_request: string; cpu_limit: string; mem_request: string; mem_limit: string; storage_size: string }> = {
-  small:  { cpu_request: '1000m', cpu_limit: '2000m',  mem_request: '2Gi',  mem_limit: '4Gi',   storage_size: '40Gi' },
+  small:  { cpu_request: '1000m', cpu_limit: '2000m',  mem_request: '2Gi',  mem_limit: '4Gi',   storage_size: '20Gi' },
   medium: { cpu_request: '2000m', cpu_limit: '4000m',  mem_request: '4Gi',  mem_limit: '8Gi',   storage_size: '80Gi' },
   large:  { cpu_request: '4000m', cpu_limit: '8000m',  mem_request: '8Gi',  mem_limit: '16Gi',  storage_size: '160Gi' },
 }
@@ -590,6 +590,8 @@ const yamlPreview = computed(() => {
           <div class="font-medium font-mono">{{ form.cpu_request }} / {{ form.cpu_limit }}</div>
           <div class="text-muted-foreground">内存 (Request / Limit)</div>
           <div class="font-medium font-mono">{{ form.mem_request }} / {{ form.mem_limit }}</div>
+          <div class="text-muted-foreground">存储</div>
+          <div class="font-medium font-mono">{{ form.storage_size }}</div>
         </div>
 
         <!-- 存储配置 -->
@@ -630,10 +632,18 @@ const yamlPreview = computed(() => {
               </p>
             </div>
             <div>
-              <label class="text-xs text-muted-foreground mb-1.5 block">存储大小</label>
-              <div class="h-9 flex items-center px-3 rounded-md border border-border bg-muted/30 text-sm font-mono">
-                {{ form.storage_size }}
+              <label class="text-xs text-muted-foreground mb-1.5 block">存储大小 (最低 20Gi)</label>
+              <div class="flex items-center gap-2">
+                <Input
+                  :model-value="parseInt(form.storage_size) || 20"
+                  type="number"
+                  :min="20"
+                  class="font-mono text-sm w-24"
+                  @update:model-value="(v: string | number) => form.storage_size = `${Math.max(20, Number(v) || 20)}Gi`"
+                />
+                <span class="text-sm text-muted-foreground">Gi</span>
               </div>
+              <p v-if="parseInt(form.storage_size) < 20" class="text-xs text-red-400 mt-1">存储空间最低 20Gi</p>
             </div>
           </div>
         </div>

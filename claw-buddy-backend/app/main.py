@@ -204,6 +204,17 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 users 表添加 password_hash 列")
 
+        # ── 迁移 7: organizations 表新增 max_storage_total ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'organizations' AND column_name = 'max_storage_total'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE organizations ADD COLUMN max_storage_total VARCHAR(16) NOT NULL DEFAULT '500Gi'"
+            ))
+            logger.info("自动迁移：已为 organizations 表添加 max_storage_total 列")
+
         # 6d: email 加 unique（如果还没有）
         idx = await conn.execute(text(
             "SELECT 1 FROM pg_indexes WHERE tablename = 'users' AND indexname = 'uq_users_email'"
@@ -238,6 +249,7 @@ async def lifespan(app: FastAPI):
                 max_instances=50,
                 max_cpu_total="200",
                 max_mem_total="400Gi",
+                max_storage_total="2000Gi",
             )
             db.add(default_org)
             await db.flush()
