@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useClusterStore, type ClusterInfo } from '@/stores/cluster'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import StatusDot from '@/components/StatusDot.vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { ArrowLeft, Server, Cpu, MemoryStick, Box, KeyRound, Plug } from 'lucide-vue-next'
+import { ArrowLeft, Server, Cpu, MemoryStick, Box, KeyRound, Plug, Pencil, Check, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import api from '@/services/api'
 
@@ -90,6 +90,42 @@ function resourcePercent(used: string, total: string): number {
   return Math.round((usedNum / totalNum) * 100)
 }
 
+// ── 重命名集群 ──
+const editingName = ref(false)
+const editName = ref('')
+const savingName = ref(false)
+
+const nameInputRef = ref<HTMLInputElement | null>(null)
+
+function startEditName() {
+  editName.value = cluster.value?.name || ''
+  editingName.value = true
+  nextTick(() => nameInputRef.value?.focus())
+}
+
+function cancelEditName() {
+  editingName.value = false
+}
+
+async function handleSaveName() {
+  const trimmed = editName.value.trim()
+  if (!trimmed || trimmed === cluster.value?.name) {
+    editingName.value = false
+    return
+  }
+  savingName.value = true
+  try {
+    const updated = await clusterStore.updateCluster(clusterId, { name: trimmed })
+    cluster.value = updated
+    editingName.value = false
+    toast.success('集群名称已更新')
+  } catch (e: any) {
+    toast.error(e?.response?.data?.detail || '重命名失败')
+  } finally {
+    savingName.value = false
+  }
+}
+
 // ── 更新 KubeConfig ──
 const showKubeconfigDialog = ref(false)
 const newKubeconfig = ref('')
@@ -140,7 +176,29 @@ async function handleTestConnection() {
       </Button>
       <Server class="w-6 h-6" />
       <div class="flex-1">
-        <h1 class="text-2xl font-bold">{{ cluster?.name || '集群详情' }}</h1>
+        <div class="flex items-center gap-2">
+          <template v-if="editingName">
+            <input
+              ref="nameInputRef"
+              v-model="editName"
+              class="text-2xl font-bold bg-transparent border-b-2 border-primary outline-none px-0 py-0 w-80"
+              @keydown.enter="handleSaveName"
+              @keydown.escape="cancelEditName"
+            />
+            <Button variant="ghost" size="icon" class="h-7 w-7" :disabled="savingName" @click="handleSaveName">
+              <Check class="w-4 h-4 text-primary" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" :disabled="savingName" @click="cancelEditName">
+              <X class="w-4 h-4 text-muted-foreground" />
+            </Button>
+          </template>
+          <template v-else>
+            <h1 class="text-2xl font-bold">{{ cluster?.name || '集群详情' }}</h1>
+            <button v-if="cluster" class="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" @click="startEditName">
+              <Pencil class="w-3.5 h-3.5" />
+            </button>
+          </template>
+        </div>
         <div v-if="cluster" class="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
           <Badge variant="secondary">{{ cluster.provider }}</Badge>
           <span v-if="cluster.k8s_version">K8s {{ cluster.k8s_version }}</span>

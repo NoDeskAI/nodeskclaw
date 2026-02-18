@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff } from 'lucide-vue-next'
@@ -45,8 +45,7 @@ const canSubmitPhone = computed(() => {
 // 无需 onMounted 初始化
 
 async function handleEmailSubmit() {
-  if (!canSubmitEmail.value) return
-  error.value = ''
+  if (!canSubmitEmail.value || loading.value) return
   loading.value = true
   try {
     if (isRegister.value) {
@@ -58,6 +57,7 @@ async function handleEmailSubmit() {
     } else {
       await authStore.emailLogin(emailForm.value.email, emailForm.value.password)
     }
+    error.value = ''
     router.replace('/')
   } catch (e: any) {
     error.value = e?.response?.data?.detail || e?.response?.data?.message || (isRegister.value ? '注册失败' : '登录失败')
@@ -68,7 +68,6 @@ async function handleEmailSubmit() {
 
 async function handleSendSms() {
   if (!phoneForm.value.phone || smsSending.value || smsCountdown.value > 0) return
-  error.value = ''
   smsSending.value = true
   try {
     await authStore.sendSmsCode(phoneForm.value.phone)
@@ -88,11 +87,11 @@ async function handleSendSms() {
 }
 
 async function handlePhoneSubmit() {
-  if (!canSubmitPhone.value) return
-  error.value = ''
+  if (!canSubmitPhone.value || loading.value) return
   loading.value = true
   try {
     await authStore.smsLogin(phoneForm.value.phone, phoneForm.value.code)
+    error.value = ''
     router.replace('/')
   } catch (e: any) {
     error.value = e?.response?.data?.detail || e?.response?.data?.message || '登录失败'
@@ -100,6 +99,10 @@ async function handlePhoneSubmit() {
     loading.value = false
   }
 }
+
+// 切换 tab 或模式时清空错误
+watch(activeTab, () => { error.value = '' })
+watch(isRegister, () => { error.value = '' })
 
 </script>
 
@@ -172,7 +175,7 @@ async function handlePhoneSubmit() {
             <button
               class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all"
               :class="activeTab === 'email' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              @click="activeTab = 'email'; error = ''"
+              @click="activeTab = 'email'"
             >
               <Mail class="w-4 h-4" />
               邮箱{{ isRegister ? '注册' : '登录' }}
@@ -180,7 +183,7 @@ async function handlePhoneSubmit() {
             <button
               class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all"
               :class="activeTab === 'phone' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              @click="activeTab = 'phone'; error = ''; isRegister = false"
+              @click="activeTab = 'phone'; isRegister = false"
             >
               <Phone class="w-4 h-4" />
               手机登录
@@ -255,7 +258,7 @@ async function handlePhoneSubmit() {
               <button
                 type="button"
                 class="text-primary hover:text-primary/80 font-medium transition-colors"
-                @click="isRegister = !isRegister; error = ''"
+                @click="isRegister = !isRegister"
               >
                 {{ isRegister ? '立即登录' : '立即注册' }}
               </button>
@@ -315,9 +318,18 @@ async function handlePhoneSubmit() {
           </form>
 
           <!-- 错误提示 -->
-          <p v-if="error" class="text-sm text-destructive text-center bg-destructive/10 rounded-lg py-2 px-3">
-            {{ error }}
-          </p>
+          <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0 -translate-y-1"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-1"
+          >
+            <p v-if="error" class="text-sm text-destructive text-center bg-destructive/10 rounded-lg py-2.5 px-3 border border-destructive/20">
+              {{ error }}
+            </p>
+          </Transition>
 
         <!-- 底部 -->
         <div class="pt-4 text-center">

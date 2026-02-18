@@ -37,12 +37,44 @@ class K8sClient:
             if any(c.type == "Ready" and c.status == "True" for c in (n.status.conditions or []))
         )
 
-        cpu_total = sum(_parse_cpu(n.status.capacity.get("cpu", "0")) for n in nodes.items)
-        mem_total = sum(_parse_memory(n.status.capacity.get("memory", "0")) for n in nodes.items)
-        cpu_alloc = sum(_parse_cpu(n.status.allocatable.get("cpu", "0")) for n in nodes.items)
-        mem_alloc = sum(_parse_memory(n.status.allocatable.get("memory", "0")) for n in nodes.items)
-        cpu_used = cpu_total - cpu_alloc
-        mem_used = mem_total - mem_alloc
+        cpu_total = 0
+        mem_total = 0
+        for n in nodes.items:
+            alloc = n.status.allocatable or {}
+            cap = n.status.capacity or {}
+            raw_cpu = alloc.get("cpu") or cap.get("cpu") or "0"
+            raw_mem = alloc.get("memory") or cap.get("memory") or "0"
+            logger.debug(
+                "Node %s: raw_cpu=%s, raw_mem=%s",
+                n.metadata.name, raw_cpu, raw_mem,
+            )
+            cpu_total += _parse_cpu(str(raw_cpu))
+            mem_total += _parse_memory(str(raw_mem))
+
+        cpu_used = 0
+        mem_used = 0
+        try:
+            metrics_data = await self.custom.list_cluster_custom_object(
+                "metrics.k8s.io", "v1beta1", "nodes"
+            )
+            for item in metrics_data.get("items", []):
+                usage = item.get("usage", {})
+                cpu_used += _parse_cpu(usage.get("cpu", "0"))
+                mem_used += _parse_memory(usage.get("memory", "0"))
+        except Exception:
+            logger.warning("metrics-server unavailable, falling back to request-based estimation")
+            for pod in pods.items:
+                if pod.status.phase not in ("Running", "Pending"):
+                    continue
+                for c in (pod.spec.containers or []):
+                    req = (c.resources.requests or {}) if c.resources else {}
+                    cpu_used += _parse_cpu(req.get("cpu", "0"))
+                    mem_used += _parse_memory(req.get("memory", "0"))
+
+        logger.info(
+            "Cluster overview: cpu_total=%sm, cpu_used=%sm, mem_total=%sMi, mem_used=%sMi",
+            cpu_total, cpu_used, mem_total, mem_used,
+        )
 
         return {
             "node_count": node_count,
@@ -336,19 +368,41 @@ def _parse_cpu(value: str) -> int:
 
 
 def _parse_memory(value: str) -> int:
-    """Parse memory to MiB."""
-    value = value.strip()
+    """Parse Kubernetes resource.Quantity memory string to MiB.
+    Handles: m (milli-bytes), Ki/Mi/Gi/Ti (binary), K/M/G/T (SI), plain bytes."""
+    value = str(value).strip()
+    if not value or value == "0":
+        return 0
+    # Binary units (IEC): Ki, Mi, Gi, Ti — must check 2-char suffixes first
     if value.endswith("Ki"):
         return int(value[:-2]) // 1024
     if value.endswith("Mi"):
         return int(value[:-2])
     if value.endswith("Gi"):
-        return int(value[:-2]) * 1024
+        return int(float(value[:-2]) * 1024)
     if value.endswith("Ti"):
-        return int(value[:-2]) * 1024 * 1024
+        return int(float(value[:-2]) * 1024 * 1024)
+    # "m" suffix = milli-bytes (Kubernetes Quantity), e.g. "61215641108480m"
+    if value.endswith("m"):
+        try:
+            milli_bytes = int(value[:-1])
+            return milli_bytes // 1000 // (1024 * 1024)
+        except ValueError:
+            pass
+    # SI units: K/k, M, G, T (decimal)
+    if value.endswith("G"):
+        return int(float(value[:-1]) * 1000_000_000 / (1024 * 1024))
+    if value.endswith("M"):
+        return int(float(value[:-1]) * 1000_000 / (1024 * 1024))
+    if value.endswith("K") or value.endswith("k"):
+        return int(float(value[:-1]) * 1000 / (1024 * 1024))
+    if value.endswith("T"):
+        return int(float(value[:-1]) * 1000_000_000_000 / (1024 * 1024))
+    # Plain bytes (may include float / exponential notation)
     try:
-        return int(value) // (1024 * 1024)
-    except ValueError:
+        return int(float(value)) // (1024 * 1024)
+    except (ValueError, OverflowError):
+        logger.warning("Failed to parse memory value: %s", value)
         return 0
 
 

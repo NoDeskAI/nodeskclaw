@@ -17,9 +17,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('portal_token')
-      localStorage.removeItem('portal_refresh_token')
-      window.location.href = '/login'
+      const url = error.config?.url || ''
+      if (!url.includes('/auth/')) {
+        localStorage.removeItem('portal_token')
+        localStorage.removeItem('portal_refresh_token')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
     }
     return Promise.reject(error)
   },

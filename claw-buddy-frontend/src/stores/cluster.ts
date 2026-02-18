@@ -66,6 +66,14 @@ export const useClusterStore = defineStore('cluster', () => {
     return res.data.data
   }
 
+  async function updateCluster(id: string, data: { name?: string; provider?: string }) {
+    const res = await api.put(`/clusters/${id}`, data)
+    const updated = res.data.data as ClusterInfo
+    const idx = clusters.value.findIndex((c) => c.id === id)
+    if (idx >= 0) clusters.value[idx] = updated
+    return updated
+  }
+
   async function updateKubeconfig(id: string, kubeconfig: string) {
     const res = await api.post(`/clusters/${id}/kubeconfig`, { kubeconfig })
     const updated = res.data.data as ClusterInfo
@@ -82,6 +90,7 @@ export const useClusterStore = defineStore('cluster', () => {
     selectCluster,
     fetchClusters,
     addCluster,
+    updateCluster,
     deleteCluster,
     testConnection,
     updateKubeconfig,

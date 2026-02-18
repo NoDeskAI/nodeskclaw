@@ -144,15 +144,17 @@ const stats = computed(() => {
           </Card>
         </div>
 
-        <!-- Right: Activity Feed -->
-        <Card>
-          <CardHeader>
-            <CardTitle>实时动态</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ActivityFeed :events="feedEvents" :max-items="20" />
-          </CardContent>
-        </Card>
+        <!-- Right: Activity Feed — absolute 定位使高度由左列决定 -->
+        <div class="relative min-h-[320px]">
+          <Card class="absolute inset-0 flex flex-col overflow-hidden">
+            <CardHeader class="shrink-0">
+              <CardTitle>实时动态</CardTitle>
+            </CardHeader>
+            <CardContent class="flex-1 overflow-y-auto min-h-0">
+              <ActivityFeed :events="feedEvents" :max-items="20" />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </template>
   </div>

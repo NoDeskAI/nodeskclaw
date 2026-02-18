@@ -57,6 +57,7 @@ class UserInfo(BaseModel):
     phone: str | None = None
     avatar_url: str | None = None
     role: str
+    is_active: bool = True
     is_super_admin: bool = False
     current_org_id: str | None = None
     last_login_at: datetime | None = None

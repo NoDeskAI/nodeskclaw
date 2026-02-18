@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import GlowCard from '@/components/GlowCard.vue'
 import StatusDot from '@/components/StatusDot.vue'
-import { Plus, Trash2, Plug, Server } from 'lucide-vue-next'
+import { Plus, Trash2, Plug, Server, Pencil } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const router = useRouter()
@@ -110,6 +110,31 @@ async function handleDelete(id: string, name: string) {
   }
 }
 
+// ── 重命名 ──
+const renameDialogOpen = ref(false)
+const renameForm = ref({ id: '', name: '' })
+const renaming = ref(false)
+
+function openRename(id: string, name: string) {
+  renameForm.value = { id, name }
+  renameDialogOpen.value = true
+}
+
+async function handleRename() {
+  const { id, name } = renameForm.value
+  if (!name.trim()) return
+  renaming.value = true
+  try {
+    await clusterStore.updateCluster(id, { name: name.trim() })
+    toast.success('集群已重命名')
+    renameDialogOpen.value = false
+  } catch (e: any) {
+    toast.error(e?.response?.data?.detail || '重命名失败')
+  } finally {
+    renaming.value = false
+  }
+}
+
 function statusToGlow(status: string) {
   if (status === 'connected') return 'running' as const
   if (status === 'connecting') return 'warning' as const
@@ -181,6 +206,13 @@ function statusToDot(status: string) {
             <Button
               variant="ghost"
               size="sm"
+              @click.stop="openRename(cluster.id, cluster.name)"
+            >
+              <Pencil class="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               @click.stop="handleDelete(cluster.id, cluster.name)"
             >
               <Trash2 class="w-3 h-3 text-destructive" />
@@ -221,6 +253,28 @@ function statusToDot(status: string) {
           <Button variant="outline" @click="showAddDialog = false">取消</Button>
           <Button :disabled="adding || !addForm.name || !addForm.kubeconfig" @click="handleAdd">
             {{ adding ? '添加中...' : '添加' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 重命名集群 Dialog -->
+    <Dialog v-model:open="renameDialogOpen">
+      <DialogContent class="sm:max-w-[380px]">
+        <DialogHeader>
+          <DialogTitle>重命名集群</DialogTitle>
+        </DialogHeader>
+        <div class="py-4">
+          <Input
+            v-model="renameForm.name"
+            placeholder="输入新的集群名称"
+            @keydown.enter="handleRename"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="renameDialogOpen = false">取消</Button>
+          <Button :disabled="renaming || !renameForm.name.trim()" @click="handleRename">
+            {{ renaming ? '保存中...' : '确认' }}
           </Button>
         </DialogFooter>
       </DialogContent>
