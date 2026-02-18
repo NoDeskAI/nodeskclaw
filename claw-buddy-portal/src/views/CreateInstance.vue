@@ -13,7 +13,8 @@ const storageGi = ref(40)
 const deploying = ref(false)
 const error = ref('')
 
-const storageAnchors = [20, 40, 80, 160]
+const storageAnchors = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
+const storageLabels = [20, 60, 100, 150, 200]
 
 // 从后端获取可用镜像版本和集群
 const imageTags = ref<string[]>([])
@@ -37,22 +38,14 @@ function selectSpec(key: string) {
   storageGi.value = specResources[key]?.storage ?? 40
 }
 
-function snapStorage(val: number) {
-  let closest = storageAnchors[0]
-  let minDiff = Math.abs(val - closest)
-  for (const a of storageAnchors) {
-    const diff = Math.abs(val - a)
-    if (diff < minDiff) {
-      minDiff = diff
-      closest = a
-    }
-  }
-  storageGi.value = closest
-}
-
-const storageSliderVal = computed({
-  get: () => storageGi.value,
-  set: (v: number) => snapStorage(v),
+const storageIndex = computed({
+  get: () => {
+    const idx = storageAnchors.indexOf(storageGi.value)
+    return idx >= 0 ? idx : 0
+  },
+  set: (idx: number) => {
+    storageGi.value = storageAnchors[idx] ?? storageAnchors[0]
+  },
 })
 
 onMounted(async () => {
@@ -172,26 +165,30 @@ async function handleDeploy() {
         <div class="space-y-2">
           <input
             type="range"
-            :min="20"
-            :max="160"
+            :min="0"
+            :max="storageAnchors.length - 1"
             :step="1"
-            :value="storageGi"
+            :value="storageIndex"
             class="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-muted"
-            @input="(e: Event) => snapStorage(Number((e.target as HTMLInputElement).value))"
+            @input="(e: Event) => storageIndex = Number((e.target as HTMLInputElement).value)"
           />
-          <div class="flex justify-between text-xs text-muted-foreground px-0.5">
-            <button
-              v-for="anchor in storageAnchors"
-              :key="anchor"
-              class="px-2 py-0.5 rounded transition-colors"
-              :class="storageGi === anchor ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-muted'"
-              @click="storageGi = anchor"
+          <div class="relative h-5 text-xs text-muted-foreground">
+            <span
+              v-for="(label, i) in storageLabels"
+              :key="label"
+              class="absolute cursor-pointer py-0.5 rounded transition-colors"
+              :class="storageGi === label ? 'text-primary font-medium' : ''"
+              :style="{
+                left: (storageAnchors.indexOf(label) / (storageAnchors.length - 1) * 100) + '%',
+                transform: i === 0 ? 'none' : i === storageLabels.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+              }"
+              @click="storageIndex = storageAnchors.indexOf(label)"
             >
-              {{ anchor }}Gi
-            </button>
+              {{ label }}Gi
+            </span>
           </div>
           <p class="text-xs text-muted-foreground">
-            当前：<span class="font-medium text-foreground">{{ storageGi }}Gi</span>，最低 20Gi
+            当前：<span class="font-medium text-foreground">{{ storageGi }}Gi</span>
           </p>
         </div>
       </div>

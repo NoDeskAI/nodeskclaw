@@ -20,9 +20,18 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 # ── JWT ──────────────────────────────────────────────────
 
-def create_access_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRE_HOURS)
-    payload = {"sub": user_id, "exp": expire, "type": "access"}
+def create_access_token(
+    user_id: str | None = None,
+    *,
+    subject: str | None = None,
+    extra_claims: dict | None = None,
+    expires_delta: timedelta | None = None,
+) -> str:
+    sub = subject or user_id or ""
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=settings.JWT_EXPIRE_HOURS))
+    payload: dict = {"sub": sub, "exp": expire, "type": "access"}
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 

@@ -2,13 +2,14 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Home, Plus, Settings, LogOut, Users, BarChart3 } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
 const isLoginPage = computed(() => route.path === '/login')
+const hideNav = computed(() => route.meta.hideNav === true)
 
 onMounted(async () => {
   if (authStore.isLoggedIn && !authStore.user) {
@@ -27,9 +28,12 @@ function handleLogout() {
     <router-view />
   </template>
 
+  <template v-else-if="hideNav">
+    <router-view />
+  </template>
+
   <template v-else>
     <div class="min-h-screen flex flex-col">
-      <!-- 顶部导航栏 -->
       <header class="h-14 flex items-center justify-between px-6 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div class="flex items-center gap-6">
           <div class="flex items-center gap-2 cursor-pointer" @click="router.push('/')">
@@ -40,22 +44,12 @@ function handleLogout() {
             <button
               :class="[
                 'px-3 py-1.5 rounded-md text-sm transition-colors',
-                route.path === '/' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+                route.path === '/' || route.path.startsWith('/workspace') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
               ]"
               @click="router.push('/')"
             >
-              <Home class="w-4 h-4 inline mr-1.5" />
-              我的实例
-            </button>
-            <button
-              :class="[
-                'px-3 py-1.5 rounded-md text-sm transition-colors',
-                route.path === '/create' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
-              ]"
-              @click="router.push('/create')"
-            >
-              <Plus class="w-4 h-4 inline mr-1.5" />
-              创建实例
+              <Boxes class="w-4 h-4 inline mr-1.5" />
+              工作区
             </button>
             <button
               :class="[
@@ -97,7 +91,6 @@ function handleLogout() {
         </div>
       </header>
 
-      <!-- 页面内容 -->
       <main class="flex-1">
         <router-view />
       </main>

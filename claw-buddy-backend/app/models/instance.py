@@ -78,8 +78,17 @@ class Instance(BaseModel):
         String(36), ForeignKey("organizations.id"), nullable=True, index=True
     )
 
+    # Workspace / Agent hex position (nullable for backward compat)
+    workspace_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    hex_position_q: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hex_position_r: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    agent_display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # relationships
     cluster = relationship("Cluster", back_populates="instances")
     creator = relationship("User", back_populates="instances", foreign_keys=[created_by])
     organization = relationship("Organization", back_populates="instances")
     deploy_records = relationship("DeployRecord", back_populates="instance", cascade="save-update, merge")
+    workspace = relationship("Workspace", foreign_keys=[workspace_id])

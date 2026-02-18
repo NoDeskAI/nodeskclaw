@@ -12,6 +12,7 @@ from app.api.organizations import router as org_router
 from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
 from app.api.storage import router as storage_router
+from app.api.workspaces import router as workspace_router
 
 api_router = APIRouter()
 
@@ -32,3 +33,4 @@ api_router.include_router(instance_router, prefix="/instances", tags=["实例"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])
 api_router.include_router(storage_router, prefix="/storage-classes", tags=["存储"])
+api_router.include_router(workspace_router, prefix="/workspaces", tags=["工作区"])

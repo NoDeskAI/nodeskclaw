@@ -7,21 +7,34 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Login.vue'),
     meta: { requiresAuth: false },
   },
+  // Workspace routes (new primary pages)
   {
     path: '/',
-    name: 'Home',
-    component: () => import('@/views/Home.vue'),
+    name: 'WorkspaceList',
+    component: () => import('@/views/WorkspaceList.vue'),
   },
   {
-    path: '/create',
-    name: 'CreateInstance',
-    component: () => import('@/views/CreateInstance.vue'),
+    path: '/workspace/create',
+    name: 'CreateWorkspace',
+    component: () => import('@/views/CreateWorkspace.vue'),
   },
   {
-    path: '/instances/:id',
-    name: 'InstanceDetail',
-    component: () => import('@/views/InstanceDetail.vue'),
+    path: '/workspace/:id',
+    name: 'WorkspaceView',
+    component: () => import('@/views/WorkspaceView.vue'),
+    meta: { hideNav: true },
   },
+  {
+    path: '/workspace/:id/settings',
+    name: 'WorkspaceSettings',
+    component: () => import('@/views/WorkspaceSettings.vue'),
+  },
+  {
+    path: '/workspace/:id/add-agent',
+    name: 'AddAgent',
+    component: () => import('@/views/AddAgent.vue'),
+  },
+  // Kept pages
   {
     path: '/settings',
     name: 'Settings',
@@ -36,6 +49,15 @@ const routes: RouteRecordRaw[] = [
     path: '/usage',
     name: 'OrgUsage',
     component: () => import('@/views/OrgUsage.vue'),
+  },
+  // Legacy redirects
+  {
+    path: '/create',
+    redirect: '/workspace/create',
+  },
+  {
+    path: '/instances/:id',
+    redirect: '/',
   },
 ]
 

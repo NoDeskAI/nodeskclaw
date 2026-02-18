@@ -16,4 +16,14 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three', 'troika-three-text'],
+          d3: ['d3-zoom', 'd3-selection'],
+        },
+      },
+    },
+  },
 })

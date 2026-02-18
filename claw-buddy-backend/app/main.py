@@ -215,6 +215,30 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 organizations 表添加 max_storage_total 列")
 
+        # ── 迁移 8: instances 表新增 workspace_id / hex_position / agent_display_name ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'workspace_id'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN workspace_id VARCHAR(36) "
+                "REFERENCES workspaces(id) ON DELETE SET NULL"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_instances_workspace_id ON instances(workspace_id)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN hex_position_q INTEGER NOT NULL DEFAULT 0"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN hex_position_r INTEGER NOT NULL DEFAULT 0"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN agent_display_name VARCHAR(64)"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 workspace 相关字段")
+
         # 6d: email 加 unique（如果还没有）
         idx = await conn.execute(text(
             "SELECT 1 FROM pg_indexes WHERE tablename = 'users' AND indexname = 'uq_users_email'"
@@ -327,15 +351,110 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("预热集群 %s 失败: %s", cluster.name, e)
 
+    # ── 迁移 9: 为每个组织创建默认工作区并迁移现有实例 ──
+    async with async_session_factory() as db:
+        from app.models.blackboard import Blackboard
+        from app.models.instance import Instance
+        from app.models.org_membership import OrgMembership
+        from app.models.organization import Organization
+        from app.models.workspace import Workspace
+        from app.models.workspace_member import WorkspaceMember
+
+        orgs_result = await db.execute(
+            select(Organization).where(Organization.deleted_at.is_(None))
+        )
+        for org in orgs_result.scalars().all():
+            ws_exists = await db.execute(
+                select(Workspace).where(
+                    Workspace.org_id == org.id,
+                    Workspace.deleted_at.is_(None),
+                ).limit(1)
+            )
+            if ws_exists.scalar_one_or_none():
+                continue
+
+            orphan_check = await db.execute(
+                select(Instance).where(
+                    Instance.org_id == org.id,
+                    Instance.workspace_id.is_(None),
+                    Instance.deleted_at.is_(None),
+                ).limit(1)
+            )
+            if orphan_check.scalar_one_or_none() is None:
+                continue
+
+            first_member_result = await db.execute(
+                select(OrgMembership).where(
+                    OrgMembership.org_id == org.id
+                ).limit(1)
+            )
+            first_member = first_member_result.scalar_one_or_none()
+
+            import uuid
+            ws = Workspace(
+                id=str(uuid.uuid4()),
+                org_id=org.id,
+                name="默认工作区",
+                description="自动创建的默认工作区",
+                created_by=first_member.user_id if first_member else "system",
+            )
+            db.add(ws)
+            await db.flush()
+
+            bb = Blackboard(workspace_id=ws.id)
+            db.add(bb)
+
+            if first_member:
+                owner = WorkspaceMember(
+                    workspace_id=ws.id,
+                    user_id=first_member.user_id,
+                    role="owner",
+                )
+                db.add(owner)
+
+            orphans = await db.execute(
+                select(Instance).where(
+                    Instance.org_id == org.id,
+                    Instance.workspace_id.is_(None),
+                    Instance.deleted_at.is_(None),
+                )
+            )
+            idx = 0
+            directions = [(0, -1), (-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1)]
+            for inst in orphans.scalars().all():
+                inst.workspace_id = ws.id
+                # spiral position
+                positions: list[tuple[int, int]] = []
+                q, r, ring = 1, 0, 1
+                while len(positions) <= idx:
+                    for dq, dr in directions:
+                        for _ in range(ring):
+                            if len(positions) > idx:
+                                break
+                            positions.append((q, r))
+                            q += dq; r += dr
+                    ring += 1; q += 1
+                inst.hex_position_q, inst.hex_position_r = positions[idx]
+                inst.agent_display_name = inst.name
+                idx += 1
+
+            await db.commit()
+            logger.info("自动迁移：已为组织 %s 创建默认工作区并迁移 %d 个实例", org.name, idx)
+
     # 启动集群健康巡检后台任务
     from app.services.health_checker import HealthChecker
 
     health_checker = HealthChecker(async_session_factory)
     health_checker.start()
 
+    from app.services.summary_job import SummaryJob
+    summary_job = SummaryJob(async_session_factory)
+    summary_job.start()
+
     yield
 
     # ── Shutdown ─────────────────────────────────────
+    await summary_job.stop()
     await health_checker.stop()
     await k8s_manager.close_all()
     logger.info("已关闭所有 K8s 连接")
