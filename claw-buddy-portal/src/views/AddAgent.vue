@@ -112,30 +112,55 @@ function goBack() {
       没有可用的实例
     </div>
 
-    <!-- Instance list -->
-    <div v-else class="space-y-2">
-      <div
-        v-for="inst in available"
-        :key="inst.id"
-        class="flex items-center justify-between px-4 py-3 rounded-lg bg-card border border-border hover:border-primary/20 transition-colors"
-      >
-        <div class="flex items-center gap-3">
-          <Bot class="w-5 h-5 text-primary" />
-          <div>
-            <p class="text-sm font-medium">{{ inst.name }}</p>
-            <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
+    <template v-else>
+      <!-- Running instances -->
+      <div v-if="runningInstances.length > 0" class="space-y-2">
+        <div
+          v-for="inst in runningInstances"
+          :key="inst.id"
+          class="flex items-center justify-between px-4 py-3 rounded-lg bg-card border border-border hover:border-primary/20 transition-colors"
+        >
+          <div class="flex items-center gap-3">
+            <Bot class="w-5 h-5 text-primary" />
+            <div>
+              <p class="text-sm font-medium">{{ inst.name }}</p>
+              <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
+            </div>
+          </div>
+          <button
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+            :disabled="adding === inst.id"
+            @click="addToWorkspace(inst.id)"
+          >
+            <Loader2 v-if="adding === inst.id" class="w-3 h-3 animate-spin" />
+            <Plus v-else class="w-3 h-3" />
+            添加
+          </button>
+        </div>
+      </div>
+
+      <!-- Unavailable instances -->
+      <div v-if="unavailableInstances.length > 0" class="mt-6">
+        <p class="text-xs text-muted-foreground mb-2">以下实例尚未就绪，无法添加到工作区</p>
+        <div class="space-y-2 opacity-50">
+          <div
+            v-for="inst in unavailableInstances"
+            :key="inst.id"
+            class="flex items-center justify-between px-4 py-3 rounded-lg bg-card border border-border cursor-not-allowed"
+          >
+            <div class="flex items-center gap-3">
+              <Bot class="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
+              </div>
+            </div>
+            <span class="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs">
+              不可用
+            </span>
           </div>
         </div>
-        <button
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
-          :disabled="adding === inst.id"
-          @click="addToWorkspace(inst.id)"
-        >
-          <Loader2 v-if="adding === inst.id" class="w-3 h-3 animate-spin" />
-          <Plus v-else class="w-3 h-3" />
-          添加
-        </button>
       </div>
-    </div>
+    </template>
   </div>
 </template>
