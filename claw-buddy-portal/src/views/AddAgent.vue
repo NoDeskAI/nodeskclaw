@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import api from '@/services/api'
 
@@ -32,7 +32,7 @@ const available = computed(() =>
 const runningInstances = computed(() => available.value.filter((i) => i.status === 'running'))
 const unavailableInstances = computed(() => available.value.filter((i) => i.status !== 'running'))
 
-onMounted(async () => {
+async function fetchInstances() {
   loading.value = true
   try {
     const res = await api.get('/instances')
@@ -47,7 +47,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(fetchInstances)
 
 async function addToWorkspace(instanceId: string) {
   adding.value = instanceId
@@ -92,14 +94,24 @@ function goBack() {
       </div>
     </button>
 
-    <!-- Search -->
-    <div class="relative mb-4">
-      <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-      <input
-        v-model="search"
-        class="w-full pl-9 pr-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
-        placeholder="搜索实例..."
-      />
+    <!-- Search + Refresh -->
+    <div class="flex items-center gap-2 mb-4">
+      <div class="relative flex-1">
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          v-model="search"
+          class="w-full pl-9 pr-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
+          placeholder="搜索实例..."
+        />
+      </div>
+      <button
+        class="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
+        :disabled="loading"
+        title="刷新列表"
+        @click="fetchInstances"
+      >
+        <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
+      </button>
     </div>
 
     <!-- Loading -->
