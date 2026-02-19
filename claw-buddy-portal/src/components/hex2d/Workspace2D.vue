@@ -18,7 +18,9 @@ const emit = defineEmits<{
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
-const { transformStr } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
+const { transformStr, zoomIn, zoomOut, resetView } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
+
+defineExpose({ zoomIn, zoomOut, resetView })
 
 const hoveredId = ref<string | null>(null)
 

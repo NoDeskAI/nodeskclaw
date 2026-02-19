@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -28,6 +28,23 @@ const isFullscreen = ref(false)
 
 const threeRef = ref<HTMLElement | null>(null)
 const svgRef = ref<HTMLElement | null>(null)
+const workspace3dRef = ref<InstanceType<typeof Workspace3D> | null>(null)
+const workspace2dRef = ref<InstanceType<typeof Workspace2D> | null>(null)
+
+function handleZoomIn() {
+  if (activeMode.value === '3d') workspace3dRef.value?.zoomIn()
+  else workspace2dRef.value?.zoomIn()
+}
+
+function handleZoomOut() {
+  if (activeMode.value === '3d') workspace3dRef.value?.zoomOut()
+  else workspace2dRef.value?.zoomOut()
+}
+
+function handleResetView() {
+  if (activeMode.value === '3d') workspace3dRef.value?.resetView()
+  else workspace2dRef.value?.resetView()
+}
 
 onMounted(async () => {
   await store.fetchWorkspace(workspaceId.value)
@@ -108,6 +125,20 @@ function goBack() {
       </div>
 
       <div class="flex items-center gap-2">
+        <div class="flex items-center gap-0.5 mr-1">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="放大" @click="handleZoomIn">
+            <ZoomIn class="w-4 h-4" />
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="缩小" @click="handleZoomOut">
+            <ZoomOut class="w-4 h-4" />
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="重置视角" @click="handleResetView">
+            <RotateCcw class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="w-px h-5 bg-border" />
+
         <ModeToggle :mode="activeMode" @toggle="toggleMode" />
         <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="toggleFullscreen">
           <Minimize2 v-if="isFullscreen" class="w-4 h-4" />
@@ -132,6 +163,7 @@ function goBack() {
         :style="{ opacity: activeMode === '3d' ? 1 : 0 }"
       >
         <Workspace3D
+          ref="workspace3dRef"
           v-if="activeMode === '3d' || isTransitioning"
           :agents="agents"
           :auto-summary="store.blackboard?.auto_summary || ''"
@@ -150,6 +182,7 @@ function goBack() {
         :style="{ opacity: activeMode === '2d' ? 1 : 0 }"
       >
         <Workspace2D
+          ref="workspace2dRef"
           v-if="activeMode === '2d' || isTransitioning"
           :agents="agents"
           :auto-summary="store.blackboard?.auto_summary || ''"

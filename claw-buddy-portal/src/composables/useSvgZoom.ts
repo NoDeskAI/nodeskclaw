@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted, ref, type Ref } from 'vue'
-import { zoom, type ZoomBehavior } from 'd3-zoom'
+import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import { select } from 'd3-selection'
 
 export interface SvgTransform {
@@ -32,6 +32,24 @@ export function useSvgZoom(
     select(svg).call(zoomBehavior)
   }
 
+  function zoomIn(factor = 1.3) {
+    const svg = svgRef.value
+    if (!svg || !zoomBehavior) return
+    select(svg).transition().duration(200).call(zoomBehavior.scaleBy, factor)
+  }
+
+  function zoomOut(factor = 1.3) {
+    const svg = svgRef.value
+    if (!svg || !zoomBehavior) return
+    select(svg).transition().duration(200).call(zoomBehavior.scaleBy, 1 / factor)
+  }
+
+  function resetView() {
+    const svg = svgRef.value
+    if (!svg || !zoomBehavior) return
+    select(svg).transition().duration(300).call(zoomBehavior.transform, zoomIdentity)
+  }
+
   onMounted(init)
   onUnmounted(() => {
     if (svgRef.value) {
@@ -39,5 +57,5 @@ export function useSvgZoom(
     }
   })
 
-  return { transform, transformStr }
+  return { transform, transformStr, zoomIn, zoomOut, resetView }
 }

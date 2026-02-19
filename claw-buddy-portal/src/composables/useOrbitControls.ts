@@ -29,8 +29,31 @@ export function useOrbitControls(
     if (renderer && !controls) createControls(renderer)
   }, { immediate: true })
 
+  const initialCameraPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+
   function update() {
     controls?.update()
+  }
+
+  function zoomIn(factor = 0.8) {
+    if (!controls) return
+    const dir = camera.position.clone().sub(controls.target)
+    const newLen = Math.max(dir.length() * factor, controls.minDistance)
+    camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(newLen))
+  }
+
+  function zoomOut(factor = 1.25) {
+    if (!controls) return
+    const dir = camera.position.clone().sub(controls.target)
+    const newLen = Math.min(dir.length() * factor, controls.maxDistance)
+    camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(newLen))
+  }
+
+  function resetView() {
+    if (!controls) return
+    camera.position.set(initialCameraPos.x, initialCameraPos.y, initialCameraPos.z)
+    controls.target.set(0, 0, 0)
+    controls.update()
   }
 
   onUnmounted(() => {
@@ -39,5 +62,5 @@ export function useOrbitControls(
     controls = null
   })
 
-  return { update, get controls() { return controls } }
+  return { update, zoomIn, zoomOut, resetView, get controls() { return controls } }
 }

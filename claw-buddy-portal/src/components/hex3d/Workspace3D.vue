@@ -247,6 +247,12 @@ addToLoop(() => {
 onUnmounted(() => {
   HEX_GEO.dispose()
 })
+
+defineExpose({
+  zoomIn: () => orbitControls.zoomIn(),
+  zoomOut: () => orbitControls.zoomOut(),
+  resetView: () => orbitControls.resetView(),
+})
 </script>
 
 <template>
