@@ -532,14 +532,6 @@ async function handleDeploy() {
             </button>
           </div>
 
-          <!-- 跳过 -->
-          <button
-            v-if="llmConfigs.length === 0"
-            class="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            @click="llmSkipped = true"
-          >
-            跳过，稍后在实例设置中配置
-          </button>
         </template>
 
         <p v-else class="text-xs text-muted-foreground italic">
@@ -549,8 +541,8 @@ async function handleDeploy() {
       </div>
 
       <!-- 部署 -->
-      <div class="pt-4">
-        <p v-if="error" class="text-sm text-destructive mb-3">{{ error }}</p>
+      <div class="pt-4 space-y-3">
+        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
         <button
           :disabled="!canDeploy"
           class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -558,7 +550,14 @@ async function handleDeploy() {
         >
           <Loader2 v-if="deploying" class="w-4 h-4 animate-spin" />
           <Rocket v-else class="w-4 h-4" />
-          {{ deploying ? '部署中...' : '一键部署' }}
+          {{ deploying ? '部署中...' : '部署' }}
+        </button>
+        <button
+          v-if="!llmSkipped && llmConfigs.length === 0"
+          class="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
+          @click="llmSkipped = true"
+        >
+          跳过大模型配置，稍后在实例设置中配置
         </button>
       </div>
     </div>
