@@ -55,6 +55,11 @@ const routes: RouteRecordRaw[] = [
     name: 'InstanceDetail',
     component: () => import('@/views/InstanceDetail.vue'),
   },
+  {
+    path: '/instances/:id/settings',
+    name: 'InstanceSettings',
+    component: () => import('@/views/InstanceSettings.vue'),
+  },
   // Kept pages
   {
     path: '/settings',

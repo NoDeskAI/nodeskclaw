@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ExternalLink, RefreshCw, Trash2, Circle, Loader2 } from 'lucide-vue-next'
+import { ArrowLeft, ExternalLink, RefreshCw, Trash2, Circle, Loader2, Settings } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
@@ -182,6 +182,13 @@ const statusLabels: Record<string, string> = {
         >
           <RefreshCw class="w-4 h-4" />
           刷新
+        </button>
+        <button
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
+          @click="router.push(`/instances/${instanceId}/settings`)"
+        >
+          <Settings class="w-4 h-4" />
+          设置
         </button>
         <button
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto"

@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Building2, Plus, Trash2, Pencil, Users, Database } from 'lucide-vue-next'
+import { Building2, Plus, Trash2, Pencil, Users, Database, Key } from 'lucide-vue-next'
 import { useOrgStore, type OrgInfo } from '@/stores/org'
 import { useNotify } from '@/components/ui/notify'
 import { useRouter } from 'vue-router'
@@ -172,6 +172,15 @@ const planLabels: Record<string, string> = {
             >
               <Users class="w-3 h-3 mr-1" />
               成员
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-7 text-xs"
+              @click="router.push(`/platform/orgs/${org.id}/llm-keys`)"
+            >
+              <Key class="w-3 h-3 mr-1" />
+              LLM Key
             </Button>
             <Button
               variant="ghost"

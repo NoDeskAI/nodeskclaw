@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # ── 火山云 ──────────────────────────────────────────
     VKE_SUBNET_ID: str = ""
 
+    # ── LLM Proxy ─────────────────────────────────────────
+    CLAWBUDDY_HOST: str = ""  # 外部可达域名，如 https://clawbuddy.example.com
+
     # ── CORS ─────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 

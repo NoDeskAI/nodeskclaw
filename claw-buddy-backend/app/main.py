@@ -283,6 +283,57 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 users.email 添加 partial unique index")
 
+        # ── 迁移 11: LLM Key 管理相关表 + instances.proxy_token ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'proxy_token'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN proxy_token VARCHAR(64)"
+            ))
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_instances_proxy_token "
+                "ON instances (proxy_token) WHERE proxy_token IS NOT NULL"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 proxy_token 列和唯一索引")
+
+        for tbl in ("org_llm_keys", "user_llm_keys", "user_llm_configs", "llm_usage_logs"):
+            exists = await conn.execute(text(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = :t"
+            ), {"t": tbl})
+            if exists.first() is None:
+                needs_create = True
+                break
+        else:
+            needs_create = False
+
+        if needs_create:
+            from app.models.llm_usage_log import LlmUsageLog
+            from app.models.org_llm_key import OrgLlmKey
+            from app.models.user_llm_config import UserLlmConfig
+            from app.models.user_llm_key import UserLlmKey
+            for model in (OrgLlmKey, UserLlmKey, UserLlmConfig, LlmUsageLog):
+                await conn.run_sync(model.__table__.create, checkfirst=True)
+            logger.info("自动迁移：已创建 LLM 相关表 (org_llm_keys, user_llm_keys, user_llm_configs, llm_usage_logs)")
+
+        # 回填 proxy_token: 从 env_vars JSON 提取 OPENCLAW_GATEWAY_TOKEN
+        rows = await conn.execute(text(
+            "SELECT id, env_vars FROM instances WHERE proxy_token IS NULL AND env_vars IS NOT NULL AND deleted_at IS NULL"
+        ))
+        import json as _json
+        for row in rows:
+            try:
+                env = _json.loads(row.env_vars) if isinstance(row.env_vars, str) else row.env_vars
+                token = env.get("OPENCLAW_GATEWAY_TOKEN")
+                if token:
+                    await conn.execute(text(
+                        "UPDATE instances SET proxy_token = :token WHERE id = :id"
+                    ), {"token": token, "id": row.id})
+            except Exception:
+                pass
+        logger.info("自动迁移：已回填 instances.proxy_token")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
@@ -562,6 +613,9 @@ register_exception_handlers(app)
 
 # ── Routers ──────────────────────────────────────────
 app.include_router(api_router, prefix="/api/v1")
+
+from app.api.llm_proxy import router as llm_proxy_router
+app.include_router(llm_proxy_router, tags=["LLM 代理"])
 
 # ── Static files (前端 build 产物) ───────────────────
 # 生产环境：Vite build 后的 dist 目录会被复制到 static/

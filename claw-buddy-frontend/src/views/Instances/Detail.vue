@@ -45,6 +45,28 @@ const activeTab = ref('overview')
 
 const instanceId = route.params.id as string
 
+// LLM config
+interface LlmConfigItem {
+  provider: string
+  key_source: string
+  key_label: string | null
+  api_key_masked: string | null
+}
+const llmConfigs = ref<LlmConfigItem[]>([])
+const llmConfigLoading = ref(false)
+
+async function fetchLlmConfig() {
+  llmConfigLoading.value = true
+  try {
+    const res = await api.get(`/instances/${instanceId}/llm-config`)
+    llmConfigs.value = res.data.data ?? []
+  } catch {
+    llmConfigs.value = []
+  } finally {
+    llmConfigLoading.value = false
+  }
+}
+
 // Modal states
 const showScaleDialog = ref(false)
 const showRestartDialog = ref(false)
@@ -74,6 +96,7 @@ onMounted(async () => {
       mem_limit: detail.value.mem_limit,
     }
     history.value = await instanceStore.getHistory(instanceId)
+    fetchLlmConfig()
   } finally {
     loading.value = false
   }
@@ -292,6 +315,7 @@ function formatTime(ts: string | null): string {
           <TabsTrigger value="overview">概览</TabsTrigger>
           <TabsTrigger value="pods">Pod 列表</TabsTrigger>
           <TabsTrigger value="config">配置</TabsTrigger>
+          <TabsTrigger value="llm">LLM 配置</TabsTrigger>
           <TabsTrigger value="logs">日志</TabsTrigger>
           <TabsTrigger value="events">事件</TabsTrigger>
           <TabsTrigger value="history">历史</TabsTrigger>
@@ -503,6 +527,31 @@ function formatTime(ts: string | null): string {
                     <Globe class="w-4 h-4 text-muted-foreground" />
                     <span class="text-muted-foreground">服务类型:</span>
                     <span class="font-medium">{{ detail.service_type }}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <!-- LLM Config Tab -->
+        <TabsContent value="llm">
+          <div class="mt-4 space-y-4">
+            <Card>
+              <CardHeader><CardTitle>LLM 配置</CardTitle></CardHeader>
+              <CardContent>
+                <div v-if="llmConfigLoading" class="text-sm text-muted-foreground py-4 text-center">加载中...</div>
+                <div v-else-if="llmConfigs.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+                  该实例未配置 LLM Key
+                </div>
+                <div v-else class="space-y-3">
+                  <div v-for="cfg in llmConfigs" :key="cfg.provider" class="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div class="flex items-center gap-3">
+                      <Badge variant="outline">{{ cfg.provider }}</Badge>
+                      <span class="text-sm">{{ cfg.key_source === 'org' ? '组织 Key' : '个人 Key' }}</span>
+                      <span v-if="cfg.key_label" class="text-xs text-muted-foreground">({{ cfg.key_label }})</span>
+                    </div>
+                    <span v-if="cfg.api_key_masked" class="font-mono text-xs text-muted-foreground">{{ cfg.api_key_masked }}</span>
                   </div>
                 </div>
               </CardContent>

@@ -781,8 +781,26 @@ const yamlPreview = computed(() => {
             <label class="text-sm font-medium">运行时环境变量</label>
             <Button variant="outline" size="sm" @click="addEnv">+ 添加</Button>
           </div>
+
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            <Button
+              v-for="preset in [
+                { label: 'OpenAI', pairs: [{ key: 'OPENAI_API_KEY', value: '' }, { key: 'OPENAI_BASE_URL', value: '' }] },
+                { label: 'Anthropic', pairs: [{ key: 'ANTHROPIC_API_KEY', value: '' }, { key: 'ANTHROPIC_BASE_URL', value: '' }] },
+                { label: 'Gemini', pairs: [{ key: 'GEMINI_API_KEY', value: '' }, { key: 'GEMINI_BASE_URL', value: '' }] },
+              ]"
+              :key="preset.label"
+              variant="secondary"
+              size="sm"
+              class="h-6 text-xs px-2"
+              @click="preset.pairs.forEach(p => { if (!envPairs.some(e => e.key === p.key)) envPairs.push({ ...p }) })"
+            >
+              + {{ preset.label }}
+            </Button>
+          </div>
+
           <div v-if="envPairs.length === 0" class="text-xs text-muted-foreground">
-            暂无环境变量，可直接跳过此步
+            暂无环境变量，可直接跳过此步。点击上方按钮快速添加常用 LLM Provider 配置
           </div>
           <div v-for="(pair, idx) in envPairs" :key="idx" class="grid grid-cols-[1fr_1fr_auto] gap-2 mb-2">
             <Input v-model="pair.key" placeholder="KEY" class="text-xs" />

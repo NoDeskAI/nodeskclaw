@@ -260,6 +260,7 @@ async def deploy_instance(
     env_vars = dict(req.env_vars) if req.env_vars else {}
     if "OPENCLAW_GATEWAY_TOKEN" not in env_vars:
         env_vars["OPENCLAW_GATEWAY_TOKEN"] = _secrets.token_hex(24)
+    gateway_token = env_vars["OPENCLAW_GATEWAY_TOKEN"]
 
     # 创建实例记录
     instance = Instance(
@@ -275,6 +276,7 @@ async def deploy_instance(
         mem_limit=req.mem_limit,
         service_type="ClusterIP",
         ingress_domain=None,
+        proxy_token=gateway_token,
         env_vars=_json.dumps(env_vars),
         advanced_config=_json.dumps(req.advanced_config) if req.advanced_config else None,
         storage_class=req.storage_class,

@@ -79,6 +79,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Platform/OrgMembers.vue'),
   },
   {
+    path: '/platform/orgs/:orgId/llm-keys',
+    name: 'PlatformOrgLlmKeys',
+    component: () => import('@/views/Platform/OrgLlmKeys.vue'),
+  },
+  {
     path: '/platform/users',
     name: 'PlatformUsers',
     component: () => import('@/views/Platform/Users.vue'),

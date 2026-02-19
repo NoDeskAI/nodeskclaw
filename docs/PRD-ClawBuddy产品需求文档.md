@@ -198,6 +198,42 @@ OpenClaw 是一个强大的 AI Agent 平台，但部署和运维需要一定的 
 - 部署失败通知（飞书消息推送）
 - Pod 异常告警（CrashLoopBackOff、OOMKilled）
 
+### 3.7 大模型 Key 管理
+
+OpenClaw 需要大模型 API Key 才能正常使用。ClawBuddy 提供集中化的 Key 管理和代理转发，用户无需直接接触真实 Key。
+
+#### 3.7.1 组织 Key（管理员配置）
+
+- 管理员为组织创建 LLM Key，同一 Provider（如 OpenAI）可配多个 Key，通过标签区分（如"市场部 Key"、"研发主号"）
+- 每个 Key 支持双重 token 额度限制（用完即止）：
+  - 组织级额度：管理员设定该 Key 在本组织的总 token 上限
+  - 系统级额度：平台管理员设定的硬性上限
+- 成员可在可选列表中看到组织 Key 的标签和脱敏值，但看不到完整 Key
+
+#### 3.7.2 用户个人 Key
+
+- 用户可添加自己的 LLM API Key（每个 Provider 一个）
+- 个人 Key 不受组织额度限制，用户自行管理自己的账单
+
+#### 3.7.3 Key 选择机制
+
+- 每个用户在每个组织中，按 Provider 粒度选择使用哪个 Key（组织 Key 或个人 Key）
+- Key 选择是用户级别设置，变更会影响该用户在同一组织下的所有实例
+- 切换已有 Provider 的 Key 来源不需要重启实例（代理端动态解析）
+- 新增/移除 Provider 需要重启 OpenClaw 进程（优雅重启，等待当前任务完成）
+
+#### 3.7.4 LLM 代理架构
+
+- ClawBuddy 后端作为 LLM 代理，OpenClaw 实例的 LLM 请求全部经过代理转发
+- OpenClaw 不持有真实 API Key，只持有代理 token（复用 Gateway Token）
+- 代理负责：鉴权、Key 解析、额度检查、流式转发、token 用量记录
+- 使用组织 Key 时自动注入 stream_options 以精确计算 token 消耗
+
+#### 3.7.5 配置时机
+
+- 创建实例时：始终可见的"配置大模型"区块，用户可选择配置或跳过
+- 实例设置页：创建后随时可在实例设置中管理 LLM 配置
+
 ---
 
 ## 四、UI 设计规范

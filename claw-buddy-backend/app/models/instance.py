@@ -52,6 +52,11 @@ class Instance(BaseModel):
     service_type: Mapped[str] = mapped_column(String(16), default=ServiceType.cluster_ip, nullable=False)
     ingress_domain: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
+    # LLM proxy token (same value as OPENCLAW_GATEWAY_TOKEN in env_vars)
+    proxy_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+
     # Config
     env_vars: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
 

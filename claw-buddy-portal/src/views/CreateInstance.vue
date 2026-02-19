@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key } from 'lucide-vue-next'
 import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const name = ref('')
 const slug = ref('')
@@ -19,6 +21,51 @@ const selectedImage = ref('')
 const storageGi = ref(20)
 const deploying = ref(false)
 const error = ref('')
+
+// ── LLM config ──
+interface AvailableKey {
+  id: string
+  provider: string
+  label: string
+  api_key_masked: string
+  is_active: boolean
+}
+
+interface LlmConfigEntry {
+  provider: string
+  keySource: 'org' | 'personal' | 'none'
+  orgKeyId: string
+  personalKey: string
+}
+
+const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter'] as const
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  gemini: 'Google Gemini',
+  openrouter: 'OpenRouter',
+}
+
+const availableOrgKeys = ref<AvailableKey[]>([])
+const llmConfigs = ref<LlmConfigEntry[]>(
+  PROVIDERS.map(p => ({ provider: p, keySource: 'none' as const, orgKeyId: '', personalKey: '' }))
+)
+const llmExpanded = ref(true)
+
+function orgKeysForProvider(provider: string) {
+  return availableOrgKeys.value.filter(k => k.provider === provider)
+}
+
+async function fetchAvailableKeys() {
+  const orgId = authStore.user?.current_org_id
+  if (!orgId) return
+  try {
+    const res = await api.get(`/orgs/${orgId}/available-llm-keys`)
+    availableOrgKeys.value = res.data.data ?? []
+  } catch {
+    availableOrgKeys.value = []
+  }
+}
 
 const storageAnchors = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
 const storageLabels = [20, 60, 100, 150, 200]
@@ -131,6 +178,7 @@ onMounted(async () => {
     const [, clustersRes] = await Promise.all([
       fetchImageTags(),
       api.get('/clusters'),
+      fetchAvailableKeys(),
     ])
     clusters.value = (clustersRes.data.data ?? []).filter((c: any) => c.status === 'connected')
   } catch {
@@ -165,6 +213,14 @@ async function handleDeploy() {
   const res_spec = specResources[selectedSpec.value]
 
   try {
+    const activeLlm = llmConfigs.value
+      .filter(c => c.keySource !== 'none')
+      .map(c => ({
+        provider: c.provider,
+        key_source: c.keySource,
+        org_llm_key_id: c.keySource === 'org' ? c.orgKeyId || undefined : undefined,
+      }))
+
     const res = await api.post('/deploy', {
       name: name.value.trim(),
       slug: slug.value,
@@ -179,6 +235,7 @@ async function handleDeploy() {
       quota_mem: res_spec.quota_mem,
       storage_size: `${storageGi.value}Gi`,
       description: description.value || undefined,
+      llm_configs: activeLlm.length > 0 ? activeLlm : undefined,
     })
 
     const deployId = res.data.data?.deploy_id
@@ -370,6 +427,94 @@ async function handleDeploy() {
           <p class="text-xs text-muted-foreground">
             当前：<span class="font-medium text-foreground">{{ storageGi }}Gi</span>
           </p>
+        </div>
+      </div>
+
+      <!-- 大模型配置 -->
+      <div class="space-y-3">
+        <button
+          class="flex items-center gap-2 text-sm font-medium w-full text-left"
+          @click="llmExpanded = !llmExpanded"
+        >
+          <Brain class="w-4 h-4 text-violet-400" />
+          配置大模型
+          <ChevronDown class="w-4 h-4 text-muted-foreground transition-transform ml-auto" :class="llmExpanded ? 'rotate-180' : ''" />
+        </button>
+        <p class="text-xs text-muted-foreground">
+          OpenClaw 需要至少一个大模型 Key 才能正常使用，你也可以稍后在实例设置中配置
+        </p>
+
+        <div v-if="llmExpanded" class="space-y-3">
+          <div
+            v-for="cfg in llmConfigs"
+            :key="cfg.provider"
+            class="rounded-lg border border-border bg-card p-4 space-y-3"
+          >
+            <div class="font-medium text-sm">{{ PROVIDER_LABELS[cfg.provider] || cfg.provider }}</div>
+
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  :name="`llm-${cfg.provider}`"
+                  value="none"
+                  v-model="cfg.keySource"
+                  class="accent-primary"
+                />
+                <span class="text-muted-foreground">不使用</span>
+              </label>
+
+              <label
+                v-if="orgKeysForProvider(cfg.provider).length > 0"
+                class="flex items-center gap-2 text-sm cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  :name="`llm-${cfg.provider}`"
+                  value="org"
+                  v-model="cfg.keySource"
+                  class="accent-primary"
+                />
+                <span>使用组织 Key</span>
+              </label>
+              <select
+                v-if="cfg.keySource === 'org' && orgKeysForProvider(cfg.provider).length > 0"
+                v-model="cfg.orgKeyId"
+                class="ml-6 w-[calc(100%-1.5rem)] px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              >
+                <option value="" disabled>选择 Key</option>
+                <option
+                  v-for="k in orgKeysForProvider(cfg.provider)"
+                  :key="k.id"
+                  :value="k.id"
+                >
+                  {{ k.label }} ({{ k.api_key_masked }})
+                </option>
+              </select>
+
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  :name="`llm-${cfg.provider}`"
+                  value="personal"
+                  v-model="cfg.keySource"
+                  class="accent-primary"
+                />
+                <span>使用个人 Key</span>
+              </label>
+              <div v-if="cfg.keySource === 'personal'" class="ml-6">
+                <div class="relative">
+                  <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    v-model="cfg.personalKey"
+                    type="password"
+                    placeholder="输入 API Key"
+                    class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
