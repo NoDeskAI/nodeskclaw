@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 class DeployRequest(BaseModel):
     cluster_id: str
     name: str
+    slug: str | None = None  # auto-generated from name if not provided
     namespace: str | None = None  # auto-generated if not provided
     image_version: str
     replicas: int = 1

@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
 
 const name = ref('')
+const slug = ref('')
+const slugManuallyEdited = ref(false)
+const slugChecking = ref(false)
+const slugConflict = ref(false)
+const slugError = ref('')
 const description = ref('')
 const selectedSpec = ref('small')
 const selectedImage = ref('')
@@ -71,6 +76,51 @@ function selectImage(tag: string) {
   imageDropdownOpen.value = false
 }
 
+function toSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+const slugValid = computed(() => /^[a-z][a-z0-9-]*[a-z0-9]$/.test(slug.value) && slug.value.length >= 2)
+
+let slugCheckTimer: ReturnType<typeof setTimeout> | null = null
+
+function debouncedSlugCheck() {
+  slugConflict.value = false
+  slugError.value = ''
+  if (slugCheckTimer) clearTimeout(slugCheckTimer)
+  if (!slug.value || !slugValid.value) return
+  slugChecking.value = true
+  slugCheckTimer = setTimeout(async () => {
+    try {
+      const res = await api.get('/instances/check-slug', { params: { slug: slug.value } })
+      const data = res.data.data
+      if (data?.conflict) {
+        slugConflict.value = true
+        slugError.value = data.reason || '该标识已被占用'
+      }
+    } catch {
+      // ignore
+    } finally {
+      slugChecking.value = false
+    }
+  }, 400)
+}
+
+watch(name, (val) => {
+  if (!slugManuallyEdited.value) {
+    slug.value = toSlug(val)
+    debouncedSlugCheck()
+  }
+})
+
+watch(slug, () => {
+  debouncedSlugCheck()
+})
+
 onMounted(async () => {
   try {
     const [, clustersRes] = await Promise.all([
@@ -86,7 +136,8 @@ onMounted(async () => {
 })
 
 const canDeploy = computed(() =>
-  !!name.value.trim() && !!selectedImage.value && clusters.value.length > 0 && !deploying.value
+  !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
+  && !!selectedImage.value && clusters.value.length > 0 && !deploying.value
 )
 
 async function handleDeploy() {
@@ -111,6 +162,7 @@ async function handleDeploy() {
   try {
     const res = await api.post('/deploy', {
       name: name.value.trim(),
+      slug: slug.value,
       cluster_id: clusters.value[0].id,
       image_version: selectedImage.value,
       replicas: 1,
@@ -166,9 +218,41 @@ async function handleDeploy() {
         <input
           v-model="name"
           type="text"
-          placeholder="例如：my-assistant"
+          placeholder="例如：我的AI助手"
           class="w-full px-4 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
         />
+      </div>
+
+      <!-- 实例标识 (slug) -->
+      <div class="space-y-2">
+        <label class="text-sm font-medium">实例标识</label>
+        <div class="relative">
+          <input
+            v-model="slug"
+            type="text"
+            placeholder="例如：my-assistant"
+            class="w-full px-4 py-2.5 rounded-lg bg-card border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+            :class="slugError ? 'border-destructive' : slug && slugValid && !slugConflict ? 'border-green-500' : 'border-border'"
+            @input="slugManuallyEdited = true"
+          />
+          <div v-if="slugChecking" class="absolute right-3 top-1/2 -translate-y-1/2">
+            <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="slug && slugValid && !slugConflict && !slugChecking" class="absolute right-3 top-1/2 -translate-y-1/2">
+            <Check class="w-4 h-4 text-green-500" />
+          </div>
+        </div>
+        <p v-if="slugError" class="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle class="w-3 h-3" />
+          {{ slugError }}
+        </p>
+        <p v-else-if="slug && !slugValid" class="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle class="w-3 h-3" />
+          须以小写字母开头，仅含小写字母、数字和连字符，至少 2 个字符
+        </p>
+        <p v-else class="text-xs text-muted-foreground">
+          用于系统内部标识，仅限小写字母、数字和连字符
+        </p>
       </div>
 
       <!-- 镜像版本 -->

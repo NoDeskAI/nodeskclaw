@@ -27,35 +27,25 @@ def _sanitize_name(name: str) -> str:
     return _re.sub(r"-{2,}", "-", safe)
 
 
-async def check_name_conflict(
-    name: str, cluster_id: str, db: AsyncSession
-) -> dict:
-    """
-    检查实例名称是否与现有实例冲突。
-    同时检查原始名称和清洗后的 namespace 是否冲突。
-    """
-    safe_name = _sanitize_name(name)
-    namespace = f"clawbuddy-{safe_name}"
+def _k8s_name(instance: Instance) -> str:
+    """K8s 资源名：优先用 slug，兼容未迁移的旧实例回退到 name。"""
+    return instance.slug or instance.name
 
-    # 查找同集群中未删除的实例，名称或 namespace 冲突
+
+async def check_slug_conflict(
+    slug: str, org_id: str, db: AsyncSession
+) -> dict:
+    """检查实例标识（slug）在同一组织内是否冲突。"""
     result = await db.execute(
         select(Instance).where(
-            Instance.cluster_id == cluster_id,
+            Instance.slug == slug,
+            Instance.org_id == org_id,
             Instance.deleted_at.is_(None),
         )
     )
-    instances = result.scalars().all()
-
-    for inst in instances:
-        if inst.name == name:
-            return {"conflict": True, "reason": f"实例名称 \"{name}\" 已存在"}
-        inst_safe = _sanitize_name(inst.name)
-        if inst_safe == safe_name:
-            return {
-                "conflict": True,
-                "reason": f"名称清洗后与已有实例 \"{inst.name}\" 的命名空间冲突（均为 {namespace}）",
-            }
-
+    existing = result.scalar_one_or_none()
+    if existing:
+        return {"conflict": True, "reason": f"实例标识 \"{slug}\" 在当前组织中已存在"}
     return {"conflict": False, "reason": ""}
 
 
@@ -106,7 +96,7 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
         try:
             api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
             k8s = K8sClient(api_client)
-            label_selector = f"app.kubernetes.io/name={instance.name}"
+            label_selector = f"app.kubernetes.io/name={_k8s_name(instance)}"
             pods = await k8s.list_pods(instance.namespace, label_selector)
             detail.pods = [
                 {
@@ -180,7 +170,7 @@ async def scale_instance(instance_id: str, replicas: int, db: AsyncSession):
 
     api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
     k8s = K8sClient(api_client)
-    await k8s.scale_deployment(instance.namespace, instance.name, replicas)
+    await k8s.scale_deployment(instance.namespace, _k8s_name(instance), replicas)
 
     instance.replicas = replicas
     await db.commit()
@@ -197,7 +187,7 @@ async def restart_instance(instance_id: str, db: AsyncSession):
 
     api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
     k8s = K8sClient(api_client)
-    await k8s.restart_deployment(instance.namespace, instance.name)
+    await k8s.restart_deployment(instance.namespace, _k8s_name(instance))
 
 
 async def get_deploy_history(instance_id: str, db: AsyncSession) -> list[DeployRecordInfo]:
@@ -389,7 +379,7 @@ async def _execute_config_update(
                     },
                     "spec": {
                         "containers": [{
-                            "name": instance.name,
+                            "name": _k8s_name(instance),
                             "image": image,
                             "resources": {
                                 "requests": {"cpu": instance.cpu_request, "memory": instance.mem_request},
@@ -400,15 +390,16 @@ async def _execute_config_update(
                 },
             }
         }
-        await k8s.apps.patch_namespaced_deployment(instance.name, instance.namespace, patch_body)
+        k_name = _k8s_name(instance)
+        await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
 
         # Update ConfigMap if env_vars changed
         if req.env_vars is not None:
-            labels = build_labels(instance.name, instance.id, instance.image_version)
-            cm = build_configmap(f"{instance.name}-config", instance.namespace, req.env_vars, labels)
+            labels = build_labels(k_name, instance.id, instance.image_version)
+            cm = build_configmap(f"{k_name}-config", instance.namespace, req.env_vars, labels)
             try:
                 await k8s.core.replace_namespaced_config_map(
-                    f"{instance.name}-config", instance.namespace, cm
+                    f"{k_name}-config", instance.namespace, cm
                 )
             except Exception:
                 await k8s.create_or_skip(
@@ -452,7 +443,8 @@ async def sync_gateway_token(instance_id: str, db: AsyncSession) -> str:
     k8s = K8sClient(api_client)
 
     # 找一个 Running 的 Pod
-    label_selector = f"app.kubernetes.io/name={instance.name}"
+    k_name = _k8s_name(instance)
+    label_selector = f"app.kubernetes.io/name={k_name}"
     pods = await k8s.list_pods(instance.namespace, label_selector)
     logger.info("sync_gateway_token: found %d pods (label=%s)", len(pods), label_selector)
     running_pods = [p for p in pods if p["phase"] == "Running"]
@@ -486,11 +478,11 @@ async def sync_gateway_token(instance_id: str, db: AsyncSession) -> str:
 
     # 回填到 ConfigMap
     try:
-        labels = build_labels(instance.name, instance.id, instance.image_version)
-        cm = build_configmap(f"{instance.name}-config", instance.namespace, env_vars, labels)
+        labels = build_labels(k_name, instance.id, instance.image_version)
+        cm = build_configmap(f"{k_name}-config", instance.namespace, env_vars, labels)
         try:
             await k8s.core.replace_namespaced_config_map(
-                f"{instance.name}-config", instance.namespace, cm
+                f"{k_name}-config", instance.namespace, cm
             )
         except Exception:
             await k8s.create_or_skip(

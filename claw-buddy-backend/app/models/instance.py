@@ -27,11 +27,16 @@ class ServiceType(str, Enum):
 class Instance(BaseModel):
     __tablename__ = "instances"
     __table_args__ = (
-        # 仅对未删除记录生效的唯一约束（兼容软删除）
-        Index("uq_instances_name_active", "name", unique=True, postgresql_where="deleted_at IS NULL"),
+        Index(
+            "uq_instances_slug_org_active",
+            "slug", "org_id",
+            unique=True,
+            postgresql_where="deleted_at IS NULL",
+        ),
     )
 
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     cluster_id: Mapped[str] = mapped_column(String(36), ForeignKey("clusters.id"), nullable=False)
     namespace: Mapped[str] = mapped_column(String(128), nullable=False)
     image_version: Mapped[str] = mapped_column(String(64), nullable=False)

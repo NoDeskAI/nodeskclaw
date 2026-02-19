@@ -45,7 +45,8 @@ async def deploy(
         )
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=409, detail=f"实例名称 '{body.name}' 已存在，请更换名称")
+        slug_display = body.slug or body.name
+        raise HTTPException(status_code=409, detail=f"实例标识 '{slug_display}' 已存在，请更换标识")
 
     # 后台异步执行 K8s 部署管道（使用独立 DB session）
     task = asyncio.create_task(

@@ -26,16 +26,46 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/check-name", response_model=ApiResponse[dict])
+@router.get("/check-slug", response_model=ApiResponse[dict])
+async def check_slug(
+    slug: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """检查实例标识（slug）在当前组织内是否冲突。"""
+    org_id = current_user.current_org_id
+    if not org_id:
+        return ApiResponse(data={"conflict": False, "reason": ""})
+    data = await instance_service.check_slug_conflict(slug, org_id, db)
+    return ApiResponse(data=data)
+
+
+@router.get("/check-name", response_model=ApiResponse[dict], deprecated=True)
 async def check_name(
     name: str = Query(..., min_length=1),
     cluster_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ):
-    """检查实例名称是否与现有实例冲突。"""
-    data = await instance_service.check_name_conflict(name, cluster_id, db)
-    return ApiResponse(data=data)
+    """(已弃用) 检查实例名称冲突，保留供管理端过渡期使用。"""
+    import re as _re
+    from app.models.instance import Instance
+    safe_name = _re.sub(r"[^a-z0-9-]", "-", name.lower()).strip("-")
+    safe_name = _re.sub(r"-{2,}", "-", safe_name)
+    result = await db.execute(
+        select(Instance).where(
+            Instance.cluster_id == cluster_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    for inst in result.scalars().all():
+        if inst.name == name:
+            return ApiResponse(data={"conflict": True, "reason": f"实例名称 \"{name}\" 已存在"})
+        inst_safe = _re.sub(r"[^a-z0-9-]", "-", inst.name.lower()).strip("-")
+        inst_safe = _re.sub(r"-{2,}", "-", inst_safe)
+        if inst_safe == safe_name:
+            return ApiResponse(data={"conflict": True, "reason": f"名称清洗后与已有实例冲突"})
+    return ApiResponse(data={"conflict": False, "reason": ""})
 
 
 @router.get("", response_model=ApiResponse[list[InstanceInfo]])

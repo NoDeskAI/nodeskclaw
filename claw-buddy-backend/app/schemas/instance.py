@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class InstanceInfo(BaseModel):
     id: str
     name: str
+    slug: str = ""
     cluster_id: str
     namespace: str
     image_version: str

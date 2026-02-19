@@ -218,6 +218,7 @@ async def deploy_instance(
     """
     # 组织配额检查 + 专属集群路由
     effective_cluster_id = req.cluster_id
+    org = None
     if org_id:
         from app.models.organization import Organization
         from app.services.billing_service import check_deploy_quota
@@ -245,10 +246,15 @@ async def deploy_instance(
     if not cluster:
         raise NotFoundError("集群不存在")
 
-    # 实例名称清洗为 RFC 1123 格式
-    safe_name = _re.sub(r"[^a-z0-9-]", "-", req.name.lower()).strip("-")
-    safe_name = _re.sub(r"-{2,}", "-", safe_name)
-    namespace = req.namespace or f"clawbuddy-{safe_name}"
+    # slug: 前端显式传入，或从 name 自动生成（兼容管理端不传 slug 的情况）
+    slug = req.slug
+    if not slug:
+        slug = _re.sub(r"[^a-z0-9-]", "-", req.name.lower()).strip("-")
+        slug = _re.sub(r"-{2,}", "-", slug) or "instance"
+
+    # namespace: clawbuddy-{org_slug}-{instance_slug}
+    org_slug = org.slug if org else "default"
+    namespace = req.namespace or f"clawbuddy-{org_slug}-{slug}"
 
     # 自动注入 OPENCLAW_GATEWAY_TOKEN（用户未提供时自动生成）
     env_vars = dict(req.env_vars) if req.env_vars else {}
@@ -258,6 +264,7 @@ async def deploy_instance(
     # 创建实例记录
     instance = Instance(
         name=req.name,
+        slug=slug,
         cluster_id=cluster.id,
         namespace=namespace,
         image_version=req.image_version,
@@ -305,7 +312,7 @@ async def deploy_instance(
         record_id=record.id,
         instance_id=instance.id,
         cluster_id=cluster.id,
-        name=req.name,
+        name=slug,
         namespace=namespace,
         image_version=req.image_version,
         replicas=req.replicas,

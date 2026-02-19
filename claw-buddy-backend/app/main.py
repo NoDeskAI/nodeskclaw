@@ -239,6 +239,40 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 workspace 相关字段")
 
+        # ── 迁移 10: instances 表新增 slug 列 + 回填 + 唯一索引替换 ──
+        slug_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'slug'"
+        ))
+        if slug_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN slug VARCHAR(128) NOT NULL DEFAULT ''"
+            ))
+            await conn.execute(text(
+                "UPDATE instances SET slug = LOWER(REGEXP_REPLACE("
+                "  REGEXP_REPLACE(name, '[^a-zA-Z0-9-]', '-', 'g'), "
+                "  '-{2,}', '-', 'g'"
+                "))"
+            ))
+            await conn.execute(text(
+                "UPDATE instances SET slug = TRIM(BOTH '-' FROM slug)"
+            ))
+            await conn.execute(text(
+                "UPDATE instances SET slug = 'instance' WHERE slug = '' OR slug IS NULL"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 slug 列并回填数据")
+
+        old_name_idx = await conn.execute(text(
+            "SELECT 1 FROM pg_indexes WHERE tablename = 'instances' AND indexname = 'uq_instances_name_active'"
+        ))
+        if old_name_idx.first() is not None:
+            await conn.execute(text("DROP INDEX uq_instances_name_active"))
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_instances_slug_org_active "
+                "ON instances (slug, org_id) WHERE deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：已将 instances 唯一索引从 name 替换为 (slug, org_id)")
+
         # 6d: email 加 unique（如果还没有）
         idx = await conn.execute(text(
             "SELECT 1 FROM pg_indexes WHERE tablename = 'users' AND indexname = 'uq_users_email'"
@@ -470,7 +504,8 @@ async def lifespan(app: FastAPI):
                 api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
                 k8s = K8sClient(api_client)
 
-                dep_status = await k8s.get_deployment_status(inst.namespace, inst.name)
+                k8s_name = inst.slug or inst.name
+                dep_status = await k8s.get_deployment_status(inst.namespace, k8s_name)
                 if dep_status["ready_replicas"] >= inst.replicas:
                     inst.status = InstanceStatus.running
                     inst.available_replicas = dep_status["available_replicas"]
