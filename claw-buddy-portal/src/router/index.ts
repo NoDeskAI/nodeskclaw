@@ -46,6 +46,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/CreateInstance.vue'),
   },
   {
+    path: '/instances/deploy/:deployId',
+    name: 'DeployProgress',
+    component: () => import('@/views/DeployProgress.vue'),
+  },
+  {
     path: '/instances/:id',
     name: 'InstanceDetail',
     component: () => import('@/views/InstanceDetail.vue'),

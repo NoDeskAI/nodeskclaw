@@ -124,9 +124,14 @@ async function handleDeploy() {
       description: description.value || undefined,
     })
 
+    const deployId = res.data.data?.deploy_id
     const instanceId = res.data.data?.instance_id
-    if (instanceId) {
-      router.push(`/instances/${instanceId}`)
+    if (deployId) {
+      router.push({
+        name: 'DeployProgress',
+        params: { deployId },
+        query: { name: name.value.trim(), instanceId: instanceId || '' },
+      })
     } else {
       router.push('/instances')
     }
