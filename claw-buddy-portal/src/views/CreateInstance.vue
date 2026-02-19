@@ -225,7 +225,10 @@ async function handleDeploy() {
 
       <!-- 实例标识 (slug) -->
       <div class="space-y-2">
-        <label class="text-sm font-medium">实例标识</label>
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium">实例标识</label>
+          <span v-if="slug && !slugManuallyEdited" class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">自动生成</span>
+        </div>
         <div class="relative">
           <input
             v-model="slug"
@@ -250,8 +253,11 @@ async function handleDeploy() {
           <AlertCircle class="w-3 h-3" />
           须以小写字母开头，仅含小写字母、数字和连字符，至少 2 个字符
         </p>
+        <p v-else-if="name && !slug" class="text-xs text-amber-500">
+          名称包含非英文字符，请手动输入标识
+        </p>
         <p v-else class="text-xs text-muted-foreground">
-          用于系统内部标识，仅限小写字母、数字和连字符
+          根据名称自动生成，也可手动修改
         </p>
       </div>
 
