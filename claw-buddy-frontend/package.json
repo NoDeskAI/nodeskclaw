@@ -18,6 +18,7 @@
     "clsx": "^2.1.1",
     "lucide-vue-next": "^0.563.0",
     "pinia": "^3.0.4",
+    "pinyin-pro": "^3.28.0",
     "reka-ui": "^2.8.0",
     "tailwind-merge": "^3.4.0",
     "vee-validate": "^4.15.1",

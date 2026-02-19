@@ -45,7 +45,7 @@ const filteredInstances = computed(() => {
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(
-      (i) => i.name.toLowerCase().includes(q) || i.namespace.toLowerCase().includes(q),
+      (i) => i.name.toLowerCase().includes(q) || i.slug?.toLowerCase().includes(q) || i.namespace.toLowerCase().includes(q),
     )
   }
   // 状态过滤
@@ -177,6 +177,7 @@ async function handleDelete(inst: InstanceInfo) {
             <StatusDot :status="statusToDot(inst.status)" size="md" />
             <div>
               <div class="font-medium">{{ inst.name }}</div>
+              <div class="text-xs font-mono text-muted-foreground">{{ inst.slug }}</div>
               <div class="text-sm text-muted-foreground mt-0.5">
                 {{ inst.namespace }} / {{ inst.image_version }}
                 <span class="ml-2">
@@ -216,6 +217,7 @@ async function handleDelete(inst: InstanceInfo) {
           <tr class="border-b border-border bg-muted/30">
             <th class="text-left px-4 py-2.5 font-medium">状态</th>
             <th class="text-left px-4 py-2.5 font-medium">实例名</th>
+            <th class="text-left px-4 py-2.5 font-medium">标识</th>
             <th class="text-left px-4 py-2.5 font-medium">命名空间</th>
             <th class="text-left px-4 py-2.5 font-medium">镜像版本</th>
             <th class="text-left px-4 py-2.5 font-medium">副本</th>
@@ -238,6 +240,7 @@ async function handleDelete(inst: InstanceInfo) {
               </div>
             </td>
             <td class="px-4 py-2.5 font-medium">{{ inst.name }}</td>
+            <td class="px-4 py-2.5 font-mono text-xs text-muted-foreground">{{ inst.slug }}</td>
             <td class="px-4 py-2.5 text-muted-foreground font-mono text-xs">{{ inst.namespace }}</td>
             <td class="px-4 py-2.5 font-mono text-xs">{{ inst.image_version }}</td>
             <td class="px-4 py-2.5">{{ inst.available_replicas }}/{{ inst.replicas }}</td>

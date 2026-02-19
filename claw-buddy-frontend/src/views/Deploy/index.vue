@@ -17,6 +17,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, RefreshCw, CircleAlert,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -34,8 +35,23 @@ const steps = [
 ]
 
 // ── Form state ──
+const slugManuallyEdited = ref(false)
+
+function toSlug(input: string): string {
+  const hasChinese = /[\u4e00-\u9fa5]/.test(input)
+  const raw = hasChinese
+    ? pinyin(input, { toneType: 'none', type: 'array' }).join('-')
+    : input
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 const form = ref({
   name: '',
+  slug: '',
   image_version: '',
   replicas: 1,
   cpu_request: '2000m',
@@ -62,35 +78,40 @@ function generateDefaultName() {
   prefix = prefix.replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-') || 'instance'
   const count = instanceStore.instances.length + 1
   form.value.name = `${prefix}-${count}`
+  form.value.slug = toSlug(form.value.name)
 }
 
-// ── 名称冲突检测（防抖）──
-const nameConflict = ref<{ conflict: boolean; reason: string }>({ conflict: false, reason: '' })
-const checkingName = ref(false)
-let nameCheckTimer: ReturnType<typeof setTimeout> | null = null
+// ── slug 冲突检测（防抖）──
+const slugConflict = ref<{ conflict: boolean; reason: string }>({ conflict: false, reason: '' })
+const checkingSlug = ref(false)
+let slugCheckTimer: ReturnType<typeof setTimeout> | null = null
+
+const slugValid = computed(() => /^[a-z][a-z0-9-]*[a-z0-9]$/.test(form.value.slug) && form.value.slug.length >= 2)
 
 watch(
   () => form.value.name,
-  (name) => {
-    // 清除上一次定时器
-    if (nameCheckTimer) clearTimeout(nameCheckTimer)
-    // 空名称直接重置
-    if (!name || !selectedCluster.value) {
-      nameConflict.value = { conflict: false, reason: '' }
-      return
+  (val) => {
+    if (!slugManuallyEdited.value) {
+      form.value.slug = toSlug(val)
     }
-    // 防抖 400ms
-    nameCheckTimer = setTimeout(async () => {
-      checkingName.value = true
+  },
+)
+
+watch(
+  () => form.value.slug,
+  (slug) => {
+    if (slugCheckTimer) clearTimeout(slugCheckTimer)
+    slugConflict.value = { conflict: false, reason: '' }
+    if (!slug || !slugValid.value) return
+    slugCheckTimer = setTimeout(async () => {
+      checkingSlug.value = true
       try {
-        const res = await api.get('/instances/check-name', {
-          params: { name, cluster_id: selectedCluster.value!.id },
-        })
-        nameConflict.value = res.data.data
+        const res = await api.get('/instances/check-slug', { params: { slug } })
+        slugConflict.value = res.data.data
       } catch {
-        nameConflict.value = { conflict: false, reason: '' }
+        slugConflict.value = { conflict: false, reason: '' }
       } finally {
-        checkingName.value = false
+        checkingSlug.value = false
       }
     }, 400)
   },
@@ -343,7 +364,8 @@ function prevStep() {
 
 // ── Step validation ──
 const canProceedStep0 = computed(() =>
-  !!form.value.name && !!form.value.image_version && !!selectedCluster.value && !nameConflict.value.conflict && !checkingName.value
+  !!form.value.name && !!form.value.slug && slugValid.value && !slugConflict.value.conflict && !checkingSlug.value
+  && !!form.value.image_version && !!selectedCluster.value
 )
 const canProceedStep1 = computed(() =>
   !!form.value.quota_cpu && !!form.value.quota_mem
@@ -357,14 +379,15 @@ const yamlPreview = computed(() => {
   lines.push('apiVersion: apps/v1')
   lines.push('kind: Deployment')
   lines.push('metadata:')
-  lines.push(`  name: ${p.name || '<name>'}`)
-  lines.push(`  namespace: clawbuddy-${p.name || '<name>'}`)
+  const slug = (p as Record<string, unknown>).slug as string || '<slug>'
+  lines.push(`  name: ${slug}`)
+  lines.push(`  namespace: clawbuddy-<org_slug>-${slug}`)
   lines.push('spec:')
   lines.push(`  replicas: ${p.replicas}`)
   lines.push('  template:')
   lines.push('    spec:')
   lines.push('      containers:')
-  lines.push(`        - name: ${p.name || '<name>'}`)
+  lines.push(`        - name: ${slug}`)
   lines.push(`          image: <registry>:${p.image_version || '<tag>'}`)
   lines.push('          resources:')
   lines.push('            requests:')
@@ -415,19 +438,19 @@ const yamlPreview = computed(() => {
   lines.push('apiVersion: v1')
   lines.push('kind: Service')
   lines.push('metadata:')
-  lines.push(`  name: ${p.name || '<name>'}`)
+  lines.push(`  name: ${slug}`)
   lines.push('spec:')
   lines.push('  type: ClusterIP')
   lines.push('  ports:')
   lines.push('    - port: 18789')
   lines.push('      targetPort: 18789')
-  if (baseDomain.value && p.name) {
-    const host = `${p.name}.${baseDomain.value}`
+  if (baseDomain.value && slug !== '<slug>') {
+    const host = `${slug}.${baseDomain.value}`
     lines.push('---')
     lines.push('apiVersion: networking.k8s.io/v1')
     lines.push('kind: Ingress')
     lines.push('metadata:')
-    lines.push(`  name: ${p.name}`)
+    lines.push(`  name: ${slug}`)
     lines.push('  annotations:')
     lines.push('    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"')
     lines.push('    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"')
@@ -443,7 +466,7 @@ const yamlPreview = computed(() => {
     lines.push('            pathType: Prefix')
     lines.push('            backend:')
     lines.push('              service:')
-    lines.push(`                name: ${p.name}`)
+    lines.push(`                name: ${slug}`)
     lines.push('                port:')
     lines.push('                  number: 18789')
   }
@@ -497,21 +520,34 @@ const yamlPreview = computed(() => {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium mb-1.5 block">实例名称 *</label>
+            <Input v-model="form.name" placeholder="如: 生产主力" />
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5 mb-1.5">
+              <label class="text-sm font-medium">实例标识 (slug) *</label>
+              <span v-if="form.slug && !slugManuallyEdited" class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">自动生成</span>
+            </div>
             <div class="relative">
               <Input
-                v-model="form.name"
+                v-model="form.slug"
                 placeholder="如: prod-main"
-                :class="nameConflict.conflict ? 'border-red-400 focus-visible:ring-red-400/30' : ''"
+                class="font-mono"
+                :class="slugConflict.conflict ? 'border-red-400 focus-visible:ring-red-400/30' : ''"
+                @input="slugManuallyEdited = true"
               />
               <Loader2
-                v-if="checkingName"
+                v-if="checkingSlug"
                 class="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin"
               />
             </div>
-            <p v-if="nameConflict.conflict" class="flex items-center gap-1 text-xs text-red-400 mt-1">
+            <p v-if="slugConflict.conflict" class="flex items-center gap-1 text-xs text-red-400 mt-1">
               <CircleAlert class="w-3.5 h-3.5 shrink-0" />
-              {{ nameConflict.reason }}
+              {{ slugConflict.reason }}
             </p>
+            <p v-else-if="form.slug && !slugValid" class="text-xs text-red-400 mt-1">
+              须以小写字母开头，仅含小写字母、数字和连字符，至少 2 个字符
+            </p>
+            <p v-else class="text-xs text-muted-foreground mt-1">根据名称自动生成，也可手动修改</p>
           </div>
           <div>
             <div class="flex items-center gap-1.5 mb-1.5">

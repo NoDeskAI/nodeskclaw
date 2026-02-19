@@ -5,6 +5,7 @@ import api from '@/services/api'
 export interface InstanceInfo {
   id: string
   name: string
+  slug: string
   cluster_id: string
   namespace: string
   image_version: string

@@ -304,6 +304,7 @@ function formatTime(ts: string | null): string {
               <CardHeader><CardTitle class="text-sm">基本信息</CardTitle></CardHeader>
               <CardContent class="text-sm space-y-2">
                 <div class="flex justify-between"><span class="text-muted-foreground">实例名称</span><span>{{ detail.name }}</span></div>
+                <div class="flex justify-between"><span class="text-muted-foreground">实例标识</span><span class="font-mono text-xs">{{ detail.slug }}</span></div>
                 <div class="flex justify-between"><span class="text-muted-foreground">命名空间</span><span class="font-mono text-xs">{{ detail.namespace }}</span></div>
                 <div class="flex justify-between"><span class="text-muted-foreground">镜像</span><span>{{ detail.image_version }}</span></div>
                 <div class="flex justify-between"><span class="text-muted-foreground">集群</span><span>{{ detail.cluster_id }}</span></div>
