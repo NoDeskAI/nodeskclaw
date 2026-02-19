@@ -29,14 +29,18 @@ router = APIRouter()
 @router.get("/check-slug", response_model=ApiResponse[dict])
 async def check_slug(
     slug: str = Query(..., min_length=1),
+    org_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """检查实例标识（slug）在当前组织内是否冲突。"""
-    org_id = current_user.current_org_id
-    if not org_id:
+    """检查实例标识（slug）在指定组织内是否冲突。
+
+    管理端显式传 org_id；Portal 不传时 fallback 到 current_user.current_org_id。
+    """
+    effective_org_id = org_id or current_user.current_org_id
+    if not effective_org_id:
         return ApiResponse(data={"conflict": False, "reason": ""})
-    data = await instance_service.check_slug_conflict(slug, org_id, db)
+    data = await instance_service.check_slug_conflict(slug, effective_org_id, db)
     return ApiResponse(data=data)
 
 

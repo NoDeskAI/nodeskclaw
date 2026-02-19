@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
 import { useInstanceStore } from '@/stores/instance'
+import { useOrgStore } from '@/stores/org'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,10 +12,15 @@ import { Badge } from '@/components/ui/badge'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from '@/components/ui/command'
 import AdvancedConfigPanel from '@/components/AdvancedConfigPanel.vue'
 import {
   Rocket, CheckCircle, XCircle, AlertTriangle, Loader2,
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, RefreshCw, CircleAlert,
+  ChevronsUpDown, Check, Building2,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { pinyin } from 'pinyin-pro'
@@ -24,6 +30,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const instanceStore = useInstanceStore()
+const orgStore = useOrgStore()
 
 // ── Stepper ──
 const currentStep = ref(0)
@@ -52,6 +59,7 @@ function toSlug(input: string): string {
 const form = ref({
   name: '',
   slug: '',
+  org_id: '',
   image_version: '',
   replicas: 1,
   cpu_request: '2000m',
@@ -63,6 +71,12 @@ const form = ref({
   quota_cpu: '4',
   quota_mem: '8Gi',
 })
+
+// ── 组织选择 ──
+const orgPopoverOpen = ref(false)
+const selectedOrg = computed(() =>
+  orgStore.orgs.find(o => o.id === form.value.org_id) ?? null
+)
 
 /** 根据用户邮箱前缀 + 已有实例数量生成默认实例名称（RFC 1123 格式） */
 function generateDefaultName() {
@@ -102,11 +116,11 @@ watch(
   (slug) => {
     if (slugCheckTimer) clearTimeout(slugCheckTimer)
     slugConflict.value = { conflict: false, reason: '' }
-    if (!slug || !slugValid.value) return
+    if (!slug || !slugValid.value || !form.value.org_id) return
     slugCheckTimer = setTimeout(async () => {
       checkingSlug.value = true
       try {
-        const res = await api.get('/instances/check-slug', { params: { slug } })
+        const res = await api.get('/instances/check-slug', { params: { slug, org_id: form.value.org_id } })
         slugConflict.value = res.data.data
       } catch {
         slugConflict.value = { conflict: false, reason: '' }
@@ -114,6 +128,28 @@ watch(
         checkingSlug.value = false
       }
     }, 400)
+  },
+)
+
+// 组织切换时重新检测 slug 冲突
+watch(
+  () => form.value.org_id,
+  () => {
+    if (form.value.slug && slugValid.value && form.value.org_id) {
+      slugConflict.value = { conflict: false, reason: '' }
+      if (slugCheckTimer) clearTimeout(slugCheckTimer)
+      slugCheckTimer = setTimeout(async () => {
+        checkingSlug.value = true
+        try {
+          const res = await api.get('/instances/check-slug', { params: { slug: form.value.slug, org_id: form.value.org_id } })
+          slugConflict.value = res.data.data
+        } catch {
+          slugConflict.value = { conflict: false, reason: '' }
+        } finally {
+          checkingSlug.value = false
+        }
+      }, 300)
+    }
   },
 )
 
@@ -271,6 +307,7 @@ onMounted(async () => {
   await Promise.all([
     clusterStore.fetchClusters(),
     instanceStore.fetchInstances(),
+    orgStore.fetchAllOrgs(),
     fetchImageTags(true),
     fetchBaseDomain(),
     fetchStorageClasses(),
@@ -302,6 +339,7 @@ function buildPayload() {
   return {
     ...form.value,
     cluster_id: selectedCluster.value?.id,
+    org_id: form.value.org_id || undefined,
     env_vars: Object.keys(envVars).length > 0 ? envVars : {},
     advanced_config: hasAdvanced
       ? { ...advancedConfig.value, init_containers: initContainers }
@@ -364,7 +402,8 @@ function prevStep() {
 
 // ── Step validation ──
 const canProceedStep0 = computed(() =>
-  !!form.value.name && !!form.value.slug && slugValid.value && !slugConflict.value.conflict && !checkingSlug.value
+  !!form.value.org_id
+  && !!form.value.name && !!form.value.slug && slugValid.value && !slugConflict.value.conflict && !checkingSlug.value
   && !!form.value.image_version && !!selectedCluster.value
 )
 const canProceedStep1 = computed(() =>
@@ -381,7 +420,8 @@ const yamlPreview = computed(() => {
   lines.push('metadata:')
   const slug = (p as Record<string, unknown>).slug as string || '<slug>'
   lines.push(`  name: ${slug}`)
-  lines.push(`  namespace: clawbuddy-<org_slug>-${slug}`)
+  const orgSlug = selectedOrg.value?.slug ?? '<org_slug>'
+  lines.push(`  namespace: clawbuddy-${orgSlug}-${slug}`)
   lines.push('spec:')
   lines.push(`  replicas: ${p.replicas}`)
   lines.push('  template:')
@@ -517,6 +557,52 @@ const yamlPreview = computed(() => {
     <Card v-show="currentStep === 0">
       <CardHeader><CardTitle>基本信息</CardTitle></CardHeader>
       <CardContent class="space-y-4">
+        <!-- 目标组织（必选） -->
+        <div>
+          <label class="text-sm font-medium mb-1.5 block">目标组织 *</label>
+          <Popover v-model:open="orgPopoverOpen">
+            <PopoverTrigger as-child>
+              <Button
+                variant="outline"
+                role="combobox"
+                :aria-expanded="orgPopoverOpen"
+                class="w-full justify-between font-normal"
+              >
+                <span v-if="selectedOrg" class="flex items-center gap-2 truncate">
+                  <Building2 class="w-4 h-4 shrink-0 text-muted-foreground" />
+                  {{ selectedOrg.name }}
+                  <span class="text-xs text-muted-foreground font-mono">({{ selectedOrg.slug }})</span>
+                </span>
+                <span v-else class="text-muted-foreground">选择组织...</span>
+                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-[--reka-popover-trigger-width] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="搜索组织名称或标识..." />
+                <CommandEmpty>未找到匹配的组织</CommandEmpty>
+                <CommandList>
+                  <CommandGroup>
+                    <CommandItem
+                      v-for="org in orgStore.orgs"
+                      :key="org.id"
+                      :value="`${org.name} ${org.slug}`"
+                      @select="form.org_id = org.id; orgPopoverOpen = false"
+                    >
+                      <Check class="mr-2 h-4 w-4" :class="form.org_id === org.id ? 'opacity-100' : 'opacity-0'" />
+                      <span class="truncate">{{ org.name }}</span>
+                      <span class="ml-auto text-xs text-muted-foreground font-mono">{{ org.slug }}</span>
+                    </CommandItem>
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          <p v-if="!form.org_id" class="text-xs text-muted-foreground mt-1">
+            选择此实例所属的组织，slug 冲突检测将在该组织范围内进行
+          </p>
+        </div>
+
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium mb-1.5 block">实例名称 *</label>
@@ -716,6 +802,8 @@ const yamlPreview = computed(() => {
         <CardHeader><CardTitle>部署概览</CardTitle></CardHeader>
         <CardContent>
           <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div class="text-muted-foreground">目标组织</div>
+            <div class="font-medium">{{ selectedOrg?.name ?? '-' }} <span class="text-xs text-muted-foreground font-mono">({{ selectedOrg?.slug ?? '-' }})</span></div>
             <div class="text-muted-foreground">实例名称</div>
             <div class="font-medium">{{ form.name }}</div>
             <div class="text-muted-foreground">镜像版本</div>

@@ -39,9 +39,12 @@ async def deploy(
     current_user: User = Depends(get_current_user),
 ):
     """执行部署：同步创建记录后立即返回，K8s 管道在后台异步执行。"""
+    effective_org_id = body.org_id or current_user.current_org_id
+    if not effective_org_id:
+        raise HTTPException(status_code=400, detail="缺少目标组织，无法部署")
     try:
         deploy_id, ctx = await deploy_service.deploy_instance(
-            body, current_user, db, org_id=current_user.current_org_id
+            body, current_user, db, org_id=effective_org_id
         )
     except IntegrityError:
         await db.rollback()

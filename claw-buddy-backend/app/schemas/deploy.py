@@ -10,6 +10,7 @@ class DeployRequest(BaseModel):
     name: str
     slug: str | None = None  # auto-generated from name if not provided
     namespace: str | None = None  # auto-generated if not provided
+    org_id: str | None = None  # 管理端显式传入；Portal 不传时 fallback 到 current_user
     image_version: str
     replicas: int = 1
     cpu_request: str = "500m"
