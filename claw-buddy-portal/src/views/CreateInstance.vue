@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Loader2, Rocket, Database } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -9,6 +9,7 @@ const router = useRouter()
 const name = ref('')
 const description = ref('')
 const selectedSpec = ref('medium')
+const selectedImage = ref('')
 const storageGi = ref(40)
 const deploying = ref(false)
 const error = ref('')
@@ -16,10 +17,11 @@ const error = ref('')
 const storageAnchors = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
 const storageLabels = [20, 60, 100, 150, 200]
 
-// 从后端获取可用镜像版本和集群
 const imageTags = ref<string[]>([])
 const clusters = ref<{ id: string; name: string }[]>([])
 const loadingInit = ref(true)
+const loadingTags = ref(false)
+const imageDropdownOpen = ref(false)
 
 const specs = [
   { key: 'small', label: '轻量', desc: '适合个人使用', cpu: '2 核', mem: '4 GB' },
@@ -48,13 +50,33 @@ const storageIndex = computed({
   },
 })
 
+async function fetchImageTags() {
+  loadingTags.value = true
+  try {
+    const res = await api.get('/registry/tags')
+    const tags = (res.data.data ?? []) as { tag: string }[]
+    imageTags.value = tags.map((t) => t.tag)
+    if (imageTags.value.length > 0 && !selectedImage.value) {
+      selectedImage.value = imageTags.value[0] ?? ''
+    }
+  } catch {
+    imageTags.value = []
+  } finally {
+    loadingTags.value = false
+  }
+}
+
+function selectImage(tag: string) {
+  selectedImage.value = tag
+  imageDropdownOpen.value = false
+}
+
 onMounted(async () => {
   try {
-    const [tagsRes, clustersRes] = await Promise.all([
-      api.get('/registry/tags'),
+    const [, clustersRes] = await Promise.all([
+      fetchImageTags(),
       api.get('/clusters'),
     ])
-    imageTags.value = tagsRes.data.data?.tags ?? []
     clusters.value = (clustersRes.data.data ?? []).filter((c: any) => c.status === 'connected')
   } catch {
     // ignore init errors
@@ -63,9 +85,17 @@ onMounted(async () => {
   }
 })
 
+const canDeploy = computed(() =>
+  !!name.value.trim() && !!selectedImage.value && clusters.value.length > 0 && !deploying.value
+)
+
 async function handleDeploy() {
   if (!name.value.trim()) {
     error.value = '请输入实例名称'
+    return
+  }
+  if (!selectedImage.value) {
+    error.value = '请选择镜像版本'
     return
   }
   if (clusters.value.length === 0) {
@@ -82,7 +112,7 @@ async function handleDeploy() {
     const res = await api.post('/deploy', {
       name: name.value.trim(),
       cluster_id: clusters.value[0].id,
-      image_version: imageTags.value[0] || 'latest',
+      image_version: selectedImage.value,
       replicas: 1,
       cpu_request: res_spec.cpu_req,
       cpu_limit: res_spec.cpu_lim,
@@ -134,6 +164,54 @@ async function handleDeploy() {
           placeholder="例如：my-assistant"
           class="w-full px-4 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
         />
+      </div>
+
+      <!-- 镜像版本 -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="text-sm font-medium">镜像版本</label>
+          <button
+            class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            :disabled="loadingTags"
+            @click="fetchImageTags"
+          >
+            <RefreshCw class="w-3 h-3" :class="loadingTags ? 'animate-spin' : ''" />
+            刷新
+          </button>
+        </div>
+        <div v-if="imageTags.length > 0" class="relative">
+          <button
+            class="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-card border border-border text-sm hover:border-primary/50 transition-colors text-left"
+            @click="imageDropdownOpen = !imageDropdownOpen"
+          >
+            <span class="font-mono">{{ selectedImage || '选择版本' }}</span>
+            <ChevronDown class="w-4 h-4 text-muted-foreground transition-transform" :class="imageDropdownOpen ? 'rotate-180' : ''" />
+          </button>
+          <div
+            v-if="imageDropdownOpen"
+            class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
+          >
+            <button
+              v-for="tag in imageTags"
+              :key="tag"
+              class="w-full px-4 py-2 text-left text-sm font-mono hover:bg-accent transition-colors"
+              :class="tag === selectedImage ? 'text-primary bg-primary/5' : 'text-foreground'"
+              @click="selectImage(tag)"
+            >
+              {{ tag }}
+              <span v-if="tag === imageTags[0]" class="ml-2 text-[10px] font-sans text-muted-foreground">(最新)</span>
+            </button>
+          </div>
+        </div>
+        <div v-else>
+          <input
+            v-model="selectedImage"
+            type="text"
+            :placeholder="loadingTags ? '加载中...' : '手动输入版本号'"
+            class="w-full px-4 py-2.5 rounded-lg bg-card border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+          />
+          <p class="text-xs text-muted-foreground mt-1">未获取到镜像仓库 Tag，请手动输入</p>
+        </div>
       </div>
 
       <!-- 规格选择 -->
@@ -202,7 +280,7 @@ async function handleDeploy() {
       <div class="pt-4">
         <p v-if="error" class="text-sm text-destructive mb-3">{{ error }}</p>
         <button
-          :disabled="deploying"
+          :disabled="!canDeploy"
           class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           @click="handleDeploy"
         >
@@ -213,4 +291,9 @@ async function handleDeploy() {
       </div>
     </div>
   </div>
+
+  <!-- 点击外部关闭下拉框 -->
+  <Teleport to="body">
+    <div v-if="imageDropdownOpen" class="fixed inset-0 z-[5]" @click="imageDropdownOpen = false" />
+  </Teleport>
 </template>
