@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check } from 'lucide-vue-next'
+import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -77,7 +78,11 @@ function selectImage(tag: string) {
 }
 
 function toSlug(input: string): string {
-  return input
+  const hasChinese = /[\u4e00-\u9fa5]/.test(input)
+  const raw = hasChinese
+    ? pinyin(input, { toneType: 'none', type: 'array' }).join('-')
+    : input
+  return raw
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-{2,}/g, '-')
@@ -252,9 +257,6 @@ async function handleDeploy() {
         <p v-else-if="slug && !slugValid" class="text-xs text-destructive flex items-center gap-1">
           <AlertCircle class="w-3 h-3" />
           须以小写字母开头，仅含小写字母、数字和连字符，至少 2 个字符
-        </p>
-        <p v-else-if="name && !slug" class="text-xs text-amber-500">
-          名称包含非英文字符，请手动输入标识
         </p>
         <p v-else class="text-xs text-muted-foreground">
           根据名称自动生成，也可手动修改
