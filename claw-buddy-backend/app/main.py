@@ -441,6 +441,51 @@ async def lifespan(app: FastAPI):
             await db.commit()
             logger.info("自动迁移：已为组织 %s 创建默认工作区并迁移 %d 个实例", org.name, idx)
 
+    # ── 恢复卡在 deploying 状态的实例 ─────────────────
+    # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
+    # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。
+    async with async_session_factory() as db:
+        from app.models.instance import Instance, InstanceStatus
+
+        stuck_result = await db.execute(
+            select(Instance).where(
+                Instance.status.in_(["deploying", "creating"]),
+                Instance.deleted_at.is_(None),
+            )
+        )
+        stuck_instances = stuck_result.scalars().all()
+        for inst in stuck_instances:
+            try:
+                cluster_result = await db.execute(
+                    select(Cluster).where(
+                        Cluster.id == inst.cluster_id,
+                        Cluster.deleted_at.is_(None),
+                    )
+                )
+                cluster = cluster_result.scalar_one_or_none()
+                if not cluster or not cluster.kubeconfig_encrypted:
+                    continue
+
+                from app.services.k8s.k8s_client import K8sClient
+                api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
+                k8s = K8sClient(api_client)
+
+                dep_status = await k8s.get_deployment_status(inst.namespace, inst.name)
+                if dep_status["ready_replicas"] >= inst.replicas:
+                    inst.status = InstanceStatus.running
+                    inst.available_replicas = dep_status["available_replicas"]
+                    logger.info("恢复实例状态: %s → running (ready=%d)", inst.name, dep_status["ready_replicas"])
+                else:
+                    logger.info(
+                        "实例 %s 仍未就绪 (ready=%d/%d)，保持 deploying",
+                        inst.name, dep_status["ready_replicas"], inst.replicas,
+                    )
+            except Exception as e:
+                logger.warning("恢复实例 %s 状态失败: %s", inst.name, e)
+
+        if stuck_instances:
+            await db.commit()
+
     # 启动集群健康巡检后台任务
     from app.services.health_checker import HealthChecker
 

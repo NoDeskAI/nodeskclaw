@@ -29,6 +29,9 @@ const available = computed(() =>
     .filter((i) => !search.value || i.name.toLowerCase().includes(search.value.toLowerCase())),
 )
 
+const runningInstances = computed(() => available.value.filter((i) => i.status === 'running'))
+const unavailableInstances = computed(() => available.value.filter((i) => i.status !== 'running'))
+
 onMounted(async () => {
   loading.value = true
   try {
