@@ -24,9 +24,9 @@ const loadingTags = ref(false)
 const imageDropdownOpen = ref(false)
 
 const specs = [
-  { key: 'small', label: '轻量', desc: '适合个人使用', cpu: '2 核', mem: '4 GB' },
-  { key: 'medium', label: '标准', desc: '适合小团队', cpu: '4 核', mem: '8 GB' },
-  { key: 'large', label: '高性能', desc: '适合大规模使用', cpu: '8 核', mem: '16 GB' },
+  { key: 'small', label: '轻量', desc: '写周报、查资料、日常问答', cpu: '2 核', mem: '4 GB' },
+  { key: 'medium', label: '标准', desc: '代码审查、文档生成、会议纪要', cpu: '4 核', mem: '8 GB' },
+  { key: 'large', label: '高性能', desc: '浏览器自动化、代码开发、数据分析', cpu: '8 核', mem: '16 GB' },
 ]
 
 const specResources: Record<string, { cpu_req: string; cpu_lim: string; mem_req: string; mem_lim: string; quota_cpu: string; quota_mem: string; storage: number }> = {
