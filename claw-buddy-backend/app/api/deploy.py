@@ -55,7 +55,7 @@ async def deploy(
     deploy_service.register_deploy_task(deploy_id, task)
     logger.info("部署任务已提交到后台: deploy_id=%s, instance=%s", deploy_id, ctx.name)
 
-    return ApiResponse(data={"deploy_id": deploy_id})
+    return ApiResponse(data={"deploy_id": deploy_id, "instance_id": ctx.instance_id})
 
 
 @router.post("/{deploy_id}/cancel", response_model=ApiResponse[dict])

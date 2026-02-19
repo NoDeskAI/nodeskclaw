@@ -94,11 +94,11 @@ async function handleDeploy() {
       description: description.value || undefined,
     })
 
-    const deployId = res.data.data?.deploy_id
-    if (deployId) {
-      router.push(`/instances/${deployId}`)
+    const instanceId = res.data.data?.instance_id
+    if (instanceId) {
+      router.push(`/instances/${instanceId}`)
     } else {
-      router.push('/')
+      router.push('/instances')
     }
   } catch (e: any) {
     error.value = e?.response?.data?.message || e?.response?.data?.detail || '部署失败'
