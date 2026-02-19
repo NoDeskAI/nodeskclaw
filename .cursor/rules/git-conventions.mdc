@@ -55,6 +55,14 @@ refactor(frontend): SSE 流 baseURL 统一走配置常量
 chore: 移除 Alembic 依赖，改用 create_all 建表
 ```
 
+## 禁止 Co-authored-by 标签
+
+**严禁在 commit message 中出现 `Co-authored-by` 行。**
+
+- 提交时必须使用 `--no-gpg-sign` 以外的方式确保消息干净
+- 如果 Cursor IDE 自动追加了 `Co-authored-by: Cursor <cursoragent@cursor.com>`，必须在提交前手动移除，或使用 HEREDOC 方式传递 commit message 以避免被追加
+- 发现历史提交中存在该标签时，应提醒用户并协助清除
+
 ## 注意事项
 
 - 不要提交 `.env` 文件（包含密钥）

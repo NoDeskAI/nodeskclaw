@@ -47,11 +47,9 @@ onUnmounted(() => {
 function toggleMode() {
   if (isTransitioning.value) return
   if (activeMode.value === '3d') {
-    const canvas = threeRef.value?.querySelector('canvas') || null
-    transitionTo2D(canvas, svgRef.value)
+    transitionTo2D(threeRef.value, svgRef.value)
   } else {
-    const canvas = threeRef.value?.querySelector('canvas') || null
-    transitionTo3D(canvas, svgRef.value)
+    transitionTo3D(threeRef.value, svgRef.value)
   }
 }
 
@@ -130,8 +128,8 @@ function goBack() {
       <div
         ref="threeRef"
         class="absolute inset-0"
-        :class="{ 'pointer-events-none': activeMode !== '3d' && !isTransitioning }"
-        :style="{ opacity: activeMode === '3d' || isTransitioning ? 1 : 0 }"
+        :class="{ 'pointer-events-none': activeMode !== '3d' }"
+        :style="{ opacity: activeMode === '3d' ? 1 : 0 }"
       >
         <Workspace3D
           v-if="activeMode === '3d' || isTransitioning"
@@ -148,8 +146,8 @@ function goBack() {
       <div
         ref="svgRef"
         class="absolute inset-0"
-        :class="{ 'pointer-events-none': activeMode !== '2d' && !isTransitioning }"
-        :style="{ opacity: activeMode === '2d' || isTransitioning ? 1 : 0 }"
+        :class="{ 'pointer-events-none': activeMode !== '2d' }"
+        :style="{ opacity: activeMode === '2d' ? 1 : 0 }"
       >
         <Workspace2D
           v-if="activeMode === '2d' || isTransitioning"

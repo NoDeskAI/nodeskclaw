@@ -62,7 +62,6 @@ scene.background = new THREE.Color(0x0a0a1a)
 const hexMeshes = new Map<string, THREE.Group>()
 
 const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
-HEX_GEO.rotateY(Math.PI / 6)
 
 function createHexMesh(agent: AgentBrief): THREE.Group {
   const group = new THREE.Group()
@@ -97,11 +96,11 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
 
 function createWorldHexGrid(): THREE.LineSegments {
   const gridRange = 8
-  const r = HEX_SIZE * 0.95
+  const r = HEX_SIZE
   const vertices: number[] = []
   const angles: number[] = []
   for (let i = 0; i < 6; i++) {
-    angles.push((Math.PI / 3) * i - Math.PI / 2)
+    angles.push((Math.PI / 3) * i - Math.PI / 6)
   }
 
   for (let q = -gridRange; q <= gridRange; q++) {
@@ -136,7 +135,6 @@ function createBlackboardMesh(): THREE.Group {
 
   const bbSize = HEX_SIZE * 1.1
   const bbGeo = new THREE.CylinderGeometry(bbSize, bbSize, 0.35, 6)
-  bbGeo.rotateY(Math.PI / 6)
   const bbMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a2e,
     emissive: new THREE.Color(0xa78bfa),

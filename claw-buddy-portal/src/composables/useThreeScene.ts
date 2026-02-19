@@ -65,6 +65,9 @@ export function useThreeScene(
     el.appendChild(renderer.domElement)
     rendererRef.value = renderer
 
+    camera.aspect = el.clientWidth / el.clientHeight
+    camera.updateProjectionMatrix()
+
     window.addEventListener('resize', resize)
     loop()
   }

@@ -1,29 +1,4 @@
-import { ref } from 'vue'
-
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-}
-
-function animateWithRAF(durationMs: number, tick: (progress: number) => void): Promise<void> {
-  return new Promise((resolve) => {
-    const start = performance.now()
-    function frame(now: number) {
-      const elapsed = now - start
-      const raw = Math.min(elapsed / durationMs, 1)
-      tick(easeInOutCubic(raw))
-      if (raw < 1) {
-        requestAnimationFrame(frame)
-      } else {
-        resolve()
-      }
-    }
-    requestAnimationFrame(frame)
-  })
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
+import { ref, nextTick } from 'vue'
 
 export type ViewMode = '3d' | '2d'
 
@@ -33,63 +8,53 @@ export function useViewTransition() {
     (localStorage.getItem('clawbuddy_view_mode') as ViewMode) || '3d',
   )
 
+  let currentAnimations: Animation[] = []
+
   function persistMode(mode: ViewMode) {
     localStorage.setItem('clawbuddy_view_mode', mode)
     activeMode.value = mode
   }
 
-  async function transitionTo2D(
-    threeCanvas: HTMLCanvasElement | null,
-    svgEl: HTMLElement | null,
-    onMidpoint?: () => void,
-  ) {
-    if (!threeCanvas || !svgEl) {
-      persistMode('2d')
-      return
-    }
+  function cancelRunning() {
+    for (const a of currentAnimations) a.cancel()
+    currentAnimations = []
+  }
+
+  async function crossFade(outEl: HTMLElement, inEl: HTMLElement, targetMode: ViewMode) {
+    if (isTransitioning.value) return
     isTransitioning.value = true
+    cancelRunning()
 
-    threeCanvas.animate(
-      [{ opacity: '1' }, { opacity: '0' }],
-      { duration: 400, fill: 'forwards', easing: 'ease-in-out' },
-    )
-    await sleep(200)
-    onMidpoint?.()
-    svgEl.animate(
-      [{ opacity: '0' }, { opacity: '1' }],
-      { duration: 400, fill: 'forwards', easing: 'ease-in-out' },
-    )
-    await sleep(400)
+    await nextTick()
+    await new Promise<void>((r) => requestAnimationFrame(() => r()))
 
-    persistMode('2d')
+    const duration = 350
+
+    const fadeOut = outEl.animate(
+      [{ opacity: 1 }, { opacity: 0 }],
+      { duration, easing: 'ease-in-out', fill: 'forwards' },
+    )
+    const fadeIn = inEl.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration, easing: 'ease-in-out', fill: 'forwards' },
+    )
+    currentAnimations = [fadeOut, fadeIn]
+
+    await fadeOut.finished.catch(() => {})
+
+    cancelRunning()
+    persistMode(targetMode)
     isTransitioning.value = false
   }
 
-  async function transitionTo3D(
-    threeCanvas: HTMLCanvasElement | null,
-    svgEl: HTMLElement | null,
-    onMidpoint?: () => void,
-  ) {
-    if (!threeCanvas || !svgEl) {
-      persistMode('3d')
-      return
-    }
-    isTransitioning.value = true
+  function transitionTo2D(threeEl: HTMLElement | null, svgEl: HTMLElement | null) {
+    if (!threeEl || !svgEl) { persistMode('2d'); return }
+    return crossFade(threeEl, svgEl, '2d')
+  }
 
-    svgEl.animate(
-      [{ opacity: '1' }, { opacity: '0' }],
-      { duration: 400, fill: 'forwards', easing: 'ease-in-out' },
-    )
-    await sleep(200)
-    onMidpoint?.()
-    threeCanvas.animate(
-      [{ opacity: '0' }, { opacity: '1' }],
-      { duration: 400, fill: 'forwards', easing: 'ease-in-out' },
-    )
-    await sleep(400)
-
-    persistMode('3d')
-    isTransitioning.value = false
+  function transitionTo3D(threeEl: HTMLElement | null, svgEl: HTMLElement | null) {
+    if (!threeEl || !svgEl) { persistMode('3d'); return }
+    return crossFade(svgEl, threeEl, '3d')
   }
 
   return { isTransitioning, activeMode, transitionTo2D, transitionTo3D }
