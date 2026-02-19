@@ -33,7 +33,7 @@ interface AvailableKey {
 
 interface LlmConfigEntry {
   provider: string
-  keySource: 'org' | 'personal' | 'none'
+  keySource: 'org' | 'personal'
   orgKeyId: string
   personalKey: string
 }
@@ -47,13 +47,34 @@ const PROVIDER_LABELS: Record<string, string> = {
 }
 
 const availableOrgKeys = ref<AvailableKey[]>([])
-const llmConfigs = ref<LlmConfigEntry[]>(
-  PROVIDERS.map(p => ({ provider: p, keySource: 'none' as const, orgKeyId: '', personalKey: '' }))
+const llmConfigs = ref<LlmConfigEntry[]>([])
+const llmSkipped = ref(false)
+const addingProvider = ref(false)
+const newProvider = ref('')
+
+const unusedProviders = computed(() =>
+  PROVIDERS.filter(p => !llmConfigs.value.some(c => c.provider === p))
 )
-const llmExpanded = ref(true)
 
 function orgKeysForProvider(provider: string) {
   return availableOrgKeys.value.filter(k => k.provider === provider)
+}
+
+function addProvider() {
+  if (!newProvider.value) return
+  const hasOrgKeys = orgKeysForProvider(newProvider.value).length > 0
+  llmConfigs.value.push({
+    provider: newProvider.value,
+    keySource: hasOrgKeys ? 'org' : 'personal',
+    orgKeyId: '',
+    personalKey: '',
+  })
+  newProvider.value = ''
+  addingProvider.value = false
+}
+
+function removeProvider(idx: number) {
+  llmConfigs.value.splice(idx, 1)
 }
 
 async function fetchAvailableKeys() {
@@ -213,13 +234,11 @@ async function handleDeploy() {
   const res_spec = specResources[selectedSpec.value]
 
   try {
-    const activeLlm = llmConfigs.value
-      .filter(c => c.keySource !== 'none')
-      .map(c => ({
-        provider: c.provider,
-        key_source: c.keySource,
-        org_llm_key_id: c.keySource === 'org' ? c.orgKeyId || undefined : undefined,
-      }))
+    const activeLlm = llmConfigs.value.map(c => ({
+      provider: c.provider,
+      key_source: c.keySource,
+      org_llm_key_id: c.keySource === 'org' ? c.orgKeyId || undefined : undefined,
+    }))
 
     const res = await api.post('/deploy', {
       name: name.value.trim(),
@@ -432,90 +451,101 @@ async function handleDeploy() {
 
       <!-- 大模型配置 -->
       <div class="space-y-3">
-        <button
-          class="flex items-center gap-2 text-sm font-medium w-full text-left"
-          @click="llmExpanded = !llmExpanded"
-        >
+        <div class="flex items-center gap-2">
           <Brain class="w-4 h-4 text-violet-400" />
-          配置大模型
-          <ChevronDown class="w-4 h-4 text-muted-foreground transition-transform ml-auto" :class="llmExpanded ? 'rotate-180' : ''" />
-        </button>
+          <label class="text-sm font-medium">配置大模型</label>
+        </div>
         <p class="text-xs text-muted-foreground">
-          OpenClaw 需要至少一个大模型 Key 才能正常使用，你也可以稍后在实例设置中配置
+          OpenClaw 需要至少一个大模型 API Key 才能正常使用
         </p>
 
-        <div v-if="llmExpanded" class="space-y-3">
-          <div
-            v-for="cfg in llmConfigs"
-            :key="cfg.provider"
-            class="rounded-lg border border-border bg-card p-4 space-y-3"
-          >
-            <div class="font-medium text-sm">{{ PROVIDER_LABELS[cfg.provider] || cfg.provider }}</div>
+        <template v-if="!llmSkipped">
+          <!-- 已添加的 Provider -->
+          <div v-for="(cfg, idx) in llmConfigs" :key="cfg.provider" class="rounded-lg border border-border bg-card p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-sm">{{ PROVIDER_LABELS[cfg.provider] || cfg.provider }}</span>
+              <button class="text-xs text-muted-foreground hover:text-destructive transition-colors" @click="removeProvider(idx)">移除</button>
+            </div>
 
             <div class="space-y-2">
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  :name="`llm-${cfg.provider}`"
-                  value="none"
-                  v-model="cfg.keySource"
-                  class="accent-primary"
-                />
-                <span class="text-muted-foreground">不使用</span>
-              </label>
+              <div v-if="orgKeysForProvider(cfg.provider).length > 0" class="flex gap-4 text-sm">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" :name="`llm-${cfg.provider}`" value="org" v-model="cfg.keySource" class="accent-primary" />
+                  组织 Key
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" :name="`llm-${cfg.provider}`" value="personal" v-model="cfg.keySource" class="accent-primary" />
+                  个人 Key
+                </label>
+              </div>
 
-              <label
-                v-if="orgKeysForProvider(cfg.provider).length > 0"
-                class="flex items-center gap-2 text-sm cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  :name="`llm-${cfg.provider}`"
-                  value="org"
-                  v-model="cfg.keySource"
-                  class="accent-primary"
-                />
-                <span>使用组织 Key</span>
-              </label>
               <select
                 v-if="cfg.keySource === 'org' && orgKeysForProvider(cfg.provider).length > 0"
                 v-model="cfg.orgKeyId"
-                class="ml-6 w-[calc(100%-1.5rem)] px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                class="w-full px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               >
                 <option value="" disabled>选择 Key</option>
-                <option
-                  v-for="k in orgKeysForProvider(cfg.provider)"
-                  :key="k.id"
-                  :value="k.id"
-                >
+                <option v-for="k in orgKeysForProvider(cfg.provider)" :key="k.id" :value="k.id">
                   {{ k.label }} ({{ k.api_key_masked }})
                 </option>
               </select>
 
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
+              <div v-if="cfg.keySource === 'personal'" class="relative">
+                <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
-                  type="radio"
-                  :name="`llm-${cfg.provider}`"
-                  value="personal"
-                  v-model="cfg.keySource"
-                  class="accent-primary"
+                  v-model="cfg.personalKey"
+                  type="password"
+                  placeholder="输入 API Key"
+                  class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
                 />
-                <span>使用个人 Key</span>
-              </label>
-              <div v-if="cfg.keySource === 'personal'" class="ml-6">
-                <div class="relative">
-                  <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                  <input
-                    v-model="cfg.personalKey"
-                    type="password"
-                    placeholder="输入 API Key"
-                    class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                </div>
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- 添加 Provider -->
+          <div v-if="unusedProviders.length > 0">
+            <div v-if="addingProvider" class="flex items-center gap-2">
+              <select
+                v-model="newProvider"
+                class="flex-1 px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              >
+                <option value="" disabled>选择 Provider</option>
+                <option v-for="p in unusedProviders" :key="p" :value="p">{{ PROVIDER_LABELS[p] || p }}</option>
+              </select>
+              <button
+                :disabled="!newProvider"
+                class="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                @click="addProvider"
+              >
+                添加
+              </button>
+              <button class="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground" @click="addingProvider = false; newProvider = ''">
+                取消
+              </button>
+            </div>
+            <button
+              v-else
+              class="text-sm text-primary hover:text-primary/80 transition-colors"
+              @click="addingProvider = true"
+            >
+              + 添加大模型 Provider
+            </button>
+          </div>
+
+          <!-- 跳过 -->
+          <button
+            v-if="llmConfigs.length === 0"
+            class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            @click="llmSkipped = true"
+          >
+            跳过，稍后在实例设置中配置
+          </button>
+        </template>
+
+        <p v-else class="text-xs text-muted-foreground italic">
+          已跳过大模型配置，创建后可在实例设置中配置
+          <button class="text-primary ml-1 not-italic" @click="llmSkipped = false">撤销</button>
+        </p>
       </div>
 
       <!-- 部署 -->
