@@ -502,8 +502,8 @@ async function handleDeploy() {
             </div>
           </div>
 
-          <!-- 添加 Provider -->
-          <div v-if="unusedProviders.length > 0">
+          <!-- 添加 Provider（最多一个） -->
+          <div v-if="llmConfigs.length === 0 && unusedProviders.length > 0">
             <div v-if="addingProvider" class="flex items-center gap-2">
               <select
                 v-model="newProvider"
