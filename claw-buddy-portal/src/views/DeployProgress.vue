@@ -53,16 +53,52 @@ function toggleLogs(idx: number) {
   steps.value[idx].expanded = !steps.value[idx].expanded
 }
 
+// Portal 只展示关键摘要，过滤掉 K8s 内部细节（Pod 名、Node/IP、Event、Condition 等）
+function sanitizeLogs(lines: string[]): string[] {
+  const result: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('开始等待') || line === '尚未发现 Pod（调度中）') {
+      result.push('等待实例启动...')
+      continue
+    }
+    if (/^已等待\s/.test(line)) {
+      result.push(line)
+      continue
+    }
+    if (line.includes('phase=')) {
+      const m = line.match(/phase=(\w+)/)
+      const phase = m?.[1] || 'Unknown'
+      const friendly = phase === 'Running' ? 'Pod 运行中'
+        : phase === 'Pending' ? 'Pod 调度中'
+        : `Pod 状态异常 (${phase})`
+      if (!result.includes(friendly)) result.push(friendly)
+      continue
+    }
+    if (line.startsWith('PVC ')) {
+      const friendly = line.includes('Bound') ? '存储已就绪' : '存储准备中'
+      if (!result.includes(friendly)) result.push(friendly)
+      continue
+    }
+    if (line === '无法获取 Pod 状态') {
+      result.push('实例状态获取中...')
+      continue
+    }
+    // Event / Deployment condition / 其他内部信息 → 丢弃
+  }
+  return result
+}
+
 function updateSteps(backendStep: number, status: string, message?: string, logs?: string[]) {
   const portalIdx = backendStepToPortalIndex(backendStep)
 
-  // 标记当前步骤之前的所有 Portal 步骤为已完成
   for (let i = 0; i < portalIdx; i++) {
     if (steps.value[i].status !== 'completed') {
       steps.value[i].status = 'completed'
       steps.value[i].expanded = false
     }
   }
+
+  const filtered = logs?.length ? sanitizeLogs(logs) : []
 
   if (status === 'success') {
     for (const s of steps.value) {
@@ -76,7 +112,7 @@ function updateSteps(backendStep: number, status: string, message?: string, logs
     if (s) {
       s.status = 'failed'
       s.message = message
-      if (logs?.length) s.logs.push(...logs)
+      if (filtered.length) s.logs = filtered
       s.expanded = true
     }
     finalStatus.value = 'failed'
@@ -85,7 +121,12 @@ function updateSteps(backendStep: number, status: string, message?: string, logs
     const s = steps.value[portalIdx]
     if (s) {
       if (s.status !== 'in_progress') s.status = 'in_progress'
-      if (logs?.length) s.logs.push(...logs)
+      // "等待就绪"步骤后端每 10s 推送完整快照，用替换而非追加
+      if (portalIdx === 3 && filtered.length) {
+        s.logs = filtered
+      } else if (filtered.length) {
+        s.logs.push(...filtered)
+      }
       s.expanded = true
     }
   }
