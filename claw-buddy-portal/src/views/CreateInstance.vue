@@ -8,9 +8,9 @@ const router = useRouter()
 
 const name = ref('')
 const description = ref('')
-const selectedSpec = ref('medium')
+const selectedSpec = ref('small')
 const selectedImage = ref('')
-const storageGi = ref(40)
+const storageGi = ref(20)
 const deploying = ref(false)
 const error = ref('')
 
