@@ -14,17 +14,20 @@ const deployId = route.params.deployId as string
 const instanceName = (route.query.name as string) || ''
 const instanceId = (route.query.instanceId as string) || ''
 
-const STEP_NAMES = [
-  '预检',
-  '创建命名空间',
-  '创建 ConfigMap',
-  '创建 PVC',
-  '创建 Deployment',
-  '创建 Service',
-  '创建 Ingress（自动路由）',
-  '配置网络策略',
-  '等待 Deployment 就绪',
+const PORTAL_STEPS = [
+  '预检查',
+  '创建相关前置资源',
+  '部署实例',
+  '等待就绪',
 ]
+
+// 后端 9 步 → Portal 4 步的映射（后端 step 从 1 开始）
+function backendStepToPortalIndex(backendStep: number): number {
+  if (backendStep <= 1) return 0          // 预检
+  if (backendStep <= 4) return 1          // 命名空间 / ConfigMap / PVC
+  if (backendStep <= 8) return 2          // Deployment / Service / Ingress / NetworkPolicy
+  return 3                                // 等待就绪
+}
 
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
@@ -37,7 +40,7 @@ interface StepItem {
 }
 
 const steps = ref<StepItem[]>(
-  STEP_NAMES.map((name) => ({ name, status: 'pending', logs: [], expanded: false })),
+  PORTAL_STEPS.map((name) => ({ name, status: 'pending', logs: [], expanded: false })),
 )
 const finalStatus = ref<'in_progress' | 'success' | 'failed'>('in_progress')
 const finalMessage = ref('')
@@ -50,8 +53,11 @@ function toggleLogs(idx: number) {
   steps.value[idx].expanded = !steps.value[idx].expanded
 }
 
-function updateSteps(stepIndex: number, status: string, message?: string, logs?: string[]) {
-  for (let i = 0; i < stepIndex - 1 && i < steps.value.length; i++) {
+function updateSteps(backendStep: number, status: string, message?: string, logs?: string[]) {
+  const portalIdx = backendStepToPortalIndex(backendStep)
+
+  // 标记当前步骤之前的所有 Portal 步骤为已完成
+  for (let i = 0; i < portalIdx; i++) {
     if (steps.value[i].status !== 'completed') {
       steps.value[i].status = 'completed'
       steps.value[i].expanded = false
@@ -66,20 +72,20 @@ function updateSteps(stepIndex: number, status: string, message?: string, logs?:
     finalStatus.value = 'success'
     finalMessage.value = message || '部署成功'
   } else if (status === 'failed') {
-    if (stepIndex - 1 >= 0 && stepIndex - 1 < steps.value.length) {
-      const s = steps.value[stepIndex - 1]
+    const s = steps.value[portalIdx]
+    if (s) {
       s.status = 'failed'
       s.message = message
-      if (logs?.length) s.logs = logs
+      if (logs?.length) s.logs.push(...logs)
       s.expanded = true
     }
     finalStatus.value = 'failed'
     finalMessage.value = message || '部署失败'
   } else {
-    if (stepIndex - 1 >= 0 && stepIndex - 1 < steps.value.length) {
-      const s = steps.value[stepIndex - 1]
-      s.status = 'in_progress'
-      if (logs?.length) s.logs = logs
+    const s = steps.value[portalIdx]
+    if (s) {
+      if (s.status !== 'in_progress') s.status = 'in_progress'
+      if (logs?.length) s.logs.push(...logs)
       s.expanded = true
     }
   }
