@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PawPrint, Loader2, Rocket, ChevronRight, Database } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Rocket, Database } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -110,9 +110,14 @@ async function handleDeploy() {
 
 <template>
   <div class="max-w-2xl mx-auto px-6 py-8">
-    <div class="mb-8">
-      <h1 class="text-xl font-bold">创建实例</h1>
-      <p class="text-sm text-muted-foreground mt-1">只需几步即可部署你的 AI 助手</p>
+    <div class="flex items-center gap-3 mb-8">
+      <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push('/instances')">
+        <ArrowLeft class="w-5 h-5" />
+      </button>
+      <div>
+        <h1 class="text-xl font-bold">创建实例</h1>
+        <p class="text-sm text-muted-foreground mt-1">只需几步即可部署你的 AI 助手</p>
+      </div>
     </div>
 
     <div v-if="loadingInit" class="flex items-center justify-center py-20">

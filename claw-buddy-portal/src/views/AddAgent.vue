@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Plus, Loader2, Bot, Search } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import api from '@/services/api'
 
@@ -74,8 +74,20 @@ function goBack() {
     </div>
 
     <p class="text-sm text-muted-foreground mb-4">
-      从已有实例中选择一个 Agent 添加到工作区
+      从已有实例中选择一个 Agent 添加到工作区，或创建新实例
     </p>
+
+    <!-- Create new instance -->
+    <button
+      class="w-full flex items-center gap-3 px-4 py-3 mb-4 rounded-lg border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors"
+      @click="router.push(`/instances/create?workspace=${workspaceId}`)"
+    >
+      <Rocket class="w-5 h-5 text-primary" />
+      <div class="text-left">
+        <p class="text-sm font-medium">创建新实例</p>
+        <p class="text-xs text-muted-foreground">部署一个全新的 OpenClaw 实例</p>
+      </div>
+    </button>
 
     <!-- Search -->
     <div class="relative mb-4">

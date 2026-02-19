@@ -34,6 +34,22 @@ const routes: RouteRecordRaw[] = [
     name: 'AddAgent',
     component: () => import('@/views/AddAgent.vue'),
   },
+  // Instance routes
+  {
+    path: '/instances',
+    name: 'InstanceList',
+    component: () => import('@/views/InstanceList.vue'),
+  },
+  {
+    path: '/instances/create',
+    name: 'CreateInstance',
+    component: () => import('@/views/CreateInstance.vue'),
+  },
+  {
+    path: '/instances/:id',
+    name: 'InstanceDetail',
+    component: () => import('@/views/InstanceDetail.vue'),
+  },
   // Kept pages
   {
     path: '/settings',
@@ -54,10 +70,6 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/create',
     redirect: '/workspace/create',
-  },
-  {
-    path: '/instances/:id',
-    redirect: '/',
   },
 ]
 

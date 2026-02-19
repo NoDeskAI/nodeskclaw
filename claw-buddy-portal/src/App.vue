@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,12 +44,22 @@ function handleLogout() {
             <button
               :class="[
                 'px-3 py-1.5 rounded-md text-sm transition-colors',
-                route.path === '/' || route.path.startsWith('/workspace') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+                (route.path === '/' || route.path.startsWith('/workspace')) && !route.path.startsWith('/instances') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
               ]"
               @click="router.push('/')"
             >
               <Boxes class="w-4 h-4 inline mr-1.5" />
               工作区
+            </button>
+            <button
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
+                route.path.startsWith('/instances') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+              ]"
+              @click="router.push('/instances')"
+            >
+              <Server class="w-4 h-4 inline mr-1.5" />
+              实例
             </button>
             <button
               :class="[
