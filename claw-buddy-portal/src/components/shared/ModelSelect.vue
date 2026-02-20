@@ -23,6 +23,7 @@ const emit = defineEmits<{
 const open = ref(false)
 const search = ref('')
 const loading = ref(false)
+const errorMsg = ref('')
 const availableModels = ref<ModelItem[]>([])
 const containerRef = ref<HTMLDivElement>()
 
@@ -50,8 +51,10 @@ function remove(id: string) {
 
 function loadModels() {
   loading.value = true
-  emit('fetch-models', props.provider, (models: ModelItem[]) => {
+  errorMsg.value = ''
+  emit('fetch-models', props.provider, (models: ModelItem[], error?: string) => {
     availableModels.value = models
+    errorMsg.value = error ?? ''
     loading.value = false
   })
 }
@@ -143,8 +146,9 @@ watch(() => props.provider, () => {
         <div v-if="loading" class="flex items-center justify-center py-6">
           <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
-        <div v-else-if="filtered.length === 0" class="py-4 text-center text-xs text-muted-foreground">
-          {{ search ? '无匹配模型' : '暂无可用模型' }}
+        <div v-else-if="filtered.length === 0" class="py-4 text-center text-xs text-muted-foreground space-y-1">
+          <div>{{ search ? '无匹配模型' : '暂无可用模型' }}</div>
+          <div v-if="errorMsg && !search" class="text-destructive">{{ errorMsg }}</div>
         </div>
         <button
           v-else

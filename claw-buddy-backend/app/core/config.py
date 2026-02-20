@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # ── LLM Proxy ─────────────────────────────────────────
     CLAWBUDDY_HOST: str = ""  # 外部可达域名，如 https://clawbuddy.example.com
 
+    # ── 出站代理（用于访问 OpenAI/Anthropic 等外部 API）────
+    HTTPS_PROXY: str = ""
+
     # ── CORS ─────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 

@@ -299,9 +299,18 @@ async def list_provider_models(
     """
     resolved_key = api_key
     if not resolved_key:
-        if not org_id:
-            return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
-                               message="需要 api_key 或 org_id 参数")
+        pk_result = await db.execute(
+            select(UserLlmKey).where(
+                UserLlmKey.user_id == current_user.id,
+                UserLlmKey.provider == provider,
+                not_deleted(UserLlmKey),
+            ).limit(1)
+        )
+        personal_key = pk_result.scalar_one_or_none()
+        if personal_key:
+            resolved_key = personal_key.api_key
+
+    if not resolved_key and org_id:
         result = await db.execute(
             select(OrgLlmKey).where(
                 OrgLlmKey.org_id == org_id,
@@ -311,13 +320,19 @@ async def list_provider_models(
             ).limit(1)
         )
         org_key = result.scalar_one_or_none()
-        if not org_key:
-            return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
-                               message=f"组织下无可用的 {provider} Key")
-        resolved_key = org_key.api_key
+        if org_key:
+            resolved_key = org_key.api_key
+
+    if not resolved_key:
+        return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
+                           message=f"无可用的 {provider} Key，请先配置个人 Key 或组织 Key")
 
     from app.services.model_catalog_service import fetch_provider_models
-    models = await fetch_provider_models(provider, resolved_key)
+    try:
+        models = await fetch_provider_models(provider, resolved_key)
+    except ValueError as e:
+        return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
+                           message=str(e))
     return ApiResponse(data=ProviderModelsResponse(provider=provider, models=models))
 
 

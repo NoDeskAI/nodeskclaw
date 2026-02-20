@@ -6,11 +6,17 @@ import time
 
 import httpx
 
+from app.core.config import settings
 from app.schemas.llm import ModelInfo
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_SECONDS = 600
+
+
+def _make_client(**kwargs) -> httpx.AsyncClient:
+    proxy = settings.HTTPS_PROXY or None
+    return httpx.AsyncClient(proxy=proxy, **kwargs)
 
 _cache: dict[str, tuple[float, list[ModelInfo]]] = {}
 
@@ -62,19 +68,25 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ModelInfo]:
         _set_cache(provider, api_key, models)
         logger.info("已拉取 %s 模型列表: %d 个", provider, len(models))
         return models
+    except httpx.HTTPStatusError as e:
+        logger.error("拉取 %s 模型列表失败 (HTTP %s): %s", provider, e.response.status_code, e)
+        raise ValueError(f"API 返回 {e.response.status_code}，请检查 Key 是否有效") from e
+    except httpx.TimeoutException:
+        logger.error("拉取 %s 模型列表超时", provider)
+        raise ValueError("请求超时，请稍后重试")
     except Exception as e:
         logger.error("拉取 %s 模型列表失败: %s", provider, e)
-        return []
+        raise ValueError(f"拉取模型列表失败: {e}") from e
 
 
 async def _fetch_openai(api_key: str) -> list[ModelInfo]:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _make_client(timeout=15) as client:
         resp = await client.get(
             "https://api.openai.com/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
         )
         resp.raise_for_status()
-    data = resp.json().get("data", [])
+        data = resp.json().get("data", [])
     models = []
     for m in data:
         mid: str = m.get("id", "")
@@ -88,7 +100,7 @@ async def _fetch_openai(api_key: str) -> list[ModelInfo]:
 
 
 async def _fetch_anthropic(api_key: str) -> list[ModelInfo]:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _make_client(timeout=15) as client:
         resp = await client.get(
             "https://api.anthropic.com/v1/models",
             headers={
@@ -98,7 +110,7 @@ async def _fetch_anthropic(api_key: str) -> list[ModelInfo]:
             params={"limit": 100},
         )
         resp.raise_for_status()
-    data = resp.json().get("data", [])
+        data = resp.json().get("data", [])
     models = []
     for m in data:
         mid = m.get("id", "")
@@ -109,13 +121,13 @@ async def _fetch_anthropic(api_key: str) -> list[ModelInfo]:
 
 
 async def _fetch_gemini(api_key: str) -> list[ModelInfo]:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _make_client(timeout=15) as client:
         resp = await client.get(
             "https://generativelanguage.googleapis.com/v1beta/models",
             params={"key": api_key, "pageSize": 100},
         )
         resp.raise_for_status()
-    data = resp.json().get("models", [])
+        data = resp.json().get("models", [])
     models = []
     for m in data:
         methods = m.get("supportedGenerationMethods", [])
@@ -132,13 +144,13 @@ async def _fetch_gemini(api_key: str) -> list[ModelInfo]:
 
 
 async def _fetch_openrouter(api_key: str) -> list[ModelInfo]:
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with _make_client(timeout=20) as client:
         resp = await client.get(
             "https://openrouter.ai/api/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
         )
         resp.raise_for_status()
-    data = resp.json().get("data", [])
+        data = resp.json().get("data", [])
     models = []
     for m in data:
         mid = m.get("id", "")
@@ -151,13 +163,13 @@ async def _fetch_openrouter(api_key: str) -> list[ModelInfo]:
 
 async def _fetch_minimax(api_key: str) -> list[ModelInfo]:
     """Minimax uses OpenAI-compatible /v1/models."""
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _make_client(timeout=15) as client:
         resp = await client.get(
             "https://api.minimax.chat/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
         )
         resp.raise_for_status()
-    data = resp.json().get("data", [])
+        data = resp.json().get("data", [])
     models = []
     for m in data:
         mid = m.get("id", "")

@@ -72,19 +72,21 @@ function addProvider() {
 
 const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
 
-async function handleFetchModels(provider: string, callback: (models: ModelItem[]) => void) {
+async function handleFetchModels(provider: string, callback: (models: ModelItem[], error?: string) => void) {
   const cfg = llmConfigs.value.find(c => c.provider === provider)
   const params: Record<string, string> = {}
   if (cfg?.keySource === 'personal' && cfg.personalKey) {
     params.api_key = cfg.personalKey
-  } else if (authStore.user?.org_id) {
+  }
+  if (authStore.user?.org_id) {
     params.org_id = authStore.user.org_id
   }
   try {
     const res = await api.get(`/llm/providers/${provider}/models`, { params })
-    callback(res.data.data?.models ?? [])
-  } catch {
-    callback([])
+    const msg = res.data?.message ?? ''
+    callback(res.data.data?.models ?? [], msg || undefined)
+  } catch (e: any) {
+    callback([], e?.response?.data?.message ?? '拉取模型列表失败')
   }
 }
 
