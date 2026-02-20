@@ -147,7 +147,6 @@ onMounted(fetchInstances)
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">名称</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">状态</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">镜像版本</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">副本</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">命名空间</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">创建时间</th>
           </tr>
@@ -175,9 +174,6 @@ onMounted(fetchInstances)
               </span>
             </td>
             <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ inst.image_version }}</td>
-            <td class="px-4 py-3 text-muted-foreground">
-              {{ inst.available_replicas }}/{{ inst.replicas }}
-            </td>
             <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ inst.namespace }}</td>
             <td class="px-4 py-3 text-muted-foreground">{{ formatTime(inst.created_at) }}</td>
           </tr>

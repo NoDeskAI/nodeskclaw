@@ -180,6 +180,9 @@ async function handleDelete(inst: InstanceInfo) {
               <div class="text-xs font-mono text-muted-foreground">{{ inst.slug }}</div>
               <div class="text-sm text-muted-foreground mt-0.5">
                 {{ inst.namespace }} / {{ inst.image_version }}
+                <span class="ml-2">
+                  {{ inst.available_replicas }}/{{ inst.replicas }} 副本
+                </span>
               </div>
             </div>
           </div>
@@ -217,6 +220,7 @@ async function handleDelete(inst: InstanceInfo) {
             <th class="text-left px-4 py-2.5 font-medium">标识</th>
             <th class="text-left px-4 py-2.5 font-medium">命名空间</th>
             <th class="text-left px-4 py-2.5 font-medium">镜像版本</th>
+            <th class="text-left px-4 py-2.5 font-medium">副本</th>
             <th class="text-right px-4 py-2.5 font-medium">操作</th>
           </tr>
         </thead>
@@ -239,6 +243,7 @@ async function handleDelete(inst: InstanceInfo) {
             <td class="px-4 py-2.5 font-mono text-xs text-muted-foreground">{{ inst.slug }}</td>
             <td class="px-4 py-2.5 text-muted-foreground font-mono text-xs">{{ inst.namespace }}</td>
             <td class="px-4 py-2.5 font-mono text-xs">{{ inst.image_version }}</td>
+            <td class="px-4 py-2.5">{{ inst.available_replicas }}/{{ inst.replicas }}</td>
             <td class="px-4 py-2.5 text-right">
               <div class="flex items-center justify-end gap-1">
                 <Button variant="ghost" size="sm" @click.stop="router.push(`/instances/${inst.id}`)">
