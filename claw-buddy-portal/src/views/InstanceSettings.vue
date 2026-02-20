@@ -381,7 +381,7 @@ onMounted(loadAll)
 
             <!-- Key source selection -->
             <div class="space-y-2">
-              <div class="flex gap-4 text-sm">
+              <div v-if="orgKeysForProvider(cfg.provider).length > 0" class="flex gap-4 text-sm">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
@@ -393,10 +393,7 @@ onMounted(loadAll)
                   />
                   个人 Key
                 </label>
-                <label
-                  v-if="orgKeysForProvider(cfg.provider).length > 0"
-                  class="flex items-center gap-1.5 cursor-pointer"
-                >
+                <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
                     :name="`ks-${cfg.provider}`"
@@ -407,12 +404,6 @@ onMounted(loadAll)
                   />
                   组织 Key
                 </label>
-                <span
-                  v-else
-                  class="text-xs text-muted-foreground flex items-center"
-                >
-                  (当前组织无可用 Key)
-                </span>
               </div>
 
               <!-- Org key selector -->
@@ -444,7 +435,7 @@ onMounted(loadAll)
                   <input
                     v-model="cfg.personalKeyNew"
                     type="password"
-                    :placeholder="cfg.hasExistingPersonalKey ? '输入新 Key 以替换' : '输入 API Key'"
+                    :placeholder="cfg.hasExistingPersonalKey ? '输入新 Key 以替换' : '粘贴你的 API Key'"
                     class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
                     @input="markDirty"
                   />
