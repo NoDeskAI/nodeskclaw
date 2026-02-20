@@ -337,6 +337,7 @@ async function handleDeploy() {
             type="text"
             placeholder="例如：我的AI助手"
             class="w-full px-4 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+            @blur="name = name.trim()"
           />
         </div>
 
