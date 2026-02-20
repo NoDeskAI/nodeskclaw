@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { ExternalLink, RefreshCw, Trash2, Circle, Loader2 } from 'lucide-vue-next'
+import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -30,6 +30,23 @@ const instance = ref<InstanceDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const openclawUrl = ref('')
+const urlCopied = ref(false)
+
+function formatCpu(val: string): string {
+  if (val.endsWith('m')) {
+    const cores = parseInt(val.slice(0, -1), 10) / 1000
+    return Number.isInteger(cores) ? `${cores} 核` : `${cores.toFixed(2)} 核`
+  }
+  return `${val} 核`
+}
+
+async function copyUrl() {
+  try {
+    await navigator.clipboard.writeText(openclawUrl.value)
+    urlCopied.value = true
+    setTimeout(() => { urlCopied.value = false }, 2000)
+  } catch { /* ignore */ }
+}
 
 onMounted(async () => {
   await fetchDetail()
@@ -78,7 +95,7 @@ async function handleDelete() {
 
     <div v-else-if="instance" class="space-y-6">
       <!-- OpenClaw 访问 -->
-      <div v-if="openclawUrl" class="p-4 rounded-xl border border-primary/30 bg-primary/5">
+      <div v-if="openclawUrl" class="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-medium">OpenClaw 访问地址</p>
@@ -93,6 +110,20 @@ async function handleDelete() {
             打开
           </a>
         </div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-background/60 border border-border/50">
+          <a
+            :href="openclawUrl"
+            target="_blank"
+            class="flex-1 text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors"
+          >{{ openclawUrl }}</a>
+          <button
+            class="shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            @click="copyUrl"
+          >
+            <Check v-if="urlCopied" class="w-3.5 h-3.5 text-green-400" />
+            <Copy v-else class="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       <!-- 基本信息 -->
@@ -104,12 +135,8 @@ async function handleDelete() {
             <span class="ml-2 font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{{ instance.image_version }}</span>
           </div>
           <div>
-            <span class="text-muted-foreground">副本</span>
-            <span class="ml-2">{{ instance.available_replicas }}/{{ instance.replicas }}</span>
-          </div>
-          <div>
             <span class="text-muted-foreground">CPU</span>
-            <span class="ml-2">{{ instance.cpu_limit }}</span>
+            <span class="ml-2">{{ formatCpu(instance.cpu_limit) }}</span>
           </div>
           <div>
             <span class="text-muted-foreground">内存</span>
