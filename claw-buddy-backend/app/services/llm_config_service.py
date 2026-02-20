@@ -12,7 +12,6 @@ from app.core.config import settings
 from app.models.base import not_deleted
 from app.models.cluster import Cluster
 from app.models.instance import Instance
-from app.models.org_llm_key import OrgLlmKey
 from app.models.user_llm_config import UserLlmConfig
 from app.models.user_llm_key import UserLlmKey
 from app.schemas.llm import OpenClawConfigResponse, OpenClawProviderEntry
@@ -24,25 +23,52 @@ logger = logging.getLogger(__name__)
 
 OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
 
+PROVIDER_BASE_URLS: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "minimax-openai": "https://api.minimax.chat/v1",
+    "minimax-anthropic": "https://api.minimax.chat/v1",
+}
+
 
 def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
-def _build_providers_config(configs: list[UserLlmConfig], proxy_token: str) -> dict:
-    """Build the models.providers section for openclaw.json."""
+def _build_providers_config(
+    configs: list[UserLlmConfig],
+    proxy_token: str,
+    user_keys: dict[str, UserLlmKey],
+) -> dict:
+    """Build the models.providers section for openclaw.json.
+
+    org  key_source  -> proxy URL + proxy token
+    personal key_source -> provider base URL + user's real API key
+    """
     host = settings.CLAWBUDDY_HOST.rstrip("/") if settings.CLAWBUDDY_HOST else ""
     providers: dict = {}
     for cfg in configs:
         provider = cfg.provider
-        if host:
-            base_url = f"{host}/llm-proxy/{provider}/v1"
+        if cfg.key_source == "personal":
+            uk = user_keys.get(provider)
+            if not uk:
+                logger.warning("个人 Key 缺失，跳过 provider=%s", provider)
+                continue
+            providers[provider] = {
+                "baseUrl": uk.base_url or PROVIDER_BASE_URLS.get(provider, ""),
+                "apiKey": uk.api_key,
+            }
         else:
-            base_url = f"http://localhost:8000/llm-proxy/{provider}/v1"
-        providers[provider] = {
-            "baseUrl": base_url,
-            "apiKey": proxy_token,
-        }
+            if host:
+                base_url = f"{host}/llm-proxy/{provider}/v1"
+            else:
+                base_url = f"http://localhost:8000/llm-proxy/{provider}/v1"
+            providers[provider] = {
+                "baseUrl": base_url,
+                "apiKey": proxy_token,
+            }
     return providers
 
 
@@ -115,44 +141,35 @@ async def read_openclaw_providers(
     )
     db_configs = {c.provider: c for c in configs_result.scalars().all()}
 
+    user_keys_result = await db.execute(
+        select(UserLlmKey).where(
+            UserLlmKey.user_id == instance.created_by,
+            not_deleted(UserLlmKey),
+        )
+    )
+    user_keys = {k.provider: k for k in user_keys_result.scalars().all()}
+
     entries: list[OpenClawProviderEntry] = []
     for provider, prov_cfg in pod_providers.items():
         base_url = prov_cfg.get("baseUrl", "")
         is_proxy = bool(host) and host in base_url
 
         key_source: str | None = None
-        key_label: str | None = None
         api_key_masked: str | None = None
 
         db_cfg = db_configs.get(provider)
         if db_cfg:
             key_source = db_cfg.key_source
-            if db_cfg.key_source == "org" and db_cfg.org_llm_key_id:
-                org_key_r = await db.execute(
-                    select(OrgLlmKey).where(OrgLlmKey.id == db_cfg.org_llm_key_id)
-                )
-                org_key = org_key_r.scalar_one_or_none()
-                if org_key:
-                    key_label = org_key.label
-                    api_key_masked = _mask_key(org_key.api_key)
-            elif db_cfg.key_source == "personal":
-                user_key_r = await db.execute(
-                    select(UserLlmKey).where(
-                        UserLlmKey.user_id == instance.created_by,
-                        UserLlmKey.provider == provider,
-                        not_deleted(UserLlmKey),
-                    )
-                )
-                user_key = user_key_r.scalar_one_or_none()
-                if user_key:
-                    api_key_masked = _mask_key(user_key.api_key)
+            if db_cfg.key_source == "personal":
+                uk = user_keys.get(provider)
+                if uk:
+                    api_key_masked = _mask_key(uk.api_key)
 
         entries.append(OpenClawProviderEntry(
             provider=provider,
             base_url=base_url,
             is_proxy=is_proxy,
             key_source=key_source,
-            key_label=key_label,
             api_key_masked=api_key_masked,
         ))
 
@@ -160,7 +177,11 @@ async def read_openclaw_providers(
 
 
 async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None:
-    """Write proxy LLM config to openclaw.json via NFS."""
+    """Write LLM config to openclaw.json via NFS.
+
+    org  -> proxy URL + proxy token
+    personal -> provider base URL + real API key
+    """
     configs_result = await db.execute(
         select(UserLlmConfig).where(
             UserLlmConfig.user_id == instance.created_by,
@@ -174,12 +195,25 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         logger.info("实例 %s 无 LLM 配置，跳过写入", instance.name)
         return
 
-    proxy_token = instance.proxy_token
-    if not proxy_token:
-        logger.warning("实例 %s 缺少 proxy_token，无法写入 LLM 配置", instance.name)
-        return
+    proxy_token = instance.proxy_token or ""
 
-    providers = _build_providers_config(configs, proxy_token)
+    personal_providers = [c.provider for c in configs if c.key_source == "personal"]
+    user_keys: dict[str, UserLlmKey] = {}
+    if personal_providers:
+        uk_result = await db.execute(
+            select(UserLlmKey).where(
+                UserLlmKey.user_id == instance.created_by,
+                UserLlmKey.provider.in_(personal_providers),
+                not_deleted(UserLlmKey),
+            )
+        )
+        user_keys = {k.provider: k for k in uk_result.scalars().all()}
+
+    has_org = any(c.key_source == "org" for c in configs)
+    if has_org and not proxy_token:
+        logger.warning("实例 %s 缺少 proxy_token，组织 Key 模式无法写入", instance.name)
+
+    providers = _build_providers_config(configs, proxy_token, user_keys)
 
     async with nfs_mount(instance, db) as mount_path:
         existing_json = _read_config_file(mount_path)

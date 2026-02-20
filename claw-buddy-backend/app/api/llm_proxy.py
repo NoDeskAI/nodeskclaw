@@ -38,6 +38,14 @@ PROVIDER_DEFAULTS: dict[str, dict] = {
         "base_url": "https://openrouter.ai/api",
         "auth_type": "bearer",
     },
+    "minimax-openai": {
+        "base_url": "https://api.minimax.chat",
+        "auth_type": "bearer",
+    },
+    "minimax-anthropic": {
+        "base_url": "https://api.minimax.chat",
+        "auth_type": "bearer",
+    },
 }
 
 _http_client: httpx.AsyncClient | None = None
@@ -202,18 +210,18 @@ async def llm_proxy(provider: str, path: str, request: Request):
         org_key_id: str | None = None
 
         if is_org_key:
-            if not config.org_llm_key_id:
-                return JSONResponse(status_code=400, content={"error": "组织 Key 配置异常"})
             key_result = await db.execute(
                 select(OrgLlmKey).where(
-                    OrgLlmKey.id == config.org_llm_key_id,
+                    OrgLlmKey.org_id == instance.org_id,
+                    OrgLlmKey.provider == provider,
+                    OrgLlmKey.is_active.is_(True),
                     not_deleted(OrgLlmKey),
-                )
+                ).order_by(OrgLlmKey.created_at).limit(1)
             )
             org_key = key_result.scalar_one_or_none()
-            if org_key is None or not org_key.is_active:
-                return JSONResponse(status_code=410, content={
-                    "error": "组织 Key 已删除或已禁用"
+            if org_key is None:
+                return JSONResponse(status_code=404, content={
+                    "error": f"当前组织未配置 {provider} 的 Key，请联系管理员"
                 })
             real_key = org_key.api_key
             base_url = org_key.base_url

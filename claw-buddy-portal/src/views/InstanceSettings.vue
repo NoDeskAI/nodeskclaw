@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, type ComputedRef, type Ref } from 'vue'
-import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, Circle, AlertTriangle, HardDrive, Save, ChevronDown, Check } from 'lucide-vue-next'
+import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, HardDrive, Save, ChevronDown, Check } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -29,14 +29,6 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 // ── Types ──
 
-interface AvailableOrgKey {
-  id: string
-  provider: string
-  label: string
-  api_key_masked: string
-  is_active: boolean
-}
-
 interface PersonalKey {
   id: string
   provider: string
@@ -48,7 +40,6 @@ interface PersonalKey {
 interface ProviderConfig {
   provider: string
   keySource: 'org' | 'personal'
-  orgKeyId: string
   personalKeyNew: string
   personalKeyMasked: string
   hasExistingPersonalKey: boolean
@@ -57,17 +48,12 @@ interface ProviderConfig {
 // ── State ──
 
 const providerConfigs = ref<ProviderConfig[]>([])
-const availableOrgKeys = ref<AvailableOrgKey[]>([])
 const personalKeys = ref<PersonalKey[]>([])
 const newProviderOpen = ref(false)
 
 const unusedProviders = computed(() =>
   PROVIDERS.filter(p => !providerConfigs.value.some(c => c.provider === p))
 )
-
-function orgKeysForProvider(provider: string) {
-  return availableOrgKeys.value.filter(k => k.provider === provider)
-}
 
 function personalKeyForProvider(provider: string) {
   return personalKeys.value.find(k => k.provider === provider)
@@ -89,10 +75,7 @@ async function loadAll() {
       api.get('/users/me/llm-keys'),
     ]
     if (orgId) {
-      requests.push(
-        api.get(`/users/me/llm-configs?org_id=${orgId}`),
-        api.get(`/orgs/${orgId}/available-llm-keys`),
-      )
+      requests.push(api.get(`/users/me/llm-configs?org_id=${orgId}`))
     }
 
     const results = await Promise.allSettled(requests)
@@ -117,14 +100,9 @@ async function loadAll() {
     }
 
     // User LLM configs (DB)
-    const dbConfigs: { provider: string; key_source: string; org_llm_key_id: string | null }[] = []
+    const dbConfigs: { provider: string; key_source: string }[] = []
     if (results[2]?.status === 'fulfilled') {
       dbConfigs.push(...(results[2].value.data.data ?? []))
-    }
-
-    // Available org keys
-    if (results[3]?.status === 'fulfilled') {
-      availableOrgKeys.value = results[3].value.data.data ?? []
     }
 
     // Build editable provider configs from DB configs
@@ -133,8 +111,7 @@ async function loadAll() {
       const pk = personalKeyForProvider(c.provider)
       configs.push({
         provider: c.provider,
-        keySource: (c.key_source === 'org' || c.key_source === 'personal') ? c.key_source : 'personal',
-        orgKeyId: c.org_llm_key_id ?? '',
+        keySource: (c.key_source === 'org' || c.key_source === 'personal') ? c.key_source : 'org',
         personalKeyNew: '',
         personalKeyMasked: pk?.api_key_masked ?? '',
         hasExistingPersonalKey: !!pk,
@@ -149,7 +126,6 @@ async function loadAll() {
         configs.push({
           provider: np.provider,
           keySource: np.key_source === 'org' ? 'org' : 'personal',
-          orgKeyId: '',
           personalKeyNew: '',
           personalKeyMasked: pk?.api_key_masked ?? np.api_key_masked ?? '',
           hasExistingPersonalKey: !!pk,
@@ -170,12 +146,10 @@ async function loadAll() {
 
 function addProvider(provider: string) {
   if (providerConfigs.value.some(c => c.provider === provider)) return
-  const hasOrgKeys = orgKeysForProvider(provider).length > 0
   const pk = personalKeyForProvider(provider)
   providerConfigs.value.push({
     provider,
-    keySource: hasOrgKeys ? 'org' : 'personal',
-    orgKeyId: '',
+    keySource: 'org',
     personalKeyNew: '',
     personalKeyMasked: pk?.api_key_masked ?? '',
     hasExistingPersonalKey: !!pk,
@@ -201,10 +175,6 @@ function validateConfigs(): string | null {
     if (cfg.keySource === 'personal') {
       if (!cfg.personalKeyNew && !cfg.hasExistingPersonalKey) {
         return `${label}: 请输入个人 API Key`
-      }
-    } else if (cfg.keySource === 'org') {
-      if (!cfg.orgKeyId) {
-        return `${label}: 请选择组织 Key`
       }
     }
   }
@@ -252,7 +222,6 @@ async function handleSave() {
       configs: providerConfigs.value.map(c => ({
         provider: c.provider,
         key_source: c.keySource,
-        org_llm_key_id: c.keySource === 'org' ? c.orgKeyId || null : null,
       })),
     })
 
@@ -381,18 +350,7 @@ onMounted(loadAll)
 
             <!-- Key source selection -->
             <div class="space-y-2">
-              <div v-if="orgKeysForProvider(cfg.provider).length > 0" class="flex gap-4 text-sm">
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    :name="`ks-${cfg.provider}`"
-                    value="personal"
-                    v-model="cfg.keySource"
-                    class="accent-primary"
-                    @change="markDirty"
-                  />
-                  个人 Key
-                </label>
+              <div class="flex gap-4 text-sm">
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
@@ -404,24 +362,23 @@ onMounted(loadAll)
                   />
                   组织 Key
                 </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    :name="`ks-${cfg.provider}`"
+                    value="personal"
+                    v-model="cfg.keySource"
+                    class="accent-primary"
+                    @change="markDirty"
+                  />
+                  个人 Key
+                </label>
               </div>
 
-              <!-- Org key selector -->
-              <select
-                v-if="cfg.keySource === 'org'"
-                v-model="cfg.orgKeyId"
-                class="w-full px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                @change="markDirty"
-              >
-                <option value="" disabled>选择组织 Key</option>
-                <option
-                  v-for="k in orgKeysForProvider(cfg.provider)"
-                  :key="k.id"
-                  :value="k.id"
-                >
-                  {{ k.label }} ({{ k.api_key_masked }})
-                </option>
-              </select>
+              <!-- Org key hint -->
+              <p v-if="cfg.keySource === 'org'" class="text-xs text-muted-foreground pl-0.5">
+                通过组织代理调用，无需输入 Key
+              </p>
 
               <!-- Personal key -->
               <div v-if="cfg.keySource === 'personal'" class="space-y-1.5">
@@ -435,7 +392,7 @@ onMounted(loadAll)
                   <input
                     v-model="cfg.personalKeyNew"
                     type="password"
-                    :placeholder="cfg.hasExistingPersonalKey ? '输入新 Key 以替换' : '粘贴你的 API Key'"
+                    :placeholder="cfg.hasExistingPersonalKey ? '输入新 Key 以替换' : '输入 API Key'"
                     class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
                     @input="markDirty"
                   />

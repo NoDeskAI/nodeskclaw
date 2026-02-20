@@ -298,22 +298,8 @@ async def get_user_llm_configs(
     )
     configs = result.scalars().all()
 
-    org_key_ids = [c.org_llm_key_id for c in configs if c.org_llm_key_id]
-    label_map: dict[str, str] = {}
-    if org_key_ids:
-        keys_result = await db.execute(
-            select(OrgLlmKey.id, OrgLlmKey.label).where(OrgLlmKey.id.in_(org_key_ids))
-        )
-        for row in keys_result:
-            label_map[row[0]] = row[1]
-
     return ApiResponse(data=[
-        UserLlmConfigInfo(
-            provider=c.provider,
-            key_source=c.key_source,
-            org_llm_key_id=c.org_llm_key_id,
-            org_llm_key_label=label_map.get(c.org_llm_key_id) if c.org_llm_key_id else None,
-        )
+        UserLlmConfigInfo(provider=c.provider, key_source=c.key_source)
         for c in configs
     ])
 
@@ -341,14 +327,13 @@ async def update_user_llm_configs(
         existing = old_map.get(item.provider)
         if existing:
             existing.key_source = item.key_source
-            existing.org_llm_key_id = item.org_llm_key_id
+            existing.org_llm_key_id = None
         else:
             db.add(UserLlmConfig(
                 user_id=current_user.id,
                 org_id=body.org_id,
                 provider=item.provider,
                 key_source=item.key_source,
-                org_llm_key_id=item.org_llm_key_id,
             ))
 
     for provider in old_providers - new_providers:
@@ -438,33 +423,25 @@ async def get_instance_llm_config(
     )
     configs = configs_result.scalars().all()
 
+    user_keys_result = await db.execute(
+        select(UserLlmKey).where(
+            UserLlmKey.user_id == instance.created_by,
+            not_deleted(UserLlmKey),
+        )
+    )
+    user_keys = {k.provider: k for k in user_keys_result.scalars().all()}
+
     items: list[InstanceLlmConfigInfo] = []
     for c in configs:
-        label = None
         masked = None
-        if c.key_source == "org" and c.org_llm_key_id:
-            key_r = await db.execute(
-                select(OrgLlmKey).where(OrgLlmKey.id == c.org_llm_key_id)
-            )
-            org_key = key_r.scalar_one_or_none()
-            if org_key:
-                label = org_key.label
-                masked = _mask_key(org_key.api_key)
-        elif c.key_source == "personal":
-            key_r = await db.execute(
-                select(UserLlmKey).where(
-                    UserLlmKey.user_id == instance.created_by,
-                    UserLlmKey.provider == c.provider,
-                    not_deleted(UserLlmKey),
-                )
-            )
-            user_key = key_r.scalar_one_or_none()
-            if user_key:
-                masked = _mask_key(user_key.api_key)
+        if c.key_source == "personal":
+            uk = user_keys.get(c.provider)
+            if uk:
+                masked = _mask_key(uk.api_key)
 
         items.append(InstanceLlmConfigInfo(
             provider=c.provider, key_source=c.key_source,
-            key_label=label, api_key_masked=masked,
+            api_key_masked=masked,
         ))
 
     return ApiResponse(data=items)

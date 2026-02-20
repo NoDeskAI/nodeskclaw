@@ -32,18 +32,9 @@ const canGoNext = computed(() =>
 )
 
 // ── LLM config ──
-interface AvailableKey {
-  id: string
-  provider: string
-  label: string
-  api_key_masked: string
-  is_active: boolean
-}
-
 interface LlmConfigEntry {
   provider: string
   keySource: 'org' | 'personal'
-  orgKeyId: string
   personalKey: string
 }
 
@@ -57,7 +48,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   'minimax-anthropic': 'Minimax-Anthropic',
 }
 
-const availableOrgKeys = ref<AvailableKey[]>([])
 const llmConfigs = ref<LlmConfigEntry[]>([])
 const llmSkipped = ref(false)
 const newProvider = ref('')
@@ -66,17 +56,11 @@ const unusedProviders = computed(() =>
   PROVIDERS.filter(p => !llmConfigs.value.some(c => c.provider === p))
 )
 
-function orgKeysForProvider(provider: string) {
-  return availableOrgKeys.value.filter(k => k.provider === provider)
-}
-
 function addProvider() {
   if (!newProvider.value) return
-  const hasOrgKeys = orgKeysForProvider(newProvider.value).length > 0
   llmConfigs.value.push({
     provider: newProvider.value,
-    keySource: hasOrgKeys ? 'org' : 'personal',
-    orgKeyId: '',
+    keySource: 'org',
     personalKey: '',
   })
   newProvider.value = ''
@@ -84,17 +68,6 @@ function addProvider() {
 
 function removeProvider(idx: number) {
   llmConfigs.value.splice(idx, 1)
-}
-
-async function fetchAvailableKeys() {
-  const orgId = authStore.user?.current_org_id
-  if (!orgId) return
-  try {
-    const res = await api.get(`/orgs/${orgId}/available-llm-keys`)
-    availableOrgKeys.value = res.data.data ?? []
-  } catch {
-    availableOrgKeys.value = []
-  }
 }
 
 const storageAnchors = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
@@ -217,7 +190,6 @@ onMounted(async () => {
     const [, clustersRes] = await Promise.all([
       fetchImageTags(),
       api.get('/clusters'),
-      fetchAvailableKeys(),
     ])
     clusters.value = (clustersRes.data.data ?? []).filter((c: any) => c.status === 'connected')
   } catch {
@@ -255,7 +227,6 @@ async function handleDeploy() {
     const activeLlm = llmConfigs.value.map(c => ({
       provider: c.provider,
       key_source: c.keySource,
-      org_llm_key_id: c.keySource === 'org' ? c.orgKeyId || undefined : undefined,
     }))
 
     const res = await api.post('/deploy', {
@@ -540,7 +511,7 @@ async function handleDeploy() {
               </div>
 
               <div class="space-y-2">
-                <div v-if="orgKeysForProvider(cfg.provider).length > 0" class="flex gap-4 text-sm">
+                <div class="flex gap-4 text-sm">
                   <label class="flex items-center gap-1.5 cursor-pointer">
                     <input type="radio" :name="`llm-${cfg.provider}`" value="org" v-model="cfg.keySource" class="accent-primary" />
                     组织 Key
@@ -551,16 +522,9 @@ async function handleDeploy() {
                   </label>
                 </div>
 
-                <select
-                  v-if="cfg.keySource === 'org' && orgKeysForProvider(cfg.provider).length > 0"
-                  v-model="cfg.orgKeyId"
-                  class="w-full px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                >
-                  <option value="" disabled>选择 Key</option>
-                  <option v-for="k in orgKeysForProvider(cfg.provider)" :key="k.id" :value="k.id">
-                    {{ k.label }} ({{ k.api_key_masked }})
-                  </option>
-                </select>
+                <p v-if="cfg.keySource === 'org'" class="text-xs text-muted-foreground pl-0.5">
+                  通过组织代理调用，无需输入 Key
+                </p>
 
                 <div v-if="cfg.keySource === 'personal'" class="relative">
                   <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
