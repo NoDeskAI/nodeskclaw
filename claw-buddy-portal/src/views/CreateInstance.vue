@@ -23,8 +23,11 @@ const deploying = ref(false)
 const error = ref('')
 const currentStep = ref(1)
 
+const nameHasEdgeSpaces = computed(() => name.value.length > 0 && name.value !== name.value.trim())
+
 const canGoNext = computed(() =>
-  !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
+  !!name.value.trim() && !nameHasEdgeSpaces.value
+  && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
   && !!selectedImage.value && clusters.value.length > 0
 )
 
@@ -336,9 +339,13 @@ async function handleDeploy() {
             v-model="name"
             type="text"
             placeholder="例如：我的AI助手"
-            class="w-full px-4 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
-            @blur="name = name.trim()"
+            class="w-full px-4 py-2.5 rounded-lg bg-card border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+            :class="nameHasEdgeSpaces ? 'border-destructive' : 'border-border'"
           />
+          <p v-if="nameHasEdgeSpaces" class="text-xs text-destructive flex items-center gap-1">
+            <AlertCircle class="w-3 h-3" />
+            名称开头和结尾不能包含空格
+          </p>
         </div>
 
         <!-- 实例标识 + 镜像版本 -->
