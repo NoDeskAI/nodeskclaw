@@ -155,11 +155,18 @@ function selectImage(tag: string) {
 }
 
 function toSlug(input: string): string {
-  const hasChinese = /[\u4e00-\u9fa5]/.test(input)
-  const raw = hasChinese
-    ? pinyin(input, { toneType: 'none', type: 'array' }).join('-')
-    : input
-  return raw
+  const segments = input.match(/[\u4e00-\u9fa5]+|[^\u4e00-\u9fa5]+/g) || []
+  const parts: string[] = []
+  for (const seg of segments) {
+    if (/[\u4e00-\u9fa5]/.test(seg)) {
+      parts.push(...pinyin(seg, { toneType: 'none', type: 'array' }))
+    } else {
+      parts.push(seg.trim())
+    }
+  }
+  return parts
+    .filter(Boolean)
+    .join('-')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
     .toLowerCase()
