@@ -115,5 +115,5 @@ class OpenClawProviderEntry(BaseModel):
 
 
 class OpenClawConfigResponse(BaseModel):
-    pod_name: str
+    data_source: str
     providers: list[OpenClawProviderEntry]

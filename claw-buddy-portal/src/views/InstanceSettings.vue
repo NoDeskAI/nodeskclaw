@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, type ComputedRef } from 'vue'
-import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, Circle, AlertTriangle, ServerOff } from 'lucide-vue-next'
+import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, Circle, AlertTriangle, HardDrive } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -35,8 +35,8 @@ interface PersonalKey {
   is_active: boolean
 }
 
-const podName = ref('')
-const podAvailable = ref(true)
+const dataSource = ref('')
+const nfsError = ref('')
 const providers = ref<ProviderEntry[]>([])
 const personalKeys = ref<PersonalKey[]>([])
 
@@ -54,6 +54,7 @@ function keySourceLabel(entry: ProviderEntry): string {
 async function fetchOpenClawProviders() {
   loading.value = true
   error.value = ''
+  nfsError.value = ''
   try {
     const [provRes, personalRes] = await Promise.all([
       api.get(`/instances/${instanceId.value}/openclaw-providers`),
@@ -63,16 +64,16 @@ async function fetchOpenClawProviders() {
     personalKeys.value = personalRes.data.data ?? []
 
     const data = provRes.data.data
-    if (data === null) {
-      podAvailable.value = false
-      providers.value = []
+    dataSource.value = data.data_source ?? ''
+    providers.value = data.providers ?? []
+  } catch (e: any) {
+    const status = e?.response?.status
+    const msg = e?.response?.data?.message || ''
+    if (status === 503 && (msg.includes('NFS') || msg.includes('nfs') || msg.includes('mount') || msg.includes('挂载'))) {
+      nfsError.value = msg
     } else {
-      podAvailable.value = true
-      podName.value = data.pod_name
-      providers.value = data.providers ?? []
+      error.value = msg || '加载配置失败'
     }
-  } catch {
-    error.value = '加载配置失败'
   } finally {
     loading.value = false
   }
@@ -152,7 +153,7 @@ onMounted(fetchOpenClawProviders)
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
       <p v-if="successMsg" class="text-sm text-green-500">{{ successMsg }}</p>
 
-      <!-- 大模型配置（从 Pod 实时读取） -->
+      <!-- 大模型配置（从 NFS 存储读取） -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -160,7 +161,7 @@ onMounted(fetchOpenClawProviders)
             <h2 class="text-sm font-medium">大模型 Provider 配置</h2>
           </div>
           <button
-            v-if="podAvailable"
+            v-if="!nfsError"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs hover:bg-card transition-colors"
             :disabled="restarting"
             @click="fetchOpenClawProviders"
@@ -170,14 +171,15 @@ onMounted(fetchOpenClawProviders)
           </button>
         </div>
 
-        <p v-if="podAvailable && podName" class="text-xs text-muted-foreground">
-          读取自 Pod: <span class="font-mono">{{ podName }}</span>
+        <p v-if="dataSource === 'nfs' && !nfsError" class="text-xs text-muted-foreground">
+          读取自 NFS 存储
         </p>
 
-        <!-- Pod 不可用 -->
-        <div v-if="!podAvailable" class="flex flex-col items-center gap-3 py-10 text-center">
-          <ServerOff class="w-8 h-8 text-muted-foreground" />
-          <p class="text-sm text-muted-foreground">实例未运行，无法读取当前配置</p>
+        <!-- NFS 不可用 -->
+        <div v-if="nfsError" class="flex flex-col items-center gap-3 py-10 text-center">
+          <HardDrive class="w-8 h-8 text-destructive/60" />
+          <p class="text-sm text-destructive">NFS 存储不可用</p>
+          <p class="text-xs text-muted-foreground max-w-sm">{{ nfsError }}</p>
         </div>
 
         <!-- 无 Provider -->

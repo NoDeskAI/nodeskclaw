@@ -1,13 +1,13 @@
-"""LLM config service: write proxy config to openclaw.json via kubectl exec."""
+"""LLM config service: read/write openclaw.json via NFS mount."""
 
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.llm_proxy import PROVIDER_DEFAULTS
 from app.core.config import settings
 from app.models.base import not_deleted
 from app.models.cluster import Cluster
@@ -18,10 +18,11 @@ from app.models.user_llm_key import UserLlmKey
 from app.schemas.llm import OpenClawConfigResponse, OpenClawProviderEntry
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
+from app.services.nfs_mount import nfs_mount
 
 logger = logging.getLogger(__name__)
 
-OPENCLAW_CONFIG_PATH = "/root/.openclaw/openclaw.json"
+OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
 
 
 def _k8s_name(instance: Instance) -> str:
@@ -45,17 +46,18 @@ def _build_providers_config(configs: list[UserLlmConfig], proxy_token: str) -> d
     return providers
 
 
-async def _get_running_pod(k8s: K8sClient, instance: Instance) -> str | None:
-    label_selector = f"app.kubernetes.io/name={_k8s_name(instance)}"
-    pods = await k8s.list_pods(instance.namespace, label_selector)
-    running = [p for p in pods if p["phase"] == "Running"]
-    return running[0]["name"] if running else None
-
-
 def _mask_key(key: str) -> str:
     if len(key) <= 8:
         return key[:2] + "***"
     return key[:6] + "***" + key[-3:]
+
+
+async def _get_running_pod(k8s: K8sClient, instance: Instance) -> str | None:
+    """Find a running Pod for the instance (only used by restart_openclaw for kill)."""
+    label_selector = f"app.kubernetes.io/name={_k8s_name(instance)}"
+    pods = await k8s.list_pods(instance.namespace, label_selector)
+    running = [p for p in pods if p["phase"] == "Running"]
+    return running[0]["name"] if running else None
 
 
 async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | None:
@@ -69,35 +71,38 @@ async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | N
     return K8sClient(api_client)
 
 
+def _read_config_file(mount_path: Path) -> dict:
+    """Read openclaw.json from NFS mount, return empty dict if file doesn't exist."""
+    config_path = mount_path / OPENCLAW_CONFIG_REL
+    if not config_path.exists():
+        return {}
+    try:
+        return json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("读取 openclaw.json 失败: %s", e)
+        return {}
+
+
+def _write_config_file(mount_path: Path, data: dict) -> None:
+    """Write openclaw.json to NFS mount."""
+    config_path = mount_path / OPENCLAW_CONFIG_REL
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 async def read_openclaw_providers(
     instance: Instance, db: AsyncSession
-) -> OpenClawConfigResponse | None:
-    """Read openclaw.json from the running Pod and enrich with DB key source info.
-
-    Returns None if no running Pod is available.
-    """
-    k8s = await _get_k8s_client(instance, db)
-    if k8s is None:
-        return None
-
-    pod_name = await _get_running_pod(k8s, instance)
-    if not pod_name:
-        return None
-
-    raw_json: dict = {}
-    try:
-        raw = await k8s.exec_in_pod(
-            instance.namespace, pod_name,
-            ["cat", OPENCLAW_CONFIG_PATH],
-        )
-        if raw:
-            raw_json = json.loads(raw)
-    except Exception:
-        logger.info("读取 Pod %s 的 openclaw.json 失败（文件可能不存在）", pod_name)
+) -> OpenClawConfigResponse:
+    """Read openclaw.json via NFS and enrich with DB key source info."""
+    async with nfs_mount(instance, db) as mount_path:
+        raw_json = _read_config_file(mount_path)
 
     pod_providers: dict = raw_json.get("models", {}).get("providers", {})
     if not pod_providers:
-        return OpenClawConfigResponse(pod_name=pod_name, providers=[])
+        return OpenClawConfigResponse(data_source="nfs", providers=[])
 
     host = (settings.CLAWBUDDY_HOST or "").rstrip("/")
 
@@ -151,11 +156,11 @@ async def read_openclaw_providers(
             api_key_masked=api_key_masked,
         ))
 
-    return OpenClawConfigResponse(pod_name=pod_name, providers=entries)
+    return OpenClawConfigResponse(data_source="nfs", providers=entries)
 
 
 async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None:
-    """Write proxy LLM config to openclaw.json."""
+    """Write proxy LLM config to openclaw.json via NFS."""
     configs_result = await db.execute(
         select(UserLlmConfig).where(
             UserLlmConfig.user_id == instance.created_by,
@@ -163,7 +168,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
             not_deleted(UserLlmConfig),
         )
     )
-    configs = configs_result.scalars().all()
+    configs = list(configs_result.scalars().all())
 
     if not configs:
         logger.info("实例 %s 无 LLM 配置，跳过写入", instance.name)
@@ -176,42 +181,21 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
     providers = _build_providers_config(configs, proxy_token)
 
-    k8s = await _get_k8s_client(instance, db)
-    if k8s is None:
-        logger.error("实例 %s 的集群不可用", instance.name)
-        return
+    async with nfs_mount(instance, db) as mount_path:
+        existing_json = _read_config_file(mount_path)
+        if "models" not in existing_json:
+            existing_json["models"] = {}
+        existing_json["models"]["providers"] = providers
+        _write_config_file(mount_path, existing_json)
 
-    pod_name = await _get_running_pod(k8s, instance)
-    if not pod_name:
-        logger.warning("实例 %s 无运行中 Pod，无法写入配置", instance.name)
-        return
-
-    existing_json = {}
-    try:
-        raw = await k8s.exec_in_pod(
-            instance.namespace, pod_name,
-            ["cat", OPENCLAW_CONFIG_PATH],
-        )
-        if raw:
-            existing_json = json.loads(raw)
-    except Exception:
-        logger.info("读取已有 openclaw.json 失败（可能不存在），将创建新文件")
-
-    if "models" not in existing_json:
-        existing_json["models"] = {}
-    existing_json["models"]["providers"] = providers
-
-    config_str = json.dumps(existing_json, indent=2, ensure_ascii=False)
-    escaped = config_str.replace("'", "'\\''")
-    await k8s.exec_in_pod(
-        instance.namespace, pod_name,
-        ["sh", "-c", f"mkdir -p /root/.openclaw && echo '{escaped}' > {OPENCLAW_CONFIG_PATH}"],
+    logger.info(
+        "已写入 openclaw.json LLM 配置 (NFS): instance=%s providers=%s",
+        instance.name, list(providers.keys()),
     )
-    logger.info("已写入 openclaw.json LLM 配置: instance=%s providers=%s", instance.name, list(providers.keys()))
 
 
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
-    """Update openclaw.json and gracefully restart OpenClaw (SIGTERM PID 1)."""
+    """Update openclaw.json via NFS and gracefully restart OpenClaw (SIGTERM PID 1)."""
     await sync_openclaw_llm_config(instance, db)
 
     k8s = await _get_k8s_client(instance, db)

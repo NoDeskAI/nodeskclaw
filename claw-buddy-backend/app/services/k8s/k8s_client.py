@@ -323,6 +323,14 @@ class K8sClient:
         except Exception:
             return []
 
+    # ── PVC / PV ─────────────────────────────────────
+
+    async def read_pvc(self, ns: str, name: str):
+        return await self.core.read_namespaced_persistent_volume_claim(name, ns)
+
+    async def read_pv(self, name: str):
+        return await self.core.read_persistent_volume(name)
+
     # ── Service / Ingress ────────────────────────────
 
     async def get_service(self, ns: str, name: str):

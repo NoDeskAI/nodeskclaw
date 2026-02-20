@@ -398,7 +398,7 @@ async def restart_openclaw(
     return ApiResponse(data=result_data)
 
 
-@router.get("/instances/{instance_id}/openclaw-providers", response_model=ApiResponse[OpenClawConfigResponse | None])
+@router.get("/instances/{instance_id}/openclaw-providers", response_model=ApiResponse[OpenClawConfigResponse])
 async def get_openclaw_providers(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
