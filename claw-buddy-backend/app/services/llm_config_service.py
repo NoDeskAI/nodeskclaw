@@ -109,35 +109,43 @@ def _read_config_file(mount_path: Path) -> dict:
         return {}
 
 
-async def _write_config_file(mount_path: Path, data: dict) -> None:
-    """Write openclaw.json to NFS mount. Falls back to sudo on PermissionError."""
-    config_path = mount_path / OPENCLAW_CONFIG_REL
-    content = json.dumps(data, indent=2, ensure_ascii=False)
+async def _ensure_nfs_writable(target_dir: Path) -> None:
+    """Ensure target_dir is writable by current user; use non-interactive sudo chmod if needed."""
+    import os
 
-    try:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
+    if target_dir.exists() and os.access(target_dir, os.W_OK):
+        return
+    if not target_dir.exists():
         proc = await asyncio.create_subprocess_exec(
-            "sudo", "mkdir", "-p", str(config_path.parent),
+            "sudo", "-n", "mkdir", "-p", str(target_dir),
             stderr=asyncio.subprocess.PIPE,
         )
         _, err = await proc.communicate()
         if proc.returncode:
-            raise PermissionError(f"sudo mkdir 失败: {err.decode().strip()}")
-
-    try:
-        config_path.write_text(content, encoding="utf-8")
-    except PermissionError:
-        logger.info("普通写入权限不足，使用 sudo tee 写入 %s", config_path)
-        proc = await asyncio.create_subprocess_exec(
-            "sudo", "tee", str(config_path),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
+            raise PermissionError(
+                f"NFS 目录创建失败（权限不足）。请先运行 sudo -v 缓存凭据，或配置 NOPASSWD。"
+                f"\n详情: {err.decode().strip()}"
+            )
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-n", "chmod", "-R", "a+rwX", str(target_dir),
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode:
+        raise PermissionError(
+            f"NFS 目录权限修复失败。请先运行 sudo -v 缓存凭据，或配置 NOPASSWD。"
+            f"\n详情: {err.decode().strip()}"
         )
-        _, err = await proc.communicate(input=content.encode("utf-8"))
-        if proc.returncode:
-            raise PermissionError(f"sudo tee 写入失败: {err.decode().strip()}")
+    logger.info("已修复 NFS 目录写入权限: %s", target_dir)
+
+
+async def _write_config_file(mount_path: Path, data: dict) -> None:
+    """Write openclaw.json to NFS mount."""
+    config_path = mount_path / OPENCLAW_CONFIG_REL
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+
+    await _ensure_nfs_writable(config_path.parent)
+    config_path.write_text(content, encoding="utf-8")
 
 
 async def read_openclaw_providers(
