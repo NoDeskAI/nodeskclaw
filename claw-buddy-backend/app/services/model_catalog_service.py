@@ -26,7 +26,7 @@ PROVIDER_BASE_URLS: dict[str, str] = {
     "gemini": "https://generativelanguage.googleapis.com",
     "openrouter": "https://openrouter.ai/api",
     "minimax-openai": "https://api.minimaxi.com",
-    "minimax-anthropic": "https://api.minimaxi.com",
+    "minimax-anthropic": "https://api.minimaxi.com/anthropic",
 }
 
 PROVIDER_API_TYPE: dict[str, str] = {
@@ -161,21 +161,18 @@ async def _fetch_openrouter(api_key: str) -> list[ModelInfo]:
     return models
 
 
-async def _fetch_minimax(api_key: str) -> list[ModelInfo]:
-    """Minimax 国内 API (api.minimaxi.com) OpenAI 兼容的 /v1/models。"""
-    async with _make_client(timeout=15) as client:
-        resp = await client.get(
-            "https://api.minimaxi.com/v1/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        resp.raise_for_status()
-        data = resp.json().get("data", [])
-    models = []
-    for m in data:
-        mid = m.get("id", "")
-        models.append(ModelInfo(id=mid, name=mid))
-    models.sort(key=lambda x: x.id)
-    return models
+_MINIMAX_TEXT_MODELS: list[ModelInfo] = [
+    ModelInfo(id="MiniMax-M2.5", name="MiniMax-M2.5", context_window=204800),
+    ModelInfo(id="MiniMax-M2.5-highspeed", name="MiniMax-M2.5 Highspeed", context_window=204800),
+    ModelInfo(id="MiniMax-M2.1", name="MiniMax-M2.1", context_window=204800),
+    ModelInfo(id="MiniMax-M2.1-highspeed", name="MiniMax-M2.1 Highspeed", context_window=204800),
+    ModelInfo(id="MiniMax-M2", name="MiniMax-M2", context_window=204800),
+]
+
+
+async def _fetch_minimax(_api_key: str) -> list[ModelInfo]:
+    """Minimax 没有模型列表 API，返回官方已知的文本模型。"""
+    return list(_MINIMAX_TEXT_MODELS)
 
 
 _FETCHERS: dict[str, object] = {

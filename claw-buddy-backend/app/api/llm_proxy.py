@@ -39,11 +39,11 @@ PROVIDER_DEFAULTS: dict[str, dict] = {
         "auth_type": "bearer",
     },
     "minimax-openai": {
-        "base_url": "https://api.minimax.chat",
+        "base_url": "https://api.minimaxi.com",
         "auth_type": "bearer",
     },
     "minimax-anthropic": {
-        "base_url": "https://api.minimax.chat",
+        "base_url": "https://api.minimaxi.com/anthropic",
         "auth_type": "bearer",
     },
 }
