@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2 } from 'lucide-vue-next'
 import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -44,12 +44,14 @@ interface LlmConfigEntry {
   personalKey: string
 }
 
-const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter'] as const
+const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter', 'minimax-openai', 'minimax-anthropic'] as const
 const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
+  'minimax-openai': 'Minimax-OpenAI',
+  'minimax-anthropic': 'Minimax-Anthropic',
 }
 
 const availableOrgKeys = ref<AvailableKey[]>([])
@@ -515,7 +517,9 @@ async function handleDeploy() {
             <div v-for="(cfg, idx) in llmConfigs" :key="cfg.provider" class="rounded-lg border border-border bg-card p-4 space-y-3">
               <div class="flex items-center justify-between">
                 <span class="font-medium text-sm">{{ PROVIDER_LABELS[cfg.provider] || cfg.provider }}</span>
-                <button class="text-xs text-muted-foreground hover:text-destructive transition-colors" @click="removeProvider(idx)">移除</button>
+                <button class="text-muted-foreground hover:text-destructive transition-colors" @click="removeProvider(idx)">
+                  <Trash2 class="w-4 h-4" />
+                </button>
               </div>
 
               <div class="space-y-2">
