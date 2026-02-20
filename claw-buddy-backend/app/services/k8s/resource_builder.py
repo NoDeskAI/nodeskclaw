@@ -10,10 +10,12 @@ from kubernetes_asyncio.client import (
     V1ContainerPort,
     V1Deployment,
     V1DeploymentSpec,
+    V1DeploymentStrategy,
     V1EmptyDirVolumeSource,
     V1EnvVar,
     V1EnvVarSource,
     V1ConfigMapKeySelector,
+    V1HTTPGetAction,
     V1HTTPIngressPath,
     V1HTTPIngressRuleValue,
     V1Ingress,
@@ -30,6 +32,7 @@ from kubernetes_asyncio.client import (
     V1PersistentVolumeClaimSpec,
     V1PodSpec,
     V1PodTemplateSpec,
+    V1Probe,
     V1ResourceQuota,
     V1ResourceQuotaSpec,
     V1ResourceRequirements,
@@ -311,6 +314,8 @@ def build_deployment(
                 )
             )
 
+    http_get = V1HTTPGetAction(path="/", port=port)
+
     container = V1Container(
         name=name,
         image=image,
@@ -321,6 +326,26 @@ def build_deployment(
             limits={"cpu": cpu_limit, "memory": mem_limit},
         ),
         volume_mounts=volume_mounts or None,
+        startup_probe=V1Probe(
+            http_get=http_get,
+            initial_delay_seconds=5,
+            period_seconds=3,
+            failure_threshold=20,
+            timeout_seconds=2,
+        ),
+        readiness_probe=V1Probe(
+            http_get=http_get,
+            period_seconds=5,
+            failure_threshold=3,
+            success_threshold=1,
+            timeout_seconds=2,
+        ),
+        liveness_probe=V1Probe(
+            http_get=http_get,
+            period_seconds=15,
+            failure_threshold=3,
+            timeout_seconds=3,
+        ),
     )
 
     # ── Advanced config: sidecar containers ──
@@ -361,6 +386,7 @@ def build_deployment(
         metadata=V1ObjectMeta(name=name, namespace=namespace, labels=labels),
         spec=V1DeploymentSpec(
             replicas=replicas,
+            strategy=V1DeploymentStrategy(type="Recreate"),
             selector=V1LabelSelector(match_labels={"app.kubernetes.io/name": labels["app.kubernetes.io/name"]}),
             template=V1PodTemplateSpec(
                 metadata=V1ObjectMeta(labels=pod_labels, annotations=pod_annotations),
