@@ -119,6 +119,18 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
                 }
                 for p in pods
             ]
+
+            if instance.status == InstanceStatus.restarting:
+                has_ready = any(
+                    all(c.get("ready", False) for c in p.get("containers", []))
+                    and len(p.get("containers", [])) > 0
+                    for p in pods
+                )
+                if has_ready:
+                    instance.status = InstanceStatus.running
+                    await db.commit()
+                    detail.status = InstanceStatus.running
+                    logger.info("实例 %s 重启完成，状态恢复为 running", instance_id)
         except Exception as e:
             logger.warning("Failed to fetch pods for instance %s: %s", instance_id, e)
 
@@ -185,9 +197,20 @@ async def restart_instance(instance_id: str, db: AsyncSession):
     if not cluster:
         raise NotFoundError("集群不存在")
 
+    instance.status = InstanceStatus.restarting
+    await db.commit()
+
     api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
     k8s = K8sClient(api_client)
-    await k8s.restart_deployment(instance.namespace, _k8s_name(instance))
+    name = _k8s_name(instance)
+    desired = instance.replicas or 1
+
+    # scale 0 -> scale N: 先释放 ResourceQuota 再创建新 Pod，
+    # 避免 annotation patch 在配额紧约束下的滚动重启死锁
+    await k8s.scale_deployment(instance.namespace, name, 0)
+    await k8s.scale_deployment(instance.namespace, name, desired)
+
+    logger.info("实例 %s (%s) 已触发重启 (scale 0->%d)", instance.name, instance_id, desired)
 
 
 async def get_deploy_history(instance_id: str, db: AsyncSession) -> list[DeployRecordInfo]:

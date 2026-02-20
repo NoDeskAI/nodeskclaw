@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, inject, type Ref, type ComputedRef } from 'vue'
+import { ref, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw } from 'lucide-vue-next'
+import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 
@@ -35,6 +35,10 @@ const pageError = ref('')
 const openclawUrl = ref('')
 const urlCopied = ref(false)
 const restarting = ref(false)
+const showRestartDialog = ref(false)
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollTimeout: ReturnType<typeof setTimeout> | null = null
 
 function formatCpu(val: string): string {
   if (val.endsWith('m')) {
@@ -54,6 +58,14 @@ async function copyUrl() {
 
 onMounted(async () => {
   await fetchDetail()
+  if (instance.value?.status === 'restarting') {
+    restarting.value = true
+    startPolling()
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 async function fetchDetail() {
@@ -75,20 +87,50 @@ async function fetchDetail() {
   }
 }
 
+async function pollOnce() {
+  try {
+    const res = await api.get(`/instances/${instanceId.value}`)
+    instance.value = res.data.data
+    await refreshInstanceBasic()
+
+    if (instance.value && instance.value.status !== 'restarting') {
+      stopPolling()
+      restarting.value = false
+      toast.success('重启完成，实例已恢复运行')
+    }
+  } catch {
+    // 轮询期间忽略网络错误
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(pollOnce, 3000)
+  pollTimeout = setTimeout(() => {
+    stopPolling()
+    restarting.value = false
+    toast.error('重启超时，请手动刷新查看状态')
+  }, 120_000)
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null }
+}
+
 async function handleRestart() {
-  if (!confirm('确定重启实例？将重启该实例中的所有程序，期间服务会短暂不可用。')) return
+  showRestartDialog.value = false
   restarting.value = true
   try {
     const res = await api.post(`/instances/${instanceId.value}/restart`)
     toast.success(res.data?.message || '已触发重启，实例将在数秒后恢复')
     await refreshInstanceBasic()
-    await fetchDetail()
+    startPolling()
   } catch (e: any) {
+    restarting.value = false
     const msg = e?.response?.data?.message || e?.message || '重启失败'
     toast.error(msg)
     console.error('[handleRestart]', e)
-  } finally {
-    restarting.value = false
   }
 }
 
@@ -119,7 +161,7 @@ async function handleDelete() {
           <div>
             <p class="text-sm font-medium">OpenClaw 访问地址</p>
             <p class="text-xs text-muted-foreground mt-0.5">
-              {{ restarting ? '实例正在重启...' : '点击即可打开 AI 助手' }}
+              {{ restarting ? '实例正在重启，请稍候...' : '点击即可打开 AI 助手' }}
             </p>
           </div>
           <button
@@ -202,6 +244,12 @@ async function handleDelete() {
           </div>
         </div>
       </div>
+      <div v-else-if="restarting" class="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
+        <div class="flex items-center gap-2 text-sm text-amber-400">
+          <Loader2 class="w-4 h-4 animate-spin" />
+          实例正在重启，等待新 Pod 启动...
+        </div>
+      </div>
 
       <!-- 操作 -->
       <div class="flex items-center gap-3 pt-4 border-t border-border">
@@ -215,7 +263,7 @@ async function handleDelete() {
         <button
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="restarting"
-          @click="handleRestart"
+          @click="showRestartDialog = true"
         >
           <RotateCcw class="w-4 h-4" :class="restarting ? 'animate-spin' : ''" />
           {{ restarting ? '重启中...' : '重启实例' }}
@@ -229,5 +277,55 @@ async function handleDelete() {
         </button>
       </div>
     </div>
+
+    <!-- 重启确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRestartDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRestartDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-amber-500/10">
+                <AlertTriangle class="w-5 h-5 text-amber-400" />
+              </div>
+              <h3 class="text-base font-semibold">重启实例</h3>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-2">
+              <p>即将重启实例，这将会：</p>
+              <ul class="list-disc list-inside space-y-1 text-xs">
+                <li>关闭实例中所有运行的程序</li>
+                <li>重启期间服务将短暂不可用</li>
+                <li>正在进行的对话和任务会被中断</li>
+              </ul>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRestartDialog = false"
+              >
+                取消
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
+                @click="handleRestart"
+              >
+                确认重启
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

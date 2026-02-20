@@ -131,11 +131,12 @@ async def scale_instance(
 async def restart_instance(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """重启实例。"""
+    """重启实例（scale 0 -> scale N）。"""
+    logger.info("用户 %s (%s) 请求重启实例 %s", current_user.name, current_user.id, instance_id)
     await instance_service.restart_instance(instance_id, db)
-    return ApiResponse(message="已触发滚动重启")
+    return ApiResponse(message="已触发重启，实例将在数秒后恢复")
 
 
 @router.get("/{instance_id}/history", response_model=ApiResponse[list[DeployRecordInfo]])
