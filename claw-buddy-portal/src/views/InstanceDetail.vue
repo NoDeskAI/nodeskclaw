@@ -3,10 +3,13 @@ import { ref, onMounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw } from 'lucide-vue-next'
 import api from '@/services/api'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const toast = useToast()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
 const instanceBasic = inject<Ref<{ name: string } | null>>('instanceBasic')!
+const refreshInstanceBasic = inject<() => Promise<void>>('refreshInstanceBasic')!
 
 interface InstanceDetail {
   id: string
@@ -28,11 +31,10 @@ interface InstanceDetail {
 
 const instance = ref<InstanceDetail | null>(null)
 const loading = ref(true)
-const error = ref('')
+const pageError = ref('')
 const openclawUrl = ref('')
 const urlCopied = ref(false)
 const restarting = ref(false)
-const successMsg = ref('')
 
 function formatCpu(val: string): string {
   if (val.endsWith('m')) {
@@ -67,7 +69,7 @@ async function fetchDetail() {
       }
     }
   } catch (e: any) {
-    error.value = e?.response?.data?.message || '加载失败'
+    pageError.value = e?.response?.data?.message || '加载失败'
   } finally {
     loading.value = false
   }
@@ -76,14 +78,15 @@ async function fetchDetail() {
 async function handleRestart() {
   if (!confirm('确定重启实例？将重启该实例中的所有程序，期间服务会短暂不可用。')) return
   restarting.value = true
-  successMsg.value = ''
   try {
-    await api.post(`/instances/${instanceId.value}/restart`)
-    successMsg.value = '已触发重启，实例将在数秒后恢复'
-    setTimeout(() => { successMsg.value = '' }, 5000)
+    const res = await api.post(`/instances/${instanceId.value}/restart`)
+    toast.success(res.data?.message || '已触发重启，实例将在数秒后恢复')
+    await refreshInstanceBasic()
     await fetchDetail()
   } catch (e: any) {
-    error.value = e?.response?.data?.message || '重启失败'
+    const msg = e?.response?.data?.message || e?.message || '重启失败'
+    toast.error(msg)
+    console.error('[handleRestart]', e)
   } finally {
     restarting.value = false
   }
@@ -93,9 +96,10 @@ async function handleDelete() {
   if (!confirm(`确定删除实例「${instanceBasic.value?.name}」？此操作不可恢复。`)) return
   try {
     await api.delete(`/instances/${instanceId.value}`)
+    toast.success('实例已删除')
     router.push('/instances')
   } catch (e: any) {
-    error.value = e?.response?.data?.message || '删除失败'
+    toast.error(e?.response?.data?.message || '删除失败')
   }
 }
 </script>
@@ -106,7 +110,7 @@ async function handleDelete() {
       <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
     </div>
 
-    <div v-else-if="error" class="text-center py-20 text-destructive">{{ error }}</div>
+    <div v-else-if="pageError" class="text-center py-20 text-destructive">{{ pageError }}</div>
 
     <div v-else-if="instance" class="space-y-6">
       <!-- OpenClaw 访问 -->
@@ -114,9 +118,20 @@ async function handleDelete() {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-medium">OpenClaw 访问地址</p>
-            <p class="text-xs text-muted-foreground mt-0.5">点击即可打开 AI 助手</p>
+            <p class="text-xs text-muted-foreground mt-0.5">
+              {{ restarting ? '实例正在重启...' : '点击即可打开 AI 助手' }}
+            </p>
           </div>
+          <button
+            v-if="restarting"
+            disabled
+            class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium cursor-not-allowed"
+          >
+            <Loader2 class="w-4 h-4 animate-spin" />
+            重启中
+          </button>
           <a
+            v-else
             :href="openclawUrl"
             target="_blank"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -129,7 +144,8 @@ async function handleDelete() {
           <a
             :href="openclawUrl"
             target="_blank"
-            class="flex-1 text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors"
+            class="flex-1 text-xs font-mono truncate transition-colors"
+            :class="restarting ? 'text-muted-foreground pointer-events-none' : 'text-primary/80 hover:text-primary'"
           >{{ openclawUrl }}</a>
           <button
             class="shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -187,11 +203,6 @@ async function handleDelete() {
         </div>
       </div>
 
-      <!-- 提示 -->
-      <div v-if="successMsg" class="px-4 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
-        {{ successMsg }}
-      </div>
-
       <!-- 操作 -->
       <div class="flex items-center gap-3 pt-4 border-t border-border">
         <button
@@ -202,7 +213,7 @@ async function handleDelete() {
           刷新
         </button>
         <button
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="restarting"
           @click="handleRestart"
         >

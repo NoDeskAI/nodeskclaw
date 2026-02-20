@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server } from 'lucide-vue-next'
+import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +25,8 @@ function handleLogout() {
 </script>
 
 <template>
+  <ToastContainer />
+
   <template v-if="isLoginPage">
     <router-view />
   </template>
