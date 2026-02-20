@@ -55,7 +55,6 @@ const PROVIDER_LABELS: Record<string, string> = {
 const availableOrgKeys = ref<AvailableKey[]>([])
 const llmConfigs = ref<LlmConfigEntry[]>([])
 const llmSkipped = ref(false)
-const addingProvider = ref(false)
 const newProvider = ref('')
 
 const unusedProviders = computed(() =>
@@ -76,7 +75,6 @@ function addProvider() {
     personalKey: '',
   })
   newProvider.value = ''
-  addingProvider.value = false
 }
 
 function removeProvider(idx: number) {
@@ -555,33 +553,21 @@ async function handleDeploy() {
               </div>
             </div>
 
-            <!-- 添加 Provider（最多一个） -->
-            <div v-if="llmConfigs.length === 0 && unusedProviders.length > 0">
-              <div v-if="addingProvider" class="flex items-center gap-2">
-                <select
-                  v-model="newProvider"
-                  class="flex-1 px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                >
-                  <option value="" disabled>选择 Provider</option>
-                  <option v-for="p in unusedProviders" :key="p" :value="p">{{ PROVIDER_LABELS[p] || p }}</option>
-                </select>
-                <button
-                  :disabled="!newProvider"
-                  class="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
-                  @click="addProvider"
-                >
-                  添加
-                </button>
-                <button class="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground" @click="addingProvider = false; newProvider = ''">
-                  取消
-                </button>
-              </div>
-              <button
-                v-else
-                class="text-sm text-primary hover:text-primary/80 transition-colors"
-                @click="addingProvider = true"
+            <!-- 选择 Provider -->
+            <div v-if="llmConfigs.length === 0 && unusedProviders.length > 0" class="flex items-center gap-2">
+              <select
+                v-model="newProvider"
+                class="flex-1 px-3 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
-                + 添加大模型 Provider
+                <option value="" disabled>选择大模型 Provider</option>
+                <option v-for="p in unusedProviders" :key="p" :value="p">{{ PROVIDER_LABELS[p] || p }}</option>
+              </select>
+              <button
+                :disabled="!newProvider"
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm disabled:opacity-50 transition-colors"
+                @click="addProvider"
+              >
+                确认
               </button>
             </div>
           </template>
@@ -606,7 +592,7 @@ async function handleDeploy() {
           </button>
           <button
             v-if="!llmSkipped && llmConfigs.length === 0"
-            class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center"
+            class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center cursor-pointer"
             @click="llmSkipped = true"
           >
             跳过，稍后配置大模型
