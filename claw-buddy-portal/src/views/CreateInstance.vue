@@ -554,21 +554,18 @@ async function handleDeploy() {
             </div>
 
             <!-- 选择 Provider -->
-            <div v-if="llmConfigs.length === 0 && unusedProviders.length > 0" class="flex items-center gap-2">
-              <select
-                v-model="newProvider"
-                class="flex-1 px-3 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-              >
-                <option value="" disabled>选择大模型 Provider</option>
-                <option v-for="p in unusedProviders" :key="p" :value="p">{{ PROVIDER_LABELS[p] || p }}</option>
-              </select>
-              <button
-                :disabled="!newProvider"
-                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm disabled:opacity-50 transition-colors"
-                @click="addProvider"
-              >
-                确认
-              </button>
+            <div v-if="llmConfigs.length === 0 && unusedProviders.length > 0" class="space-y-2">
+              <p class="text-xs text-muted-foreground">选择你使用的大模型服务商</p>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="p in unusedProviders"
+                  :key="p"
+                  class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
+                  @click="newProvider = p; addProvider()"
+                >
+                  {{ PROVIDER_LABELS[p] || p }}
+                </button>
+              </div>
             </div>
           </template>
 
