@@ -255,35 +255,52 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
 
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
-    """Update openclaw.json via NFS and gracefully restart OpenClaw (SIGTERM PID 1)."""
+    """Update openclaw.json via NFS and restart OpenClaw.
+
+    Strategy: try graceful SIGTERM first; if exec fails (pod crashed / not ready),
+    fall back to Deployment rolling restart.
+    """
     await sync_openclaw_llm_config(instance, db)
 
     k8s = await _get_k8s_client(instance, db)
     if k8s is None:
         return {"status": "error", "message": "集群不可用"}
 
-    pod_name = await _get_running_pod(k8s, instance)
-    if not pod_name:
-        return {"status": "error", "message": "无运行中的 Pod"}
+    deploy_name = _k8s_name(instance)
+    restarted_via = "sigterm"
 
-    await k8s.exec_in_pod(
-        instance.namespace, pod_name,
-        ["kill", "-SIGTERM", "1"],
-    )
-    logger.info("已发送 SIGTERM 到实例 %s 的 PID 1", instance.name)
+    pod_name = await _get_running_pod(k8s, instance)
+    if pod_name:
+        try:
+            await k8s.exec_in_pod(
+                instance.namespace, pod_name,
+                ["kill", "-SIGTERM", "1"],
+            )
+            logger.info("已发送 SIGTERM 到实例 %s 的 PID 1", instance.name)
+        except Exception as e:
+            logger.warning(
+                "exec kill 失败 (pod=%s)，降级为 Deployment 滚动重启: %s",
+                pod_name, e,
+            )
+            await k8s.restart_deployment(instance.namespace, deploy_name)
+            restarted_via = "rollout"
+    else:
+        logger.info("无运行中的 Pod，触发 Deployment 滚动重启: %s", deploy_name)
+        await k8s.restart_deployment(instance.namespace, deploy_name)
+        restarted_via = "rollout"
 
     for _ in range(30):
         await asyncio.sleep(2)
         pods = await k8s.list_pods(
             instance.namespace,
-            f"app.kubernetes.io/name={_k8s_name(instance)}",
+            f"app.kubernetes.io/name={deploy_name}",
         )
         running = [p for p in pods if p["phase"] == "Running"]
         if running:
             for p in running:
                 ready = all(c.get("ready", False) for c in p.get("containers", []))
                 if ready:
-                    logger.info("实例 %s OpenClaw 重启完成", instance.name)
+                    logger.info("实例 %s OpenClaw 重启完成 (via %s)", instance.name, restarted_via)
                     return {"status": "ok", "message": "重启完成"}
 
     return {"status": "timeout", "message": "重启超时（60s），请检查实例状态"}
