@@ -160,6 +160,32 @@ def _ensure_gateway_config(config: dict, instance: Instance) -> None:
     gw.setdefault("controlUi", {})["allowInsecureAuth"] = True
 
 
+def _set_default_agent_model(config: dict, providers: dict) -> None:
+    """Set agents.defaults.model.primary from the first configured provider/model.
+
+    OpenClaw uses this field to decide which model handles conversations.
+    Format: "provider/model-id" (e.g. "minimax-openai/MiniMax-M2.5").
+    """
+    if not providers:
+        return
+
+    for provider_name, provider_cfg in providers.items():
+        models = provider_cfg.get("models", [])
+        if models:
+            model_id = models[0].get("id", "")
+            if model_id:
+                primary = f"{provider_name}/{model_id}"
+                agents = config.setdefault("agents", {})
+                defaults = agents.setdefault("defaults", {})
+                defaults["model"] = {"primary": primary}
+                return
+
+    first_provider = next(iter(providers))
+    agents = config.setdefault("agents", {})
+    defaults = agents.setdefault("defaults", {})
+    defaults["model"] = {"primary": first_provider}
+
+
 def _read_config_file(mount_path: Path) -> dict | None:
     """Read openclaw.json from NFS mount.
 
@@ -323,6 +349,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         existing_json["models"]["providers"] = providers
 
         _ensure_gateway_config(existing_json, instance)
+        _set_default_agent_model(existing_json, providers)
         _write_config_file(mount_path, existing_json)
 
     logger.info(
