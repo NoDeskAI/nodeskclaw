@@ -32,6 +32,26 @@ PROVIDER_BASE_URLS: dict[str, str] = {
     "minimax-anthropic": "https://api.minimax.chat/v1",
 }
 
+BUILTIN_PROVIDERS = {"openai", "anthropic", "gemini", "openrouter"}
+
+_MINIMAX_MODELS = [
+    {"id": "MiniMax-M2.5", "name": "MiniMax M2.5", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
+    {"id": "MiniMax-M2.5-highspeed", "name": "MiniMax M2.5 Highspeed", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
+    {"id": "MiniMax-M2.1", "name": "MiniMax M2.1", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
+    {"id": "MiniMax-M2", "name": "MiniMax M2", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
+]
+
+CUSTOM_PROVIDER_EXTRA: dict[str, dict] = {
+    "minimax-openai": {
+        "api": "openai-completions",
+        "models": _MINIMAX_MODELS,
+    },
+    "minimax-anthropic": {
+        "api": "anthropic-messages",
+        "models": _MINIMAX_MODELS,
+    },
+}
+
 
 def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
@@ -56,7 +76,7 @@ def _build_providers_config(
             if not uk:
                 logger.warning("个人 Key 缺失，跳过 provider=%s", provider)
                 continue
-            providers[provider] = {
+            entry: dict = {
                 "baseUrl": uk.base_url or PROVIDER_BASE_URLS.get(provider, ""),
                 "apiKey": uk.api_key,
             }
@@ -65,10 +85,16 @@ def _build_providers_config(
                 base_url = f"{host}/llm-proxy/{provider}/v1"
             else:
                 base_url = f"http://localhost:8000/llm-proxy/{provider}/v1"
-            providers[provider] = {
+            entry = {
                 "baseUrl": base_url,
                 "apiKey": proxy_token,
             }
+
+        extra = CUSTOM_PROVIDER_EXTRA.get(provider)
+        if extra:
+            entry.update(extra)
+
+        providers[provider] = entry
     return providers
 
 
