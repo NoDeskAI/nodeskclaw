@@ -9,6 +9,7 @@ class InstanceInfo(BaseModel):
     id: str
     name: str
     slug: str = ""
+    org_id: str | None = None
     cluster_id: str
     namespace: str
     image_version: str

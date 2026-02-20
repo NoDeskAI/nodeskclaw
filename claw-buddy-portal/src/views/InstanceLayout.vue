@@ -12,6 +12,7 @@ interface InstanceBasic {
   id: string
   name: string
   status: string
+  org_id: string | null
 }
 
 const instance = ref<InstanceBasic | null>(null)
@@ -43,7 +44,10 @@ async function fetchBasic() {
   }
 }
 
+const instanceOrgId = computed(() => instance.value?.org_id ?? null)
+
 provide('instanceId', instanceId)
+provide('instanceOrgId', instanceOrgId)
 provide('instanceBasic', instance)
 provide('refreshInstanceBasic', fetchBasic)
 
