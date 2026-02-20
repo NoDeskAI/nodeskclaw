@@ -2,6 +2,8 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2 } from 'lucide-vue-next'
+import ModelSelect from '@/components/shared/ModelSelect.vue'
+import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -36,6 +38,7 @@ interface LlmConfigEntry {
   provider: string
   keySource: 'org' | 'personal'
   personalKey: string
+  selectedModels: ModelItem[]
 }
 
 const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter', 'minimax-openai', 'minimax-anthropic'] as const
@@ -62,8 +65,27 @@ function addProvider() {
     provider: newProvider.value,
     keySource: 'org',
     personalKey: '',
+    selectedModels: [],
   })
   newProvider.value = ''
+}
+
+const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
+
+async function handleFetchModels(provider: string, callback: (models: ModelItem[]) => void) {
+  const cfg = llmConfigs.value.find(c => c.provider === provider)
+  const params: Record<string, string> = {}
+  if (cfg?.keySource === 'personal' && cfg.personalKey) {
+    params.api_key = cfg.personalKey
+  } else if (authStore.user?.org_id) {
+    params.org_id = authStore.user.org_id
+  }
+  try {
+    const res = await api.get(`/llm/providers/${provider}/models`, { params })
+    callback(res.data.data?.models ?? [])
+  } catch {
+    callback([])
+  }
 }
 
 function removeProvider(idx: number) {
@@ -227,6 +249,7 @@ async function handleDeploy() {
     const activeLlm = llmConfigs.value.map(c => ({
       provider: c.provider,
       key_source: c.keySource,
+      selected_models: c.selectedModels.length > 0 ? c.selectedModels : undefined,
     }))
 
     const res = await api.post('/deploy', {
@@ -536,6 +559,16 @@ async function handleDeploy() {
                   />
                 </div>
               </div>
+
+              <!-- Model selection -->
+              <ModelSelect
+                :provider="cfg.provider"
+                v-model="cfg.selectedModels"
+                @fetch-models="handleFetchModels"
+              />
+              <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && cfg.selectedModels.length === 0" class="text-[10px] text-amber-500">
+                自定义 Provider 需要选择至少一个模型
+              </p>
             </div>
 
             <!-- 选择 Provider -->

@@ -25,6 +25,7 @@ from app.schemas.llm import (
     OrgLlmKeyCreate,
     OrgLlmKeyInfo,
     OrgLlmKeyUpdate,
+    ProviderModelsResponse,
     UserLlmConfigInfo,
     UserLlmConfigUpdate,
     UserLlmKeyCreate,
@@ -280,6 +281,47 @@ async def delete_user_llm_key(
 
 
 # ══════════════════════════════════════════════════════════
+# Provider Model Catalog
+# ══════════════════════════════════════════════════════════
+
+@router.get("/llm/providers/{provider}/models", response_model=ApiResponse[ProviderModelsResponse])
+async def list_provider_models(
+    provider: str,
+    api_key: str | None = Query(None),
+    org_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch available models from a provider's API.
+
+    - If api_key is provided, use it directly (personal key scenario).
+    - Otherwise, look up an active org key for the given (org_id, provider).
+    """
+    resolved_key = api_key
+    if not resolved_key:
+        if not org_id:
+            return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
+                               message="需要 api_key 或 org_id 参数")
+        result = await db.execute(
+            select(OrgLlmKey).where(
+                OrgLlmKey.org_id == org_id,
+                OrgLlmKey.provider == provider,
+                OrgLlmKey.is_active.is_(True),
+                not_deleted(OrgLlmKey),
+            ).limit(1)
+        )
+        org_key = result.scalar_one_or_none()
+        if not org_key:
+            return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
+                               message=f"组织下无可用的 {provider} Key")
+        resolved_key = org_key.api_key
+
+    from app.services.model_catalog_service import fetch_provider_models
+    models = await fetch_provider_models(provider, resolved_key)
+    return ApiResponse(data=ProviderModelsResponse(provider=provider, models=models))
+
+
+# ══════════════════════════════════════════════════════════
 # User LLM Configs (Portal - key source selection)
 # ══════════════════════════════════════════════════════════
 
@@ -299,7 +341,11 @@ async def get_user_llm_configs(
     configs = result.scalars().all()
 
     return ApiResponse(data=[
-        UserLlmConfigInfo(provider=c.provider, key_source=c.key_source)
+        UserLlmConfigInfo(
+            provider=c.provider,
+            key_source=c.key_source,
+            selected_models=c.selected_models,
+        )
         for c in configs
     ])
 
@@ -328,12 +374,14 @@ async def update_user_llm_configs(
         if existing:
             existing.key_source = item.key_source
             existing.org_llm_key_id = None
+            existing.selected_models = item.selected_models
         else:
             db.add(UserLlmConfig(
                 user_id=current_user.id,
                 org_id=body.org_id,
                 provider=item.provider,
                 key_source=item.key_source,
+                selected_models=item.selected_models,
             ))
 
     for provider in old_providers - new_providers:

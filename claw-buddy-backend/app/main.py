@@ -334,6 +334,21 @@ async def lifespan(app: FastAPI):
                 pass
         logger.info("自动迁移：已回填 instances.proxy_token")
 
+        # ── 迁移 12: user_llm_configs 新增 selected_models 列 ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'user_llm_configs' AND column_name = 'selected_models'"
+        ))
+        if col.first() is None:
+            tbl_exists = await conn.execute(text(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = 'user_llm_configs'"
+            ))
+            if tbl_exists.first() is not None:
+                await conn.execute(text(
+                    "ALTER TABLE user_llm_configs ADD COLUMN selected_models JSONB"
+                ))
+                logger.info("自动迁移：已为 user_llm_configs 表添加 selected_models 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

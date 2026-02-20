@@ -1,6 +1,7 @@
 """User LLM Config model -- per (user, org, provider) key source selection."""
 
 from sqlalchemy import ForeignKey, Index, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import BaseModel
@@ -28,3 +29,4 @@ class UserLlmConfig(BaseModel):
     org_llm_key_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("org_llm_keys.id"), nullable=True
     )
+    selected_models: Mapped[list | None] = mapped_column(JSONB, nullable=True)

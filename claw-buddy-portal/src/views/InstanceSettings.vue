@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, type ComputedRef, type Ref } from 'vue'
 import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, HardDrive, Save, ChevronDown, Check } from 'lucide-vue-next'
+import ModelSelect from '@/components/shared/ModelSelect.vue'
+import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import api from '@/services/api'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -43,7 +45,10 @@ interface ProviderConfig {
   personalKeyNew: string
   personalKeyMasked: string
   hasExistingPersonalKey: boolean
+  selectedModels: ModelItem[]
 }
+
+const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
 
 // ── State ──
 
@@ -115,6 +120,7 @@ async function loadAll() {
         personalKeyNew: '',
         personalKeyMasked: pk?.api_key_masked ?? '',
         hasExistingPersonalKey: !!pk,
+        selectedModels: (c as any).selected_models ?? [],
       })
     }
 
@@ -129,6 +135,7 @@ async function loadAll() {
           personalKeyNew: '',
           personalKeyMasked: pk?.api_key_masked ?? np.api_key_masked ?? '',
           hasExistingPersonalKey: !!pk,
+          selectedModels: [],
         })
       }
     }
@@ -153,9 +160,26 @@ function addProvider(provider: string) {
     personalKeyNew: '',
     personalKeyMasked: pk?.api_key_masked ?? '',
     hasExistingPersonalKey: !!pk,
+    selectedModels: [],
   })
   newProviderOpen.value = false
   dirty.value = true
+}
+
+async function handleFetchModels(provider: string, callback: (models: ModelItem[]) => void) {
+  const cfg = providerConfigs.value.find(c => c.provider === provider)
+  const params: Record<string, string> = {}
+  if (cfg?.keySource === 'personal' && cfg.personalKeyNew) {
+    params.api_key = cfg.personalKeyNew
+  } else if (instanceOrgId.value) {
+    params.org_id = instanceOrgId.value
+  }
+  try {
+    const res = await api.get(`/llm/providers/${provider}/models`, { params })
+    callback(res.data.data?.models ?? [])
+  } catch {
+    callback([])
+  }
 }
 
 function removeProvider(idx: number) {
@@ -222,6 +246,7 @@ async function handleSave() {
       configs: providerConfigs.value.map(c => ({
         provider: c.provider,
         key_source: c.keySource,
+        selected_models: c.selectedModels.length > 0 ? c.selectedModels : undefined,
       })),
     })
 
@@ -399,6 +424,17 @@ onMounted(loadAll)
                 </div>
               </div>
             </div>
+
+            <!-- Model selection -->
+            <ModelSelect
+              :provider="cfg.provider"
+              v-model="cfg.selectedModels"
+              @fetch-models="handleFetchModels"
+              @update:model-value="markDirty"
+            />
+            <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && cfg.selectedModels.length === 0" class="text-[10px] text-amber-500">
+              自定义 Provider 需要选择至少一个模型
+            </p>
           </div>
 
           <!-- Add provider -->

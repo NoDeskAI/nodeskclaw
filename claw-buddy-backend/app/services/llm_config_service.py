@@ -34,22 +34,9 @@ PROVIDER_BASE_URLS: dict[str, str] = {
 
 BUILTIN_PROVIDERS = {"openai", "anthropic", "gemini", "openrouter"}
 
-_MINIMAX_MODELS = [
-    {"id": "MiniMax-M2.5", "name": "MiniMax M2.5", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
-    {"id": "MiniMax-M2.5-highspeed", "name": "MiniMax M2.5 Highspeed", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
-    {"id": "MiniMax-M2.1", "name": "MiniMax M2.1", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
-    {"id": "MiniMax-M2", "name": "MiniMax M2", "reasoning": True, "input": ["text"], "contextWindow": 204800, "maxTokens": 32000},
-]
-
-CUSTOM_PROVIDER_EXTRA: dict[str, dict] = {
-    "minimax-openai": {
-        "api": "openai-completions",
-        "models": _MINIMAX_MODELS,
-    },
-    "minimax-anthropic": {
-        "api": "anthropic-messages",
-        "models": _MINIMAX_MODELS,
-    },
+PROVIDER_API_TYPE: dict[str, str] = {
+    "minimax-openai": "openai-completions",
+    "minimax-anthropic": "anthropic-messages",
 }
 
 
@@ -90,12 +77,28 @@ def _build_providers_config(
                 "apiKey": proxy_token,
             }
 
-        extra = CUSTOM_PROVIDER_EXTRA.get(provider)
-        if extra:
-            entry.update(extra)
+        api_type = PROVIDER_API_TYPE.get(provider)
+        if api_type:
+            entry["api"] = api_type
+
+        if cfg.selected_models:
+            entry["models"] = _to_openclaw_models(cfg.selected_models)
 
         providers[provider] = entry
     return providers
+
+
+def _to_openclaw_models(selected: list[dict]) -> list[dict]:
+    """Convert stored model metadata to OpenClaw models array format."""
+    result = []
+    for m in selected:
+        item: dict = {"id": m["id"], "name": m.get("name", m["id"])}
+        if m.get("context_window"):
+            item["contextWindow"] = m["context_window"]
+        if m.get("max_tokens"):
+            item["maxTokens"] = m["max_tokens"]
+        result.append(item)
+    return result
 
 
 def _mask_key(key: str) -> str:

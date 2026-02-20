@@ -1,0 +1,176 @@
+"""Fetch available models from LLM provider APIs with in-memory caching."""
+
+import hashlib
+import logging
+import time
+
+import httpx
+
+from app.schemas.llm import ModelInfo
+
+logger = logging.getLogger(__name__)
+
+CACHE_TTL_SECONDS = 600
+
+_cache: dict[str, tuple[float, list[ModelInfo]]] = {}
+
+PROVIDER_BASE_URLS: dict[str, str] = {
+    "openai": "https://api.openai.com",
+    "anthropic": "https://api.anthropic.com",
+    "gemini": "https://generativelanguage.googleapis.com",
+    "openrouter": "https://openrouter.ai/api",
+    "minimax-openai": "https://api.minimax.chat",
+    "minimax-anthropic": "https://api.minimax.chat",
+}
+
+PROVIDER_API_TYPE: dict[str, str] = {
+    "minimax-openai": "openai-completions",
+    "minimax-anthropic": "anthropic-messages",
+}
+
+
+def _cache_key(provider: str, api_key: str) -> str:
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+    return f"{provider}:{key_hash}"
+
+
+def _get_cached(provider: str, api_key: str) -> list[ModelInfo] | None:
+    ck = _cache_key(provider, api_key)
+    entry = _cache.get(ck)
+    if entry and (time.time() - entry[0]) < CACHE_TTL_SECONDS:
+        return entry[1]
+    return None
+
+
+def _set_cache(provider: str, api_key: str, models: list[ModelInfo]) -> None:
+    ck = _cache_key(provider, api_key)
+    _cache[ck] = (time.time(), models)
+
+
+async def fetch_provider_models(provider: str, api_key: str) -> list[ModelInfo]:
+    cached = _get_cached(provider, api_key)
+    if cached is not None:
+        return cached
+
+    fetcher = _FETCHERS.get(provider)
+    if not fetcher:
+        logger.warning("不支持的 provider: %s", provider)
+        return []
+
+    try:
+        models = await fetcher(api_key)
+        _set_cache(provider, api_key, models)
+        logger.info("已拉取 %s 模型列表: %d 个", provider, len(models))
+        return models
+    except Exception as e:
+        logger.error("拉取 %s 模型列表失败: %s", provider, e)
+        return []
+
+
+async def _fetch_openai(api_key: str) -> list[ModelInfo]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("data", [])
+    models = []
+    for m in data:
+        mid: str = m.get("id", "")
+        if not mid.startswith(("gpt-", "o1", "o3", "o4", "chatgpt-")):
+            continue
+        if any(kw in mid for kw in ("instruct", "realtime", "audio", "transcribe")):
+            continue
+        models.append(ModelInfo(id=mid, name=mid))
+    models.sort(key=lambda x: x.id)
+    return models
+
+
+async def _fetch_anthropic(api_key: str) -> list[ModelInfo]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            "https://api.anthropic.com/v1/models",
+            headers={
+                "X-Api-Key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            params={"limit": 100},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("data", [])
+    models = []
+    for m in data:
+        mid = m.get("id", "")
+        name = m.get("display_name") or mid
+        models.append(ModelInfo(id=mid, name=name))
+    models.sort(key=lambda x: x.id)
+    return models
+
+
+async def _fetch_gemini(api_key: str) -> list[ModelInfo]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            params={"key": api_key, "pageSize": 100},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("models", [])
+    models = []
+    for m in data:
+        methods = m.get("supportedGenerationMethods", [])
+        if "generateContent" not in methods:
+            continue
+        raw_name: str = m.get("name", "")
+        mid = raw_name.removeprefix("models/")
+        display = m.get("displayName") or mid
+        ctx = m.get("inputTokenLimit")
+        out = m.get("outputTokenLimit")
+        models.append(ModelInfo(id=mid, name=display, context_window=ctx, max_tokens=out))
+    models.sort(key=lambda x: x.id)
+    return models
+
+
+async def _fetch_openrouter(api_key: str) -> list[ModelInfo]:
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("data", [])
+    models = []
+    for m in data:
+        mid = m.get("id", "")
+        name = m.get("name") or mid
+        ctx = m.get("context_length")
+        models.append(ModelInfo(id=mid, name=name, context_window=ctx))
+    models.sort(key=lambda x: x.name)
+    return models
+
+
+async def _fetch_minimax(api_key: str) -> list[ModelInfo]:
+    """Minimax uses OpenAI-compatible /v1/models."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            "https://api.minimax.chat/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("data", [])
+    models = []
+    for m in data:
+        mid = m.get("id", "")
+        models.append(ModelInfo(id=mid, name=mid))
+    models.sort(key=lambda x: x.id)
+    return models
+
+
+_FETCHERS: dict[str, object] = {
+    "openai": _fetch_openai,
+    "anthropic": _fetch_anthropic,
+    "gemini": _fetch_gemini,
+    "openrouter": _fetch_openrouter,
+    "minimax-openai": _fetch_minimax,
+    "minimax-anthropic": _fetch_minimax,
+}

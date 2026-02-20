@@ -3,6 +3,20 @@
 from pydantic import BaseModel, Field
 
 
+# ── Model Info ───────────────────────────────────────────
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    context_window: int | None = None
+    max_tokens: int | None = None
+
+
+class ProviderModelsResponse(BaseModel):
+    provider: str
+    models: list[ModelInfo]
+
+
 # ── Org LLM Key ──────────────────────────────────────────
 
 class OrgLlmKeyCreate(BaseModel):
@@ -62,6 +76,7 @@ class UserLlmKeyInfo(BaseModel):
 class LlmConfigItem(BaseModel):
     provider: str
     key_source: str = Field(..., pattern=r"^(org|personal)$")
+    selected_models: list[dict] | None = None
 
 
 class UserLlmConfigUpdate(BaseModel):
@@ -72,6 +87,7 @@ class UserLlmConfigUpdate(BaseModel):
 class UserLlmConfigInfo(BaseModel):
     provider: str
     key_source: str
+    selected_models: list[dict] | None = None
 
     model_config = {"from_attributes": True}
 
