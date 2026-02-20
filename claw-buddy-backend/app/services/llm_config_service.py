@@ -49,6 +49,8 @@ PROVIDER_API_TYPE: dict[str, str] = {
     "minimax-anthropic": "anthropic-messages",
 }
 
+TRUSTED_PROXY_CIDRS = ["10.0.0.0/8", "100.64.0.0/10", "192.168.0.0/16"]
+
 
 def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
@@ -134,6 +136,28 @@ async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | N
         return None
     api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
     return K8sClient(api_client)
+
+
+def _ensure_gateway_config(config: dict, instance: Instance) -> None:
+    """Ensure gateway config is correct for reverse-proxy (Ingress) deployments.
+
+    - gateway.auth.token: shared secret for Control UI WebSocket auth
+    - gateway.trustedProxies: Ingress Controller IPs for header forwarding
+    - gateway.controlUi.allowInsecureAuth: bypass device pairing for non-localhost
+    """
+    if "gateway" not in config:
+        config["gateway"] = {}
+    gw = config["gateway"]
+
+    # gateway.token (legacy) -> gateway.auth.token
+    gw.pop("token", None)
+    if instance.proxy_token:
+        gw.setdefault("auth", {})["token"] = instance.proxy_token
+
+    if "trustedProxies" not in gw:
+        gw["trustedProxies"] = list(TRUSTED_PROXY_CIDRS)
+
+    gw.setdefault("controlUi", {})["allowInsecureAuth"] = True
 
 
 def _read_config_file(mount_path: Path) -> dict | None:
@@ -297,12 +321,36 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         if "models" not in existing_json:
             existing_json["models"] = {}
         existing_json["models"]["providers"] = providers
+
+        _ensure_gateway_config(existing_json, instance)
         _write_config_file(mount_path, existing_json)
 
     logger.info(
         "已写入 openclaw.json LLM 配置 (NFS): instance=%s providers=%s",
         instance.name, list(providers.keys()),
     )
+
+
+async def ensure_openclaw_gateway_config(instance: Instance, db: AsyncSession) -> None:
+    """Ensure gateway.token and trustedProxies are in openclaw.json.
+
+    Called after deployment succeeds to fix the case where the entrypoint
+    skips config generation because the file already exists.
+    """
+    try:
+        async with nfs_mount(instance, db) as mount_path:
+            try:
+                existing = _read_config_file(mount_path)
+            except ValueError as e:
+                logger.warning("ensure_gateway_config: 解析失败 %s", e)
+                return
+            if existing is None:
+                existing = {}
+            _ensure_gateway_config(existing, instance)
+            _write_config_file(mount_path, existing)
+        logger.info("已注入 gateway 配置: instance=%s", instance.name)
+    except Exception as e:
+        logger.warning("注入 gateway 配置失败（非致命）: %s", e)
 
 
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:

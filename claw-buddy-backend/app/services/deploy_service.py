@@ -586,6 +586,11 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 instance.status = InstanceStatus.running
                 instance.available_replicas = dep_status.get("available_replicas", 0)
                 await db.commit()
+
+                # 注入 gateway.token + trustedProxies 到 openclaw.json
+                from app.services.llm_config_service import ensure_openclaw_gateway_config
+                await ensure_openclaw_gateway_config(instance, db)
+
                 _publish(total, "完成", status="success", message="部署成功")
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
             else:
