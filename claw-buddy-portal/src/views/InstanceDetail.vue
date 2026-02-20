@@ -21,7 +21,7 @@ interface InstanceDetail {
   cpu_limit: string
   mem_request: string
   mem_limit: string
-  env_vars: string | null
+  env_vars: Record<string, string> | null
   created_at: string
   pods: { name: string; status: string; ready: boolean; restart_count: number }[]
 }
@@ -59,13 +59,10 @@ async function fetchDetail() {
     instance.value = res.data.data
 
     if (instance.value?.ingress_domain && instance.value.env_vars) {
-      try {
-        const envs = JSON.parse(instance.value.env_vars)
-        const token = envs.OPENCLAW_GATEWAY_TOKEN
-        if (token) {
-          openclawUrl.value = `https://${instance.value.ingress_domain}?token=${token}`
-        }
-      } catch { /* ignore */ }
+      const token = instance.value.env_vars.OPENCLAW_GATEWAY_TOKEN
+      if (token) {
+        openclawUrl.value = `https://${instance.value.ingress_domain}?token=${token}`
+      }
     }
   } catch (e: any) {
     error.value = e?.response?.data?.message || '加载失败'
