@@ -109,14 +109,35 @@ def _read_config_file(mount_path: Path) -> dict:
         return {}
 
 
-def _write_config_file(mount_path: Path, data: dict) -> None:
-    """Write openclaw.json to NFS mount."""
+async def _write_config_file(mount_path: Path, data: dict) -> None:
+    """Write openclaw.json to NFS mount. Falls back to sudo on PermissionError."""
     config_path = mount_path / OPENCLAW_CONFIG_REL
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "mkdir", "-p", str(config_path.parent),
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await proc.communicate()
+        if proc.returncode:
+            raise PermissionError(f"sudo mkdir 失败: {err.decode().strip()}")
+
+    try:
+        config_path.write_text(content, encoding="utf-8")
+    except PermissionError:
+        logger.info("普通写入权限不足，使用 sudo tee 写入 %s", config_path)
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "tee", str(config_path),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await proc.communicate(input=content.encode("utf-8"))
+        if proc.returncode:
+            raise PermissionError(f"sudo tee 写入失败: {err.decode().strip()}")
 
 
 async def read_openclaw_providers(
@@ -220,7 +241,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         if "models" not in existing_json:
             existing_json["models"] = {}
         existing_json["models"]["providers"] = providers
-        _write_config_file(mount_path, existing_json)
+        await _write_config_file(mount_path, existing_json)
 
     logger.info(
         "已写入 openclaw.json LLM 配置 (NFS): instance=%s providers=%s",
