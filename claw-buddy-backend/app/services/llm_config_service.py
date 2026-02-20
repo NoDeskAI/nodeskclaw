@@ -3,12 +3,14 @@
 import asyncio
 import json
 import logging
+import re
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.models.base import not_deleted
 from app.models.cluster import Cluster
 from app.models.instance import Instance
@@ -22,6 +24,14 @@ from app.services.nfs_mount import nfs_mount
 logger = logging.getLogger(__name__)
 
 OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
+
+
+def _strip_jsonc(text: str) -> str:
+    """Strip JS-style comments (// and /* */) and trailing commas from JSON text."""
+    text = re.sub(r'//[^\n]*', '', text)
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    return text
 
 PROVIDER_BASE_URLS: dict[str, str] = {
     "openai": "https://api.openai.com/v1",
@@ -126,16 +136,35 @@ async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | N
     return K8sClient(api_client)
 
 
-def _read_config_file(mount_path: Path) -> dict:
-    """Read openclaw.json from NFS mount, return empty dict if file doesn't exist."""
+def _read_config_file(mount_path: Path) -> dict | None:
+    """Read openclaw.json from NFS mount.
+
+    Returns:
+        dict  - parsed config on success
+        None  - file doesn't exist (safe to create from scratch)
+
+    Raises:
+        ValueError - file exists but cannot be parsed (must NOT overwrite)
+    """
     config_path = mount_path / OPENCLAW_CONFIG_REL
     if not config_path.exists():
-        return {}
+        return None
     try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning("读取 openclaw.json 失败: %s", e)
-        return {}
+        raw = config_path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ValueError(f"无法读取 openclaw.json: {e}") from e
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        return json.loads(_strip_jsonc(raw))
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"openclaw.json 格式无法解析（已尝试去除注释）: {e}"
+        ) from e
 
 
 def _write_config_file(mount_path: Path, data: dict) -> None:
@@ -153,7 +182,14 @@ async def read_openclaw_providers(
 ) -> OpenClawConfigResponse:
     """Read openclaw.json via NFS and enrich with DB key source info."""
     async with nfs_mount(instance, db) as mount_path:
-        raw_json = _read_config_file(mount_path)
+        try:
+            raw_json = _read_config_file(mount_path)
+        except ValueError as e:
+            logger.warning("读取 openclaw.json 解析失败: %s", e)
+            raw_json = None
+
+    if not raw_json:
+        return OpenClawConfigResponse(data_source="nfs", providers=[])
 
     pod_providers: dict = raw_json.get("models", {}).get("providers", {})
     if not pod_providers:
@@ -245,7 +281,19 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
     providers = _build_providers_config(configs, proxy_token, user_keys)
 
     async with nfs_mount(instance, db) as mount_path:
-        existing_json = _read_config_file(mount_path)
+        try:
+            existing_json = _read_config_file(mount_path)
+        except ValueError as e:
+            logger.error("openclaw.json 解析失败，中止写入以防覆盖原有配置: %s", e)
+            raise AppException(
+                code=50001,
+                message=f"openclaw.json 无法解析，中止写入以保护现有配置: {e}",
+                status_code=500,
+            ) from e
+
+        if existing_json is None:
+            existing_json = {}
+
         if "models" not in existing_json:
             existing_json["models"] = {}
         existing_json["models"]["providers"] = providers
