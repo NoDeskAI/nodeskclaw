@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check } from 'lucide-vue-next'
+import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const router = useRouter()
@@ -31,6 +31,7 @@ const loading = ref(true)
 const error = ref('')
 const openclawUrl = ref('')
 const urlCopied = ref(false)
+const restarting = ref(false)
 
 function formatCpu(val: string): string {
   if (val.endsWith('m')) {
@@ -68,6 +69,19 @@ async function fetchDetail() {
     error.value = e?.response?.data?.message || '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleRestart() {
+  if (!confirm('确定重启实例？将重启该实例中的所有程序，期间服务会短暂不可用。')) return
+  restarting.value = true
+  try {
+    await api.post(`/instances/${instanceId.value}/restart`)
+    await fetchDetail()
+  } catch (e: any) {
+    error.value = e?.response?.data?.message || '重启失败'
+  } finally {
+    restarting.value = false
   }
 }
 
@@ -177,6 +191,14 @@ async function handleDelete() {
         >
           <RefreshCw class="w-4 h-4" />
           刷新
+        </button>
+        <button
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors"
+          :disabled="restarting"
+          @click="handleRestart"
+        >
+          <RotateCcw class="w-4 h-4" :class="restarting ? 'animate-spin' : ''" />
+          {{ restarting ? '重启中...' : '重启实例' }}
         </button>
         <button
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto"
