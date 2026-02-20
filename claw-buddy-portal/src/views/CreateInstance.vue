@@ -160,6 +160,8 @@ function toSlug(input: string): string {
     ? pinyin(input, { toneType: 'none', type: 'array' }).join('-')
     : input
   return raw
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-{2,}/g, '-')
