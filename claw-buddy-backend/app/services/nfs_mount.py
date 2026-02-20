@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 NFS_BASE_DIR = Path("/tmp/clawbuddy-nfs")
 
-_nfs_info_cache: dict[str, tuple[str, str]] = {}
+_nfs_info_cache: dict[str, tuple[str, str, list[str]]] = {}
 
 
 class NFSMountError(AppException):
@@ -43,8 +42,12 @@ def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
-async def _resolve_nfs_info(instance: Instance, db: AsyncSession) -> tuple[str, str]:
-    """Resolve NFS server + path from PVC -> PV spec. Results are cached by instance ID."""
+async def _resolve_nfs_info(instance: Instance, db: AsyncSession) -> tuple[str, str, list[str]]:
+    """Resolve NFS server + path from PVC -> PV spec. Results are cached by instance ID.
+
+    Supports both native NFS PVs (spec.nfs) and CSI-based NAS PVs
+    (spec.csi with volumeAttributes containing server/path, e.g. VKE nas-subpath).
+    """
     cached = _nfs_info_cache.get(instance.id)
     if cached:
         return cached
@@ -66,18 +69,32 @@ async def _resolve_nfs_info(instance: Instance, db: AsyncSession) -> tuple[str, 
     except Exception as e:
         raise NFSMountError(f"读取 PV {pv_name} 失败: {e}") from e
 
-    nfs_spec = pv.spec.nfs
-    if not nfs_spec:
-        raise NFSMountError(f"PV {pv_name} 不是 NFS 类型")
+    server: str | None = None
+    path: str | None = None
+    mount_options: list[str] = []
 
-    server = nfs_spec.server
-    path = nfs_spec.path
+    if pv.spec.nfs:
+        server = pv.spec.nfs.server
+        path = pv.spec.nfs.path
+    elif pv.spec.csi and pv.spec.csi.volume_attributes:
+        attrs = pv.spec.csi.volume_attributes
+        server = attrs.get("server")
+        path = attrs.get("path")
+    else:
+        raise NFSMountError(f"PV {pv_name} 既非 NFS 类型也非 CSI NAS 类型，无法提取存储地址")
+
     if not server or not path:
         raise NFSMountError(f"PV {pv_name} 缺少 NFS server 或 path")
 
-    _nfs_info_cache[instance.id] = (server, path)
-    logger.info("解析 NFS 信息: instance=%s server=%s path=%s", instance.name, server, path)
-    return server, path
+    if pv.spec.mount_options:
+        mount_options = list(pv.spec.mount_options)
+
+    _nfs_info_cache[instance.id] = (server, path, mount_options)
+    logger.info(
+        "解析 NFS 信息: instance=%s server=%s path=%s mount_options=%s",
+        instance.name, server, path, mount_options,
+    )
+    return server, path, mount_options
 
 
 async def _run_cmd(cmd: list[str]) -> tuple[int, str, str]:
@@ -93,7 +110,7 @@ async def _run_cmd(cmd: list[str]) -> tuple[int, str, str]:
 @asynccontextmanager
 async def nfs_mount(instance: Instance, db: AsyncSession) -> AsyncIterator[Path]:
     """Temporarily mount instance PVC via NFS, yield local path, unmount on exit."""
-    server, nfs_path = await _resolve_nfs_info(instance, db)
+    server, nfs_path, mount_options = await _resolve_nfs_info(instance, db)
 
     mount_point = NFS_BASE_DIR / instance.namespace
     mount_point.mkdir(parents=True, exist_ok=True)
@@ -105,13 +122,20 @@ async def nfs_mount(instance: Instance, db: AsyncSession) -> AsyncIterator[Path]
 
     if not already_mounted:
         nfs_source = f"{server}:{nfs_path}"
-        rc, _out, err = await _run_cmd(["mount", "-t", "nfs", nfs_source, str(mount_point)])
+        cmd = ["mount", "-t", "nfs"]
+        if mount_options:
+            cmd += ["-o", ",".join(mount_options)]
+        cmd += [nfs_source, str(mount_point)]
+        rc, _out, err = await _run_cmd(cmd)
         if rc != 0:
-            mount_point.rmdir()
+            try:
+                mount_point.rmdir()
+            except OSError:
+                pass
             if "permission denied" in err.lower() or "not permitted" in err.lower():
                 raise NFSMountError(f"NFS 挂载失败（权限不足），请以 root 运行或配置 CAP_SYS_ADMIN: {err.strip()}")
             raise NFSMountError(f"NFS 挂载失败: {err.strip()}")
-        logger.info("已挂载 NFS: %s -> %s", nfs_source, mount_point)
+        logger.info("已挂载 NFS: %s -> %s (options=%s)", nfs_source, mount_point, mount_options)
 
     try:
         yield mount_point
