@@ -109,43 +109,14 @@ def _read_config_file(mount_path: Path) -> dict:
         return {}
 
 
-async def _ensure_nfs_writable(target_dir: Path) -> None:
-    """Ensure target_dir is writable by current user; use non-interactive sudo chmod if needed."""
-    import os
-
-    if target_dir.exists() and os.access(target_dir, os.W_OK):
-        return
-    if not target_dir.exists():
-        proc = await asyncio.create_subprocess_exec(
-            "sudo", "-n", "mkdir", "-p", str(target_dir),
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, err = await proc.communicate()
-        if proc.returncode:
-            raise PermissionError(
-                f"NFS 目录创建失败（权限不足）。请先运行 sudo -v 缓存凭据，或配置 NOPASSWD。"
-                f"\n详情: {err.decode().strip()}"
-            )
-    proc = await asyncio.create_subprocess_exec(
-        "sudo", "-n", "chmod", "-R", "a+rwX", str(target_dir),
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, err = await proc.communicate()
-    if proc.returncode:
-        raise PermissionError(
-            f"NFS 目录权限修复失败。请先运行 sudo -v 缓存凭据，或配置 NOPASSWD。"
-            f"\n详情: {err.decode().strip()}"
-        )
-    logger.info("已修复 NFS 目录写入权限: %s", target_dir)
-
-
-async def _write_config_file(mount_path: Path, data: dict) -> None:
-    """Write openclaw.json to NFS mount."""
+def _write_config_file(mount_path: Path, data: dict) -> None:
+    """Write openclaw.json to NFS mount. Permissions are fixed at mount time."""
     config_path = mount_path / OPENCLAW_CONFIG_REL
-    content = json.dumps(data, indent=2, ensure_ascii=False)
-
-    await _ensure_nfs_writable(config_path.parent)
-    config_path.write_text(content, encoding="utf-8")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 async def read_openclaw_providers(
@@ -249,7 +220,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         if "models" not in existing_json:
             existing_json["models"] = {}
         existing_json["models"]["providers"] = providers
-        await _write_config_file(mount_path, existing_json)
+        _write_config_file(mount_path, existing_json)
 
     logger.info(
         "已写入 openclaw.json LLM 配置 (NFS): instance=%s providers=%s",

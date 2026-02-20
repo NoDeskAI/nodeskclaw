@@ -122,7 +122,7 @@ async def nfs_mount(instance: Instance, db: AsyncSession) -> AsyncIterator[Path]
 
     if not already_mounted:
         nfs_source = f"{server}:{nfs_path}"
-        cmd = ["mount", "-t", "nfs"]
+        cmd = ["sudo", "-n", "mount", "-t", "nfs"]
         if mount_options:
             cmd += ["-o", ",".join(mount_options)]
         cmd += [nfs_source, str(mount_point)]
@@ -132,16 +132,31 @@ async def nfs_mount(instance: Instance, db: AsyncSession) -> AsyncIterator[Path]
                 mount_point.rmdir()
             except OSError:
                 pass
+            if "a password is required" in err.lower():
+                raise NFSMountError(
+                    "NFS 挂载需要 sudo 权限。请运行以下命令配置免密:\n"
+                    "sudo sh -c 'echo \"$(whoami) ALL=(ALL) NOPASSWD: "
+                    "/sbin/mount, /sbin/umount, /bin/chmod, /bin/mkdir\" "
+                    "> /etc/sudoers.d/clawbuddy-nfs && chmod 440 /etc/sudoers.d/clawbuddy-nfs'"
+                )
             if "permission denied" in err.lower() or "not permitted" in err.lower():
-                raise NFSMountError(f"NFS 挂载失败（权限不足），请以 root 运行或配置 CAP_SYS_ADMIN: {err.strip()}")
+                raise NFSMountError(f"NFS 挂载失败（权限不足）: {err.strip()}")
             raise NFSMountError(f"NFS 挂载失败: {err.strip()}")
         logger.info("已挂载 NFS: %s -> %s (options=%s)", nfs_source, mount_point, mount_options)
+
+        rc, _out, err = await _run_cmd(
+            ["sudo", "-n", "chmod", "-R", "a+rwX", str(mount_point)]
+        )
+        if rc != 0:
+            logger.warning("NFS 挂载后修复权限失败: %s", err.strip())
+        else:
+            logger.debug("已修复 NFS 挂载点权限: %s", mount_point)
 
     try:
         yield mount_point
     finally:
         if not already_mounted:
-            rc, _out, err = await _run_cmd(["umount", str(mount_point)])
+            rc, _out, err = await _run_cmd(["sudo", "-n", "umount", str(mount_point)])
             if rc != 0:
                 logger.warning("NFS 卸载失败: %s (err=%s)", mount_point, err.strip())
             else:
