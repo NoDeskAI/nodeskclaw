@@ -611,7 +611,7 @@ async function handleDeploy() {
           <button
             v-if="!llmSkipped"
             class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center cursor-pointer"
-            @click="llmSkipped = true; llmConfigs.splice(0)"
+            @click="llmSkipped = true; llmConfigs.splice(0); handleDeploy()"
           >
             跳过，稍后配置大模型
           </button>
