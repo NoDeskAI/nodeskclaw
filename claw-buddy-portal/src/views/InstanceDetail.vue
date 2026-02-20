@@ -32,6 +32,7 @@ const error = ref('')
 const openclawUrl = ref('')
 const urlCopied = ref(false)
 const restarting = ref(false)
+const successMsg = ref('')
 
 function formatCpu(val: string): string {
   if (val.endsWith('m')) {
@@ -75,8 +76,11 @@ async function fetchDetail() {
 async function handleRestart() {
   if (!confirm('确定重启实例？将重启该实例中的所有程序，期间服务会短暂不可用。')) return
   restarting.value = true
+  successMsg.value = ''
   try {
     await api.post(`/instances/${instanceId.value}/restart`)
+    successMsg.value = '已触发重启，实例将在数秒后恢复'
+    setTimeout(() => { successMsg.value = '' }, 5000)
     await fetchDetail()
   } catch (e: any) {
     error.value = e?.response?.data?.message || '重启失败'
@@ -181,6 +185,11 @@ async function handleDelete() {
             </span>
           </div>
         </div>
+      </div>
+
+      <!-- 提示 -->
+      <div v-if="successMsg" class="px-4 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
+        {{ successMsg }}
       </div>
 
       <!-- 操作 -->
