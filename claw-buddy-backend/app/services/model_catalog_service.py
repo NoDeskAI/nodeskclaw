@@ -25,8 +25,8 @@ PROVIDER_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
     "gemini": "https://generativelanguage.googleapis.com",
     "openrouter": "https://openrouter.ai/api",
-    "minimax-openai": "https://api.minimax.chat",
-    "minimax-anthropic": "https://api.minimax.chat",
+    "minimax-openai": "https://api.minimaxi.com",
+    "minimax-anthropic": "https://api.minimaxi.com",
 }
 
 PROVIDER_API_TYPE: dict[str, str] = {

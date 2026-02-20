@@ -28,8 +28,8 @@ PROVIDER_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
-    "minimax-openai": "https://api.minimax.chat/v1",
-    "minimax-anthropic": "https://api.minimax.chat/v1",
+    "minimax-openai": "https://api.minimaxi.com/v1",
+    "minimax-anthropic": "https://api.minimaxi.com/anthropic/v1",
 }
 
 BUILTIN_PROVIDERS = {"openai", "anthropic", "gemini", "openrouter"}
