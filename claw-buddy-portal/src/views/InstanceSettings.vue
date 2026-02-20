@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Loader2, Brain, Key, Save, Trash2, Plus, RefreshCw } from 'lucide-vue-next'
+import { ref, onMounted, inject, type ComputedRef } from 'vue'
+import { Loader2, Brain, Key, Save, Trash2, Plus, RefreshCw } from 'lucide-vue-next'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
-const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
 
-const instanceId = computed(() => route.params.id as string)
-const instanceName = ref('')
+const instanceId = inject<ComputedRef<string>>('instanceId')!
 const loading = ref(true)
 const saving = ref(false)
 const restarting = ref(false)
@@ -99,15 +95,6 @@ async function fetchAll() {
     error.value = '加载配置失败'
   } finally {
     loading.value = false
-  }
-}
-
-async function fetchInstanceName() {
-  try {
-    const res = await api.get(`/instances/${instanceId.value}`)
-    instanceName.value = res.data.data?.name ?? ''
-  } catch {
-    // ignore
   }
 }
 
@@ -202,23 +189,12 @@ async function deletePersonalKey(provider: string) {
 }
 
 onMounted(() => {
-  fetchInstanceName()
   fetchAll()
 })
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-6 py-8">
-    <div class="flex items-center gap-3 mb-8">
-      <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push(`/instances/${instanceId}`)">
-        <ArrowLeft class="w-5 h-5" />
-      </button>
-      <div>
-        <h1 class="text-xl font-bold">{{ instanceName || '实例' }} 设置</h1>
-        <p class="text-sm text-muted-foreground mt-1">管理大模型配置和 API Key</p>
-      </div>
-    </div>
-
+  <div>
     <div v-if="loading" class="flex items-center justify-center py-20">
       <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
     </div>

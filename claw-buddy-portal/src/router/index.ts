@@ -52,13 +52,11 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/instances/:id',
-    name: 'InstanceDetail',
-    component: () => import('@/views/InstanceDetail.vue'),
-  },
-  {
-    path: '/instances/:id/settings',
-    name: 'InstanceSettings',
-    component: () => import('@/views/InstanceSettings.vue'),
+    component: () => import('@/views/InstanceLayout.vue'),
+    children: [
+      { path: '', name: 'InstanceDetail', component: () => import('@/views/InstanceDetail.vue') },
+      { path: 'settings', name: 'InstanceSettings', component: () => import('@/views/InstanceSettings.vue') },
+    ],
   },
   // Kept pages
   {

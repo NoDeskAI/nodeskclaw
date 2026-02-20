@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ExternalLink, RefreshCw, Trash2, Circle, Loader2, Settings } from 'lucide-vue-next'
+import { ref, onMounted, inject, type Ref, type ComputedRef } from 'vue'
+import { useRouter } from 'vue-router'
+import { ExternalLink, RefreshCw, Trash2, Circle, Loader2 } from 'lucide-vue-next'
 import api from '@/services/api'
 
-const route = useRoute()
 const router = useRouter()
-const instanceId = computed(() => route.params.id as string)
+const instanceId = inject<ComputedRef<string>>('instanceId')!
+const instanceBasic = inject<Ref<{ name: string } | null>>('instanceBasic')!
 
 interface InstanceDetail {
   id: string
@@ -41,7 +41,6 @@ async function fetchDetail() {
     const res = await api.get(`/instances/${instanceId.value}`)
     instance.value = res.data.data
 
-    // 构造 OpenClaw 访问地址
     if (instance.value?.ingress_domain && instance.value.env_vars) {
       try {
         const envs = JSON.parse(instance.value.env_vars)
@@ -59,7 +58,7 @@ async function fetchDetail() {
 }
 
 async function handleDelete() {
-  if (!confirm(`确定删除实例「${instance.value?.name}」？此操作不可恢复。`)) return
+  if (!confirm(`确定删除实例「${instanceBasic.value?.name}」？此操作不可恢复。`)) return
   try {
     await api.delete(`/instances/${instanceId.value}`)
     router.push('/instances')
@@ -67,38 +66,10 @@ async function handleDelete() {
     error.value = e?.response?.data?.message || '删除失败'
   }
 }
-
-const statusColors: Record<string, string> = {
-  running: 'text-green-400',
-  deploying: 'text-yellow-400',
-  failed: 'text-red-400',
-}
-const statusLabels: Record<string, string> = {
-  running: '运行中',
-  deploying: '部署中',
-  creating: '创建中',
-  updating: '更新中',
-  failed: '异常',
-  pending: '等待中',
-}
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto px-6 py-8">
-    <!-- Header -->
-    <div class="flex items-center gap-3 mb-6">
-      <button class="text-muted-foreground hover:text-foreground" @click="router.push('/instances')">
-        <ArrowLeft class="w-5 h-5" />
-      </button>
-      <div v-if="instance" class="flex items-center gap-3">
-        <h1 class="text-xl font-bold">{{ instance.name }}</h1>
-        <span class="flex items-center gap-1 text-xs" :class="statusColors[instance.status] || 'text-zinc-400'">
-          <Circle class="w-2 h-2 fill-current" />
-          {{ statusLabels[instance.status] || instance.status }}
-        </span>
-      </div>
-    </div>
-
+  <div>
     <div v-if="loading" class="flex items-center justify-center py-20">
       <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
     </div>
@@ -182,13 +153,6 @@ const statusLabels: Record<string, string> = {
         >
           <RefreshCw class="w-4 h-4" />
           刷新
-        </button>
-        <button
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
-          @click="router.push(`/instances/${instanceId}/settings`)"
-        >
-          <Settings class="w-4 h-4" />
-          设置
         </button>
         <button
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto"

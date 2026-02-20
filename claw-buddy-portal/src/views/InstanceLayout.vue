@@ -1,0 +1,101 @@
+<script setup lang="ts">
+import { ref, onMounted, computed, provide } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings } from 'lucide-vue-next'
+import api from '@/services/api'
+
+const route = useRoute()
+const router = useRouter()
+const instanceId = computed(() => route.params.id as string)
+
+interface InstanceBasic {
+  id: string
+  name: string
+  status: string
+}
+
+const instance = ref<InstanceBasic | null>(null)
+const loading = ref(true)
+
+const statusColors: Record<string, string> = {
+  running: 'text-green-400',
+  deploying: 'text-yellow-400',
+  failed: 'text-red-400',
+}
+const statusLabels: Record<string, string> = {
+  running: '运行中',
+  deploying: '部署中',
+  creating: '创建中',
+  updating: '更新中',
+  failed: '异常',
+  pending: '等待中',
+}
+
+async function fetchBasic() {
+  loading.value = true
+  try {
+    const res = await api.get(`/instances/${instanceId.value}`)
+    instance.value = res.data.data
+  } catch {
+    instance.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+provide('instanceId', instanceId)
+provide('instanceBasic', instance)
+provide('refreshInstanceBasic', fetchBasic)
+
+onMounted(fetchBasic)
+
+const navItems = [
+  { name: 'InstanceDetail', label: '概览', icon: LayoutDashboard },
+  { name: 'InstanceSettings', label: '设置', icon: Settings },
+]
+</script>
+
+<template>
+  <div class="max-w-4xl mx-auto px-6 py-8">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-6">
+      <button class="text-muted-foreground hover:text-foreground transition-colors" @click="router.push('/instances')">
+        <ArrowLeft class="w-5 h-5" />
+      </button>
+      <template v-if="loading">
+        <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
+      </template>
+      <template v-else-if="instance">
+        <h1 class="text-xl font-bold">{{ instance.name }}</h1>
+        <span class="flex items-center gap-1 text-xs" :class="statusColors[instance.status] || 'text-zinc-400'">
+          <Circle class="w-2 h-2 fill-current" />
+          {{ statusLabels[instance.status] || instance.status }}
+        </span>
+      </template>
+    </div>
+
+    <!-- Body: sidebar + content -->
+    <div class="flex gap-6">
+      <!-- Left nav -->
+      <nav class="w-40 shrink-0 space-y-1">
+        <router-link
+          v-for="item in navItems"
+          :key="item.name"
+          :to="{ name: item.name, params: { id: instanceId } }"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
+          :class="route.name === item.name
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'"
+        >
+          <component :is="item.icon" class="w-4 h-4" />
+          {{ item.label }}
+        </router-link>
+      </nav>
+
+      <!-- Content -->
+      <div class="flex-1 min-w-0">
+        <router-view />
+      </div>
+    </div>
+  </div>
+</template>
