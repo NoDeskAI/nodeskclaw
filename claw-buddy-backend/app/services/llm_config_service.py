@@ -12,7 +12,10 @@ from app.core.config import settings
 from app.models.base import not_deleted
 from app.models.cluster import Cluster
 from app.models.instance import Instance
+from app.models.org_llm_key import OrgLlmKey
 from app.models.user_llm_config import UserLlmConfig
+from app.models.user_llm_key import UserLlmKey
+from app.schemas.llm import OpenClawConfigResponse, OpenClawProviderEntry
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
 
@@ -49,8 +52,110 @@ async def _get_running_pod(k8s: K8sClient, instance: Instance) -> str | None:
     return running[0]["name"] if running else None
 
 
+def _mask_key(key: str) -> str:
+    if len(key) <= 8:
+        return key[:2] + "***"
+    return key[:6] + "***" + key[-3:]
+
+
+async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | None:
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id)
+    )
+    cluster = cluster_result.scalar_one_or_none()
+    if not cluster or not cluster.kubeconfig_encrypted:
+        return None
+    api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
+    return K8sClient(api_client)
+
+
+async def read_openclaw_providers(
+    instance: Instance, db: AsyncSession
+) -> OpenClawConfigResponse | None:
+    """Read openclaw.json from the running Pod and enrich with DB key source info.
+
+    Returns None if no running Pod is available.
+    """
+    k8s = await _get_k8s_client(instance, db)
+    if k8s is None:
+        return None
+
+    pod_name = await _get_running_pod(k8s, instance)
+    if not pod_name:
+        return None
+
+    raw_json: dict = {}
+    try:
+        raw = await k8s.exec_in_pod(
+            instance.namespace, pod_name,
+            ["cat", OPENCLAW_CONFIG_PATH],
+        )
+        if raw:
+            raw_json = json.loads(raw)
+    except Exception:
+        logger.info("读取 Pod %s 的 openclaw.json 失败（文件可能不存在）", pod_name)
+
+    pod_providers: dict = raw_json.get("models", {}).get("providers", {})
+    if not pod_providers:
+        return OpenClawConfigResponse(pod_name=pod_name, providers=[])
+
+    host = (settings.CLAWBUDDY_HOST or "").rstrip("/")
+
+    configs_result = await db.execute(
+        select(UserLlmConfig).where(
+            UserLlmConfig.user_id == instance.created_by,
+            UserLlmConfig.org_id == instance.org_id,
+            not_deleted(UserLlmConfig),
+        )
+    )
+    db_configs = {c.provider: c for c in configs_result.scalars().all()}
+
+    entries: list[OpenClawProviderEntry] = []
+    for provider, prov_cfg in pod_providers.items():
+        base_url = prov_cfg.get("baseUrl", "")
+        is_proxy = bool(host) and host in base_url
+
+        key_source: str | None = None
+        key_label: str | None = None
+        api_key_masked: str | None = None
+
+        db_cfg = db_configs.get(provider)
+        if db_cfg:
+            key_source = db_cfg.key_source
+            if db_cfg.key_source == "org" and db_cfg.org_llm_key_id:
+                org_key_r = await db.execute(
+                    select(OrgLlmKey).where(OrgLlmKey.id == db_cfg.org_llm_key_id)
+                )
+                org_key = org_key_r.scalar_one_or_none()
+                if org_key:
+                    key_label = org_key.label
+                    api_key_masked = _mask_key(org_key.api_key)
+            elif db_cfg.key_source == "personal":
+                user_key_r = await db.execute(
+                    select(UserLlmKey).where(
+                        UserLlmKey.user_id == instance.created_by,
+                        UserLlmKey.provider == provider,
+                        not_deleted(UserLlmKey),
+                    )
+                )
+                user_key = user_key_r.scalar_one_or_none()
+                if user_key:
+                    api_key_masked = _mask_key(user_key.api_key)
+
+        entries.append(OpenClawProviderEntry(
+            provider=provider,
+            base_url=base_url,
+            is_proxy=is_proxy,
+            key_source=key_source,
+            key_label=key_label,
+            api_key_masked=api_key_masked,
+        ))
+
+    return OpenClawConfigResponse(pod_name=pod_name, providers=entries)
+
+
 async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None:
-    """Write proxy LLM config to openclaw.json and restart OpenClaw."""
+    """Write proxy LLM config to openclaw.json."""
     configs_result = await db.execute(
         select(UserLlmConfig).where(
             UserLlmConfig.user_id == instance.created_by,
@@ -71,16 +176,10 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
     providers = _build_providers_config(configs, proxy_token)
 
-    cluster_result = await db.execute(
-        select(Cluster).where(Cluster.id == instance.cluster_id)
-    )
-    cluster = cluster_result.scalar_one_or_none()
-    if not cluster or not cluster.kubeconfig_encrypted:
+    k8s = await _get_k8s_client(instance, db)
+    if k8s is None:
         logger.error("实例 %s 的集群不可用", instance.name)
         return
-
-    api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
-    k8s = K8sClient(api_client)
 
     pod_name = await _get_running_pod(k8s, instance)
     if not pod_name:
@@ -115,15 +214,9 @@ async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
     """Update openclaw.json and gracefully restart OpenClaw (SIGTERM PID 1)."""
     await sync_openclaw_llm_config(instance, db)
 
-    cluster_result = await db.execute(
-        select(Cluster).where(Cluster.id == instance.cluster_id)
-    )
-    cluster = cluster_result.scalar_one_or_none()
-    if not cluster or not cluster.kubeconfig_encrypted:
+    k8s = await _get_k8s_client(instance, db)
+    if k8s is None:
         return {"status": "error", "message": "集群不可用"}
-
-    api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
-    k8s = K8sClient(api_client)
 
     pod_name = await _get_running_pod(k8s, instance)
     if not pod_name:

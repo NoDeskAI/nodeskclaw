@@ -21,6 +21,7 @@ from app.schemas.llm import (
     AvailableLlmKey,
     InstanceLlmConfigInfo,
     LlmConfigUpdateResult,
+    OpenClawConfigResponse,
     OrgLlmKeyCreate,
     OrgLlmKeyInfo,
     OrgLlmKeyUpdate,
@@ -395,6 +396,24 @@ async def restart_openclaw(
     from app.services.llm_config_service import restart_openclaw as _restart
     result_data = await _restart(instance, db)
     return ApiResponse(data=result_data)
+
+
+@router.get("/instances/{instance_id}/openclaw-providers", response_model=ApiResponse[OpenClawConfigResponse | None])
+async def get_openclaw_providers(
+    instance_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, Instance.deleted_at.is_(None))
+    )
+    instance = result.scalar_one_or_none()
+    if instance is None:
+        raise NotFoundError("实例不存在")
+
+    from app.services.llm_config_service import read_openclaw_providers
+    config = await read_openclaw_providers(instance, db)
+    return ApiResponse(data=config)
 
 
 @router.get("/instances/{instance_id}/llm-config", response_model=ApiResponse[list[InstanceLlmConfigInfo]])

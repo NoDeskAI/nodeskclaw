@@ -101,3 +101,19 @@ class AvailableLlmKey(BaseModel):
     label: str
     api_key_masked: str
     is_active: bool
+
+
+# ── OpenClaw Pod Provider Config (live read) ────────────
+
+class OpenClawProviderEntry(BaseModel):
+    provider: str
+    base_url: str
+    is_proxy: bool
+    key_source: str | None = None
+    key_label: str | None = None
+    api_key_masked: str | None = None
+
+
+class OpenClawConfigResponse(BaseModel):
+    pod_name: str
+    providers: list[OpenClawProviderEntry]
