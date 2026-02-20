@@ -609,9 +609,9 @@ async function handleDeploy() {
             {{ deploying ? '部署中...' : '部署' }}
           </button>
           <button
-            v-if="!llmSkipped && llmConfigs.length === 0"
+            v-if="!llmSkipped"
             class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center cursor-pointer"
-            @click="llmSkipped = true"
+            @click="llmSkipped = true; llmConfigs.splice(0)"
           >
             跳过，稍后配置大模型
           </button>
