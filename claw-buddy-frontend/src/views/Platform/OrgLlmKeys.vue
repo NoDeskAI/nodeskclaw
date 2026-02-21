@@ -53,12 +53,14 @@ interface OrgLlmKey {
 const keys = ref<OrgLlmKey[]>([])
 const loading = ref(true)
 
-const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter']
+const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter', 'minimax-openai', 'minimax-anthropic']
 const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
-  gemini: 'Gemini',
+  gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
+  'minimax-openai': 'MiniMax-OpenAI (CN)',
+  'minimax-anthropic': 'MiniMax-Anthropic (CN)',
 }
 
 const showCreate = ref(false)

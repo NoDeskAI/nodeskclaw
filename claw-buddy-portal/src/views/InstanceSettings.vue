@@ -25,8 +25,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
-  'minimax-openai': 'Minimax-OpenAI',
-  'minimax-anthropic': 'Minimax-Anthropic',
+  'minimax-openai': 'MiniMax-OpenAI (CN)',
+  'minimax-anthropic': 'MiniMax-Anthropic (CN)',
 }
 
 // ── Types ──
