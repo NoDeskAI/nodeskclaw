@@ -1,12 +1,12 @@
 # ClawBuddy LLM Proxy
 
-独立的 LLM 请求代理服务，负责组织 Key 模式下的 API 请求转发、鉴权和用量记录。
+独立的 LLM 请求代理服务，负责 Working Plan 模式下的 API 请求转发、鉴权和用量记录。
 
 ## 功能
 
 - 通过 `proxy_token` 鉴权，解析组织/个人 Key
 - 支持 OpenAI、Anthropic、Gemini、OpenRouter、MiniMax 等 Provider
-- 组织 Key 额度检查
+- Working Plan 额度检查
 - 流式/非流式请求转发
 - Token 用量自动记录
 

@@ -325,7 +325,7 @@ async def list_provider_models(
 
     if not resolved_key:
         return ApiResponse(data=ProviderModelsResponse(provider=provider, models=[]),
-                           message=f"无可用的 {provider} Key，请先配置个人 Key 或组织 Key")
+                           message=f"无可用的 {provider} Key，请先配置个人 Key 或 Working Plan")
 
     from app.services.model_catalog_service import fetch_provider_models
     try:

@@ -63,7 +63,7 @@ function addProvider() {
   if (!newProvider.value) return
   llmConfigs.value.push({
     provider: newProvider.value,
-    keySource: 'org',
+    keySource: WORKING_PLAN_PROVIDERS.has(newProvider.value) ? 'org' : 'personal',
     personalKey: '',
     selectedModel: null,
   })
@@ -71,6 +71,7 @@ function addProvider() {
 }
 
 const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
+const WORKING_PLAN_PROVIDERS = new Set(['minimax-openai', 'minimax-anthropic'])
 
 async function handleFetchModels(provider: string, callback: (models: ModelItem[], error?: string) => void) {
   const cfg = llmConfigs.value.find(c => c.provider === provider)
@@ -537,9 +538,13 @@ async function handleDeploy() {
 
               <div class="space-y-2">
                 <div class="flex gap-4 text-sm">
-                  <label class="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" :name="`llm-${cfg.provider}`" value="org" v-model="cfg.keySource" class="accent-primary" />
-                    组织 Key
+                  <label
+                    class="flex items-center gap-1.5"
+                    :class="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+                    :title="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? '' : '暂未开放'"
+                  >
+                    <input type="radio" :name="`llm-${cfg.provider}`" value="org" v-model="cfg.keySource" class="accent-primary" :disabled="!WORKING_PLAN_PROVIDERS.has(cfg.provider)" />
+                    Working Plan
                   </label>
                   <label class="flex items-center gap-1.5 cursor-pointer">
                     <input type="radio" :name="`llm-${cfg.provider}`" value="personal" v-model="cfg.keySource" class="accent-primary" />
@@ -548,7 +553,7 @@ async function handleDeploy() {
                 </div>
 
                 <p v-if="cfg.keySource === 'org'" class="text-xs text-muted-foreground pl-0.5">
-                  通过组织代理调用，无需输入 Key
+                  使用组织统一配置的 Key，无需自行输入
                 </p>
 
                 <div v-if="cfg.keySource === 'personal'" class="relative">

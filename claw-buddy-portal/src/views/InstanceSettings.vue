@@ -49,6 +49,7 @@ interface ProviderConfig {
 }
 
 const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
+const WORKING_PLAN_PROVIDERS = new Set(['minimax-openai', 'minimax-anthropic'])
 
 // ── State ──
 
@@ -388,16 +389,21 @@ watch(instanceOrgId, (val) => {
             <!-- Key source selection -->
             <div class="space-y-2">
               <div class="flex gap-4 text-sm">
-                <label class="flex items-center gap-1.5 cursor-pointer">
+                <label
+                  class="flex items-center gap-1.5"
+                  :class="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+                  :title="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? '' : '暂未开放'"
+                >
                   <input
                     type="radio"
                     :name="`ks-${cfg.provider}`"
                     value="org"
                     v-model="cfg.keySource"
                     class="accent-primary"
+                    :disabled="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
                     @change="markDirty"
                   />
-                  组织 Key
+                  Working Plan
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
@@ -412,9 +418,9 @@ watch(instanceOrgId, (val) => {
                 </label>
               </div>
 
-              <!-- Org key hint -->
+              <!-- Working Plan hint -->
               <p v-if="cfg.keySource === 'org'" class="text-xs text-muted-foreground pl-0.5">
-                通过组织代理调用，无需输入 Key
+                使用组织统一配置的 Key，无需自行输入
               </p>
 
               <!-- Personal key -->

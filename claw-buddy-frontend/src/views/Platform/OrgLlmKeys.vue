@@ -192,9 +192,9 @@ onMounted(fetchKeys)
         <div>
           <h1 class="text-lg font-semibold flex items-center gap-2">
             <Key class="w-5 h-5" />
-            组织 LLM Key 管理
+            Working Plan 管理
           </h1>
-          <p class="text-sm text-muted-foreground">管理该组织的大模型 API Key 和额度</p>
+          <p class="text-sm text-muted-foreground">管理组织 Working Plan 的 Key 和额度</p>
         </div>
       </div>
       <Button @click="showCreate = true">
@@ -210,7 +210,7 @@ onMounted(fetchKeys)
           <TableHead>Provider</TableHead>
           <TableHead>标签</TableHead>
           <TableHead>Key</TableHead>
-          <TableHead>用量 / 组织额度</TableHead>
+          <TableHead>用量 / Working Plan 额度</TableHead>
           <TableHead>系统额度</TableHead>
           <TableHead>状态</TableHead>
           <TableHead class="w-24">操作</TableHead>
@@ -293,7 +293,7 @@ onMounted(fetchKeys)
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <label class="text-sm font-medium">组织额度（token 数）</label>
+              <label class="text-sm font-medium">Working Plan 额度（token 数）</label>
               <Input v-model="createForm.org_token_limit" type="number" placeholder="留空不限" />
             </div>
             <div class="space-y-1.5">
@@ -332,7 +332,7 @@ onMounted(fetchKeys)
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <label class="text-sm font-medium">组织额度</label>
+              <label class="text-sm font-medium">Working Plan 额度</label>
               <Input v-model="editForm.org_token_limit" type="number" placeholder="不限" />
             </div>
             <div class="space-y-1.5">

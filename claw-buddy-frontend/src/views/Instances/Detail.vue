@@ -548,7 +548,7 @@ function formatTime(ts: string | null): string {
                   <div v-for="cfg in llmConfigs" :key="cfg.provider" class="flex items-center justify-between p-3 rounded-lg border border-border">
                     <div class="flex items-center gap-3">
                       <Badge variant="outline">{{ cfg.provider }}</Badge>
-                      <span class="text-sm">{{ cfg.key_source === 'org' ? '组织 Key' : '个人 Key' }}</span>
+                      <span class="text-sm">{{ cfg.key_source === 'org' ? 'Working Plan' : '个人 Key' }}</span>
                       <span v-if="cfg.key_label" class="text-xs text-muted-foreground">({{ cfg.key_label }})</span>
                     </div>
                     <span v-if="cfg.api_key_masked" class="font-mono text-xs text-muted-foreground">{{ cfg.api_key_masked }}</span>

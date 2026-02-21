@@ -110,7 +110,7 @@ async def _check_quota(org_key_id: str, org_limit: int | None, sys_limit: int | 
     total_used = int(result.scalar())
 
     if org_limit is not None and total_used >= org_limit:
-        return False, f"组织 Key 额度已用尽 ({total_used}/{org_limit} tokens)"
+        return False, f"Working Plan 额度已用尽 ({total_used}/{org_limit} tokens)"
     if sys_limit is not None and total_used >= sys_limit:
         return False, f"系统额度已用尽 ({total_used}/{sys_limit} tokens)"
     return True, ""
@@ -221,7 +221,7 @@ async def llm_proxy(provider: str, path: str, request: Request):
             org_key = key_result.scalar_one_or_none()
             if org_key is None:
                 return JSONResponse(status_code=404, content={
-                    "error": f"当前组织未配置 {provider} 的 Key，请联系管理员"
+                    "error": f"当前组织未配置 {provider} 的 Working Plan Key，请联系管理员"
                 })
             real_key = org_key.api_key
             base_url = org_key.base_url

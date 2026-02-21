@@ -81,7 +81,7 @@ def _build_providers_config(
             }
         else:
             if not proxy_url:
-                logger.error("LLM_PROXY_URL 未配置，组织 Key 模式无法生成 proxy URL")
+                logger.error("LLM_PROXY_URL 未配置，Working Plan 模式无法生成 proxy URL")
                 continue
             entry = {
                 "baseUrl": f"{proxy_url}/{provider}/v1",
@@ -325,7 +325,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
     has_org = any(c.key_source == "org" for c in configs)
     if has_org and not proxy_token:
-        logger.warning("实例 %s 缺少 proxy_token，组织 Key 模式无法写入", instance.name)
+        logger.warning("实例 %s 缺少 proxy_token，Working Plan 模式无法写入", instance.name)
 
     providers = _build_providers_config(configs, proxy_token, user_keys)
 
