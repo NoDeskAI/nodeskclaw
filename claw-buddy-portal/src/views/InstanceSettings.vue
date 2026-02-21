@@ -390,9 +390,8 @@ watch(instanceOrgId, (val) => {
             <div class="space-y-2">
               <div class="flex gap-4 text-sm">
                 <label
-                  class="flex items-center gap-1.5"
+                  class="flex items-center gap-1.5 group relative"
                   :class="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
-                  :title="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? '' : '暂未开放'"
                 >
                   <input
                     type="radio"
@@ -404,6 +403,12 @@ watch(instanceOrgId, (val) => {
                     @change="markDirty"
                   />
                   Working Plan
+                  <span
+                    v-if="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
+                    class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border border-border opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    该 Provider 暂未开放 Working Plan
+                  </span>
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
