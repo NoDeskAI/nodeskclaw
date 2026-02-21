@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     VKE_SUBNET_ID: str = ""
 
     # ── LLM Proxy ─────────────────────────────────────────
-    CLAWBUDDY_HOST: str = ""  # 外部可达域名，如 https://clawbuddy.example.com
+    CLAWBUDDY_HOST: str = ""  # 外部可达域名，如 https://clawbuddy.example.com（废弃，保留兼容）
+    LLM_PROXY_URL: str = ""  # 独立 LLM Proxy 服务地址，如 http://llm-proxy.internal.nodesk.tech
 
     # ── 出站代理（用于访问 OpenAI/Anthropic 等外部 API）────
     HTTPS_PROXY: str = ""

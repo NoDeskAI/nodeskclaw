@@ -629,8 +629,9 @@ register_exception_handlers(app)
 # ── Routers ──────────────────────────────────────────
 app.include_router(api_router, prefix="/api/v1")
 
-from app.api.llm_proxy import router as llm_proxy_router
-app.include_router(llm_proxy_router, tags=["LLM 代理"])
+if settings.DEBUG:
+    from app.api.llm_proxy import router as llm_proxy_router
+    app.include_router(llm_proxy_router, tags=["LLM 代理（开发模式）"])
 
 # ── Static files (前端 build 产物) ───────────────────
 # 生产环境：Vite build 后的 dist 目录会被复制到 static/

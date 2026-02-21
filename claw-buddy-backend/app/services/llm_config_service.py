@@ -66,7 +66,7 @@ def _build_providers_config(
     org  key_source  -> proxy URL + proxy token
     personal key_source -> provider base URL + user's real API key
     """
-    host = settings.CLAWBUDDY_HOST.rstrip("/") if settings.CLAWBUDDY_HOST else ""
+    proxy_url = settings.LLM_PROXY_URL.rstrip("/") if settings.LLM_PROXY_URL else ""
     providers: dict = {}
     for cfg in configs:
         provider = cfg.provider
@@ -80,12 +80,11 @@ def _build_providers_config(
                 "apiKey": uk.api_key,
             }
         else:
-            if host:
-                base_url = f"{host}/llm-proxy/{provider}/v1"
-            else:
-                base_url = f"http://localhost:8000/llm-proxy/{provider}/v1"
+            if not proxy_url:
+                logger.error("LLM_PROXY_URL 未配置，组织 Key 模式无法生成 proxy URL")
+                continue
             entry = {
-                "baseUrl": base_url,
+                "baseUrl": f"{proxy_url}/{provider}/v1",
                 "apiKey": proxy_token,
             }
 
@@ -245,7 +244,7 @@ async def read_openclaw_providers(
     if not pod_providers:
         return OpenClawConfigResponse(data_source="nfs", providers=[])
 
-    host = (settings.CLAWBUDDY_HOST or "").rstrip("/")
+    host = (settings.LLM_PROXY_URL or "").rstrip("/")
 
     configs_result = await db.execute(
         select(UserLlmConfig).where(
