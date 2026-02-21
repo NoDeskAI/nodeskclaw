@@ -405,7 +405,7 @@ watch(instanceOrgId, (val) => {
                   Working Plan
                   <span
                     v-if="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
-                    class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border border-border opacity-0 group-hover:opacity-100 transition-opacity"
+                    class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border border-border invisible group-hover:visible transition-opacity"
                   >
                     该 Provider 暂未开放 Working Plan
                   </span>
