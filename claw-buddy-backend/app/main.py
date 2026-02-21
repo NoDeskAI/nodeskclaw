@@ -362,10 +362,15 @@ async def lifespan(app: FastAPI):
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_instances_wp_api_key "
                 "ON instances (wp_api_key) WHERE wp_api_key IS NOT NULL"
             ))
-            await conn.execute(text(
-                "UPDATE instances SET wp_api_key = 'clawbuddy-wp-' || encode(gen_random_bytes(32), 'hex') "
-                "WHERE wp_api_key IS NULL AND deleted_at IS NULL"
+            import secrets as _secrets_mod
+            rows = await conn.execute(text(
+                "SELECT id FROM instances WHERE wp_api_key IS NULL AND deleted_at IS NULL"
             ))
+            for row in rows:
+                await conn.execute(
+                    text("UPDATE instances SET wp_api_key = :key WHERE id = :id"),
+                    {"key": f"clawbuddy-wp-{_secrets_mod.token_hex(32)}", "id": row.id},
+                )
             logger.info("自动迁移：已为 instances 表添加 wp_api_key 列并回填")
 
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
