@@ -1342,25 +1342,59 @@ LLM Proxy 是独立于 ClawBuddy 后端的微服务，负责组织 Key 模式下
 
 ### 10.2 架构
 
+#### 10.2.1 Pod 内部架构
+
 ```
-OpenClaw Pod ──HTTP──> LLM Proxy Service (私网域名)
-                            │
-                       ┌────┴─────┐
-                       │   Pod    │
-                       │ ┌──────┐ │
-                       │ │Proxy │──── DB (RDS PostgreSQL)
-                       │ │:8080 │ │
-                       │ └──┬───┘ │
-                       │    │     │
-                       │ ┌──┴───┐ │
-                       │ │Clash │──── OpenAI / Anthropic / MiniMax ...
-                       │ │:7890 │ │
-                       │ └──────┘ │
-                       └──────────┘
+LLM Proxy Pod (clawbuddy-system namespace)
+┌──────────────────────────────────┐
+│ ┌──────────────┐                 │
+│ │  LLM Proxy   │──── DB (RDS)   │
+│ │  FastAPI     │                 │
+│ │  :8080       │                 │
+│ └──────┬───────┘                 │
+│        │ HTTP_PROXY=127.0.0.1:7890
+│ ┌──────┴───────┐                 │
+│ │  Clash       │──── OpenAI / Anthropic / ...
+│ │  mihomo      │                 │
+│ │  :7890       │                 │
+│ └──────────────┘                 │
+└──────────────────────────────────┘
 ```
 
 - **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 proxy_token 鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
 - **Clash Sidecar**（mihomo :7890）：提供出站 HTTPS 代理，用于访问 OpenAI/Anthropic 等需要翻墙的外部 API
+
+#### 10.2.2 网络链路（实际部署方案）
+
+LLM Proxy 复用已有的 Controller ALB + Nginx Ingress Controller，不单独创建 ALB：
+
+```
+OpenClaw Pod
+  │
+  │ HTTPS (clawbuddy-llm-proxy.nodesk.tech)
+  ▼
+Controller ALB (私网 10.3.32.251, HTTPS:443)
+  │ *.nodesk.tech 通配转发规则
+  ▼
+Nginx Ingress Controller Pod (clawbuddy-system)
+  │ Host: clawbuddy-llm-proxy.nodesk.tech
+  ▼
+LLM Proxy Service (ClusterIP, port:80 -> targetPort:8080)
+  │
+  ▼
+LLM Proxy Pod (:8080)
+```
+
+涉及的 K8s 资源：
+
+| 资源 | 名称 | 命名空间 | 说明 |
+|------|------|----------|------|
+| Ingress (alb) | `clawbuddy-controller-alb-route` | clawbuddy-system | `*.nodesk.tech` 通配，转发到 Nginx Controller |
+| Ingress (nginx) | `clawbuddy-llm-proxy` | clawbuddy-system | 匹配 `clawbuddy-llm-proxy.nodesk.tech`，转发到 LLM Proxy Service |
+| Service | `clawbuddy-llm-proxy` | clawbuddy-system | ClusterIP，port 80 -> targetPort 8080 |
+| Deployment | `clawbuddy-llm-proxy` | clawbuddy-system | 1 副本，含 Clash sidecar |
+
+DNS 配置：`clawbuddy-llm-proxy.nodesk.tech` 解析到 Controller ALB 的私网 VIP `10.3.32.251`（可用 `*.nodesk.tech` 通配 A 记录覆盖）。
 
 ### 10.3 部署步骤
 
@@ -1379,9 +1413,32 @@ kubectl apply -f deploy/clash-config.yaml
 kubectl apply -f deploy/deployment.yaml
 kubectl apply -f deploy/service.yaml
 
-# 5. 配置私网 DNS 解析到 Service ClusterIP
-kubectl get svc -n clawbuddy-system clawbuddy-llm-proxy
-# 将 ClusterIP 解析到私网域名（如 llm-proxy.internal.nodesk.tech）
+# 5. 创建 Nginx Ingress（复用 Controller ALB）
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clawbuddy-llm-proxy
+  namespace: clawbuddy-system
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: clawbuddy-llm-proxy.nodesk.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: clawbuddy-llm-proxy
+            port:
+              number: 80
+EOF
+
+# 6. 验证
+kubectl exec -n <any-openclaw-namespace> <pod> -- \
+  curl -sk https://clawbuddy-llm-proxy.nodesk.tech/health
+# 期望返回: {"status":"ok"}
 ```
 
 ### 10.4 后端配置
@@ -1389,7 +1446,115 @@ kubectl get svc -n clawbuddy-system clawbuddy-llm-proxy
 在 `claw-buddy-backend/.env` 中设置 LLM Proxy 地址：
 
 ```
-LLM_PROXY_URL=http://llm-proxy.internal.nodesk.tech
+LLM_PROXY_URL=https://clawbuddy-llm-proxy.nodesk.tech
 ```
 
 后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 会指向 `{LLM_PROXY_URL}/{provider}/v1`。
+
+### 10.5 为什么不给 LLM Proxy 单独创建 ALB
+
+早期方案尝试过为 LLM Proxy 创建独立 ALB Ingress（`ingressClassName: alb`），但遇到 VKE ALB 控制器的问题导致失败，详见第十一节。最终采用复用 Controller ALB + Nginx Ingress 的方案，优势：
+
+- 不额外创建 ALB 实例，节省资源
+- 复用已有的 `*.nodesk.tech` 通配转发规则和 TLS 证书
+- Nginx Ingress 配置简单、行为可预测
+
+---
+
+## 十一、VKE ALB 踩坑记录
+
+> 记录在 VKE 上使用 ALB Ingress 遇到的问题和排障经验，供后续参考。
+
+### 11.1 背景
+
+VKE 支持两种 IngressClass：
+
+| IngressClass | 说明 | 适用场景 |
+|-------------|------|----------|
+| `nginx` | 通过 Nginx Ingress Controller 路由，所有域名共享一个入口 ALB | 大多数场景 |
+| `alb` | 每个 Ingress 可对应一个独立 ALB 实例，VKE ALB 控制器自动管理 | 需要独立 ALB 的场景 |
+
+项目当前架构：一个 Controller ALB（`alb-njd4tb8nlqn9`，私网 `10.3.32.251`）负责所有 `*.nodesk.tech` 流量，通过通配转发规则将请求转给 Nginx Ingress Controller，再由 Nginx 根据 Host header 分发到各个后端 Service。
+
+### 11.2 问题 1：新建 ALB Ingress 后端服务器组为空
+
+**现象**：为 LLM Proxy 创建 `ingressClassName: alb` 的 Ingress，VKE 自动创建了新 ALB 实例，但 ALB 的后端服务器组始终为空（0 个后端），导致 HTTPS 请求返回 503。
+
+**排查过程**：
+
+1. Ingress events 显示 `reconcile alb ingress successfully`，表面上成功
+2. 但 ALB 控制台查看服务器组，确认后端数为 0
+3. 对比已正常运行的 ALB（`alb-cnh4mmhwgdwk`）的 CRD，发现新 ALB 缺少两个关键字段：
+
+```yaml
+# 正常 ALB 的 CRD 有以下字段
+spec:
+  listeners:
+    customizedConfig:
+      customizedCfgID: ccfg-xxx
+      customizedConfigEnabled: "on"
+    enableHTTP2: true
+
+# 新建的 ALB �RD 缺少这两个字段
+```
+
+4. Ingress events 中曾出现 `QuotaExceed.ListenerPerCustomizedCfg` 错误
+
+**结论**：VKE ALB 控制器在自动创建 ALB 时，未正确配置 `customizedConfig` 和 `enableHTTP2`，导致后端注册失败但不报错。即使手动补上这两个字段，服务器组仍未被正确填充。
+
+**规避方案**：放弃独立 ALB，改用 Nginx Ingress 复用已有 Controller ALB。
+
+### 11.3 问题 2：共享 ALB 上的 Ingress 增删导致后端服务器组被清空
+
+**现象**：在同一个 ALB（`alb-njd4tb8nlqn9`）上多次创建、删除 LLM Proxy 的 Ingress 资源后，原本正常的 `*.nodesk.tech` 通配规则也开始返回 503，所有域名全部不可用。
+
+**原因**：VKE ALB 控制器在处理同一 ALB 上多个 Ingress 的增删时，内部状态出现异常，导致后端服务器组被错误地清空。
+
+**修复方法**：
+
+```bash
+# 给 Ingress 加一个无害的 annotation，触发 VKE 控制器重新同步
+kubectl annotate ingress clawbuddy-controller-alb-route \
+  -n clawbuddy-system \
+  force-sync=$(date +%s) --overwrite
+
+# 等待几秒后检查 events
+kubectl describe ingress clawbuddy-controller-alb-route -n clawbuddy-system
+# 应看到: ReconcileALBIngressSuccessfully
+```
+
+**经验**：对 ALB 做任何 Ingress 变更后，务必验证既有规则仍然正常。如果发现 503，先尝试 force-sync annotation 触发重新同步。
+
+### 11.4 问题 3：ALB 转发规则路径匹配类型错误
+
+**现象**：ALB 重新同步后，只有根路径 `/` 能正确转发到后端，非根路径（`/health`、`/api`、`/v1/chat/completions` 等）全部返回 503。
+
+**原因**：ALB 控制台上 `*.nodesk.tech` 转发规则的 URL 路径 `/` 被配置为**精确匹配**而非**前缀匹配**。Kubernetes Ingress 中 `pathType: Prefix` 的语义未被正确映射到 ALB 的转发规则。
+
+**修复方法**：在 ALB 控制台手动修改转发规则，将路径匹配从"精确匹配"改为"前缀匹配"，或添加 `/**` 前缀匹配规则。
+
+**验证**：
+
+```bash
+# 从任意 Pod 测试多个路径
+for path in / /health /api /v1/chat/completions; do
+  code=$(curl -sk -o /dev/null -w '%{http_code}' \
+    https://clawbuddy-llm-proxy.nodesk.tech${path})
+  echo "${path} -> ${code}"
+done
+# 所有路径都应返回非 503 的状态码
+```
+
+### 11.5 快速排障检查清单
+
+遇到 ALB 相关的 503 时，按以下顺序排查：
+
+| 步骤 | 检查项 | 命令/操作 |
+|------|--------|-----------|
+| 1 | Nginx Controller Pod 是否 Running | `kubectl get pods -n clawbuddy-system -l app.kubernetes.io/component=controller` |
+| 2 | 直接访问 Nginx Controller Pod 是否正常 | `curl -H "Host: xxx.nodesk.tech" http://<pod-ip>:80/health` |
+| 3 | ALB 后端服务器组是否有后端 | ALB 控制台 -> 服务器组 -> 查看后端数量 |
+| 4 | ALB 转发规则路径匹配类型 | ALB 控制台 -> 转发规则 -> 确认为"前缀匹配" |
+| 5 | DNS 解析是否指向正确的 ALB VIP | `python3 -c "import socket; print(socket.gethostbyname('xxx.nodesk.tech'))"` |
+| 6 | 是否有残留的 Ingress 或 ALB 资源 | `kubectl get ingress -A` / `kubectl get alb` |
+| 7 | 强制重新同步 | `kubectl annotate ingress <name> -n clawbuddy-system force-sync=$(date +%s) --overwrite` |
