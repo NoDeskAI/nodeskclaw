@@ -157,7 +157,7 @@ function addProvider(provider: string) {
   const pk = personalKeyForProvider(provider)
   providerConfigs.value.push({
     provider,
-    keySource: 'org',
+    keySource: WORKING_PLAN_PROVIDERS.has(provider) ? 'org' : 'personal',
     personalKeyNew: '',
     personalKeyMasked: pk?.api_key_masked ?? '',
     hasExistingPersonalKey: !!pk,
