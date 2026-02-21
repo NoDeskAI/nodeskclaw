@@ -323,13 +323,18 @@ async def _handle_stream(
 
     async def stream_generator():
         nonlocal usage_data
+        seen_done = False
         try:
             async for line in resp.aiter_lines():
                 if is_org_key and org_key_id:
                     parsed = _parse_usage_from_sse_chunk(line)
                     if parsed:
                         usage_data = parsed
+                if line.strip() == "data: [DONE]":
+                    seen_done = True
                 yield line + "\n"
+            if not seen_done:
+                yield "data: [DONE]\n\n"
         finally:
             await resp.aclose()
             if is_org_key and org_key_id and usage_data:
