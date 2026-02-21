@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clawbuddy-llm-proxy-clash
+  namespace: clawbuddy-system
+data:
+  config.yaml: |
+    mixed-port: 7890
+    allow-lan: false
+    mode: rule
+    log-level: warning
+
+    proxy-providers:
+      subscription:
+        type: http
+        url: "https://fba02.fbsubcn01.cc:2096/flydsubal/ie6rjnbj4lhppnzs?sub=2&extend=1"
+        interval: 3600
+        path: ./providers/subscription.yaml
+        health-check:
+          enable: true
+          interval: 300
+          url: https://www.gstatic.com/generate_204
+
+    proxy-groups:
+      - name: LLM-Outbound
+        type: select
+        use:
+          - subscription
+        filter: "(?i)(singapore|sg|hongkong|hk|香港|新加坡)"
+
+    rules:
+      - DOMAIN-SUFFIX,openai.com,LLM-Outbound
+      - DOMAIN-SUFFIX,anthropic.com,LLM-Outbound
+      - DOMAIN-SUFFIX,googleapis.com,LLM-Outbound
+      - DOMAIN-SUFFIX,openrouter.ai,LLM-Outbound
+      - DOMAIN-SUFFIX,minimaxi.com,DIRECT
+      - MATCH,DIRECT

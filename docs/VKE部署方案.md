@@ -1329,3 +1329,67 @@ spec:
           persistentVolumeClaim:
             claimName: clawbuddy-data
 ```
+
+---
+
+## 十、LLM Proxy 独立服务部署
+
+### 10.1 概述
+
+LLM Proxy 是独立于 ClawBuddy 后端的微服务，负责组织 Key 模式下的 LLM 请求代理转发。独立部署到 K8s 后，OpenClaw 实例通过私网域名访问该服务。
+
+项目目录：`claw-buddy-llm-proxy/`，包含代码、Dockerfile、构建脚本和 K8s 部署清单。
+
+### 10.2 架构
+
+```
+OpenClaw Pod ──HTTP──> LLM Proxy Service (私网域名)
+                            │
+                       ┌────┴─────┐
+                       │   Pod    │
+                       │ ┌──────┐ │
+                       │ │Proxy │──── DB (RDS PostgreSQL)
+                       │ │:8080 │ │
+                       │ └──┬───┘ │
+                       │    │     │
+                       │ ┌──┴───┐ │
+                       │ │Clash │──── OpenAI / Anthropic / MiniMax ...
+                       │ │:7890 │ │
+                       │ └──────┘ │
+                       └──────────┘
+```
+
+- **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 proxy_token 鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
+- **Clash Sidecar**（mihomo :7890）：提供出站 HTTPS 代理，用于访问 OpenAI/Anthropic 等需要翻墙的外部 API
+
+### 10.3 部署步骤
+
+```bash
+# 1. 构建并推送镜像
+cd claw-buddy-llm-proxy
+./build-and-push.sh
+
+# 2. 创建 Secret（DATABASE_URL）
+kubectl apply -f deploy/secret.yaml
+
+# 3. 创建 Clash 配置
+kubectl apply -f deploy/clash-config.yaml
+
+# 4. 部署 Deployment + Service
+kubectl apply -f deploy/deployment.yaml
+kubectl apply -f deploy/service.yaml
+
+# 5. 配置私网 DNS 解析到 Service ClusterIP
+kubectl get svc -n clawbuddy-system clawbuddy-llm-proxy
+# 将 ClusterIP 解析到私网域名（如 llm-proxy.internal.nodesk.tech）
+```
+
+### 10.4 后端配置
+
+在 `claw-buddy-backend/.env` 中设置 LLM Proxy 地址：
+
+```
+LLM_PROXY_URL=http://llm-proxy.internal.nodesk.tech
+```
+
+后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 会指向 `{LLM_PROXY_URL}/{provider}/v1`。
