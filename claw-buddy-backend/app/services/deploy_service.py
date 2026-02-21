@@ -517,7 +517,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             deployment_ready = False
             label_selector = f"app.kubernetes.io/name={ctx.name}"
 
-            for tick in range(60):  # 60 x 5s = 300s
+            for tick in range(150):  # 150 x 2s = 300s
                 dep_status = await k8s.get_deployment_status(ctx.namespace, ctx.name)
                 if dep_status["ready_replicas"] >= ctx.replicas:
                     deployment_ready = True
@@ -567,13 +567,13 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                     for cond in dep_status.get("conditions", []):
                         diag_lines.append(f"{cond['type']}: {cond.get('message', '')[:100]}")
 
-                    elapsed = (tick + 1) * 5
+                    elapsed = (tick + 1) * 2
                     diag_lines.append(f"已等待 {elapsed}s / 300s")
                     # 同时写入后端日志文件，方便事后排查
                     logger.info("[%s] 等待就绪诊断:\n  %s", ctx.name, "\n  ".join(diag_lines))
                     _publish(9, DEPLOY_STEPS[8], logs=diag_lines)
 
-                await asyncio.sleep(5)
+                await asyncio.sleep(2)
 
             rec_result = await db.execute(select(DeployRecord).where(DeployRecord.id == ctx.record_id))
             record = rec_result.scalar_one()
@@ -588,9 +588,16 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 instance.available_replicas = dep_status.get("available_replicas", 0)
                 await db.commit()
 
-                # 注入 gateway.token + trustedProxies 到 openclaw.json
-                from app.services.llm_config_service import ensure_openclaw_gateway_config
+                # 注入 gateway 配置 + LLM provider 配置到 openclaw.json
+                from app.services.llm_config_service import (
+                    ensure_openclaw_gateway_config,
+                    sync_openclaw_llm_config,
+                )
                 await ensure_openclaw_gateway_config(instance, db)
+                try:
+                    await sync_openclaw_llm_config(instance, db)
+                except Exception as e:
+                    logger.warning("部署后同步 LLM 配置失败（非致命）: %s", e)
 
                 _publish(total, "完成", status="success", message="部署成功")
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
