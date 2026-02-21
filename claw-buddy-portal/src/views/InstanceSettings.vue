@@ -203,9 +203,17 @@ function validateConfigs(): string | null {
         return `${label}: 请输入个人 API Key`
       }
     }
+    if (!cfg.selectedModel) {
+      return `${label}: 请选择一个模型`
+    }
   }
   return null
 }
+
+const canSave = computed(() => {
+  if (!dirty.value || providerConfigs.value.length === 0) return false
+  return providerConfigs.value.every(c => !!c.selectedModel)
+})
 
 // ── Save ──
 
@@ -309,9 +317,9 @@ onMounted(loadAll)
           </button>
           <button
             v-if="providerConfigs.length > 0"
-            :disabled="saving || restarting || !dirty"
+            :disabled="saving || restarting || !canSave"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors"
-            :class="dirty
+            :class="canSave
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'bg-muted text-muted-foreground'"
             @click="handleSave"
@@ -465,18 +473,6 @@ onMounted(loadAll)
           </div>
         </div>
 
-        <!-- Save button (bottom, for when there are configs) -->
-        <div v-if="providerConfigs.length > 0 && dirty" class="pt-2">
-          <button
-            :disabled="saving || restarting"
-            class="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            @click="handleSave"
-          >
-            <Loader2 v-if="saving || restarting" class="w-4 h-4 animate-spin" />
-            <Save v-else class="w-4 h-4" />
-            {{ restarting ? '重启中...' : saving ? '保存中...' : '保存配置并重启 OpenClaw' }}
-          </button>
-        </div>
       </template>
     </div>
 
