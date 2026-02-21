@@ -260,9 +260,9 @@ async function handleSave() {
       })),
     })
 
-    // 3. Restart OpenClaw
+    // 3. Restart OpenClaw (needs longer timeout: waits for pod ready)
     restarting.value = true
-    const res = await api.post(`/instances/${instanceId.value}/restart-openclaw`)
+    const res = await api.post(`/instances/${instanceId.value}/restart-openclaw`, null, { timeout: 120000 })
     const result = res.data.data
     if (result?.status === 'ok') {
       successMsg.value = '配置已保存，OpenClaw 已重启'
