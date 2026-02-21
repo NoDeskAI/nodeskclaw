@@ -62,9 +62,9 @@ const navItems = [
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-6 py-8">
-    <!-- Header -->
-    <div class="flex items-center gap-3 mb-6">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] max-w-4xl mx-auto px-6">
+    <!-- Header (固定) -->
+    <div class="shrink-0 flex items-center gap-3 pt-8 pb-4">
       <button class="text-muted-foreground hover:text-foreground transition-colors" @click="router.push('/instances')">
         <ArrowLeft class="w-5 h-5" />
       </button>
@@ -81,8 +81,8 @@ const navItems = [
     </div>
 
     <!-- Body: sidebar + content -->
-    <div class="flex gap-6">
-      <!-- Left nav -->
+    <div class="flex gap-6 flex-1 min-h-0 pb-8">
+      <!-- Left nav (固定) -->
       <nav class="w-40 shrink-0 space-y-1">
         <router-link
           v-for="item in navItems"
@@ -98,8 +98,8 @@ const navItems = [
         </router-link>
       </nav>
 
-      <!-- Content -->
-      <div class="flex-1 min-w-0">
+      <!-- Content (可滚动) -->
+      <div class="flex-1 min-w-0 overflow-y-auto">
         <router-view />
       </div>
     </div>
