@@ -389,27 +389,29 @@ watch(instanceOrgId, (val) => {
             <!-- Key source selection -->
             <div class="space-y-2">
               <div class="flex gap-4 text-sm">
-                <label
-                  class="flex items-center gap-1.5 group relative"
-                  :class="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
-                >
-                  <input
-                    type="radio"
-                    :name="`ks-${cfg.provider}`"
-                    value="org"
-                    v-model="cfg.keySource"
-                    class="accent-primary"
-                    :disabled="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
-                    @change="markDirty"
-                  />
-                  Working Plan
+                <span class="relative group">
+                  <label
+                    class="flex items-center gap-1.5"
+                    :class="WORKING_PLAN_PROVIDERS.has(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+                  >
+                    <input
+                      type="radio"
+                      :name="`ks-${cfg.provider}`"
+                      value="org"
+                      v-model="cfg.keySource"
+                      class="accent-primary"
+                      :disabled="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
+                      @change="markDirty"
+                    />
+                    Working Plan
+                  </label>
                   <span
                     v-if="!WORKING_PLAN_PROVIDERS.has(cfg.provider)"
-                    class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border border-border invisible group-hover:visible transition-opacity"
+                    class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border border-border invisible group-hover:visible"
                   >
                     该 Provider 暂未开放 Working Plan
                   </span>
-                </label>
+                </span>
                 <label class="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
