@@ -38,7 +38,7 @@ interface LlmConfigEntry {
   provider: string
   keySource: 'org' | 'personal'
   personalKey: string
-  selectedModels: ModelItem[]
+  selectedModel: ModelItem | null
 }
 
 const PROVIDERS = ['openai', 'anthropic', 'gemini', 'openrouter', 'minimax-openai', 'minimax-anthropic'] as const
@@ -65,7 +65,7 @@ function addProvider() {
     provider: newProvider.value,
     keySource: 'org',
     personalKey: '',
-    selectedModels: [],
+    selectedModel: null,
   })
   newProvider.value = ''
 }
@@ -251,7 +251,7 @@ async function handleDeploy() {
     const activeLlm = llmConfigs.value.map(c => ({
       provider: c.provider,
       key_source: c.keySource,
-      selected_models: c.selectedModels.length > 0 ? c.selectedModels : undefined,
+      selected_models: c.selectedModel ? [c.selectedModel] : undefined,
     }))
 
     const res = await api.post('/deploy', {
@@ -565,11 +565,11 @@ async function handleDeploy() {
               <!-- Model selection -->
               <ModelSelect
                 :provider="cfg.provider"
-                v-model="cfg.selectedModels"
+                v-model="cfg.selectedModel"
                 @fetch-models="handleFetchModels"
               />
-              <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && cfg.selectedModels.length === 0" class="text-[10px] text-amber-500">
-                自定义 Provider 需要选择至少一个模型
+              <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && !cfg.selectedModel" class="text-[10px] text-amber-500">
+                自定义 Provider 需要选择一个模型
               </p>
             </div>
 

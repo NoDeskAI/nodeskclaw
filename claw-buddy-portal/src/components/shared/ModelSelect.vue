@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Search, X, ChevronDown, Loader2, RefreshCw, Check } from 'lucide-vue-next'
+import { Search, X, ChevronDown, Loader2, RefreshCw } from 'lucide-vue-next'
 
 export interface ModelItem {
   id: string
@@ -11,13 +11,13 @@ export interface ModelItem {
 
 const props = defineProps<{
   provider: string
-  modelValue: ModelItem[]
+  modelValue: ModelItem | null
   disabled?: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [value: ModelItem[]]
-  'fetch-models': [provider: string, callback: (models: ModelItem[]) => void]
+  'update:modelValue': [value: ModelItem | null]
+  'fetch-models': [provider: string, callback: (models: ModelItem[], error?: string) => void]
 }>()
 
 const open = ref(false)
@@ -27,8 +27,6 @@ const errorMsg = ref('')
 const availableModels = ref<ModelItem[]>([])
 const containerRef = ref<HTMLDivElement>()
 
-const selectedIds = computed(() => new Set(props.modelValue.map(m => m.id)))
-
 const filtered = computed(() => {
   if (!search.value) return availableModels.value
   const q = search.value.toLowerCase()
@@ -37,16 +35,17 @@ const filtered = computed(() => {
   )
 })
 
-function toggle(model: ModelItem) {
-  if (selectedIds.value.has(model.id)) {
-    emit('update:modelValue', props.modelValue.filter(m => m.id !== model.id))
+function select(model: ModelItem) {
+  if (props.modelValue?.id === model.id) {
+    emit('update:modelValue', null)
   } else {
-    emit('update:modelValue', [...props.modelValue, model])
+    emit('update:modelValue', model)
   }
+  open.value = false
 }
 
-function remove(id: string) {
-  emit('update:modelValue', props.modelValue.filter(m => m.id !== id))
+function clear() {
+  emit('update:modelValue', null)
 }
 
 function loadModels() {
@@ -84,45 +83,33 @@ watch(() => props.provider, () => {
 
 <template>
   <div ref="containerRef" class="relative">
-    <label class="text-xs text-muted-foreground mb-1 block">
-      可用模型
-      <span v-if="modelValue.length > 0" class="text-foreground font-medium ml-1">{{ modelValue.length }} 个已选</span>
-    </label>
+    <label class="text-xs text-muted-foreground mb-1 block">模型</label>
 
-    <!-- Selected tags + trigger -->
     <div
-      class="min-h-[38px] flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-card text-sm cursor-pointer transition-colors"
+      class="h-[38px] flex items-center gap-1.5 px-3 rounded-lg border bg-card text-sm cursor-pointer transition-colors"
       :class="[
         disabled ? 'opacity-50 cursor-not-allowed border-border' : 'hover:border-primary/50 border-border',
         open ? 'ring-2 ring-primary/50 border-primary' : ''
       ]"
       @click="handleOpen"
     >
-      <span
-        v-for="m in modelValue"
-        :key="m.id"
-        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-mono"
-      >
-        {{ m.id }}
+      <template v-if="modelValue">
+        <span class="flex-1 font-mono text-xs truncate">{{ modelValue.id }}</span>
         <button
-          class="hover:text-destructive transition-colors"
-          @click.stop="remove(m.id)"
+          class="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+          @click.stop="clear"
         >
-          <X class="w-3 h-3" />
+          <X class="w-3.5 h-3.5" />
         </button>
-      </span>
-      <span v-if="modelValue.length === 0" class="text-muted-foreground text-sm">
-        点击选择模型...
-      </span>
-      <ChevronDown class="w-4 h-4 text-muted-foreground ml-auto shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" />
+      </template>
+      <span v-else class="flex-1 text-muted-foreground text-sm">选择模型...</span>
+      <ChevronDown class="w-4 h-4 text-muted-foreground shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" />
     </div>
 
-    <!-- Dropdown -->
     <div
       v-if="open"
       class="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-lg overflow-hidden"
     >
-      <!-- Search input -->
       <div class="flex items-center gap-2 px-3 py-2 border-b border-border">
         <Search class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <input
@@ -141,7 +128,6 @@ watch(() => props.provider, () => {
         </button>
       </div>
 
-      <!-- Model list -->
       <div class="max-h-60 overflow-y-auto">
         <div v-if="loading" class="flex items-center justify-center py-6">
           <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
@@ -155,13 +141,14 @@ watch(() => props.provider, () => {
           v-for="m in filtered"
           :key="m.id"
           class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent transition-colors"
-          @click.stop="toggle(m)"
+          :class="modelValue?.id === m.id ? 'bg-primary/5' : ''"
+          @click.stop="select(m)"
         >
           <div
-            class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors"
-            :class="selectedIds.has(m.id) ? 'bg-primary border-primary' : 'border-muted-foreground/40'"
+            class="w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors"
+            :class="modelValue?.id === m.id ? 'border-primary' : 'border-muted-foreground/40'"
           >
-            <Check v-if="selectedIds.has(m.id)" class="w-3 h-3 text-primary-foreground" />
+            <div v-if="modelValue?.id === m.id" class="w-2 h-2 rounded-full bg-primary" />
           </div>
           <div class="flex-1 min-w-0">
             <div class="font-mono text-xs truncate">{{ m.id }}</div>

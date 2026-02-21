@@ -45,7 +45,7 @@ interface ProviderConfig {
   personalKeyNew: string
   personalKeyMasked: string
   hasExistingPersonalKey: boolean
-  selectedModels: ModelItem[]
+  selectedModel: ModelItem | null
 }
 
 const BUILTIN_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter'])
@@ -120,7 +120,7 @@ async function loadAll() {
         personalKeyNew: '',
         personalKeyMasked: pk?.api_key_masked ?? '',
         hasExistingPersonalKey: !!pk,
-        selectedModels: (c as any).selected_models ?? [],
+        selectedModel: ((c as any).selected_models ?? [])[0] ?? null,
       })
     }
 
@@ -135,7 +135,7 @@ async function loadAll() {
           personalKeyNew: '',
           personalKeyMasked: pk?.api_key_masked ?? np.api_key_masked ?? '',
           hasExistingPersonalKey: !!pk,
-          selectedModels: [],
+          selectedModel: null,
         })
       }
     }
@@ -160,7 +160,7 @@ function addProvider(provider: string) {
     personalKeyNew: '',
     personalKeyMasked: pk?.api_key_masked ?? '',
     hasExistingPersonalKey: !!pk,
-    selectedModels: [],
+    selectedModel: null,
   })
   newProviderOpen.value = false
   dirty.value = true
@@ -248,7 +248,7 @@ async function handleSave() {
       configs: providerConfigs.value.map(c => ({
         provider: c.provider,
         key_source: c.keySource,
-        selected_models: c.selectedModels.length > 0 ? c.selectedModels : undefined,
+        selected_models: c.selectedModel ? [c.selectedModel] : undefined,
       })),
     })
 
@@ -430,12 +430,12 @@ onMounted(loadAll)
             <!-- Model selection -->
             <ModelSelect
               :provider="cfg.provider"
-              v-model="cfg.selectedModels"
+              v-model="cfg.selectedModel"
               @fetch-models="handleFetchModels"
               @update:model-value="markDirty"
             />
-            <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && cfg.selectedModels.length === 0" class="text-[10px] text-amber-500">
-              自定义 Provider 需要选择至少一个模型
+            <p v-if="!BUILTIN_PROVIDERS.has(cfg.provider) && !cfg.selectedModel" class="text-[10px] text-amber-500">
+              自定义 Provider 需要选择一个模型
             </p>
           </div>
 
