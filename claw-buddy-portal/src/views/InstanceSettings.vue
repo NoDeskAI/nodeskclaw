@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, inject, type ComputedRef, type Ref } from 'vue'
+import { ref, computed, watch, inject, type ComputedRef, type Ref } from 'vue'
 import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, HardDrive, Save, ChevronDown, Check } from 'lucide-vue-next'
 import ModelSelect from '@/components/shared/ModelSelect.vue'
 import type { ModelItem } from '@/components/shared/ModelSelect.vue'
@@ -287,7 +287,9 @@ async function handleSave() {
   }
 }
 
-onMounted(loadAll)
+watch(instanceOrgId, (val) => {
+  if (val) loadAll()
+}, { immediate: true })
 </script>
 
 <template>
