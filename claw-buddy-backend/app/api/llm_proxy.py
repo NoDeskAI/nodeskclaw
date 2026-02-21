@@ -177,14 +177,21 @@ async def llm_proxy(provider: str, path: str, request: Request):
         return JSONResponse(status_code=401, content={"error": "Missing proxy token"})
 
     async with async_session_factory() as db:
-        # 1. Lookup instance by proxy_token
         result = await db.execute(
             select(Instance).where(
-                Instance.proxy_token == proxy_token,
+                Instance.wp_api_key == proxy_token,
                 Instance.deleted_at.is_(None),
             )
         )
         instance = result.scalar_one_or_none()
+        if instance is None:
+            result = await db.execute(
+                select(Instance).where(
+                    Instance.proxy_token == proxy_token,
+                    Instance.deleted_at.is_(None),
+                )
+            )
+            instance = result.scalar_one_or_none()
         if instance is None:
             return JSONResponse(status_code=401, content={"error": "Invalid proxy token"})
 

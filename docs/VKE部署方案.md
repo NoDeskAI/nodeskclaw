@@ -1361,7 +1361,7 @@ LLM Proxy Pod (clawbuddy-system namespace)
 └──────────────────────────────────┘
 ```
 
-- **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 proxy_token 鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
+- **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 `wp_api_key`（格式 `clawbuddy-wp-{hex}`）鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
 - **Clash Sidecar**（mihomo :7890）：提供出站 HTTPS 代理，用于访问 OpenAI/Anthropic 等需要翻墙的外部 API
 
 #### 10.2.2 网络链路（实际部署方案）
@@ -1447,9 +1447,10 @@ kubectl exec -n <any-openclaw-namespace> <pod> -- \
 
 ```
 LLM_PROXY_URL=https://clawbuddy-llm-proxy.nodesk.tech
+LLM_PROXY_INTERNAL_URL=http://clawbuddy-llm-proxy.clawbuddy-system
 ```
 
-后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 会指向 `{LLM_PROXY_URL}/{provider}/v1`。
+`LLM_PROXY_INTERNAL_URL`（K8s 内网 DNS）优先使用，可绕过 ALB 压缩问题。后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 指向 `{LLM_PROXY_INTERNAL_URL}/{provider}/v1`，`apiKey` 使用实例的 `wp_api_key`（独立于 gateway token）。
 
 ### 10.5 为什么不给 LLM Proxy 单独创建 ALB
 

@@ -277,6 +277,7 @@ async def deploy_instance(
         service_type="ClusterIP",
         ingress_domain=None,
         proxy_token=gateway_token,
+        wp_api_key=f"clawbuddy-wp-{_secrets.token_hex(32)}",
         env_vars=_json.dumps(env_vars),
         advanced_config=_json.dumps(req.advanced_config) if req.advanced_config else None,
         storage_class=req.storage_class,

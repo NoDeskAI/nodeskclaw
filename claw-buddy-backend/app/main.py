@@ -349,6 +349,25 @@ async def lifespan(app: FastAPI):
                 ))
                 logger.info("自动迁移：已为 user_llm_configs 表添加 selected_models 列")
 
+        # ── 迁移 13: instances 新增 wp_api_key 列 + 回填 ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'wp_api_key'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN wp_api_key VARCHAR(96)"
+            ))
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_instances_wp_api_key "
+                "ON instances (wp_api_key) WHERE wp_api_key IS NOT NULL"
+            ))
+            await conn.execute(text(
+                "UPDATE instances SET wp_api_key = 'clawbuddy-wp-' || encode(gen_random_bytes(32), 'hex') "
+                "WHERE wp_api_key IS NULL AND deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 wp_api_key 列并回填")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

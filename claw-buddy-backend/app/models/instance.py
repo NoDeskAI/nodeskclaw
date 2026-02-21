@@ -53,9 +53,13 @@ class Instance(BaseModel):
     service_type: Mapped[str] = mapped_column(String(16), default=ServiceType.cluster_ip, nullable=False)
     ingress_domain: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
-    # LLM proxy token (same value as OPENCLAW_GATEWAY_TOKEN in env_vars)
+    # OpenClaw gateway token (Control UI / WebSocket 认证)
     proxy_token: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, index=True
+    )
+    # Working Plan API Key (LLM Proxy 认证，格式 clawbuddy-wp-{hex})
+    wp_api_key: Mapped[str | None] = mapped_column(
+        String(96), nullable=True, unique=True, index=True
     )
 
     # Config

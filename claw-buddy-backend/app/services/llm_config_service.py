@@ -58,15 +58,15 @@ def _k8s_name(instance: Instance) -> str:
 
 def _build_providers_config(
     configs: list[UserLlmConfig],
-    proxy_token: str,
+    wp_api_key: str,
     user_keys: dict[str, UserLlmKey],
 ) -> dict:
     """Build the models.providers section for openclaw.json.
 
-    org  key_source  -> proxy URL + proxy token
+    org  key_source  -> proxy URL + wp_api_key
     personal key_source -> provider base URL + user's real API key
     """
-    proxy_url = settings.LLM_PROXY_URL.rstrip("/") if settings.LLM_PROXY_URL else ""
+    proxy_url = (settings.LLM_PROXY_INTERNAL_URL or settings.LLM_PROXY_URL or "").rstrip("/")
     providers: dict = {}
     for cfg in configs:
         provider = cfg.provider
@@ -85,7 +85,7 @@ def _build_providers_config(
                 continue
             entry = {
                 "baseUrl": f"{proxy_url}/{provider}/v1",
-                "apiKey": proxy_token,
+                "apiKey": wp_api_key,
             }
 
         api_type = PROVIDER_API_TYPE.get(provider)
@@ -244,7 +244,12 @@ async def read_openclaw_providers(
     if not pod_providers:
         return OpenClawConfigResponse(data_source="nfs", providers=[])
 
-    host = (settings.LLM_PROXY_URL or "").rstrip("/")
+    proxy_hosts = [
+        h for h in (
+            (settings.LLM_PROXY_INTERNAL_URL or "").rstrip("/"),
+            (settings.LLM_PROXY_URL or "").rstrip("/"),
+        ) if h
+    ]
 
     configs_result = await db.execute(
         select(UserLlmConfig).where(
@@ -266,7 +271,7 @@ async def read_openclaw_providers(
     entries: list[OpenClawProviderEntry] = []
     for provider, prov_cfg in pod_providers.items():
         base_url = prov_cfg.get("baseUrl", "")
-        is_proxy = bool(host) and host in base_url
+        is_proxy = any(h in base_url for h in proxy_hosts)
 
         key_source: str | None = None
         api_key_masked: str | None = None
@@ -309,7 +314,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         logger.info("实例 %s 无 LLM 配置，跳过写入", instance.name)
         return
 
-    proxy_token = instance.proxy_token or ""
+    wp_api_key = instance.wp_api_key or ""
 
     personal_providers = [c.provider for c in configs if c.key_source == "personal"]
     user_keys: dict[str, UserLlmKey] = {}
@@ -324,10 +329,10 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         user_keys = {k.provider: k for k in uk_result.scalars().all()}
 
     has_org = any(c.key_source == "org" for c in configs)
-    if has_org and not proxy_token:
-        logger.warning("实例 %s 缺少 proxy_token，Working Plan 模式无法写入", instance.name)
+    if has_org and not wp_api_key:
+        logger.warning("实例 %s 缺少 wp_api_key，Working Plan 模式无法写入", instance.name)
 
-    providers = _build_providers_config(configs, proxy_token, user_keys)
+    providers = _build_providers_config(configs, wp_api_key, user_keys)
 
     async with nfs_mount(instance, db) as mount_path:
         try:
