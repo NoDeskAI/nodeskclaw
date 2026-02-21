@@ -20,7 +20,7 @@ spec:
       containers:
         # LLM Proxy
         - name: llm-proxy
-          image: nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-llm-proxy:latest
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-llm-proxy:20260221-ed29c25
           ports:
             - containerPort: 8080
           env:
@@ -54,7 +54,7 @@ spec:
             periodSeconds: 30
         # Clash sidecar for outbound proxy
         - name: clash
-          image: metacubex/mihomo:v1.19.0
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/mihomo:v1.19.0
           ports:
             - containerPort: 7890
           volumeMounts:
