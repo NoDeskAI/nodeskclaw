@@ -36,6 +36,8 @@ const openclawUrl = ref('')
 const urlCopied = ref(false)
 const restarting = ref(false)
 const showRestartDialog = ref(false)
+const showDeleteDialog = ref(false)
+const deleting = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollTimeout: ReturnType<typeof setTimeout> | null = null
@@ -135,12 +137,14 @@ async function handleRestart() {
 }
 
 async function handleDelete() {
-  if (!confirm(`确定删除实例「${instanceBasic.value?.name}」？此操作不可恢复。`)) return
+  showDeleteDialog.value = false
+  deleting.value = true
   try {
     await api.delete(`/instances/${instanceId.value}`)
     toast.success('实例已删除')
     router.push('/instances')
   } catch (e: any) {
+    deleting.value = false
     toast.error(e?.response?.data?.message || '删除失败')
   }
 }
@@ -269,11 +273,13 @@ async function handleDelete() {
           {{ restarting ? '重启中...' : '重启实例' }}
         </button>
         <button
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto"
-          @click="handleDelete"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="deleting"
+          @click="showDeleteDialog = true"
         >
-          <Trash2 class="w-4 h-4" />
-          删除实例
+          <Loader2 v-if="deleting" class="w-4 h-4 animate-spin" />
+          <Trash2 v-else class="w-4 h-4" />
+          {{ deleting ? '删除中...' : '删除实例' }}
         </button>
       </div>
     </div>
@@ -310,6 +316,45 @@ async function handleDelete() {
                 @click="handleRestart"
               >
                 确认重启
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 删除确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showDeleteDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showDeleteDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-red-500/10">
+                <AlertTriangle class="w-5 h-5 text-red-400" />
+              </div>
+              <h3 class="text-base font-semibold">删除实例</h3>
+            </div>
+            <div class="text-sm text-muted-foreground space-y-2">
+              <p>确定删除实例「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>
+              <ul class="list-disc list-inside space-y-1 text-xs">
+                <li>实例及其 K8s 资源将被永久删除</li>
+                <li>所有对话记录和工作区数据将丢失</li>
+                <li>此操作不可恢复</li>
+              </ul>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showDeleteDialog = false"
+              >
+                取消
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+                @click="handleDelete"
+              >
+                确认删除
               </button>
             </div>
           </div>
