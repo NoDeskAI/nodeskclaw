@@ -224,14 +224,18 @@ onMounted(async () => {
   }
 })
 
-const hasUnselectedModel = computed(() =>
-  llmConfigs.value.some(c => !BUILTIN_PROVIDERS.has(c.provider) && !c.selectedModel)
-)
+const llmReady = computed(() => {
+  if (llmSkipped.value) return true
+  if (llmConfigs.value.length === 0) return false
+  return llmConfigs.value.every(c =>
+    BUILTIN_PROVIDERS.has(c.provider) || !!c.selectedModel
+  )
+})
 
 const canDeploy = computed(() =>
   !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
   && !!selectedImage.value && clusters.value.length > 0 && !deploying.value
-  && !hasUnselectedModel.value
+  && llmReady.value
 )
 
 async function handleDeploy() {
