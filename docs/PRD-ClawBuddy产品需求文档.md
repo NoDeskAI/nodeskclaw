@@ -1070,4 +1070,28 @@ Glow:    box-shadow:0 0 8px <色值>
 
 ---
 
+## 附录 B 工作区 Agent 协同功能
+
+### B.1 功能概述
+
+工作区内的多个 Agent 以"群聊"模式协同工作。用户发送消息后，所有工作区内运行中的 Agent 同时收到消息并各自决定是否回复。Agent 也可通过 `send` 工具主动联系其他 Agent。
+
+### B.2 核心交互
+
+- **群聊广播**：用户消息自动发送给工作区内所有运行中 Agent
+- **多 Agent 流式响应**：各 Agent 响应通过 SSE 实时推送到前端
+- **NO_REPLY 静默**：与话题无关的 Agent 回复 `NO_REPLY` 即可静默，前端无感知
+- **Agent 协同**：Agent 使用 `send -t clawbuddy -to "agent:xxx" -m "消息"` 主动联系其他 Agent
+- **防循环**：Agent 响应只入库不触发其他 Agent；主动 send 携带深度计数器
+
+### B.3 技术实现
+
+- 后端维护 `workspace_messages` 表，记录所有群聊消息
+- 每次调用 Agent 时注入其他成员的近期消息作为上下文
+- OpenClaw session key `workspace:{ws_id}` 隔离工作区会话
+- 自研 `openclaw-channel-clawbuddy` channel plugin 实现 Agent 间通信
+- Channel plugin 通过 NFS 自动分发到各 OpenClaw 实例
+
+---
+
 *文档持续更新中，欢迎评审反馈。*

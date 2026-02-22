@@ -9,8 +9,11 @@ OpenClaw 实例可视化管理平台 -- One-click deploy, full control.
 ```
 ClawBuddy/
 ├── claw-buddy-frontend/      # 前端（Vue 3 + shadcn-vue + Tailwind CSS）
+├── claw-buddy-portal/        # 用户门户前端（Vue 3 + Tailwind CSS）
 ├── claw-buddy-backend/       # 后端（Python 3.12 + FastAPI）
+├── claw-buddy-llm-proxy/     # LLM Proxy 服务（Go）
 ├── claw-buddy-artifacts/     # 镜像构建 & 部署制品
+├── openclaw-channel-clawbuddy/  # OpenClaw channel plugin（工作区 Agent 协同）
 ├── openclaw/                 # OpenClaw 源码（独立仓库，不纳入 Git）
 └── vibecraft/                # VibeCraft 源码（独立仓库，不纳入 Git）
 ```
@@ -81,3 +84,4 @@ npm run dev
 
 - [后端 README](claw-buddy-backend/README.md) -- API 概览、目录结构、环境变量详解
 - [制品 README](claw-buddy-artifacts/README.md) -- OpenClaw 镜像构建、Dockerfile 说明
+- [Channel Plugin README](openclaw-channel-clawbuddy/README.md) -- 工作区 Agent 协同 channel plugin

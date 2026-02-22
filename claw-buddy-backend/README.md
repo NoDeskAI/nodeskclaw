@@ -25,7 +25,9 @@ claw-buddy-backend/
 │   │   ├── events.py         # SSE 事件推送
 │   │   ├── instances.py      # 实例管理
 │   │   ├── registry.py       # 镜像仓库
-│   │   └── settings.py       # 系统配置
+│   │   ├── settings.py       # 系统配置
+│   │   ├── workspaces.py     # 工作区 CRUD、群聊、SSE
+│   │   └── webhook.py        # Channel plugin webhook
 │   ├── core/                 # 核心模块
 │   │   ├── config.py         # pydantic-settings 配置
 │   │   ├── deps.py           # 依赖注入（DB session、当前用户等）
@@ -37,6 +39,10 @@ claw-buddy-backend/
 │   │   ├── cluster.py        # 集群
 │   │   ├── instance.py       # 实例
 │   │   ├── deploy_record.py  # 部署记录
+│   │   ├── workspace.py      # 工作区
+│   │   ├── workspace_message.py  # 工作区群聊消息
+│   │   ├── workspace_member.py   # 工作区成员
+│   │   ├── blackboard.py     # 工作区黑板
 │   │   └── system_config.py  # 系统配置（键值对）
 │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   ├── services/             # 业务逻辑层
@@ -47,6 +53,10 @@ claw-buddy-backend/
 │   │   ├── registry_service.py   # 镜像仓库查询
 │   │   ├── config_service.py     # 系统配置读写
 │   │   ├── health_checker.py     # 集群健康巡检
+│   │   ├── workspace_service.py  # 工作区 CRUD + Agent 管理
+│   │   ├── workspace_message_service.py  # 群聊消息记录 + 上下文构建
+│   │   ├── llm_config_service.py # OpenClaw 配置 + Channel plugin 分发
+│   │   ├── summary_job.py        # 自动摘要生成
 │   │   └── k8s/                  # K8s 相关
 │   │       ├── client_manager.py # K8s 连接池管理
 │   │       ├── k8s_client.py     # K8s API 封装
@@ -73,6 +83,11 @@ claw-buddy-backend/
 | `/api/v1/events` | 事件 | SSE 实时推送 |
 | `/api/v1/registry` | 镜像仓库 | 仓库配置、Tag 查询 |
 | `/api/v1/settings` | 系统配置 | 配置读写 |
+| `/api/v1/workspaces` | 工作区 | CRUD、Agent 管理、群聊、SSE |
+| `/api/v1/workspaces/{ws}/chat` | 群聊 | 广播消息给所有 Agent |
+| `/api/v1/workspaces/{ws}/messages` | 消息 | 工作区消息历史 |
+| `/api/v1/workspaces/{ws}/events` | SSE | 实时事件流（含 Agent 流式响应） |
+| `/api/v1/webhook/clawbuddy` | Webhook | Channel plugin 回调端点 |
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 
