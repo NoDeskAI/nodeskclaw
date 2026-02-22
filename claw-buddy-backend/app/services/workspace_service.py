@@ -3,11 +3,9 @@
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.agent_share_config import AgentShareConfig
-from app.models.agent_subscription import AgentSubscription
 from app.models.blackboard import Blackboard
 from app.models.instance import Instance
 from app.models.workspace import Workspace
@@ -185,11 +183,6 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest) 
     inst.workspace_id = workspace_id
     inst.agent_display_name = data.display_name
 
-    share = AgentShareConfig(instance_id=inst.id, workspace_id=workspace_id)
-    db.add(share)
-    sub = AgentSubscription(instance_id=inst.id, workspace_id=workspace_id)
-    db.add(sub)
-
     await db.commit()
     await db.refresh(inst)
     return _agent_brief(inst)
@@ -232,18 +225,6 @@ async def remove_agent(db: AsyncSession, workspace_id: str, instance_id: str) ->
     inst.hex_position_r = 0
     inst.agent_display_name = None
 
-    await db.execute(
-        delete(AgentShareConfig).where(
-            AgentShareConfig.instance_id == instance_id,
-            AgentShareConfig.workspace_id == workspace_id,
-        )
-    )
-    await db.execute(
-        delete(AgentSubscription).where(
-            AgentSubscription.instance_id == instance_id,
-            AgentSubscription.workspace_id == workspace_id,
-        )
-    )
     await db.commit()
     return True
 

@@ -1,20 +1,20 @@
-"""Background job for auto-summary generation and expired context cleanup."""
+"""Background job for auto-summary generation from workspace messages."""
 
 import asyncio
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from app.models.blackboard import Blackboard
-from app.models.context_entry import ContextEntry
 from app.models.workspace import Workspace
+from app.models.workspace_message import WorkspaceMessage
 
 logger = logging.getLogger(__name__)
 
 
 class SummaryJob:
-    """Periodically cleans up expired context entries and regenerates blackboard summaries."""
+    """Periodically regenerates blackboard summaries from recent workspace messages."""
 
     def __init__(self, session_factory, interval_seconds: int = 3600):
         self._session_factory = session_factory
@@ -47,24 +47,11 @@ class SummaryJob:
 
     async def _run(self):
         async with self._session_factory() as db:
-            cleaned = await self._cleanup_expired(db)
-            if cleaned:
-                logger.info("Cleaned %d expired context entries", cleaned)
-
             updated = await self._refresh_summaries(db)
             if updated:
                 logger.info("Refreshed summaries for %d workspaces", updated)
 
-    async def _cleanup_expired(self, db) -> int:
-        now = datetime.now(timezone.utc)
-        result = await db.execute(
-            delete(ContextEntry).where(ContextEntry.expires_at < now)
-        )
-        await db.commit()
-        return result.rowcount or 0
-
     async def _refresh_summaries(self, db) -> int:
-        now = datetime.now(timezone.utc)
         result = await db.execute(
             select(Workspace).where(Workspace.deleted_at.is_(None))
         )
@@ -72,21 +59,21 @@ class SummaryJob:
 
         count = 0
         for ws in workspaces:
-            entries_result = await db.execute(
-                select(ContextEntry).where(
-                    ContextEntry.workspace_id == ws.id,
-                    ContextEntry.expires_at > now,
-                    ContextEntry.deleted_at.is_(None),
-                ).order_by(ContextEntry.created_at.desc()).limit(20)
+            messages_result = await db.execute(
+                select(WorkspaceMessage).where(
+                    WorkspaceMessage.workspace_id == ws.id,
+                    WorkspaceMessage.deleted_at.is_(None),
+                ).order_by(WorkspaceMessage.created_at.desc()).limit(20)
             )
-            entries = entries_result.scalars().all()
+            messages = messages_result.scalars().all()
 
-            if not entries:
+            if not messages:
                 continue
 
             summary_lines = []
-            for e in entries[:10]:
-                summary_lines.append(f"[{e.entry_type}] {e.content[:100]}")
+            for m in reversed(messages[:10]):
+                ts = m.created_at.strftime("%H:%M") if isinstance(m.created_at, datetime) else ""
+                summary_lines.append(f"[{ts} {m.sender_name}] {m.content[:100]}")
             summary_text = "\n".join(summary_lines)
 
             bb_result = await db.execute(
@@ -95,7 +82,7 @@ class SummaryJob:
             bb = bb_result.scalar_one_or_none()
             if bb:
                 bb.auto_summary = summary_text
-                bb.summary_updated_at = now
+                bb.summary_updated_at = datetime.now(timezone.utc)
                 count += 1
 
         await db.commit()

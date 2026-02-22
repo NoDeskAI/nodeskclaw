@@ -3,11 +3,10 @@
 import asyncio
 import json
 import logging
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +15,8 @@ from app.core.deps import async_session_factory, get_current_org, get_db
 from app.models.instance import Instance
 from app.schemas.workspace import (
     AddAgentRequest,
-    AgentShareConfigUpdate,
-    AgentSubscriptionUpdate,
     BlackboardUpdate,
     ChatMessageRequest,
-    ContextEntryCreate,
     UpdateAgentRequest,
     WorkspaceChatRequest,
     WorkspaceCreate,
@@ -28,7 +24,7 @@ from app.schemas.workspace import (
     WorkspaceMemberUpdate,
     WorkspaceUpdate,
 )
-from app.services import context_service, workspace_service
+from app.services import workspace_service
 from app.services import workspace_message_service as msg_service
 
 logger = logging.getLogger(__name__)
@@ -177,104 +173,6 @@ async def update_blackboard(
     if bb is None:
         raise HTTPException(status_code=404, detail="黑板不存在")
     return _ok(bb.model_dump(mode="json"))
-
-
-# ── Context CRUD ─────────────────────────────────────
-
-@router.get("/{workspace_id}/context")
-async def list_context(
-    workspace_id: str,
-    entry_type: str | None = None,
-    limit: int = Query(default=50, le=200),
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    entries = await context_service.list_context_entries(db, workspace_id, limit, entry_type)
-    return _ok([e.model_dump(mode="json") for e in entries])
-
-
-@router.post("/{workspace_id}/context")
-async def create_context(
-    workspace_id: str,
-    data: ContextEntryCreate,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    entry = await context_service.create_context_entry(
-        db, workspace_id, "manual", data,
-    )
-    return _ok(entry.model_dump(mode="json"))
-
-
-@router.delete("/{workspace_id}/context/{entry_id}")
-async def delete_context(
-    workspace_id: str,
-    entry_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    ok = await context_service.delete_context_entry(db, entry_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="条目不存在")
-    return _ok(message="已删除")
-
-
-# ── Agent Share Config ───────────────────────────────
-
-@router.get("/{workspace_id}/agents/{instance_id}/share-config")
-async def get_share_config(
-    workspace_id: str,
-    instance_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    cfg = await context_service.get_share_config(db, instance_id, workspace_id)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail="配置不存在")
-    return _ok(cfg.model_dump(mode="json"))
-
-
-@router.put("/{workspace_id}/agents/{instance_id}/share-config")
-async def update_share_config(
-    workspace_id: str,
-    instance_id: str,
-    data: AgentShareConfigUpdate,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    cfg = await context_service.update_share_config(db, instance_id, workspace_id, data)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail="配置不存在")
-    return _ok(cfg.model_dump(mode="json"))
-
-
-# ── Agent Subscription ───────────────────────────────
-
-@router.get("/{workspace_id}/agents/{instance_id}/subscription")
-async def get_subscription(
-    workspace_id: str,
-    instance_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    sub = await context_service.get_subscription(db, instance_id, workspace_id)
-    if sub is None:
-        raise HTTPException(status_code=404, detail="订阅不存在")
-    return _ok(sub.model_dump(mode="json"))
-
-
-@router.put("/{workspace_id}/agents/{instance_id}/subscription")
-async def update_subscription(
-    workspace_id: str,
-    instance_id: str,
-    data: AgentSubscriptionUpdate,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    sub = await context_service.update_subscription(db, instance_id, workspace_id, data)
-    if sub is None:
-        raise HTTPException(status_code=404, detail="订阅不存在")
-    return _ok(sub.model_dump(mode="json"))
 
 
 # ── Workspace Members ────────────────────────────────

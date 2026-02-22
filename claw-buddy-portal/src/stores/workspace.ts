@@ -45,20 +45,6 @@ export interface BlackboardInfo {
   updated_at: string
 }
 
-export interface ContextEntryInfo {
-  id: string
-  workspace_id: string
-  source_instance_id: string
-  entry_type: string
-  content: string
-  tags: string[]
-  visibility: string
-  target_instance_ids: string[]
-  ttl_hours: number
-  expires_at: string
-  created_at: string
-}
-
 export interface WorkspaceMemberInfo {
   user_id: string
   user_name: string
@@ -85,7 +71,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const workspaces = ref<WorkspaceListItem[]>([])
   const currentWorkspace = ref<WorkspaceInfo | null>(null)
   const blackboard = ref<BlackboardInfo | null>(null)
-  const contextEntries = ref<ContextEntryInfo[]>([])
   const members = ref<WorkspaceMemberInfo[]>([])
   const loading = ref(false)
 
@@ -178,17 +163,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   async function updateBlackboard(workspaceId: string, notes: string) {
     const res = await api.put(`/workspaces/${workspaceId}/blackboard`, { manual_notes: notes })
     blackboard.value = res.data.data
-  }
-
-  // ── Context ───────────────────────────────────────
-
-  async function fetchContext(workspaceId: string, limit = 50) {
-    try {
-      const res = await api.get(`/workspaces/${workspaceId}/context`, { params: { limit } })
-      contextEntries.value = res.data.data || []
-    } catch (e) {
-      console.error('fetchContext error:', e)
-    }
   }
 
   // ── Members ───────────────────────────────────────
@@ -463,7 +437,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     workspaces,
     currentWorkspace,
     blackboard,
-    contextEntries,
     members,
     loading,
     chatMessages,
@@ -479,7 +452,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     updateAgent,
     fetchBlackboard,
     updateBlackboard,
-    fetchContext,
     fetchMembers,
     fetchChatHistory,
     sendWorkspaceMessage,

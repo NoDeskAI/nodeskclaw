@@ -48,11 +48,7 @@ onMounted(async () => {
   await store.fetchWorkspace(workspaceId.value)
   await store.fetchBlackboard(workspaceId.value)
 
-  store.connectSSE(workspaceId.value, (event, data) => {
-    if (event === 'context:published') {
-      store.fetchContext(workspaceId.value)
-    }
-  })
+  store.connectSSE(workspaceId.value)
 })
 
 onUnmounted(() => {
