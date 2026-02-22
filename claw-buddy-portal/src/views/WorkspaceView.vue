@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -74,20 +74,35 @@ function toggleMode() {
   }
 }
 
+let clickHandled = false
+
 function onAgentClick(id: string) {
+  clickHandled = true
   selectedAgentId.value = selectedAgentId.value === id ? null : id
 }
 
 function onAgentDblClick(_id: string) {
+  clickHandled = true
   chatOpen.value = true
 }
 
 function onBlackboardClick() {
+  clickHandled = true
   bbOpen.value = true
 }
 
 function onAddAgentClick() {
+  clickHandled = true
   router.push(`/workspace/${workspaceId.value}/add-agent`)
+}
+
+function onCanvasAreaClick() {
+  nextTick(() => {
+    if (!clickHandled && selectedAgentId.value !== null) {
+      selectedAgentId.value = null
+    }
+    clickHandled = false
+  })
 }
 
 function toggleFullscreen() {
@@ -276,7 +291,7 @@ function handleKeydown(e: KeyboardEvent) {
     </div>
 
     <!-- 3D / 2D Scene -->
-    <div class="flex-1 relative min-h-0">
+    <div class="flex-1 relative min-h-0" @click="onCanvasAreaClick">
       <!-- 3D mode -->
       <div
         ref="threeRef"
