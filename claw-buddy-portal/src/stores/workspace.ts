@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import api from '@/services/api'
 
 export interface AgentBrief {
@@ -67,6 +67,19 @@ export interface WorkspaceMemberInfo {
   role: string
   created_at: string
 }
+
+export interface GroupChatMessage {
+  id: string
+  sender_type: 'user' | 'agent'
+  sender_id: string
+  sender_name: string
+  content: string
+  message_type: string
+  created_at: string
+  streaming?: boolean
+}
+
+export type ChatSSECallback = (event: string, data: Record<string, unknown>) => void
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const workspaces = ref<WorkspaceListItem[]>([])
@@ -189,54 +202,207 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  // ── Group Chat ─────────────────────────────────────
+
+  const chatMessages = ref<GroupChatMessage[]>([])
+  const chatLoading = ref(false)
+  const typingAgents = ref<Map<string, string>>(new Map())
+
+  async function fetchChatHistory(workspaceId: string) {
+    try {
+      const res = await api.get(`/workspaces/${workspaceId}/messages`, { params: { limit: 50 } })
+      const raw = res.data.data || []
+      chatMessages.value = raw.map((m: Record<string, unknown>) => ({
+        id: m.id as string,
+        sender_type: m.sender_type as 'user' | 'agent',
+        sender_id: m.sender_id as string,
+        sender_name: m.sender_name as string,
+        content: m.content as string,
+        message_type: m.message_type as string,
+        created_at: m.created_at as string,
+      }))
+    } catch (e) {
+      console.error('fetchChatHistory error:', e)
+    }
+  }
+
+  async function sendWorkspaceMessage(workspaceId: string, message: string) {
+    if (chatLoading.value) return
+    chatLoading.value = true
+
+    const userMsg: GroupChatMessage = {
+      id: `local-${Date.now()}`,
+      sender_type: 'user',
+      sender_id: 'me',
+      sender_name: 'Me',
+      content: message,
+      message_type: 'chat',
+      created_at: new Date().toISOString(),
+    }
+    chatMessages.value.push(userMsg)
+
+    try {
+      await api.post(`/workspaces/${workspaceId}/chat`, { message })
+    } catch (e) {
+      console.error('sendWorkspaceMessage error:', e)
+    } finally {
+      chatLoading.value = false
+    }
+  }
+
+  function _handleAgentTyping(data: Record<string, unknown>) {
+    const instanceId = data.instance_id as string
+    const agentName = data.agent_name as string
+    typingAgents.value.set(instanceId, agentName)
+  }
+
+  function _handleAgentChunk(data: Record<string, unknown>) {
+    const instanceId = data.instance_id as string
+    const agentName = data.agent_name as string
+    const content = data.content as string
+
+    const existing = chatMessages.value.find(
+      (m) => m.sender_id === instanceId && m.streaming,
+    )
+    if (existing) {
+      existing.content += content
+    } else {
+      chatMessages.value.push({
+        id: `stream-${instanceId}-${Date.now()}`,
+        sender_type: 'agent',
+        sender_id: instanceId,
+        sender_name: agentName,
+        content,
+        message_type: 'chat',
+        created_at: new Date().toISOString(),
+        streaming: true,
+      })
+    }
+  }
+
+  function _handleAgentDone(data: Record<string, unknown>) {
+    const instanceId = data.instance_id as string
+    typingAgents.value.delete(instanceId)
+
+    const streaming = chatMessages.value.find(
+      (m) => m.sender_id === instanceId && m.streaming,
+    )
+    if (streaming) {
+      streaming.streaming = false
+      streaming.content = (data.full_content as string) || streaming.content
+    }
+  }
+
+  function _handleAgentError(data: Record<string, unknown>) {
+    const instanceId = data.instance_id as string
+    const agentName = data.agent_name as string
+    typingAgents.value.delete(instanceId)
+
+    const streaming = chatMessages.value.find(
+      (m) => m.sender_id === instanceId && m.streaming,
+    )
+    if (streaming) {
+      streaming.streaming = false
+      streaming.content += `\n[Error: ${data.error}]`
+    } else {
+      chatMessages.value.push({
+        id: `error-${instanceId}-${Date.now()}`,
+        sender_type: 'agent',
+        sender_id: instanceId,
+        sender_name: agentName,
+        content: `[Error: ${data.error}]`,
+        message_type: 'chat',
+        created_at: new Date().toISOString(),
+      })
+    }
+  }
+
+  function _handleAgentCollaboration(data: Record<string, unknown>) {
+    const agentName = data.agent_name as string
+    const instanceId = data.instance_id as string
+    const content = data.content as string
+
+    chatMessages.value.push({
+      id: `collab-${instanceId}-${Date.now()}`,
+      sender_type: 'agent',
+      sender_id: instanceId,
+      sender_name: agentName,
+      content,
+      message_type: 'collaboration',
+      created_at: new Date().toISOString(),
+    })
+  }
+
   // ── SSE ───────────────────────────────────────────
 
   let eventSource: EventSource | null = null
+  let externalCallback: ChatSSECallback | null = null
 
-  function connectSSE(workspaceId: string, onEvent?: (event: string, data: unknown) => void) {
+  function connectSSE(workspaceId: string, onEvent?: ChatSSECallback) {
     disconnectSSE()
+    externalCallback = onEvent || null
     const token = localStorage.getItem('portal_token') || ''
     eventSource = new EventSource(`/api/v1/workspaces/${workspaceId}/events?token=${token}`)
 
     eventSource.onmessage = (e) => {
       try {
         const parsed = JSON.parse(e.data)
-        onEvent?.(parsed.event || 'message', parsed)
+        externalCallback?.(parsed.event || 'message', parsed)
       } catch { /* ignore */ }
+    }
+
+    const sseHandlers: Record<string, (data: Record<string, unknown>) => void> = {
+      'agent:typing': _handleAgentTyping,
+      'agent:chunk': _handleAgentChunk,
+      'agent:done': _handleAgentDone,
+      'agent:error': _handleAgentError,
+      'agent:collaboration': _handleAgentCollaboration,
+    }
+
+    for (const [eventName, handler] of Object.entries(sseHandlers)) {
+      eventSource.addEventListener(eventName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          handler(data)
+          externalCallback?.(eventName, data)
+        } catch { /* ignore */ }
+      })
     }
 
     eventSource.addEventListener('agent:status', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)
-        onEvent?.('agent:status', data)
+        externalCallback?.('agent:status', data)
         if (currentWorkspace.value) {
-          const agent = currentWorkspace.value.agents.find((a) => a.instance_id === data.instance_id)
-          if (agent) agent.status = data.status
+          const agent = currentWorkspace.value.agents.find(
+            (a) => a.instance_id === data.instance_id,
+          )
+          if (agent) agent.status = data.status as string
         }
-      } catch { /* ignore */ }
-    })
-
-    eventSource.addEventListener('context:published', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        onEvent?.('context:published', data)
       } catch { /* ignore */ }
     })
 
     eventSource.addEventListener('blackboard:updated', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)
-        onEvent?.('blackboard:updated', data)
+        externalCallback?.('blackboard:updated', data)
         if (blackboard.value) {
           Object.assign(blackboard.value, data)
         }
       } catch { /* ignore */ }
     })
 
+    eventSource.addEventListener('system:info', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        externalCallback?.('system:info', data)
+      } catch { /* ignore */ }
+    })
+
     eventSource.onerror = () => {
       setTimeout(() => {
         if (eventSource?.readyState === EventSource.CLOSED) {
-          connectSSE(workspaceId, onEvent)
+          connectSSE(workspaceId, externalCallback || undefined)
         }
       }, 3000)
     }
@@ -245,9 +411,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function disconnectSSE() {
     eventSource?.close()
     eventSource = null
+    externalCallback = null
   }
 
-  // ── Chat ──────────────────────────────────────────
+  // ── Legacy Chat (deprecated) ──────────────────────
 
   async function* sendMessage(
     workspaceId: string,
@@ -299,6 +466,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     contextEntries,
     members,
     loading,
+    chatMessages,
+    chatLoading,
+    typingAgents,
     fetchWorkspaces,
     fetchWorkspace,
     createWorkspace,
@@ -311,6 +481,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     updateBlackboard,
     fetchContext,
     fetchMembers,
+    fetchChatHistory,
+    sendWorkspaceMessage,
     connectSSE,
     disconnectSSE,
     sendMessage,

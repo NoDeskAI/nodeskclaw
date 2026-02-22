@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -21,8 +21,6 @@ const agents = computed(() => ws.value?.agents || [])
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
 const chatOpen = ref(false)
-const chatAgentId = ref('')
-const chatAgentName = ref('')
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
 
@@ -70,13 +68,8 @@ function toggleMode() {
   }
 }
 
-function onAgentClick(id: string) {
-  const agent = agents.value.find((a) => a.instance_id === id)
-  if (agent) {
-    chatAgentId.value = agent.instance_id
-    chatAgentName.value = agent.display_name || agent.name
-    chatOpen.value = true
-  }
+function onAgentClick(_id: string) {
+  chatOpen.value = true
 }
 
 function onBlackboardClick() {
@@ -146,6 +139,14 @@ function goBack() {
         </button>
         <button
           class="p-1.5 rounded-lg hover:bg-muted transition-colors"
+          :class="{ 'bg-primary/10 text-primary': chatOpen }"
+          title="Group Chat"
+          @click="chatOpen = !chatOpen"
+        >
+          <MessageSquare class="w-4 h-4" />
+        </button>
+        <button
+          class="p-1.5 rounded-lg hover:bg-muted transition-colors"
           @click="router.push(`/workspace/${workspaceId}/settings`)"
         >
           <Settings class="w-4 h-4" />
@@ -198,8 +199,7 @@ function goBack() {
     <ChatDrawer
       :open="chatOpen"
       :workspace-id="workspaceId"
-      :agent-id="chatAgentId"
-      :agent-name="chatAgentName"
+      :workspace-name="ws?.name || 'Workspace'"
       @close="chatOpen = false"
     />
 
