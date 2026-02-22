@@ -384,6 +384,131 @@ async def ensure_openclaw_gateway_config(instance: Instance, db: AsyncSession) -
         logger.warning("注入 gateway 配置失败（非致命）: %s", e)
 
 
+CHANNEL_PLUGIN_DIR = "openclaw-channel-clawbuddy"
+PLUGIN_FILES = ["index.ts", "package.json", "openclaw.plugin.json", "src/channel.ts", "src/runtime.ts", "src/types.ts"]
+
+
+def _get_plugin_source_dir() -> Path:
+    """Locate the channel plugin source directory relative to project root."""
+    candidates = [
+        Path(__file__).resolve().parents[3] / CHANNEL_PLUGIN_DIR,
+        Path("/app") / CHANNEL_PLUGIN_DIR,
+    ]
+    for p in candidates:
+        if p.exists() and (p / "index.ts").exists():
+            return p
+    raise FileNotFoundError(
+        f"Channel plugin source not found. Checked: {[str(c) for c in candidates]}"
+    )
+
+
+def _deploy_plugin_files(mount_path: Path, plugin_source: Path) -> None:
+    """Copy channel plugin files to the NFS mount (.openclaw/extensions/)."""
+    target_dir = mount_path / ".openclaw" / "extensions" / CHANNEL_PLUGIN_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "src").mkdir(parents=True, exist_ok=True)
+
+    for rel_path in PLUGIN_FILES:
+        src = plugin_source / rel_path
+        dst = target_dir / rel_path
+        if src.exists():
+            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _inject_channel_config(
+    config: dict,
+    instance: Instance,
+    workspace_id: str,
+    callback_url: str,
+) -> None:
+    """Inject clawbuddy channel config and plugin load path into openclaw.json."""
+    if "channels" not in config:
+        config["channels"] = {}
+    config["channels"]["clawbuddy"] = {
+        "accounts": {
+            "default": {
+                "enabled": True,
+                "callbackUrl": callback_url,
+                "workspaceId": workspace_id,
+                "instanceId": instance.id,
+                "apiToken": json.loads(instance.env_vars or "{}").get(
+                    "OPENCLAW_GATEWAY_TOKEN", ""
+                ),
+            }
+        }
+    }
+
+    plugins = config.setdefault("plugins", {})
+    load = plugins.setdefault("load", {})
+    paths = load.setdefault("paths", [])
+    plugin_path = f".openclaw/extensions/{CHANNEL_PLUGIN_DIR}"
+    if plugin_path not in paths:
+        paths.append(plugin_path)
+
+    gw = config.setdefault("gateway", {})
+    gw["chatCompletions"] = {"enabled": True}
+
+
+async def deploy_clawbuddy_channel_plugin(
+    instance: Instance, db: AsyncSession, workspace_id: str, callback_url: str,
+) -> None:
+    """Deploy the clawbuddy channel plugin to an OpenClaw instance via NFS.
+
+    1. Copy plugin source files to .openclaw/extensions/
+    2. Inject channel config + plugin load path into openclaw.json
+    3. Ensure chatCompletions is enabled in gateway config
+    """
+    plugin_source = _get_plugin_source_dir()
+
+    async with nfs_mount(instance, db) as mount_path:
+        _deploy_plugin_files(mount_path, plugin_source)
+
+        try:
+            existing = _read_config_file(mount_path)
+        except ValueError as e:
+            logger.error("deploy_channel_plugin: openclaw.json 解析失败: %s", e)
+            raise
+
+        if existing is None:
+            existing = {}
+
+        _inject_channel_config(existing, instance, workspace_id, callback_url)
+        _ensure_gateway_config(existing, instance)
+        _write_config_file(mount_path, existing)
+
+    logger.info(
+        "已部署 clawbuddy channel plugin: instance=%s workspace=%s",
+        instance.name, workspace_id,
+    )
+
+
+async def remove_clawbuddy_channel_plugin(
+    instance: Instance, db: AsyncSession,
+) -> None:
+    """Remove clawbuddy channel config from openclaw.json when agent leaves workspace."""
+    try:
+        async with nfs_mount(instance, db) as mount_path:
+            try:
+                existing = _read_config_file(mount_path)
+            except ValueError:
+                return
+            if existing is None:
+                return
+
+            channels = existing.get("channels", {})
+            channels.pop("clawbuddy", None)
+
+            paths = existing.get("plugins", {}).get("load", {}).get("paths", [])
+            plugin_path = f".openclaw/extensions/{CHANNEL_PLUGIN_DIR}"
+            if plugin_path in paths:
+                paths.remove(plugin_path)
+
+            _write_config_file(mount_path, existing)
+        logger.info("已移除 clawbuddy channel 配置: instance=%s", instance.name)
+    except Exception as e:
+        logger.warning("移除 channel 配置失败（非致命）: %s", e)
+
+
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
     """Update openclaw.json via NFS and restart OpenClaw.
 

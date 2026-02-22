@@ -13,6 +13,7 @@ from app.api.organizations import router as org_router
 from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
 from app.api.storage import router as storage_router
+from app.api.webhook import router as webhook_router
 from app.api.workspaces import router as workspace_router
 
 api_router = APIRouter()
@@ -35,4 +36,5 @@ api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])
 api_router.include_router(storage_router, prefix="/storage-classes", tags=["存储"])
+api_router.include_router(webhook_router, prefix="/webhook", tags=["Webhook"])
 api_router.include_router(workspace_router, prefix="/workspaces", tags=["工作区"])

@@ -171,3 +171,30 @@ class WorkspaceMemberUpdate(BaseModel):
 class ChatMessageRequest(BaseModel):
     message: str
     history: list[dict] = []
+
+
+class WorkspaceChatRequest(BaseModel):
+    message: str
+
+
+class WorkspaceMessageInfo(BaseModel):
+    id: str
+    workspace_id: str
+    sender_type: str
+    sender_id: str
+    sender_name: str
+    content: str
+    message_type: str
+    target_instance_id: str | None = None
+    depth: int = 0
+    created_at: datetime
+
+
+# ── Webhook ──────────────────────────────────────────
+
+class WebhookPayload(BaseModel):
+    workspace_id: str
+    source_instance_id: str
+    target: str
+    text: str
+    depth: int = 0

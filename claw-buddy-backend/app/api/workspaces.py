@@ -6,11 +6,14 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_org, get_db
+from app.core.deps import async_session_factory, get_current_org, get_db
+from app.models.instance import Instance
 from app.schemas.workspace import (
     AddAgentRequest,
     AgentShareConfigUpdate,
@@ -19,12 +22,14 @@ from app.schemas.workspace import (
     ChatMessageRequest,
     ContextEntryCreate,
     UpdateAgentRequest,
+    WorkspaceChatRequest,
     WorkspaceCreate,
     WorkspaceMemberAdd,
     WorkspaceMemberUpdate,
     WorkspaceUpdate,
 )
 from app.services import context_service, workspace_service
+from app.services import workspace_message_service as msg_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -327,7 +332,78 @@ async def remove_member(
     return _ok(message="已移除")
 
 
-# ── Chat Proxy ───────────────────────────────────────
+# ── Group Chat (Broadcast) ───────────────────────────
+
+@router.post("/{workspace_id}/chat")
+async def workspace_chat(
+    workspace_id: str,
+    data: WorkspaceChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """Workspace-level group chat: broadcast user message to all agents."""
+    ws_info = await workspace_service.get_workspace(db, workspace_id)
+    if ws_info is None:
+        raise HTTPException(status_code=404, detail="工作区不存在")
+
+    await msg_service.record_message(
+        db,
+        workspace_id=workspace_id,
+        sender_type="user",
+        sender_id=user.id,
+        sender_name=user.name,
+        content=data.message,
+    )
+
+    running_agents = await _get_running_agents(db, workspace_id)
+    if not running_agents:
+        broadcast_event(workspace_id, "system:info", {"message": "工作区内没有运行中的 Agent"})
+        return _ok({"status": "no_agents"})
+
+    members = _build_members_list(ws_info, user)
+    recent_messages = await msg_service.get_recent_messages(db, workspace_id)
+
+    for inst in running_agents:
+        asyncio.create_task(
+            _stream_agent_response(
+                workspace_id=workspace_id,
+                instance=inst,
+                members=members,
+                recent_messages=recent_messages,
+                user_name=user.name,
+                user_message=data.message,
+                ws_name=ws_info.name,
+            )
+        )
+
+    return _ok({"status": "broadcasting", "agent_count": len(running_agents)})
+
+
+@router.get("/{workspace_id}/messages")
+async def list_workspace_messages(
+    workspace_id: str,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """List recent workspace messages for chat history."""
+    messages = await msg_service.get_recent_messages(db, workspace_id, limit)
+    return _ok([
+        {
+            "id": m.id,
+            "workspace_id": m.workspace_id,
+            "sender_type": m.sender_type,
+            "sender_id": m.sender_id,
+            "sender_name": m.sender_name,
+            "content": m.content,
+            "message_type": m.message_type,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in messages
+    ])
+
+
+# ── Legacy Chat Proxy (deprecated) ──────────────────
 
 @router.post("/{workspace_id}/agents/{instance_id}/chat")
 async def agent_chat(
@@ -337,9 +413,7 @@ async def agent_chat(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
-    from app.models.instance import Instance
-    from sqlalchemy import select as sa_select
-
+    """Single-agent chat (deprecated, use workspace_chat instead)."""
     result = await db.execute(
         sa_select(Instance).where(
             Instance.id == instance_id,
@@ -351,45 +425,46 @@ async def agent_chat(
     if inst is None:
         raise HTTPException(status_code=404, detail="Agent 不在该工作区中")
 
-    context_entries = await context_service.get_relevant_context(db, instance_id, workspace_id)
-    share_config = await context_service.get_share_config(db, instance_id, workspace_id)
-
     ws_info = await workspace_service.get_workspace(db, workspace_id)
+    recent_messages = await msg_service.get_recent_messages(db, workspace_id)
+    members = _build_members_list(ws_info, user)
 
-    context_text = _format_context(context_entries)
-    share_instruction = _build_share_instruction(
-        ws_info, share_config,
+    agent_name = inst.agent_display_name or inst.name
+    context_prompt = msg_service.build_context_prompt(
+        workspace_name=ws_info.name if ws_info else "Unknown",
+        agent_display_name=agent_name,
+        current_instance_id=instance_id,
+        members=members,
+        recent_messages=recent_messages,
     )
-    system_content = f"{context_text}\n\n{share_instruction}" if context_text else share_instruction
 
-    messages = [{"role": "system", "content": system_content}]
-    messages.extend(data.history)
-    messages.append({"role": "user", "content": data.message})
+    messages = [
+        {"role": "system", "content": context_prompt},
+        {"role": "user", "content": data.message},
+    ]
 
-    env_vars = json.loads(inst.env_vars or '{}')
-    token = env_vars.get('OPENCLAW_GATEWAY_TOKEN', '')
-    domain = inst.ingress_domain or ''
-    base_url = f"https://{domain}" if domain else ""
-
+    base_url, token = _get_instance_connection(inst)
     if not base_url or not token:
         raise HTTPException(status_code=400, detail="Agent 实例缺少访问地址或 Token")
 
     async def stream():
-        import httpx
-
         full_response = ""
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream(
                 "POST",
                 f"{base_url}/v1/chat/completions",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "X-OpenClaw-Session-Key": f"workspace:{workspace_id}",
+                },
                 json={"model": "gpt-4", "messages": messages, "stream": True},
             ) as resp:
                 async for line in resp.aiter_lines():
                     if line.startswith("data: "):
                         chunk_data = line[6:]
                         if chunk_data == "[DONE]":
-                            yield f"data: [DONE]\n\n"
+                            yield "data: [DONE]\n\n"
                             break
                         try:
                             chunk = json.loads(chunk_data)
@@ -397,17 +472,19 @@ async def agent_chat(
                             content = delta.get("content", "")
                             if content:
                                 full_response += content
-                                clean = context_service.strip_share_markers(content)
-                                if clean:
-                                    yield f"data: {json.dumps({'content': clean})}\n\n"
+                                yield f"data: {json.dumps({'content': content})}\n\n"
                         except json.JSONDecodeError:
                             pass
 
-        if full_response:
-            from app.core.deps import async_session_factory
-            async with async_session_factory() as parse_db:
-                await context_service.parse_and_publish(
-                    parse_db, workspace_id, instance_id, full_response,
+        if full_response and not msg_service.is_no_reply(full_response):
+            async with async_session_factory() as save_db:
+                await msg_service.record_message(
+                    save_db,
+                    workspace_id=workspace_id,
+                    sender_type="agent",
+                    sender_id=instance_id,
+                    sender_name=agent_name,
+                    content=full_response,
                 )
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -468,45 +545,165 @@ async def create_sse_token(
 
 # ── Private helpers ──────────────────────────────────
 
-def _format_context(entries: list) -> str:
-    if not entries:
-        return ""
-    lines = ["[工作区上下文]", "以下是同事 Agent 最近分享的信息：", ""]
-    for e in entries[:10]:
-        lines.append(f"- [{e.entry_type}] {e.content}")
-    return "\n".join(lines)
-
-
-def _build_share_instruction(ws_info, share_config) -> str:
-    agents_list = ""
-    if ws_info and ws_info.agents:
-        agents_list = "\n".join(
-            f"  - {a.display_name or a.name} (负责 {a.name})" for a in ws_info.agents
+async def _get_running_agents(db: AsyncSession, workspace_id: str) -> list[Instance]:
+    result = await db.execute(
+        sa_select(Instance).where(
+            Instance.workspace_id == workspace_id,
+            Instance.status == "running",
+            Instance.deleted_at.is_(None),
         )
+    )
+    return list(result.scalars().all())
 
-    freq_map = {
-        "proactive": "主动分享所有你认为有价值的信息",
-        "conservative": "只在有重要结果或需要协助时分享",
-        "minimal": "仅在完成关键任务时分享结果",
-    }
-    freq = "proactive"
-    if share_config and share_config.share_frequency:
-        freq = share_config.share_frequency
-    freq_instruction = freq_map.get(freq, freq_map["proactive"])
 
-    instruction = f"""[工作区协作指令]
-你正在工作区「{ws_info.name if ws_info else '未知'}」中工作，同事 Agent 包括：
-{agents_list or '  （暂无其他 Agent）'}
+def _get_instance_connection(inst: Instance) -> tuple[str, str]:
+    env_vars = json.loads(inst.env_vars or "{}")
+    token = env_vars.get("OPENCLAW_GATEWAY_TOKEN", "")
+    domain = inst.ingress_domain or ""
+    base_url = f"https://{domain}" if domain else ""
+    return base_url, token
 
-当你认为某些信息对同事有价值时，请在回复中使用以下标记分享：
-  [SHARE:result] 你的工作成果
-  [SHARE:knowledge] 你发现的事实或知识
-  [SHARE:request:目标Agent名] 你需要某个Agent协助的事项
-  [SHARE:activity] 你当前正在做的事情
 
-分享策略：{freq_instruction}
-"""
-    if share_config and share_config.custom_instruction:
-        instruction += f"\n补充指令：{share_config.custom_instruction}\n"
+def _build_members_list(ws_info, user) -> list[dict]:
+    members = []
+    if ws_info and ws_info.agents:
+        for a in ws_info.agents:
+            members.append({
+                "type": "Agent",
+                "name": a.display_name or a.name,
+                "id": a.instance_id,
+            })
+    members.append({"type": "User", "name": user.name, "id": user.id})
+    return members
 
-    return instruction
+
+NO_REPLY_BUFFER_SIZE = 20
+
+
+async def _stream_agent_response(
+    *,
+    workspace_id: str,
+    instance: Instance,
+    members: list[dict],
+    recent_messages: list,
+    user_name: str,
+    user_message: str,
+    ws_name: str,
+):
+    """Stream a single agent's response and relay via SSE broadcast.
+
+    Buffers initial characters to detect NO_REPLY before pushing to frontend.
+    Each agent runs in its own asyncio.Task so they execute in parallel.
+    """
+    agent_name = instance.agent_display_name or instance.name
+    instance_id = instance.id
+
+    context_prompt = msg_service.build_context_prompt(
+        workspace_name=ws_name,
+        agent_display_name=agent_name,
+        current_instance_id=instance_id,
+        members=members,
+        recent_messages=recent_messages,
+    )
+
+    messages = [
+        {"role": "system", "content": context_prompt},
+        {"role": "user", "content": f"[{user_name}]: {user_message}"},
+    ]
+
+    base_url, token = _get_instance_connection(instance)
+    if not base_url or not token:
+        logger.warning("Agent %s (%s) 缺少连接信息，跳过", agent_name, instance_id)
+        return
+
+    broadcast_event(workspace_id, "agent:typing", {
+        "instance_id": instance_id,
+        "agent_name": agent_name,
+    })
+
+    buffer = ""
+    flushed = False
+    full_response = ""
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                f"{base_url}/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "X-OpenClaw-Session-Key": f"workspace:{workspace_id}",
+                },
+                json={"model": "gpt-4", "messages": messages, "stream": True},
+            ) as resp:
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    chunk_data = line[6:]
+                    if chunk_data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(chunk_data)
+                        delta = chunk.get("choices", [{}])[0].get("delta", {})
+                        content = delta.get("content", "")
+                    except json.JSONDecodeError:
+                        continue
+                    if not content:
+                        continue
+
+                    full_response += content
+
+                    if not flushed:
+                        buffer += content
+                        if len(buffer) > NO_REPLY_BUFFER_SIZE:
+                            if msg_service.is_no_reply(buffer.strip()):
+                                logger.info("Agent %s replied NO_REPLY, discarding", agent_name)
+                                return
+                            broadcast_event(workspace_id, "agent:chunk", {
+                                "instance_id": instance_id,
+                                "agent_name": agent_name,
+                                "content": buffer,
+                            })
+                            flushed = True
+                    else:
+                        broadcast_event(workspace_id, "agent:chunk", {
+                            "instance_id": instance_id,
+                            "agent_name": agent_name,
+                            "content": content,
+                        })
+    except Exception as e:
+        logger.error("Agent %s streaming failed: %s", agent_name, e)
+        broadcast_event(workspace_id, "agent:error", {
+            "instance_id": instance_id,
+            "agent_name": agent_name,
+            "error": str(e),
+        })
+        return
+
+    if not flushed and buffer:
+        if msg_service.is_no_reply(buffer.strip()):
+            logger.info("Agent %s replied NO_REPLY (short response), discarding", agent_name)
+            return
+        broadcast_event(workspace_id, "agent:chunk", {
+            "instance_id": instance_id,
+            "agent_name": agent_name,
+            "content": buffer,
+        })
+
+    if full_response and not msg_service.is_no_reply(full_response.strip()):
+        broadcast_event(workspace_id, "agent:done", {
+            "instance_id": instance_id,
+            "agent_name": agent_name,
+            "full_content": full_response,
+        })
+
+        async with async_session_factory() as save_db:
+            await msg_service.record_message(
+                save_db,
+                workspace_id=workspace_id,
+                sender_type="agent",
+                sender_id=instance_id,
+                sender_name=agent_name,
+                content=full_response,
+            )
