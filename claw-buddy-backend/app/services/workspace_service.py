@@ -5,7 +5,6 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.blackboard import Blackboard
 from app.models.instance import Instance
 from app.models.workspace import Workspace
@@ -261,17 +260,12 @@ async def update_agent(
 
 # ── Channel Plugin Deploy ────────────────────────────
 
+BACKEND_INTERNAL_URL = "http://clawbuddy-backend.clawbuddy-system.svc.cluster.local:8000/api/v1"
+
+
 async def _deploy_channel_plugin(inst: Instance, db: AsyncSession, workspace_id: str) -> None:
     """Deploy clawbuddy channel plugin when agent joins workspace."""
-    callback_base = settings.CLAWBUDDY_WEBHOOK_BASE_URL.rstrip("/")
-    if not callback_base:
-        logger.warning(
-            "CLAWBUDDY_WEBHOOK_BASE_URL 未配置，跳过 channel plugin 部署: instance=%s",
-            inst.name,
-        )
-        return
-
-    callback_url = f"{callback_base}/webhook/clawbuddy"
+    callback_url = f"{BACKEND_INTERNAL_URL}/webhook/clawbuddy"
     try:
         from app.services.llm_config_service import deploy_clawbuddy_channel_plugin
         await deploy_clawbuddy_channel_plugin(inst, db, workspace_id, callback_url)
