@@ -1,11 +1,11 @@
 """Workspace CRUD + Agent management + Blackboard service."""
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.blackboard import Blackboard
 from app.models.instance import Instance
 from app.models.workspace import Workspace
@@ -185,6 +185,9 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest) 
 
     await db.commit()
     await db.refresh(inst)
+
+    await _deploy_channel_plugin(inst, db, workspace_id)
+
     return _agent_brief(inst)
 
 
@@ -220,6 +223,8 @@ async def remove_agent(db: AsyncSession, workspace_id: str, instance_id: str) ->
     if inst is None:
         return False
 
+    await _remove_channel_plugin(inst, db)
+
     inst.workspace_id = None
     inst.hex_position_q = 0
     inst.hex_position_r = 0
@@ -252,6 +257,35 @@ async def update_agent(
     await db.commit()
     await db.refresh(inst)
     return _agent_brief(inst)
+
+
+# ── Channel Plugin Deploy ────────────────────────────
+
+async def _deploy_channel_plugin(inst: Instance, db: AsyncSession, workspace_id: str) -> None:
+    """Deploy clawbuddy channel plugin when agent joins workspace."""
+    callback_base = settings.CLAWBUDDY_WEBHOOK_BASE_URL.rstrip("/")
+    if not callback_base:
+        logger.warning(
+            "CLAWBUDDY_WEBHOOK_BASE_URL 未配置，跳过 channel plugin 部署: instance=%s",
+            inst.name,
+        )
+        return
+
+    callback_url = f"{callback_base}/webhook/clawbuddy"
+    try:
+        from app.services.llm_config_service import deploy_clawbuddy_channel_plugin
+        await deploy_clawbuddy_channel_plugin(inst, db, workspace_id, callback_url)
+    except Exception as e:
+        logger.error("部署 channel plugin 失败（非致命）: instance=%s error=%s", inst.name, e)
+
+
+async def _remove_channel_plugin(inst: Instance, db: AsyncSession) -> None:
+    """Remove clawbuddy channel plugin when agent leaves workspace."""
+    try:
+        from app.services.llm_config_service import remove_clawbuddy_channel_plugin
+        await remove_clawbuddy_channel_plugin(inst, db)
+    except Exception as e:
+        logger.error("移除 channel plugin 失败（非致命）: instance=%s error=%s", inst.name, e)
 
 
 # ── Blackboard ───────────────────────────────────────
