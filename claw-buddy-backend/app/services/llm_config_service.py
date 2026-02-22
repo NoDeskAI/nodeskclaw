@@ -385,7 +385,15 @@ async def ensure_openclaw_gateway_config(instance: Instance, db: AsyncSession) -
 
 
 CHANNEL_PLUGIN_DIR = "openclaw-channel-clawbuddy"
-PLUGIN_FILES = ["index.ts", "package.json", "openclaw.plugin.json", "src/channel.ts", "src/runtime.ts", "src/types.ts"]
+PLUGIN_FILES = [
+    "index.ts",
+    "package.json",
+    "openclaw.plugin.json",
+    "src/channel.ts",
+    "src/runtime.ts",
+    "src/types.ts",
+    "src/sse-server.ts",
+]
 
 
 def _get_plugin_source_dir() -> Path:
