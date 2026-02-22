@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import api from '@/services/api'
 
@@ -15,7 +15,6 @@ interface InstanceItem {
   id: string
   name: string
   status: string
-  workspace_id: string | null
 }
 
 const instances = ref<InstanceItem[]>([])
@@ -23,14 +22,25 @@ const loading = ref(false)
 const adding = ref<string | null>(null)
 const search = ref('')
 
-const available = computed(() =>
-  instances.value
-    .filter((i) => !i.workspace_id)
-    .filter((i) => !search.value || i.name.toLowerCase().includes(search.value.toLowerCase())),
+const alreadyInWorkspace = computed(() =>
+  new Set(store.currentWorkspace?.agents?.map((a) => a.instance_id) || []),
 )
 
-const runningInstances = computed(() => available.value.filter((i) => i.status === 'running'))
-const unavailableInstances = computed(() => available.value.filter((i) => i.status !== 'running'))
+const filtered = computed(() =>
+  instances.value.filter(
+    (i) => !search.value || i.name.toLowerCase().includes(search.value.toLowerCase()),
+  ),
+)
+
+const runningInstances = computed(() =>
+  filtered.value.filter((i) => i.status === 'running' && !alreadyInWorkspace.value.has(i.id)),
+)
+const addedInstances = computed(() =>
+  filtered.value.filter((i) => alreadyInWorkspace.value.has(i.id)),
+)
+const unavailableInstances = computed(() =>
+  filtered.value.filter((i) => i.status !== 'running' && !alreadyInWorkspace.value.has(i.id)),
+)
 
 async function fetchInstances() {
   loading.value = true
@@ -40,7 +50,6 @@ async function fetchInstances() {
       id: i.id,
       name: i.name,
       status: i.status,
-      workspace_id: i.workspace_id,
     }))
   } catch (e) {
     console.error('fetch instances error:', e)
@@ -55,8 +64,6 @@ async function addToWorkspace(instanceId: string) {
   adding.value = instanceId
   try {
     await store.addAgent(workspaceId.value, instanceId)
-    const idx = instances.value.findIndex((i) => i.id === instanceId)
-    if (idx >= 0) instances.value[idx].workspace_id = workspaceId.value
   } catch (e: any) {
     alert(e?.response?.data?.detail || '添加失败')
   } finally {
@@ -120,12 +127,12 @@ function goBack() {
     </div>
 
     <!-- Empty -->
-    <div v-else-if="available.length === 0" class="text-center py-10 text-muted-foreground text-sm">
+    <div v-else-if="filtered.length === 0" class="text-center py-10 text-muted-foreground text-sm">
       没有可用的实例
     </div>
 
     <template v-else>
-      <!-- Running instances -->
+      <!-- Running instances (can be added) -->
       <div v-if="runningInstances.length > 0" class="space-y-2">
         <div
           v-for="inst in runningInstances"
@@ -151,7 +158,31 @@ function goBack() {
         </div>
       </div>
 
-      <!-- Unavailable instances -->
+      <!-- Already in this workspace -->
+      <div v-if="addedInstances.length > 0" class="mt-6">
+        <p class="text-xs text-muted-foreground mb-2">已在当前工作区</p>
+        <div class="space-y-2">
+          <div
+            v-for="inst in addedInstances"
+            :key="inst.id"
+            class="flex items-center justify-between px-4 py-3 rounded-lg bg-card border border-border opacity-60"
+          >
+            <div class="flex items-center gap-3">
+              <Bot class="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
+              </div>
+            </div>
+            <span class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs">
+              <Check class="w-3 h-3" />
+              已添加
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unavailable instances (not running) -->
       <div v-if="unavailableInstances.length > 0" class="mt-6">
         <p class="text-xs text-muted-foreground mb-2">以下实例尚未就绪，无法添加到工作区</p>
         <div class="space-y-2 opacity-50">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -24,6 +24,12 @@ const chatOpen = ref(false)
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
 const selectedAgentId = ref<string | null>(null)
+const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !== 'hidden')
+
+function toggleShortcutHints() {
+  showShortcutHints.value = !showShortcutHints.value
+  localStorage.setItem('workspace-shortcut-hints', showShortcutHints.value ? 'visible' : 'hidden')
+}
 
 const threeRef = ref<HTMLElement | null>(null)
 const svgRef = ref<HTMLElement | null>(null)
@@ -200,7 +206,7 @@ function handleKeydown(e: KeyboardEvent) {
           @click="onAddAgentClick"
         >
           <Plus class="w-3.5 h-3.5" />
-          添加
+          添加 Agent
         </button>
       </div>
 
@@ -283,6 +289,59 @@ function handleKeydown(e: KeyboardEvent) {
           @blackboard-click="onBlackboardClick"
           @add-agent-click="onAddAgentClick"
         />
+      </div>
+
+      <!-- Shortcut Hints Panel -->
+      <div class="absolute right-3 bottom-3 z-10">
+        <button
+          v-if="!showShortcutHints"
+          class="p-2 rounded-lg bg-background/70 backdrop-blur-sm border border-border/50 text-muted-foreground hover:text-foreground transition-colors"
+          title="显示快捷键"
+          @click="toggleShortcutHints"
+        >
+          <Keyboard class="w-4 h-4" />
+        </button>
+        <div
+          v-else
+          class="rounded-lg bg-background/70 backdrop-blur-sm border border-border/50 text-xs"
+        >
+          <button
+            class="flex items-center gap-1.5 w-full px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            @click="toggleShortcutHints"
+          >
+            <Keyboard class="w-3.5 h-3.5" />
+            <span>快捷键</span>
+            <ChevronDown class="w-3 h-3 ml-auto" />
+          </button>
+          <div class="border-t border-border/50 px-3 py-2 space-y-1 text-muted-foreground">
+            <div class="flex justify-between gap-4">
+              <span>方向键</span>
+              <span class="text-foreground/70">{{ selectedAgentId ? '移动 Agent' : '平移画布' }}</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span>+ / -</span>
+              <span class="text-foreground/70">缩放</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span>0</span>
+              <span class="text-foreground/70">重置视角</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span>Esc</span>
+              <span class="text-foreground/70">取消选中</span>
+            </div>
+            <div class="border-t border-border/30 pt-1 mt-1">
+              <div class="flex justify-between gap-4">
+                <span>单击</span>
+                <span class="text-foreground/70">选中 Agent</span>
+              </div>
+              <div class="flex justify-between gap-4">
+                <span>双击</span>
+                <span class="text-foreground/70">打开对话</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

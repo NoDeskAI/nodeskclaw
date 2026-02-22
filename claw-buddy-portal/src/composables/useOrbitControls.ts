@@ -65,10 +65,22 @@ export function useOrbitControls(
   function panBy(dx: number, dy: number) {
     if (!controls) return
     const amount = 1
-    controls.target.x += dx * amount
-    controls.target.z += dy * amount
-    camera.position.x += dx * amount
-    camera.position.z += dy * amount
+
+    const forward = new THREE.Vector3()
+    camera.getWorldDirection(forward)
+    forward.y = 0
+    forward.normalize()
+
+    const right = new THREE.Vector3()
+      .crossVectors(forward, new THREE.Vector3(0, 1, 0))
+      .normalize()
+
+    const offset = new THREE.Vector3()
+      .addScaledVector(right, dx * amount)
+      .addScaledVector(forward, -dy * amount)
+
+    controls.target.add(offset)
+    camera.position.add(offset)
   }
 
   onUnmounted(() => {
