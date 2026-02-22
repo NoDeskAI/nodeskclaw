@@ -1,5 +1,5 @@
 {
-  "name": "@clawbuddy/channel-plugin",
+  "name": "clawbuddy",
   "version": "0.1.0",
   "private": true,
   "description": "OpenClaw channel plugin for ClawBuddy workspace collaboration",
