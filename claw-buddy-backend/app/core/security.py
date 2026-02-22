@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -55,18 +55,27 @@ def decode_token(token: str) -> dict:
 
 # ── Current User Dependency ──────────────────────────────
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+_ALLOWED_TOKEN_TYPES = {"access"}
+
+async def _get_user_by_token(
+    token: str,
+    db: AsyncSession,
+    *,
+    allowed_scopes: set[str] | None = None,
 ) -> User:
-    """Extract and validate JWT from Authorization header, return User."""
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未提供认证信息")
+    """Validate a raw JWT string and return the corresponding User.
 
-    payload = decode_token(credentials.credentials)
+    ``allowed_scopes``: if provided, the token's ``scope`` claim must be in
+    the set **or** the token can have no ``scope`` (plain access token).
+    """
+    payload = decode_token(token)
 
-    if payload.get("type") != "access":
+    if payload.get("type") not in _ALLOWED_TOKEN_TYPES:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 类型错误")
+
+    scope = payload.get("scope")
+    if allowed_scopes and scope and scope not in allowed_scopes:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token scope 不允许")
 
     user_id = payload.get("sub")
     if not user_id:
@@ -81,6 +90,24 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用")
 
     return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Extract and validate JWT from Authorization header, return User."""
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未提供认证信息")
+    return await _get_user_by_token(credentials.credentials, db)
+
+
+async def get_current_user_from_query(
+    token: str = Query(..., description="JWT access token (支持 SSE 短时效 token)"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """SSE 端点专用: 从 query parameter 读 token, 兼容普通 access token 和 SSE token."""
+    return await _get_user_by_token(token, db, allowed_scopes={"sse"})
 
 
 # ── KubeConfig AES-256-GCM Encryption ────────────────────

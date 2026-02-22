@@ -312,10 +312,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   let eventSource: EventSource | null = null
   let externalCallback: ChatSSECallback | null = null
 
-  function connectSSE(workspaceId: string, onEvent?: ChatSSECallback) {
+  async function connectSSE(workspaceId: string, onEvent?: ChatSSECallback) {
     disconnectSSE()
     externalCallback = onEvent || null
-    const token = localStorage.getItem('portal_token') || ''
+
+    let token = ''
+    try {
+      const { data } = await api.post('/workspaces/sse-token')
+      token = data?.data?.sse_token || ''
+    } catch { /* ignore */ }
+    if (!token) token = localStorage.getItem('portal_token') || ''
+
     eventSource = new EventSource(`/api/v1/workspaces/${workspaceId}/events?token=${token}`)
 
     eventSource.onmessage = (e) => {

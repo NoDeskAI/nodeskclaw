@@ -87,7 +87,8 @@ claw-buddy-backend/
 | `/api/v1/workspaces` | 工作区 | CRUD、Agent 管理、群聊、SSE |
 | `/api/v1/workspaces/{ws}/chat` | 群聊 | 广播消息给所有 Agent |
 | `/api/v1/workspaces/{ws}/messages` | 消息 | 工作区消息历史 |
-| `/api/v1/workspaces/{ws}/events` | SSE | 实时事件流（含 Agent 流式响应） |
+| `/api/v1/workspaces/{ws}/events?token=` | SSE | 实时事件流（query param JWT 认证） |
+| `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 

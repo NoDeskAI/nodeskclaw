@@ -42,6 +42,11 @@ def _get_current_user_dep():
     return get_current_user
 
 
+def _get_current_user_from_query_dep():
+    from app.core.security import get_current_user_from_query
+    return get_current_user_from_query
+
+
 # ── Workspace CRUD ───────────────────────────────────
 
 @router.post("")
@@ -402,7 +407,7 @@ def broadcast_event(workspace_id: str, event_type: str, data: dict):
 @router.get("/{workspace_id}/events")
 async def workspace_events(
     workspace_id: str,
-    user=Depends(_get_current_user_dep()),
+    user=Depends(_get_current_user_from_query_dep()),
 ):
     queue: asyncio.Queue = asyncio.Queue()
     if workspace_id not in _workspace_queues:
