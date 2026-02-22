@@ -83,11 +83,27 @@ export function useOrbitControls(
     camera.position.add(offset)
   }
 
+  function getCameraXZDirections(): { right: { x: number; z: number }; forward: { x: number; z: number } } {
+    if (!controls) return { right: { x: 1, z: 0 }, forward: { x: 0, z: -1 } }
+
+    const fwd = new THREE.Vector3()
+    camera.getWorldDirection(fwd)
+    fwd.y = 0
+    fwd.normalize()
+
+    const rt = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize()
+
+    return {
+      right: { x: rt.x, z: rt.z },
+      forward: { x: fwd.x, z: fwd.z },
+    }
+  }
+
   onUnmounted(() => {
     stop()
     controls?.dispose()
     controls = null
   })
 
-  return { update, zoomIn, zoomOut, resetView, panBy, get controls() { return controls } }
+  return { update, zoomIn, zoomOut, resetView, panBy, getCameraXZDirections, get controls() { return controls } }
 }

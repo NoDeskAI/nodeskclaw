@@ -9,6 +9,7 @@ import Workspace2D from '@/components/hex2d/Workspace2D.vue'
 import ModeToggle from '@/components/shared/ModeToggle.vue'
 import ChatDrawer from '@/components/chat/ChatDrawer.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
+import { axialToWorld } from '@/composables/useHexLayout'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,6 +111,33 @@ const HEX_DELTAS: Record<string, [number, number]> = {
   ArrowDown: [0, 1],
 }
 
+const ALL_HEX_DIRS: [number, number][] = [
+  [1, 0], [-1, 0], [0, -1], [0, 1], [1, -1], [-1, 1],
+]
+
+function resolveHexDelta(key: string): [number, number] | null {
+  if (activeMode.value === '2d') return HEX_DELTAS[key] || null
+
+  const dirs = workspace3dRef.value?.getCameraXZDirections()
+  if (!dirs) return HEX_DELTAS[key] || null
+
+  let sx = 0, sz = 0
+  if (key === 'ArrowRight') { sx = dirs.right.x; sz = dirs.right.z }
+  else if (key === 'ArrowLeft') { sx = -dirs.right.x; sz = -dirs.right.z }
+  else if (key === 'ArrowUp') { sx = dirs.forward.x; sz = dirs.forward.z }
+  else if (key === 'ArrowDown') { sx = -dirs.forward.x; sz = -dirs.forward.z }
+  else return null
+
+  let bestDot = -Infinity
+  let best: [number, number] = [1, 0]
+  for (const [dq, dr] of ALL_HEX_DIRS) {
+    const w = axialToWorld(dq, dr)
+    const dot = sx * w.x + sz * w.y
+    if (dot > bestDot) { bestDot = dot; best = [dq, dr] }
+  }
+  return best
+}
+
 async function moveSelectedAgent(dq: number, dr: number) {
   if (!selectedAgentId.value) return
   const agent = agents.value.find((a) => a.instance_id === selectedAgentId.value)
@@ -151,11 +179,11 @@ function handleKeydown(e: KeyboardEvent) {
     return
   }
 
-  const delta = HEX_DELTAS[e.key]
-  if (delta) {
+  if (HEX_DELTAS[e.key]) {
     e.preventDefault()
     if (selectedAgentId.value) {
-      moveSelectedAgent(delta[0], delta[1])
+      const hexDelta = resolveHexDelta(e.key)
+      if (hexDelta) moveSelectedAgent(hexDelta[0], hexDelta[1])
     } else {
       panCanvas(e.key)
     }
