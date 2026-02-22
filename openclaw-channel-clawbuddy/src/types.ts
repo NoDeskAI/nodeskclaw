@@ -1,6 +1,5 @@
 export type ClawBuddyAccountConfig = {
   enabled?: boolean;
-  callbackUrl: string;
   workspaceId: string;
   instanceId: string;
   apiToken: string;
@@ -14,13 +13,12 @@ export type ResolvedClawBuddyAccount = {
   accountId: string;
   enabled: boolean;
   configured: boolean;
-  callbackUrl: string;
   workspaceId: string;
   instanceId: string;
   apiToken: string;
 };
 
-export type WebhookPayload = {
+export type CollaborationPayload = {
   workspace_id: string;
   source_instance_id: string;
   target: string;

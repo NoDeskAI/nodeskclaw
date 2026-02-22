@@ -26,8 +26,7 @@ claw-buddy-backend/
 │   │   ├── instances.py      # 实例管理
 │   │   ├── registry.py       # 镜像仓库
 │   │   ├── settings.py       # 系统配置
-│   │   ├── workspaces.py     # 工作区 CRUD、群聊、SSE
-│   │   └── webhook.py        # Channel plugin webhook
+│   │   └── workspaces.py     # 工作区 CRUD、群聊、SSE
 │   ├── core/                 # 核心模块
 │   │   ├── config.py         # pydantic-settings 配置
 │   │   ├── deps.py           # 依赖注入（DB session、当前用户等）
@@ -55,6 +54,8 @@ claw-buddy-backend/
 │   │   ├── health_checker.py     # 集群健康巡检
 │   │   ├── workspace_service.py  # 工作区 CRUD + Agent 管理
 │   │   ├── workspace_message_service.py  # 群聊消息记录 + 上下文构建
+│   │   ├── collaboration_service.py      # 协作消息处理（由 SSE 监听器调用）
+│   │   ├── sse_listener.py               # OpenClaw 实例 SSE 长连接（按 Ingress 域名）
 │   │   ├── llm_config_service.py # OpenClaw 配置 + Channel plugin 分发
 │   │   ├── summary_job.py        # 自动摘要生成
 │   │   └── k8s/                  # K8s 相关
@@ -87,7 +88,6 @@ claw-buddy-backend/
 | `/api/v1/workspaces/{ws}/chat` | 群聊 | 广播消息给所有 Agent |
 | `/api/v1/workspaces/{ws}/messages` | 消息 | 工作区消息历史 |
 | `/api/v1/workspaces/{ws}/events` | SSE | 实时事件流（含 Agent 流式响应） |
-| `/api/v1/webhook/clawbuddy` | Webhook | Channel plugin 回调端点 |
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 

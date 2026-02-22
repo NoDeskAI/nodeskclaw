@@ -2,9 +2,10 @@ import type { ChannelPlugin, OpenClawConfig } from "openclaw/plugin-sdk";
 import type {
   ClawBuddyAccountConfig,
   ResolvedClawBuddyAccount,
-  WebhookPayload,
+  CollaborationPayload,
 } from "./types.js";
 import { getClawBuddyRuntime } from "./runtime.js";
+import { broadcast } from "./sse-server.js";
 
 const CHANNEL_KEY = "clawbuddy";
 const DEFAULT_ACCOUNT_ID = "default";
@@ -29,7 +30,6 @@ function resolveAccount(
       accountId: id,
       enabled: false,
       configured: false,
-      callbackUrl: "",
       workspaceId: "",
       instanceId: "",
       apiToken: "",
@@ -39,8 +39,7 @@ function resolveAccount(
   return {
     accountId: id,
     enabled: raw.enabled !== false,
-    configured: Boolean(raw.callbackUrl && raw.workspaceId && raw.instanceId),
-    callbackUrl: raw.callbackUrl ?? "",
+    configured: Boolean(raw.workspaceId && raw.instanceId),
     workspaceId: raw.workspaceId ?? "",
     instanceId: raw.instanceId ?? "",
     apiToken: raw.apiToken ?? "",
@@ -79,13 +78,7 @@ export const clawbuddyPlugin: ChannelPlugin<ResolvedClawBuddyAccount> = {
     sendText: async ({ cfg, to, text, accountId }) => {
       const account = resolveAccount(cfg, accountId);
 
-      if (!account.callbackUrl) {
-        throw new Error(
-          `ClawBuddy callbackUrl not configured for account "${account.accountId}"`,
-        );
-      }
-
-      const payload: WebhookPayload = {
+      const payload: CollaborationPayload = {
         workspace_id: account.workspaceId,
         source_instance_id: account.instanceId,
         target: to,
@@ -93,21 +86,7 @@ export const clawbuddyPlugin: ChannelPlugin<ResolvedClawBuddyAccount> = {
         depth: 0,
       };
 
-      const response = await fetch(account.callbackUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${account.apiToken}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => "");
-        throw new Error(
-          `ClawBuddy webhook failed (${response.status}): ${errorBody}`.trim(),
-        );
-      }
+      broadcast(payload);
 
       getClawBuddyRuntime().channel.activity.record({
         channel: CHANNEL_KEY,

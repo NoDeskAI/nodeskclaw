@@ -5,7 +5,6 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.blackboard import Blackboard
 from app.models.instance import Instance
 from app.models.workspace import Workspace
@@ -262,17 +261,35 @@ async def update_agent(
 # ── Channel Plugin Deploy ────────────────────────────
 
 async def _deploy_channel_plugin(inst: Instance, db: AsyncSession, workspace_id: str) -> None:
-    """Deploy clawbuddy channel plugin when agent joins workspace."""
-    callback_url = f"{settings.CLAWBUDDY_WEBHOOK_BASE_URL.rstrip('/')}/webhook/clawbuddy"
+    """Deploy clawbuddy channel plugin config + restart instance + connect SSE."""
     try:
         from app.services.llm_config_service import deploy_clawbuddy_channel_plugin
-        await deploy_clawbuddy_channel_plugin(inst, db, workspace_id, callback_url)
+        await deploy_clawbuddy_channel_plugin(inst, db, workspace_id)
     except Exception as e:
         logger.error("部署 channel plugin 失败（非致命）: instance=%s error=%s", inst.name, e)
+        return
+
+    try:
+        from app.services.instance_service import restart_instance
+        await restart_instance(inst.id, db)
+        logger.info("已重启实例以加载 channel plugin: %s", inst.name)
+    except Exception as e:
+        logger.warning("重启实例失败（非致命）: instance=%s error=%s", inst.name, e)
+
+    if inst.ingress_domain:
+        from app.services.sse_listener import sse_listener_manager
+        await sse_listener_manager.connect(
+            inst.id,
+            inst.ingress_domain,
+            delay=15,
+        )
 
 
 async def _remove_channel_plugin(inst: Instance, db: AsyncSession) -> None:
-    """Remove clawbuddy channel plugin when agent leaves workspace."""
+    """Disconnect SSE + remove clawbuddy channel plugin config."""
+    from app.services.sse_listener import sse_listener_manager
+    await sse_listener_manager.disconnect(inst.id)
+
     try:
         from app.services.llm_config_service import remove_clawbuddy_channel_plugin
         await remove_clawbuddy_channel_plugin(inst, db)

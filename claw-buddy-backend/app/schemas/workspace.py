@@ -129,11 +129,3 @@ class WorkspaceMessageInfo(BaseModel):
     created_at: datetime
 
 
-# ── Webhook ──────────────────────────────────────────
-
-class WebhookPayload(BaseModel):
-    workspace_id: str
-    source_instance_id: str
-    target: str
-    text: str
-    depth: int = 0

@@ -2,6 +2,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { clawbuddyPlugin } from "./src/channel.js";
 import { setClawBuddyRuntime } from "./src/runtime.js";
+import { startSSEServer } from "./src/sse-server.js";
 
 const plugin = {
   id: "clawbuddy",
@@ -11,6 +12,7 @@ const plugin = {
   register(api: OpenClawPluginApi) {
     setClawBuddyRuntime(api.runtime);
     api.registerChannel({ plugin: clawbuddyPlugin });
+    startSSEServer();
   },
 };
 

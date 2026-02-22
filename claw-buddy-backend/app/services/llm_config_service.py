@@ -419,7 +419,6 @@ def _inject_channel_config(
     config: dict,
     instance: Instance,
     workspace_id: str,
-    callback_url: str,
 ) -> None:
     """Inject clawbuddy channel config and plugin load path into openclaw.json."""
     if "channels" not in config:
@@ -428,7 +427,6 @@ def _inject_channel_config(
         "accounts": {
             "default": {
                 "enabled": True,
-                "callbackUrl": callback_url,
                 "workspaceId": workspace_id,
                 "instanceId": instance.id,
                 "apiToken": json.loads(instance.env_vars or "{}").get(
@@ -450,7 +448,7 @@ def _inject_channel_config(
 
 
 async def deploy_clawbuddy_channel_plugin(
-    instance: Instance, db: AsyncSession, workspace_id: str, callback_url: str,
+    instance: Instance, db: AsyncSession, workspace_id: str,
 ) -> None:
     """Deploy the clawbuddy channel plugin to an OpenClaw instance via NFS.
 
@@ -472,7 +470,7 @@ async def deploy_clawbuddy_channel_plugin(
         if existing is None:
             existing = {}
 
-        _inject_channel_config(existing, instance, workspace_id, callback_url)
+        _inject_channel_config(existing, instance, workspace_id)
         _ensure_gateway_config(existing, instance)
         _write_config_file(mount_path, existing)
 

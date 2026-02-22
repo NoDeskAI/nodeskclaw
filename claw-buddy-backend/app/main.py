@@ -621,9 +621,31 @@ async def lifespan(app: FastAPI):
     summary_job = SummaryJob(async_session_factory)
     summary_job.start()
 
+    # ── 恢复工作区 SSE 连接 ────────────────────────────
+    from app.services.sse_listener import sse_listener_manager
+
+    async with async_session_factory() as db:
+        from app.models.instance import Instance
+        ws_agents = await db.execute(
+            select(Instance).where(
+                Instance.workspace_id.isnot(None),
+                Instance.status == "running",
+                Instance.ingress_domain.isnot(None),
+                Instance.deleted_at.is_(None),
+            )
+        )
+        for inst in ws_agents.scalars().all():
+            await sse_listener_manager.connect(inst.id, inst.ingress_domain)
+    logger.info(
+        "已恢复 %d 个工作区 SSE 连接",
+        len(sse_listener_manager.connected_instances),
+    )
+
     yield
 
     # ── Shutdown ─────────────────────────────────────
+    await sse_listener_manager.disconnect_all()
+    logger.info("已关闭所有 SSE 连接")
     await summary_job.stop()
     await health_checker.stop()
     await k8s_manager.close_all()

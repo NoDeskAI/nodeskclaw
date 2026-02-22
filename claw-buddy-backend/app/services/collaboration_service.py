@@ -1,78 +1,73 @@
-"""Webhook API — receives callbacks from OpenClaw channel plugins."""
+"""Collaboration message handling — shared by SSE listener and (legacy) webhook."""
 
 import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import async_session_factory
 from app.models.instance import Instance
-from app.schemas.workspace import WebhookPayload
 from app.services import workspace_message_service as msg_service
 from app.services import workspace_service
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
 
 
-@router.post("/clawbuddy")
-async def webhook_clawbuddy(payload: WebhookPayload, request: Request):
-    """Receive outbound messages from the clawbuddy channel plugin.
+async def handle_collaboration_message(
+    *,
+    workspace_id: str,
+    source_instance_id: str,
+    target: str,
+    text: str,
+    depth: int = 0,
+) -> None:
+    """Process an inbound collaboration message from a channel plugin.
 
-    Called when an Agent uses `send -t clawbuddy` to communicate with
-    other agents in the workspace.
+    1. Validate depth limit
+    2. Look up source instance
+    3. Record message
+    4. Broadcast SSE event to frontend
+    5. Route to target agent(s)
     """
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization")
-    api_token = auth_header[7:]
-
-    if payload.depth > msg_service.MAX_COLLABORATION_DEPTH:
+    if depth > msg_service.MAX_COLLABORATION_DEPTH:
         logger.warning(
             "Collaboration depth exceeded (%d > %d) from instance %s",
-            payload.depth, msg_service.MAX_COLLABORATION_DEPTH,
-            payload.source_instance_id,
+            depth, msg_service.MAX_COLLABORATION_DEPTH, source_instance_id,
         )
-        return {"ok": True, "message": "depth limit exceeded, message recorded but not forwarded"}
+        return
 
     async with async_session_factory() as db:
-        source_inst = await _get_instance(db, payload.source_instance_id)
+        source_inst = await _get_instance(db, source_instance_id)
         if source_inst is None:
-            raise HTTPException(status_code=404, detail="Source instance not found")
+            logger.warning("Source instance not found: %s", source_instance_id)
+            return
 
-        env_vars = json.loads(source_inst.env_vars or "{}")
-        expected_token = env_vars.get("OPENCLAW_GATEWAY_TOKEN", "")
-        if not expected_token or api_token != expected_token:
-            raise HTTPException(status_code=403, detail="Invalid API token")
-
-        workspace_id = payload.workspace_id
         source_name = source_inst.agent_display_name or source_inst.name
 
         await msg_service.record_message(
             db,
             workspace_id=workspace_id,
             sender_type="agent",
-            sender_id=payload.source_instance_id,
+            sender_id=source_instance_id,
             sender_name=source_name,
-            content=payload.text,
+            content=text,
             message_type="collaboration",
-            target_instance_id=_extract_target_instance_id(payload.target),
-            depth=payload.depth,
+            target_instance_id=_extract_target_instance_id(target),
+            depth=depth,
         )
 
         from app.api.workspaces import broadcast_event
         broadcast_event(workspace_id, "agent:collaboration", {
-            "instance_id": payload.source_instance_id,
+            "instance_id": source_instance_id,
             "agent_name": source_name,
-            "target": payload.target,
-            "content": payload.text,
+            "target": target,
+            "content": text,
         })
 
-        if payload.target.startswith("agent:"):
-            target_name = payload.target[6:]
+        if target.startswith("agent:"):
+            target_name = target[6:]
             target_inst = await _find_agent_by_name(db, workspace_id, target_name)
             if target_inst:
                 asyncio.create_task(
@@ -80,25 +75,26 @@ async def webhook_clawbuddy(payload: WebhookPayload, request: Request):
                         workspace_id=workspace_id,
                         target_instance=target_inst,
                         source_name=source_name,
-                        message=payload.text,
-                        depth=payload.depth + 1,
+                        message=text,
+                        depth=depth + 1,
                     )
                 )
-        elif payload.target == "broadcast":
+        elif target == "broadcast":
             agents = await _get_workspace_agents(db, workspace_id)
             for agent in agents:
-                if agent.id != payload.source_instance_id:
+                if agent.id != source_instance_id:
                     asyncio.create_task(
                         _invoke_target_agent(
                             workspace_id=workspace_id,
                             target_instance=agent,
                             source_name=source_name,
-                            message=payload.text,
-                            depth=payload.depth + 1,
+                            message=text,
+                            depth=depth + 1,
                         )
                     )
 
-    return {"ok": True}
+
+# ── DB helpers ────────────────────────────────────────
 
 
 async def _get_instance(db: AsyncSession, instance_id: str) -> Instance | None:
@@ -153,7 +149,7 @@ async def _invoke_target_agent(
     source_name: str,
     message: str,
     depth: int,
-):
+) -> None:
     """Invoke a target agent with a collaboration message."""
     import httpx
 
