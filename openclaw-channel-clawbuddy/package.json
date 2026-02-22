@@ -1,0 +1,23 @@
+{
+  "name": "@clawbuddy/channel-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw channel plugin for ClawBuddy workspace collaboration",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "clawbuddy",
+      "label": "ClawBuddy",
+      "selectionLabel": "ClawBuddy (Workspace)",
+      "docsPath": "/channels/clawbuddy",
+      "blurb": "ClawBuddy workspace agent collaboration channel.",
+      "aliases": ["cb"]
+    }
+  }
+}
