@@ -452,7 +452,9 @@ def _inject_channel_config(
         paths.append(plugin_path)
 
     gw = config.setdefault("gateway", {})
-    gw["chatCompletions"] = {"enabled": True}
+    http_cfg = gw.setdefault("http", {})
+    endpoints = http_cfg.setdefault("endpoints", {})
+    endpoints["chatCompletions"] = {"enabled": True}
 
 
 async def deploy_clawbuddy_channel_plugin(
