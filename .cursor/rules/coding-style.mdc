@@ -105,6 +105,36 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 - **禁止"分析完顺手就改"**：即使已经定位了根因、方案也很明确，仍然必须先报告并等用户说"改"才动手。"我直接改了"这种话不应出现
 - **禁止把"用户让我排查"等同于"用户让我修"**：排查 = 查原因并汇报，不等于授权修改代码
 
+## K8s / OpenClaw 排查规则
+
+**用户提到的任何 OpenClaw 或 K8s 相关问题，必须先通过 kubectl 实际查看集群状态，再做判断。** 不允许凭代码逻辑或经验猜测。
+
+### 必查项
+
+用户反馈 OpenClaw 实例问题时，按以下顺序执行：
+
+1. **Pod 状态**：`kubectl get pods -n <namespace>` — 确认 Running / CrashLoopBackOff / Pending 等
+2. **Pod 详情**：`kubectl describe pod <pod> -n <namespace>` — 查看 Events、Conditions、Container State
+3. **Pod 日志**：`kubectl logs <pod> -n <namespace> --tail=30` — 查看 OpenClaw 启动日志和错误输出
+4. **Deployment 状态**：`kubectl get deploy -n <namespace>` — 确认 READY、UP-TO-DATE、AVAILABLE
+5. **配置文件**：`kubectl exec <pod> -- cat /root/.openclaw/openclaw.json` — 确认实际运行配置
+6. **环境变量**：`kubectl exec <pod> -- printenv | grep OPENCLAW` — 确认 token 等关键变量
+7. **Events**：`kubectl get events -n <namespace> --sort-by='.lastTimestamp'` — 查看最近集群事件
+
+### 什么算"OpenClaw 或 K8s 相关"
+
+- 实例打不开、502、503、连接失败
+- pairing required、token mismatch、disconnected
+- 实例状态异常（一直部署中、重启失败、运行中但不可访问）
+- Pod/容器/Deployment/Service/Ingress 相关的任何问题
+- NFS 挂载、PVC、配置文件读写问题
+
+### 严禁
+
+- **禁止不查就猜**：不跑 kubectl 就说"应该是 xxx 问题"
+- **禁止只看代码**：代码逻辑正确不代表集群状态正确，必须用 kubectl 拿到第一手证据
+- **禁止省略关键步骤**：不要只查 Pod 状态就下结论，日志和 Events 同样重要
+
 ## 排查问题方法论
 
 **问题没解决就不叫排查完了。修了一刀发现没效果，必须继续深挖到真正的根因。**
@@ -238,6 +268,32 @@ docker build -t my-image:latest .
 
 - **禁止只改一处就收工**：不搜索就断言"只有这一处"
 - **禁止事后补**：不要等用户发现另一处没改再回来补
+
+## Plan 模式提问规则
+
+**Plan 模式下向用户提问时，问题必须有深度、有广度、透彻、精确、有思考、有细节。** 禁止提出敷衍的、表面的、缺乏技术判断的问题。
+
+### 提问前必须做
+
+- **先自行调研**：提问前先读代码、查配置、搜文档，把能自己搞清楚的都搞清楚。只把真正需要用户决策的问题抛出来
+- **分析可行性**：每个选项都要先在脑中推演其技术可行性、实现复杂度、对现有架构的影响，再呈现给用户
+- **预判边界情况**：除了 happy path，还要考虑异常场景、兼容性、性能、安全、维护成本等
+- **带上你的判断**：不要只罗列选项让用户选——给出你的推荐，并说明推荐理由
+
+### 问题质量标准
+
+- **深度**：不停留在"要不要做"这个层面，要深入到"怎么做、有什么坑、对现有系统有什么影响"
+- **广度**：考虑关联影响——改了 A 模块，B、C 模块是否受影响？前端、后端、基础设施是否都需要配合？
+- **精确**：问题要具体到技术细节——不要问"你想怎么部署"，要问"是用 Nginx default-backend 302 跳转，还是在 Ingress 注解里配置 custom-http-errors 指向自定义错误页面服务"
+- **有思考**：展示你的分析过程——"我考虑了 A 方案和 B 方案，A 的优点是 xxx 但缺点是 xxx，B 的优点是 xxx"
+- **有细节**：涉及配置、URL、端口、域名、路径等具体值时，直接给出具体例子而非抽象描述
+
+### 严禁
+
+- **禁止懒问**：能自己查到的信息不要问用户（如"这个文件在哪"、"用的什么框架"）
+- **禁止空泛提问**：不要问"你想怎么做"这种把思考责任甩给用户的问题
+- **禁止不带分析的选择题**：每个选项必须附带优缺点分析，不能只是干巴巴列 A/B/C
+- **禁止只问不想**：提问前必须自己先有判断，告诉用户你倾向哪个方案、为什么
 
 ## 变更规模判断规则
 
