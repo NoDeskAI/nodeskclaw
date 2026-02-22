@@ -9,14 +9,13 @@ const props = defineProps<{
   autoSummary: string
   manualNotes: string
   selectedAgentId: string | null
+  selectedHex: { q: number, r: number } | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'agent-click', id: string): void
+  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard', agentId?: string }): void
   (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
-  (e: 'blackboard-click'): void
-  (e: 'add-agent-click'): void
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
@@ -75,29 +74,21 @@ function bbHexPoints(): string {
   return hexPolygonPoints(0, 0, BB_RADIUS)
 }
 
-function nextAddPosition(): { px: number; py: number } {
-  const idx = props.agents.length
-  const directions: [number, number][] = [[0, -1], [-1, 0], [-1, 1], [0, 1], [1, 0], [1, -1]]
-  let q = 1, r = 0, ring = 1
-  const positions: [number, number][] = []
-  while (positions.length <= idx) {
-    for (const [dq, dr] of directions) {
-      for (let s = 0; s < ring && positions.length <= idx; s++) {
-        positions.push([q, r])
-        q += dq; r += dr
-      }
+const emptyHexes = computed(() => {
+  const occupied = new Set<string>()
+  occupied.add('0:0')
+  for (const a of props.agents) occupied.add(`${a.hex_q}:${a.hex_r}`)
+  const hexes: { q: number, r: number, px: number, py: number }[] = []
+  for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
+    for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
+      if (Math.abs(q) + Math.abs(r) + Math.abs(-q - r) > GRID_RANGE * 2) continue
+      if (occupied.has(`${q}:${r}`)) continue
+      const { x, y } = axialToWorld(q, r)
+      hexes.push({ q, r, px: x * SCALE, py: y * SCALE })
     }
-    ring++; q++
   }
-  if (positions.length > idx) {
-    const [aq, ar] = positions[idx]
-    const { x, y } = axialToWorld(aq, ar)
-    return { px: x * SCALE, py: y * SCALE }
-  }
-  return { px: 200, py: 0 }
-}
-
-const addPos = computed(() => nextAddPosition())
+  return hexes
+})
 </script>
 
 <template>
@@ -136,13 +127,39 @@ const addPos = computed(() => nextAddPosition())
         mask="url(#grid-mask)"
       />
 
+      <!-- Empty hex clickable areas -->
+      <g
+        v-for="hex in emptyHexes"
+        :key="`empty-${hex.q}-${hex.r}`"
+        class="cursor-pointer"
+        :transform="`translate(${hex.px}, ${hex.py})`"
+        @click.stop="emit('hex-click', { q: hex.q, r: hex.r, type: 'empty' })"
+      >
+        <polygon
+          :points="hexPoints(0, 0)"
+          :fill="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa11' : 'transparent'"
+          :stroke="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa' : 'transparent'"
+          :stroke-width="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? 2 : 0"
+          class="hover-empty-hex"
+        />
+      </g>
+
       <!-- Blackboard hex at center (q=0, r=0) -->
       <g
         class="cursor-pointer bb-hex"
-        @click="emit('blackboard-click')"
+        @click.stop="emit('hex-click', { q: 0, r: 0, type: 'blackboard' })"
         @pointerenter="hoveredId = '__blackboard__'"
         @pointerleave="hoveredId = null"
       >
+        <polygon
+          v-if="selectedHex?.q === 0 && selectedHex?.r === 0"
+          :points="bbHexPoints()"
+          fill="none"
+          stroke="#60a5fa"
+          stroke-width="3"
+          opacity="0.8"
+          class="animate-selected-ring"
+        />
         <polygon
           :points="bbHexPoints()"
           :fill="hoveredId === '__blackboard__' ? '#1e1e3a' : '#141428'"
@@ -177,7 +194,7 @@ const addPos = computed(() => nextAddPosition())
         :key="agent.instance_id"
         class="cursor-pointer transition-transform"
         :transform="`translate(${agent.px}, ${agent.py}) ${hoveredId === agent.instance_id ? 'scale(1.08)' : ''}`"
-        @click="emit('agent-click', agent.instance_id)"
+        @click.stop="emit('hex-click', { q: agent.hex_q, r: agent.hex_r, type: 'agent', agentId: agent.instance_id })"
         @dblclick="emit('agent-dblclick', agent.instance_id)"
         @pointerenter="hoveredId = agent.instance_id; emit('agent-hover', agent.instance_id)"
         @pointerleave="hoveredId = null; emit('agent-hover', null)"
@@ -221,20 +238,19 @@ const addPos = computed(() => nextAddPosition())
         </text>
       </g>
 
-      <!-- Add agent placeholder -->
+      <!-- Selected hex highlight for agents -->
       <g
-        class="cursor-pointer opacity-40 hover:opacity-70 transition-opacity"
-        :transform="`translate(${addPos.px}, ${addPos.py})`"
-        @click="emit('add-agent-click')"
+        v-if="selectedHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
+        :transform="`translate(${axialToWorld(selectedHex!.q, selectedHex!.r).x * SCALE}, ${axialToWorld(selectedHex!.q, selectedHex!.r).y * SCALE})`"
       >
         <polygon
           :points="hexPoints(0, 0)"
           fill="none"
-          stroke="#555577"
-          stroke-width="2"
-          stroke-dasharray="8,4"
+          stroke="#60a5fa"
+          stroke-width="3"
+          opacity="0.8"
+          class="animate-selected-ring"
         />
-        <text y="4" text-anchor="middle" fill="#888" font-size="24" font-weight="300">+</text>
       </g>
     </g>
   </svg>
@@ -271,5 +287,14 @@ const addPos = computed(() => nextAddPosition())
 }
 .bb-hex:hover {
   transform: scale(1.04);
+}
+
+.hover-empty-hex {
+  transition: fill 0.15s ease, stroke 0.15s ease;
+}
+.hover-empty-hex:hover {
+  fill: #4ac8e808;
+  stroke: #4ac8e8;
+  stroke-width: 1;
 }
 </style>

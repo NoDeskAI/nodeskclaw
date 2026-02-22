@@ -10,6 +10,8 @@ const router = useRouter()
 const store = useWorkspaceStore()
 
 const workspaceId = computed(() => route.params.id as string)
+const targetHexQ = computed(() => route.query.hex_q != null ? Number(route.query.hex_q) : undefined)
+const targetHexR = computed(() => route.query.hex_r != null ? Number(route.query.hex_r) : undefined)
 
 interface InstanceItem {
   id: string
@@ -63,7 +65,7 @@ onMounted(fetchInstances)
 async function addToWorkspace(instanceId: string) {
   adding.value = instanceId
   try {
-    await store.addAgent(workspaceId.value, instanceId)
+    await store.addAgent(workspaceId.value, instanceId, undefined, targetHexQ.value, targetHexR.value)
   } catch (e: any) {
     alert(e?.response?.data?.detail || '添加失败')
   } finally {

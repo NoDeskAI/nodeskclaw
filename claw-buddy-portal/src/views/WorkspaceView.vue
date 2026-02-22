@@ -9,6 +9,7 @@ import Workspace2D from '@/components/hex2d/Workspace2D.vue'
 import ModeToggle from '@/components/shared/ModeToggle.vue'
 import ChatDrawer from '@/components/chat/ChatDrawer.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
+import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
 import { axialToWorld } from '@/composables/useHexLayout'
 
 const route = useRoute()
@@ -26,6 +27,25 @@ const bbOpen = ref(false)
 const isFullscreen = ref(false)
 const selectedAgentId = ref<string | null>(null)
 const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !== 'hidden')
+
+interface SelectedHex {
+  q: number
+  r: number
+  type: 'empty' | 'agent' | 'blackboard'
+  agentId?: string
+}
+const selectedHex = ref<SelectedHex | null>(null)
+const hexDrawerOpen = ref(false)
+
+const selectedHexPos = computed(() =>
+  selectedHex.value ? { q: selectedHex.value.q, r: selectedHex.value.r } : null,
+)
+
+const hexAgentInfo = computed(() => {
+  if (selectedHex.value?.type !== 'agent' || !selectedHex.value.agentId) return undefined
+  const agent = agents.value.find((a) => a.instance_id === selectedHex.value!.agentId)
+  return agent ? { id: agent.instance_id, name: agent.display_name || agent.name } : undefined
+})
 
 function toggleShortcutHints() {
   showShortcutHints.value = !showShortcutHints.value
@@ -76,9 +96,26 @@ function toggleMode() {
 
 let clickHandled = false
 
-function onAgentClick(id: string) {
+function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard', agentId?: string }) {
   clickHandled = true
-  selectedAgentId.value = selectedAgentId.value === id ? null : id
+
+  if (selectedHex.value &&
+    selectedHex.value.q === payload.q &&
+    selectedHex.value.r === payload.r) {
+    selectedHex.value = null
+    hexDrawerOpen.value = false
+    if (payload.type !== 'agent') selectedAgentId.value = null
+    return
+  }
+
+  selectedHex.value = payload
+  hexDrawerOpen.value = true
+
+  if (payload.type === 'agent' && payload.agentId) {
+    selectedAgentId.value = payload.agentId
+  } else {
+    selectedAgentId.value = null
+  }
 }
 
 function onAgentDblClick(_id: string) {
@@ -86,20 +123,53 @@ function onAgentDblClick(_id: string) {
   chatOpen.value = true
 }
 
-function onBlackboardClick() {
-  clickHandled = true
-  bbOpen.value = true
+function onHexAction(action: string) {
+  switch (action) {
+    case 'add-agent': {
+      const q = selectedHex.value?.q
+      const r = selectedHex.value?.r
+      const query: Record<string, string> = {}
+      if (q !== undefined && r !== undefined) { query.hex_q = String(q); query.hex_r = String(r) }
+      router.push({ path: `/workspace/${workspaceId.value}/add-agent`, query })
+      break
+    }
+    case 'open-chat':
+      chatOpen.value = true
+      hexDrawerOpen.value = false
+      break
+    case 'view-detail':
+      if (selectedHex.value?.agentId) {
+        router.push(`/instances/${selectedHex.value.agentId}`)
+      }
+      hexDrawerOpen.value = false
+      break
+    case 'remove-agent':
+      if (selectedHex.value?.agentId) {
+        store.removeAgent(workspaceId.value, selectedHex.value.agentId)
+        selectedHex.value = null
+        hexDrawerOpen.value = false
+        selectedAgentId.value = null
+      }
+      break
+    case 'edit-blackboard':
+      bbOpen.value = true
+      hexDrawerOpen.value = false
+      break
+  }
 }
 
-function onAddAgentClick() {
-  clickHandled = true
-  router.push(`/workspace/${workspaceId.value}/add-agent`)
+function closeHexDrawer() {
+  selectedHex.value = null
+  hexDrawerOpen.value = false
+  selectedAgentId.value = null
 }
 
 function onCanvasAreaClick() {
   nextTick(() => {
-    if (!clickHandled && selectedAgentId.value !== null) {
+    if (!clickHandled) {
       selectedAgentId.value = null
+      selectedHex.value = null
+      hexDrawerOpen.value = false
     }
     clickHandled = false
   })
@@ -190,6 +260,8 @@ function handleKeydown(e: KeyboardEvent) {
 
   if (e.key === 'Escape') {
     selectedAgentId.value = null
+    selectedHex.value = null
+    hexDrawerOpen.value = false
     e.preventDefault()
     return
   }
@@ -246,7 +318,7 @@ function handleKeydown(e: KeyboardEvent) {
         </div>
         <button
           class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-          @click="onAddAgentClick"
+          @click="router.push(`/workspace/${workspaceId}/add-agent`)"
         >
           <Plus class="w-3.5 h-3.5" />
           添加 Agent
@@ -306,10 +378,9 @@ function handleKeydown(e: KeyboardEvent) {
           :auto-summary="store.blackboard?.auto_summary || ''"
           :manual-notes="store.blackboard?.manual_notes || ''"
           :selected-agent-id="selectedAgentId"
-          @agent-click="onAgentClick"
+          :selected-hex="selectedHexPos"
+          @hex-click="onHexClick"
           @agent-dblclick="onAgentDblClick"
-          @blackboard-click="onBlackboardClick"
-          @add-agent-click="onAddAgentClick"
         />
       </div>
 
@@ -327,10 +398,9 @@ function handleKeydown(e: KeyboardEvent) {
           :auto-summary="store.blackboard?.auto_summary || ''"
           :manual-notes="store.blackboard?.manual_notes || ''"
           :selected-agent-id="selectedAgentId"
-          @agent-click="onAgentClick"
+          :selected-hex="selectedHexPos"
+          @hex-click="onHexClick"
           @agent-dblclick="onAgentDblClick"
-          @blackboard-click="onBlackboardClick"
-          @add-agent-click="onAddAgentClick"
         />
       </div>
 
@@ -376,11 +446,11 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="border-t border-border/30 pt-1 mt-1">
               <div class="flex justify-between gap-4">
                 <span>单击</span>
-                <span class="text-foreground/70">选中 Agent</span>
+                <span class="text-foreground/70">打开操作面板</span>
               </div>
               <div class="flex justify-between gap-4">
                 <span>双击</span>
-                <span class="text-foreground/70">打开对话</span>
+                <span class="text-foreground/70">快速打开对话</span>
               </div>
             </div>
           </div>
@@ -401,6 +471,16 @@ function handleKeydown(e: KeyboardEvent) {
       :open="bbOpen"
       :workspace-id="workspaceId"
       @close="bbOpen = false"
+    />
+
+    <!-- Hex Action Drawer -->
+    <HexActionDrawer
+      :open="hexDrawerOpen"
+      :hex-type="selectedHex?.type || 'empty'"
+      :hex-position="selectedHex ? { q: selectedHex.q, r: selectedHex.r } : { q: 0, r: 0 }"
+      :agent-info="hexAgentInfo"
+      @close="closeHexDrawer"
+      @action="onHexAction"
     />
   </div>
 </template>
