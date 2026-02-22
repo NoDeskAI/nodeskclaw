@@ -13,10 +13,12 @@ const props = defineProps<{
   agents: AgentBrief[]
   autoSummary: string
   manualNotes: string
+  selectedAgentId: string | null
 }>()
 
 const emit = defineEmits<{
   (e: 'agent-click', id: string): void
+  (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
   (e: 'blackboard-click'): void
   (e: 'add-agent-click'): void
@@ -32,7 +34,7 @@ const { scene, camera, renderer, addToLoop } = useThreeScene(containerRef, {
 const orbitControls = useOrbitControls(camera, renderer)
 addToLoop(() => orbitControls.update())
 
-const { hoveredId, selectedId } = useHexRaycaster(scene, camera, containerRef, {
+const { hoveredId, selectedId, dblclickId } = useHexRaycaster(scene, camera, containerRef, {
   meshFilter: (obj) => obj.userData?.isHex === true || obj.userData?.hexId != null,
 })
 
@@ -41,6 +43,9 @@ watch(selectedId, (id) => {
   if (id === '__blackboard__') emit('blackboard-click')
   else if (id === '__add_agent__') emit('add-agent-click')
   else if (id) emit('agent-click', id)
+})
+watch(dblclickId, (id) => {
+  if (id && !id.startsWith('__')) emit('agent-dblclick', id)
 })
 
 // Environment setup
@@ -225,21 +230,22 @@ function syncScene() {
 
 watch(() => props.agents, syncScene, { deep: true, immediate: true })
 
-// Hover animation
+// Hover + selection animation
 const clock = new THREE.Clock()
 addToLoop(() => {
   const t = clock.getElapsedTime()
   for (const [id, group] of hexMeshes) {
     if (id.startsWith('__')) continue
     const isHovered = hoveredId.value === id
-    const targetY = isHovered ? 0.4 : 0.15
+    const isSelected = props.selectedAgentId === id
+    const targetY = isHovered ? 0.4 : isSelected ? 0.3 : 0.15
     group.position.y += (targetY - group.position.y) * 0.1
 
     const mesh = group.children[0] as THREE.Mesh
     if (mesh?.material && 'emissiveIntensity' in mesh.material) {
       const mat = mesh.material as THREE.MeshStandardMaterial
       const pulse = Math.sin(t * 2) * 0.1 + 0.15
-      mat.emissiveIntensity = isHovered ? 0.4 : pulse
+      mat.emissiveIntensity = isSelected ? 0.5 + Math.sin(t * 3) * 0.15 : isHovered ? 0.4 : pulse
     }
   }
 })
@@ -252,6 +258,7 @@ defineExpose({
   zoomIn: () => orbitControls.zoomIn(),
   zoomOut: () => orbitControls.zoomOut(),
   resetView: () => orbitControls.resetView(),
+  panBy: (dx: number, dy: number) => orbitControls.panBy(dx, dy),
 })
 </script>
 

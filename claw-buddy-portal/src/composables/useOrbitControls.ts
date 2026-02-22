@@ -23,6 +23,12 @@ export function useOrbitControls(
     controls.maxDistance = options?.maxDistance ?? 30
     controls.maxPolarAngle = options?.maxPolarAngle ?? Math.PI / 2.2
     controls.target.set(0, 0, 0)
+    controls.enablePan = true
+    controls.screenSpacePanning = true
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    }
   }
 
   const stop = watch(rendererRef, (renderer) => {
@@ -56,11 +62,20 @@ export function useOrbitControls(
     controls.update()
   }
 
+  function panBy(dx: number, dy: number) {
+    if (!controls) return
+    const amount = 1
+    controls.target.x += dx * amount
+    controls.target.z += dy * amount
+    camera.position.x += dx * amount
+    camera.position.z += dy * amount
+  }
+
   onUnmounted(() => {
     stop()
     controls?.dispose()
     controls = null
   })
 
-  return { update, zoomIn, zoomOut, resetView, get controls() { return controls } }
+  return { update, zoomIn, zoomOut, resetView, panBy, get controls() { return controls } }
 }

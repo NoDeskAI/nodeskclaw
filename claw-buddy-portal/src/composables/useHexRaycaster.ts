@@ -13,6 +13,7 @@ export function useHexRaycaster(
   const pointer = new THREE.Vector2()
   const hoveredId = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
+  const dblclickId = ref<string | null>(null)
 
   let downX = 0
   let downY = 0
@@ -60,12 +61,19 @@ export function useHexRaycaster(
     if (id) selectedId.value = id
   }
 
+  function onDblClick(e: MouseEvent) {
+    const hits = cast(e)
+    const id = hits.length > 0 ? getHexId(hits[0].object) : null
+    if (id) dblclickId.value = id
+  }
+
   onMounted(() => {
     const el = containerRef.value
     if (!el) return
     el.addEventListener('pointermove', onPointerMove)
     el.addEventListener('pointerdown', onPointerDown)
     el.addEventListener('click', onClick)
+    el.addEventListener('dblclick', onDblClick)
   })
 
   onUnmounted(() => {
@@ -74,7 +82,8 @@ export function useHexRaycaster(
     el.removeEventListener('pointermove', onPointerMove)
     el.removeEventListener('pointerdown', onPointerDown)
     el.removeEventListener('click', onClick)
+    el.removeEventListener('dblclick', onDblClick)
   })
 
-  return { hoveredId, selectedId }
+  return { hoveredId, selectedId, dblclickId }
 }

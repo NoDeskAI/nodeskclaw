@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -23,6 +23,7 @@ const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewT
 const chatOpen = ref(false)
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
+const selectedAgentId = ref<string | null>(null)
 
 const threeRef = ref<HTMLElement | null>(null)
 const svgRef = ref<HTMLElement | null>(null)
@@ -49,10 +50,12 @@ onMounted(async () => {
   await store.fetchBlackboard(workspaceId.value)
 
   store.connectSSE(workspaceId.value)
+  window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   store.disconnectSSE()
+  window.removeEventListener('keydown', handleKeydown)
 })
 
 function toggleMode() {
@@ -64,7 +67,11 @@ function toggleMode() {
   }
 }
 
-function onAgentClick(_id: string) {
+function onAgentClick(id: string) {
+  selectedAgentId.value = selectedAgentId.value === id ? null : id
+}
+
+function onAgentDblClick(_id: string) {
   chatOpen.value = true
 }
 
@@ -89,6 +96,83 @@ function toggleFullscreen() {
 function goBack() {
   router.push('/')
 }
+
+const HEX_DELTAS: Record<string, [number, number]> = {
+  ArrowRight: [1, 0],
+  ArrowLeft: [-1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
+
+async function moveSelectedAgent(dq: number, dr: number) {
+  if (!selectedAgentId.value) return
+  const agent = agents.value.find((a) => a.instance_id === selectedAgentId.value)
+  if (!agent) return
+
+  const targetQ = agent.hex_q + dq
+  const targetR = agent.hex_r + dr
+
+  if (targetQ === 0 && targetR === 0) return
+
+  const occupied = agents.value.some(
+    (a) => a.instance_id !== selectedAgentId.value && a.hex_q === targetQ && a.hex_r === targetR,
+  )
+  if (occupied) return
+
+  await store.updateAgent(workspaceId.value, selectedAgentId.value, {
+    hex_q: targetQ,
+    hex_r: targetR,
+  })
+}
+
+function panCanvas(key: string) {
+  const dx = key === 'ArrowRight' ? 1 : key === 'ArrowLeft' ? -1 : 0
+  const dy = key === 'ArrowDown' ? 1 : key === 'ArrowUp' ? -1 : 0
+  if (activeMode.value === '3d') {
+    workspace3dRef.value?.panBy(dx, dy)
+  } else {
+    workspace2dRef.value?.panBy(dx, dy)
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
+
+  if (e.key === 'Escape') {
+    selectedAgentId.value = null
+    e.preventDefault()
+    return
+  }
+
+  const delta = HEX_DELTAS[e.key]
+  if (delta) {
+    e.preventDefault()
+    if (selectedAgentId.value) {
+      moveSelectedAgent(delta[0], delta[1])
+    } else {
+      panCanvas(e.key)
+    }
+    return
+  }
+
+  if (e.key === '+' || e.key === '=') {
+    e.preventDefault()
+    handleZoomIn()
+    return
+  }
+
+  if (e.key === '-') {
+    e.preventDefault()
+    handleZoomOut()
+    return
+  }
+
+  if (e.key === '0') {
+    e.preventDefault()
+    handleResetView()
+  }
+}
 </script>
 
 <template>
@@ -111,17 +195,24 @@ function goBack() {
           </div>
           <span class="font-semibold text-sm">{{ ws.name }}</span>
         </div>
+        <button
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+          @click="onAddAgentClick"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          添加
+        </button>
       </div>
 
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-0.5 mr-1">
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="放大" @click="handleZoomIn">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="放大 (+)" @click="handleZoomIn">
             <ZoomIn class="w-4 h-4" />
           </button>
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="缩小" @click="handleZoomOut">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="缩小 (-)" @click="handleZoomOut">
             <ZoomOut class="w-4 h-4" />
           </button>
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="重置视角" @click="handleResetView">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="重置视角 (0)" @click="handleResetView">
             <RotateCcw class="w-4 h-4" />
           </button>
         </div>
@@ -165,7 +256,9 @@ function goBack() {
           :agents="agents"
           :auto-summary="store.blackboard?.auto_summary || ''"
           :manual-notes="store.blackboard?.manual_notes || ''"
+          :selected-agent-id="selectedAgentId"
           @agent-click="onAgentClick"
+          @agent-dblclick="onAgentDblClick"
           @blackboard-click="onBlackboardClick"
           @add-agent-click="onAddAgentClick"
         />
@@ -184,7 +277,9 @@ function goBack() {
           :agents="agents"
           :auto-summary="store.blackboard?.auto_summary || ''"
           :manual-notes="store.blackboard?.manual_notes || ''"
+          :selected-agent-id="selectedAgentId"
           @agent-click="onAgentClick"
+          @agent-dblclick="onAgentDblClick"
           @blackboard-click="onBlackboardClick"
           @add-agent-click="onAddAgentClick"
         />

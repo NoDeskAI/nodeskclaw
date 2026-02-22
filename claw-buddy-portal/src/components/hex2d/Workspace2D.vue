@@ -8,19 +8,21 @@ const props = defineProps<{
   agents: AgentBrief[]
   autoSummary: string
   manualNotes: string
+  selectedAgentId: string | null
 }>()
 
 const emit = defineEmits<{
   (e: 'agent-click', id: string): void
+  (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
   (e: 'blackboard-click'): void
   (e: 'add-agent-click'): void
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
-const { transformStr, zoomIn, zoomOut, resetView } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
+const { transformStr, zoomIn, zoomOut, resetView, panBy } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
 
-defineExpose({ zoomIn, zoomOut, resetView })
+defineExpose({ zoomIn, zoomOut, resetView, panBy })
 
 const hoveredId = ref<string | null>(null)
 
@@ -176,9 +178,20 @@ const addPos = computed(() => nextAddPosition())
         class="cursor-pointer transition-transform"
         :transform="`translate(${agent.px}, ${agent.py}) ${hoveredId === agent.instance_id ? 'scale(1.08)' : ''}`"
         @click="emit('agent-click', agent.instance_id)"
+        @dblclick="emit('agent-dblclick', agent.instance_id)"
         @pointerenter="hoveredId = agent.instance_id; emit('agent-hover', agent.instance_id)"
         @pointerleave="hoveredId = null; emit('agent-hover', null)"
       >
+        <!-- Selection highlight ring -->
+        <polygon
+          v-if="props.selectedAgentId === agent.instance_id"
+          :points="hexPoints(0, 0)"
+          fill="none"
+          stroke="#60a5fa"
+          stroke-width="3.5"
+          opacity="0.8"
+          class="animate-selected-ring"
+        />
         <polygon
           :points="hexPoints(0, 0)"
           :fill="(statusColors[agent.status] || '#a78bfa') + '22'"
@@ -243,6 +256,14 @@ const addPos = computed(() => nextAddPosition())
 }
 .animate-bb-ring {
   animation: bb-ring-rotate 8s linear infinite;
+}
+
+@keyframes selected-ring-pulse {
+  0%, 100% { opacity: 0.8; stroke-width: 3.5; }
+  50% { opacity: 0.4; stroke-width: 2.5; }
+}
+.animate-selected-ring {
+  animation: selected-ring-pulse 1.5s ease-in-out infinite;
 }
 
 .bb-hex {
