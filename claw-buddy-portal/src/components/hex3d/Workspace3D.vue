@@ -144,8 +144,8 @@ function createBlackboardMesh(): THREE.Group {
   group.position.set(0, 0.15, 0)
   group.userData = { hexId: '__blackboard__', isHex: true }
 
-  const bbSize = HEX_SIZE * 1.1
-  const bbGeo = new THREE.CylinderGeometry(bbSize, bbSize, 0.35, 6)
+  const bbSize = HEX_SIZE * 0.95
+  const bbGeo = new THREE.CylinderGeometry(bbSize, bbSize, 0.15, 6)
   const bbMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a2e,
     emissive: new THREE.Color(0xa78bfa),
