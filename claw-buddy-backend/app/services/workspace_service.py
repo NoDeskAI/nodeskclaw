@@ -31,6 +31,7 @@ def _agent_brief(inst: Instance) -> AgentBrief:
         instance_id=inst.id,
         name=inst.name,
         display_name=inst.agent_display_name,
+        slug=inst.slug,
         status=inst.status,
         hex_q=inst.hex_position_q,
         hex_r=inst.hex_position_r,

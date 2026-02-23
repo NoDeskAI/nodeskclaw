@@ -46,6 +46,11 @@ function agentLabel(a: AgentBrief): string {
   return a.display_name || a.name
 }
 
+function agentSlug(senderId: string): string | null {
+  const a = agents.value.find(x => x.instance_id === senderId)
+  return a?.slug ?? null
+}
+
 // ── @ Mention autocomplete ────────────────────────
 const mentionOpen = ref(false)
 const mentionQuery = ref('')
@@ -133,6 +138,10 @@ function selectCommand(cmd: typeof COMMANDS[number]) {
 function handleInputEvent() {
   const el = textareaRef.value
   if (!el) return
+
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+
   const text = el.value
 
   if (text.startsWith('/') && !text.includes('\n')) {
@@ -271,6 +280,7 @@ async function sendMessage() {
   input.value = ''
   mentionOpen.value = false
   commandOpen.value = false
+  if (textareaRef.value) textareaRef.value.style.height = 'auto'
   await store.sendWorkspaceMessage(props.workspaceId, text, mentions.length > 0 ? mentions : undefined)
   scrollToBottom()
 }
@@ -362,6 +372,10 @@ function formatTime(dateStr: string): string {
               <span class="text-xs font-medium" :style="{ color: msg.sender_type === 'agent' ? getAgentColor(msg.sender_id) : undefined }">
                 {{ msg.sender_name }}
               </span>
+              <span
+                v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
+                class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono leading-none"
+              >{{ agentSlug(msg.sender_id) }}</span>
               <span class="text-[10px] text-muted-foreground">{{ formatTime(msg.created_at) }}</span>
               <span
                 v-if="msg.message_type === 'collaboration'"
@@ -381,8 +395,8 @@ function formatTime(dateStr: string): string {
                   v-if="seg.type === 'mention'"
                   class="inline-block rounded px-1 font-medium text-xs leading-5"
                   :class="msg.sender_type === 'user'
-                    ? 'bg-white/20 text-primary-foreground'
-                    : 'bg-primary/20 text-primary'"
+                    ? 'bg-white/30 text-primary-foreground font-semibold'
+                    : 'bg-primary/15 text-primary font-semibold'"
                 >{{ seg.value }}</span>
                 <span v-else>{{ seg.value }}</span>
               </template>
@@ -452,21 +466,20 @@ function formatTime(dateStr: string): string {
         </div>
       </Transition>
 
-      <!-- Textarea + hints + send -->
-      <div class="flex items-center gap-2">
-        <div class="flex-1 relative">
-          <textarea
-            ref="textareaRef"
-            v-model="input"
-            rows="1"
-            class="w-full resize-none bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50"
-            placeholder="消息... 输入 @ 提及 Agent，/ 执行命令"
-            @keydown="handleKeydown"
-            @input="handleInputEvent"
-          />
-        </div>
+      <!-- Textarea + send button -->
+      <div class="relative">
+        <textarea
+          ref="textareaRef"
+          v-model="input"
+          rows="1"
+          class="w-full resize-none overflow-y-auto bg-muted rounded-lg pl-3 pr-10 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50"
+          :style="{ maxHeight: '120px' }"
+          placeholder="消息... 输入 @ 提及 Agent，/ 执行命令"
+          @keydown="handleKeydown"
+          @input="handleInputEvent"
+        />
         <button
-          class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          class="absolute right-1.5 bottom-1.5 p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           :disabled="!input.trim() || sending"
           @click="sendMessage"
         >
