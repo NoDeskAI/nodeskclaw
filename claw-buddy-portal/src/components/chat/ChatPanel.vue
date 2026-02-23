@@ -478,7 +478,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 <template>
   <div class="flex flex-col h-full">
     <!-- Messages -->
-    <div ref="messagesEl" class="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+    <div ref="messagesEl" class="messages-scroll flex-1 px-4 py-3 space-y-3 min-h-0">
       <div
         v-if="messages.length === 0"
         class="flex items-center justify-center h-full text-muted-foreground text-sm"
@@ -779,6 +779,23 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
   transform: translateX(-50%);
   border: 4px solid transparent;
   border-bottom-color: var(--popover);
+}
+
+.messages-scroll {
+  overflow-y: scroll;
+}
+.messages-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.messages-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.messages-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 3px;
+}
+.messages-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
 }
 
 .chat-markdown :deep(p) { margin: 0.25em 0; }
