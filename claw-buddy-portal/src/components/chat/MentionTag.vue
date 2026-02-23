@@ -51,7 +51,7 @@ onUnmounted(() => {
       <X class="w-2.5 h-2.5" />
     </button>
     <Bot v-else class="w-3 h-3 shrink-0 opacity-70" />
-    <span class="tag-label">@{{ node.attrs.label }}</span>
+    <span class="tag-label">{{ node.attrs.label }}</span>
 
     <Teleport to="body">
       <div

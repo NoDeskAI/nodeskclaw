@@ -65,7 +65,7 @@ async function copySlug(agentId: string) {
   const slug = agentSlug(agentId)
   if (!slug) return
   await navigator.clipboard.writeText(slug)
-  toast.success('Slug 已复制到剪贴板')
+  toast.success('实例标识已复制')
 }
 
 // ── Commands ────────────────────────────────────────
@@ -292,7 +292,7 @@ const editor = useEditor({
       dropcursor: false,
     }),
     Placeholder.configure({
-      placeholder: '消息...',
+      placeholder: '输入消息，@ 提及 Agent，/ 执行命令',
     }),
     AgentMention.configure({
       suggestion: {
@@ -516,12 +516,14 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               >{{ msg.sender_name }}</span>
               <span
                 v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
-                class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono leading-none truncate max-w-[140px] cursor-default"
-                :title="agentSlug(msg.sender_id)"
-              >{{ agentSlug(msg.sender_id) }}</span>
+                class="slug-tag group/slug relative"
+              >
+                <span class="slug-text">{{ agentSlug(msg.sender_id) }}</span>
+                <span class="slug-tooltip">{{ agentSlug(msg.sender_id) }}</span>
+              </span>
               <button
                 v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
-                class="opacity-0 group-hover/header:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted shrink-0"
+                class="opacity-0 group-hover/header:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted shrink-0 cursor-pointer"
                 @click="copySlug(msg.sender_id)"
               >
                 <Copy class="w-3 h-3 text-muted-foreground" />
@@ -697,9 +699,53 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 .tiptap-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
   color: hsl(var(--muted-foreground));
+  opacity: 0.5;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
   pointer-events: none;
   float: left;
   height: 0;
+}
+
+.slug-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 140px;
+  cursor: default;
+}
+.slug-text {
+  display: block;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slug-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+}
+.group\/slug:hover .slug-tooltip {
+  display: block;
 }
 
 .chat-markdown :deep(p) { margin: 0.25em 0; }
