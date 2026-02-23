@@ -49,9 +49,11 @@ export function useThreeScene(
     if (!el || !rendererRef.value) return
     const w = el.clientWidth
     const h = el.clientHeight
+    if (w === 0 || h === 0) return
     camera.aspect = w / h
     camera.updateProjectionMatrix()
     rendererRef.value.setSize(w, h)
+    rendererRef.value.render(scene, camera)
   }
 
   function init() {
