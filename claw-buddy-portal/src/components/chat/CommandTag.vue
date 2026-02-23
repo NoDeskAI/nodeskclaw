@@ -26,7 +26,7 @@ const hovered = ref(false)
       <X class="tag-icon-x" :class="{ visible: hovered }" />
       <Terminal class="tag-icon-default" :class="{ visible: !hovered }" />
     </button>
-    <span class="tag-label">/{{ node.attrs.label }}<span v-if="node.attrs.agentLabel" class="agent-part"> {{ node.attrs.agentLabel }}</span></span>
+    <span class="tag-label">/{{ node.attrs.label }}<span v-if="node.attrs.agentLabel" class="agent-part">{{ node.attrs.agentLabel }}</span></span>
   </NodeViewWrapper>
 </template>
 
@@ -37,7 +37,6 @@ const hovered = ref(false)
   gap: 2px;
   background: color-mix(in srgb, var(--primary) 20%, var(--muted));
   color: color-mix(in srgb, var(--primary) 90%, white);
-  border-left: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
   border-radius: 4px;
   padding: 0 4px;
   font-size: 0.7rem;
@@ -86,6 +85,7 @@ const hovered = ref(false)
   pointer-events: none;
 }
 .agent-part {
+  margin-left: 4px;
   color: var(--primary);
   font-weight: 600;
 }

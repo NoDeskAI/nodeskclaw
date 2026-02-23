@@ -79,7 +79,6 @@ onUnmounted(() => {
   gap: 2px;
   background: color-mix(in srgb, var(--primary) 20%, var(--muted));
   color: var(--primary);
-  border-left: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
   border-radius: 4px;
   padding: 0 4px;
   font-size: 0.7rem;
