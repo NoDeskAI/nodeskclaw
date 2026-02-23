@@ -35,17 +35,17 @@ const hovered = ref(false)
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--accent));
-  color: hsl(var(--primary) / 0.9);
-  border-left: 2px solid hsl(var(--primary) / 0.4);
+  background: color-mix(in srgb, var(--primary) 20%, var(--muted));
+  color: color-mix(in srgb, var(--primary) 90%, white);
+  border-left: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
   border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 0.75rem;
+  padding: 0 4px;
+  font-size: 0.7rem;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.3;
   cursor: default;
   user-select: none;
-  vertical-align: baseline;
+  vertical-align: middle;
 }
 .tag-icon-btn {
   position: relative;
@@ -59,7 +59,7 @@ const hovered = ref(false)
   flex-shrink: 0;
 }
 .tag-icon-btn:hover {
-  background: hsl(var(--primary) / 0.15);
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
 }
 .tag-icon-x,
 .tag-icon-default {
@@ -86,7 +86,7 @@ const hovered = ref(false)
   pointer-events: none;
 }
 .agent-part {
-  color: hsl(var(--primary));
+  color: var(--primary);
   font-weight: 600;
 }
 </style>

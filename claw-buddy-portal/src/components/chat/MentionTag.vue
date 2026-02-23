@@ -77,17 +77,17 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--accent));
-  color: hsl(var(--primary));
-  border-left: 2px solid hsl(var(--primary) / 0.5);
+  background: color-mix(in srgb, var(--primary) 20%, var(--muted));
+  color: var(--primary);
+  border-left: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
   border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 0.75rem;
+  padding: 0 4px;
+  font-size: 0.7rem;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.3;
   cursor: default;
   user-select: none;
-  vertical-align: baseline;
+  vertical-align: middle;
 }
 .tag-icon-btn {
   position: relative;
@@ -101,7 +101,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .tag-icon-btn:hover {
-  background: hsl(var(--primary) / 0.2);
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
 }
 .tag-icon-x,
 .tag-icon-bot {
@@ -131,8 +131,8 @@ onUnmounted(() => {
   position: fixed;
   z-index: 9999;
   transform: translateY(-100%);
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
   padding: 6px 10px;
