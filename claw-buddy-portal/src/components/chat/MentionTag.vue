@@ -77,7 +77,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--primary) / 0.22);
+  background: hsl(var(--accent));
   color: hsl(var(--primary));
   border-left: 2px solid hsl(var(--primary) / 0.5);
   border-radius: 4px;
@@ -117,10 +117,8 @@ onUnmounted(() => {
 .tag-icon-bot {
   width: 12px;
   height: 12px;
-  opacity: 0.7;
 }
-.tag-icon-x.visible,
-.tag-icon-bot.visible {
+.tag-icon-x.visible {
   opacity: 1;
 }
 .tag-icon-bot.visible {

@@ -35,7 +35,7 @@ const hovered = ref(false)
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--primary) / 0.18);
+  background: hsl(var(--accent));
   color: hsl(var(--primary) / 0.9);
   border-left: 2px solid hsl(var(--primary) / 0.4);
   border-radius: 4px;
@@ -75,10 +75,8 @@ const hovered = ref(false)
 .tag-icon-default {
   width: 12px;
   height: 12px;
-  opacity: 0.7;
 }
-.tag-icon-x.visible,
-.tag-icon-default.visible {
+.tag-icon-x.visible {
   opacity: 1;
 }
 .tag-icon-default.visible {
