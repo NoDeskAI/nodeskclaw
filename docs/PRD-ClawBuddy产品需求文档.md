@@ -1082,7 +1082,7 @@ Glow:    box-shadow:0 0 8px <色值>
 - **@ 提及**：用户可 `@AgentName` 定向标记 Agent。被 @ 的 Agent 收到"必须回复"提示，未被 @ 的 Agent 收到"如无关可 NO_REPLY"提示。消息仍然全员广播
 - **/ 命令**：输入 `/` 触发命令菜单。Phase 1 支持 `/status`（查看状态）、`/clear`（清空聊天）、`/restart AgentName`（重启 Agent）、`/remove AgentName`（移除 Agent）。命令在前端本地执行，不发送给 Agent
 - **多 Agent 流式响应**：各 Agent 响应通过 SSE 实时推送到前端
-- **NO_REPLY 静默**：与话题无关的 Agent 回复 `NO_REPLY` 即可静默，前端无感知
+- **NO_REPLY 静默**：与话题无关的 Agent 回复 `NO_REPLY` 即可静默，后端仍广播 `agent:done` 清除 typing 指示器，前端无消息显示
 - **Agent 协同**：Agent 使用 `send -t clawbuddy -to "agent:xxx" -m "消息"` 主动联系其他 Agent
 - **防循环**：Agent 响应只入库不触发其他 Agent；主动 send 携带深度计数器
 - **入群自我介绍**：Agent 加入工作区后自动收到系统消息，触发自我介绍回复
@@ -1095,7 +1095,7 @@ Glow:    box-shadow:0 0 8px <色值>
 - 关闭时：画布占满全宽，消息图标上显示未读消息计数红点角标
 - 系统消息（如"XXX 已加入工作区"）以居中灰色气泡展示，与 user/agent 消息区分
 - 用户头像：有 `avatar_url` 时显示真实头像图片，无则回退为灰色圆圈 + User 图标
-- @ 提及自动补全：输入 `@` 后弹出 Agent 列表浮动下拉，支持模糊搜索、键盘导航（方向键 + Enter），消息中的 `@AgentName` 以蓝色高亮 `<span>` 渲染
+- @ 提及自动补全：输入 `@` 后弹出 Agent 列表浮动下拉，支持模糊搜索、键盘导航（方向键 + Enter），消息中的 `@AgentName` 高亮渲染（用户气泡内白色半透明底、Agent 气泡内主色调底）
 - / 命令自动补全：输入 `/` 后弹出命令列表浮动下拉，支持键盘导航；需要 Agent 参数的命令（如 `/restart`）选中后自动触发 @ 提及补全
 
 ### B.2.2 添加 Agent 进度

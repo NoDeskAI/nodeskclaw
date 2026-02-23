@@ -379,7 +379,10 @@ function formatTime(dateStr: string): string {
               <template v-for="(seg, si) in parseContent(msg.content)" :key="si">
                 <span
                   v-if="seg.type === 'mention'"
-                  class="inline-block bg-primary/20 text-primary rounded px-1 font-medium text-xs leading-5"
+                  class="inline-block rounded px-1 font-medium text-xs leading-5"
+                  :class="msg.sender_type === 'user'
+                    ? 'bg-white/20 text-primary-foreground'
+                    : 'bg-primary/20 text-primary'"
                 >{{ seg.value }}</span>
                 <span v-else>{{ seg.value }}</span>
               </template>

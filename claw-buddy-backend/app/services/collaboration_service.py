@@ -235,6 +235,10 @@ async def _invoke_target_agent(
                         buffer += content
                         if len(buffer) > 20:
                             if msg_service.is_no_reply(buffer.strip()):
+                                broadcast_event(workspace_id, "agent:done", {
+                                    "instance_id": instance_id,
+                                    "agent_name": agent_name,
+                                })
                                 return
                             broadcast_event(workspace_id, "agent:chunk", {
                                 "instance_id": instance_id,
@@ -259,6 +263,10 @@ async def _invoke_target_agent(
 
     if not flushed and buffer:
         if msg_service.is_no_reply(buffer.strip()):
+            broadcast_event(workspace_id, "agent:done", {
+                "instance_id": instance_id,
+                "agent_name": agent_name,
+            })
             return
         broadcast_event(workspace_id, "agent:chunk", {
             "instance_id": instance_id,
@@ -284,3 +292,8 @@ async def _invoke_target_agent(
                 message_type="collaboration",
                 depth=depth,
             )
+    else:
+        broadcast_event(workspace_id, "agent:done", {
+            "instance_id": instance_id,
+            "agent_name": agent_name,
+        })

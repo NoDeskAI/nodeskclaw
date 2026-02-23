@@ -374,7 +374,7 @@ async function handleDeploy() {
               <span v-if="slug && !slugManuallyEdited" class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">自动生成</span>
             </div>
             <div class="flex items-center gap-0">
-              <div class="relative flex-1">
+              <div class="flex-1">
                 <input
                   v-model="slug"
                   type="text"
@@ -383,14 +383,12 @@ async function handleDeploy() {
                   :class="slugError ? 'border-destructive' : slug && slugValid && !slugConflict ? 'border-green-500' : 'border-border'"
                   @input="slugManuallyEdited = true"
                 />
-                <div v-if="slugChecking" class="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
-                </div>
-                <div v-else-if="slug && slugValid && !slugConflict && !slugChecking" class="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Check class="w-4 h-4 text-green-500" />
-                </div>
               </div>
-              <span class="h-[42px] flex items-center px-2.5 rounded-r-lg border border-l-0 border-border bg-muted text-sm font-mono text-muted-foreground select-none whitespace-nowrap">-{{ randomSuffix }}</span>
+              <span class="h-[42px] flex items-center gap-1.5 px-2.5 rounded-r-lg border border-l-0 border-border bg-muted text-sm font-mono text-muted-foreground select-none whitespace-nowrap">
+                -{{ randomSuffix }}
+                <Loader2 v-if="slugChecking" class="w-4 h-4 animate-spin text-muted-foreground" />
+                <Check v-else-if="slug && slugValid && !slugConflict && !slugChecking" class="w-4 h-4 text-green-500" />
+              </span>
             </div>
             <p v-if="slugError" class="text-xs text-destructive flex items-center gap-1">
               <AlertCircle class="w-3 h-3" />

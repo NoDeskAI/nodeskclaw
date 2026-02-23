@@ -239,10 +239,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  const _typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
   function _handleAgentTyping(data: Record<string, unknown>) {
     const instanceId = data.instance_id as string
     const agentName = data.agent_name as string
     typingAgents.value.set(instanceId, agentName)
+    const prev = _typingTimers.get(instanceId)
+    if (prev) clearTimeout(prev)
+    _typingTimers.set(instanceId, setTimeout(() => {
+      typingAgents.value.delete(instanceId)
+      _typingTimers.delete(instanceId)
+    }, 15_000))
   }
 
   function _handleAgentChunk(data: Record<string, unknown>) {
@@ -270,9 +278,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  function _clearTypingTimer(instanceId: string) {
+    const t = _typingTimers.get(instanceId)
+    if (t) { clearTimeout(t); _typingTimers.delete(instanceId) }
+  }
+
   function _handleAgentDone(data: Record<string, unknown>) {
     const instanceId = data.instance_id as string
     typingAgents.value.delete(instanceId)
+    _clearTypingTimer(instanceId)
 
     const streaming = chatMessages.value.find(
       (m) => m.sender_id === instanceId && m.streaming,
@@ -287,6 +301,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const instanceId = data.instance_id as string
     const agentName = data.agent_name as string
     typingAgents.value.delete(instanceId)
+    _clearTypingTimer(instanceId)
 
     const streaming = chatMessages.value.find(
       (m) => m.sender_id === instanceId && m.streaming,

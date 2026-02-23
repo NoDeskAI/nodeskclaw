@@ -2,6 +2,9 @@ import { onUnmounted, watch, type ShallowRef } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
+const LERP_FACTOR = 0.12
+const CONVERGE_THRESHOLD = 0.01
+
 export function useOrbitControls(
   camera: THREE.PerspectiveCamera,
   rendererRef: ShallowRef<THREE.WebGLRenderer | null>,
@@ -14,6 +17,9 @@ export function useOrbitControls(
   },
 ) {
   let controls: OrbitControls | null = null
+
+  let _animCamPos: THREE.Vector3 | null = null
+  let _animTarget: THREE.Vector3 | null = null
 
   function createControls(renderer: THREE.WebGLRenderer) {
     controls = new OrbitControls(camera, renderer.domElement)
@@ -37,7 +43,25 @@ export function useOrbitControls(
 
   const initialCameraPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z }
 
+  function _animateTo(camPos: THREE.Vector3, target?: THREE.Vector3) {
+    _animCamPos = camPos
+    _animTarget = target ?? controls?.target.clone() ?? new THREE.Vector3()
+  }
+
   function update() {
+    if (_animCamPos && _animTarget && controls) {
+      camera.position.lerp(_animCamPos, LERP_FACTOR)
+      controls.target.lerp(_animTarget, LERP_FACTOR)
+
+      const camDist = camera.position.distanceTo(_animCamPos)
+      const tgtDist = controls.target.distanceTo(_animTarget)
+      if (camDist < CONVERGE_THRESHOLD && tgtDist < CONVERGE_THRESHOLD) {
+        camera.position.copy(_animCamPos)
+        controls.target.copy(_animTarget)
+        _animCamPos = null
+        _animTarget = null
+      }
+    }
     controls?.update()
   }
 
@@ -45,21 +69,23 @@ export function useOrbitControls(
     if (!controls) return
     const dir = camera.position.clone().sub(controls.target)
     const newLen = Math.max(dir.length() * factor, controls.minDistance)
-    camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(newLen))
+    const newPos = controls.target.clone().add(dir.normalize().multiplyScalar(newLen))
+    _animateTo(newPos)
   }
 
   function zoomOut(factor = 1.25) {
     if (!controls) return
     const dir = camera.position.clone().sub(controls.target)
     const newLen = Math.min(dir.length() * factor, controls.maxDistance)
-    camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(newLen))
+    const newPos = controls.target.clone().add(dir.normalize().multiplyScalar(newLen))
+    _animateTo(newPos)
   }
 
   function resetView() {
     if (!controls) return
-    camera.position.set(initialCameraPos.x, initialCameraPos.y, initialCameraPos.z)
-    controls.target.set(0, 0, 0)
-    controls.update()
+    const newPos = new THREE.Vector3(initialCameraPos.x, initialCameraPos.y, initialCameraPos.z)
+    const newTarget = new THREE.Vector3(0, 0, 0)
+    _animateTo(newPos, newTarget)
   }
 
   function panBy(dx: number, dy: number) {
@@ -79,8 +105,9 @@ export function useOrbitControls(
       .addScaledVector(right, dx * amount)
       .addScaledVector(forward, -dy * amount)
 
-    controls.target.add(offset)
-    camera.position.add(offset)
+    const newTarget = controls.target.clone().add(offset)
+    const newCamPos = camera.position.clone().add(offset)
+    _animateTo(newCamPos, newTarget)
   }
 
   function getCameraXZDirections(): { right: { x: number; z: number }; forward: { x: number; z: number } } {

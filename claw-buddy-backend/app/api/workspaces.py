@@ -571,6 +571,10 @@ async def _stream_agent_response(
                         if len(buffer) > NO_REPLY_BUFFER_SIZE:
                             if msg_service.is_no_reply(buffer.strip()):
                                 logger.info("Agent %s replied NO_REPLY, discarding", agent_name)
+                                broadcast_event(workspace_id, "agent:done", {
+                                    "instance_id": instance_id,
+                                    "agent_name": agent_name,
+                                })
                                 return
                             broadcast_event(workspace_id, "agent:chunk", {
                                 "instance_id": instance_id,
@@ -596,6 +600,10 @@ async def _stream_agent_response(
     if not flushed and buffer:
         if msg_service.is_no_reply(buffer.strip()):
             logger.info("Agent %s replied NO_REPLY (short response), discarding", agent_name)
+            broadcast_event(workspace_id, "agent:done", {
+                "instance_id": instance_id,
+                "agent_name": agent_name,
+            })
             return
         broadcast_event(workspace_id, "agent:chunk", {
             "instance_id": instance_id,
@@ -619,3 +627,8 @@ async def _stream_agent_response(
                 sender_name=agent_name,
                 content=full_response,
             )
+    else:
+        broadcast_event(workspace_id, "agent:done", {
+            "instance_id": instance_id,
+            "agent_name": agent_name,
+        })
