@@ -480,7 +480,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
       <div v-for="msg in messages" :key="msg.id">
         <!-- System message -->
         <div v-if="msg.sender_type === 'system'" class="flex justify-center">
-          <span class="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1 whitespace-pre-wrap">
+          <span class="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1 whitespace-pre-wrap">
             {{ msg.content }}
           </span>
         </div>
