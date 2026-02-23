@@ -236,7 +236,19 @@ const clock = new THREE.Clock()
 addToLoop(() => {
   const t = clock.getElapsedTime()
   for (const [id, group] of hexMeshes) {
-    if (id === '__blackboard__') continue
+    if (id === '__blackboard__') {
+      const isHovered = hoveredId.value === '__blackboard__'
+      const isSelectedHex = props.selectedHex?.q === 0 && props.selectedHex?.r === 0
+      const targetY = isHovered ? 0.4 : isSelectedHex ? 0.3 : 0.15
+      group.position.y += (targetY - group.position.y) * 0.1
+
+      const mesh = group.children[0] as THREE.Mesh
+      if (mesh?.material && 'emissiveIntensity' in mesh.material) {
+        const mat = mesh.material as THREE.MeshStandardMaterial
+        mat.emissiveIntensity = isSelectedHex ? 0.7 + Math.sin(t * 3) * 0.15 : isHovered ? 0.5 : 0.2
+      }
+      continue
+    }
 
     if (id.startsWith('empty:')) {
       const mesh = group.children[0] as THREE.Mesh

@@ -18,7 +18,7 @@ const emit = defineEmits<{
   <Transition name="slide-up">
     <div
       v-if="open"
-      class="fixed inset-x-0 bottom-0 z-40 bg-card border-t border-border shadow-2xl rounded-t-xl"
+      class="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-60 bg-card border border-border shadow-2xl rounded-t-xl"
     >
       <div class="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
         <span class="text-sm font-medium text-foreground">
@@ -40,7 +40,7 @@ const emit = defineEmits<{
         </button>
       </div>
 
-      <div class="flex items-center gap-1 px-3 py-2.5">
+      <div class="flex flex-col gap-0.5 px-2 py-2">
         <!-- Empty hex actions -->
         <template v-if="hexType === 'empty'">
           <button

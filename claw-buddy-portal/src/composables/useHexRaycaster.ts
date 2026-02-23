@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, type Ref, type ShallowRef } from 'vue'
+import { ref, shallowRef, triggerRef, onMounted, onUnmounted, type Ref } from 'vue'
 import * as THREE from 'three'
 
 const DRAG_THRESHOLD = 5
@@ -12,8 +12,8 @@ export function useHexRaycaster(
   const raycaster = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
   const hoveredId = ref<string | null>(null)
-  const selectedId = ref<string | null>(null)
-  const dblclickId = ref<string | null>(null)
+  const selectedId = shallowRef<string | null>(null)
+  const dblclickId = shallowRef<string | null>(null)
 
   let downX = 0
   let downY = 0
@@ -58,13 +58,19 @@ export function useHexRaycaster(
 
     const hits = cast(e)
     const id = hits.length > 0 ? getHexId(hits[0].object) : null
-    if (id) selectedId.value = id
+    if (id) {
+      selectedId.value = id
+      triggerRef(selectedId)
+    }
   }
 
   function onDblClick(e: MouseEvent) {
     const hits = cast(e)
     const id = hits.length > 0 ? getHexId(hits[0].object) : null
-    if (id) dblclickId.value = id
+    if (id) {
+      dblclickId.value = id
+      triggerRef(dblclickId)
+    }
   }
 
   onMounted(() => {
