@@ -156,7 +156,7 @@ function createBlackboardMesh(): THREE.Group {
     opacity: 0.9,
   })
   const mesh = new THREE.Mesh(bbGeo, bbMat)
-  mesh.userData = { hexId: '__blackboard__', isHex: true }
+  mesh.raycast = () => {}
   group.add(mesh)
 
   const edgeGeo = new THREE.EdgesGeometry(bbGeo)
@@ -166,8 +166,14 @@ function createBlackboardMesh(): THREE.Group {
     opacity: 0.5,
   })
   const edges = new THREE.LineSegments(edgeGeo, edgeMat)
-  edges.userData = { hexId: '__blackboard__', isHex: true }
   group.add(edges)
+
+  const hitGeo = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.05, 6)
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false })
+  const hitMesh = new THREE.Mesh(hitGeo, hitMat)
+  hitMesh.position.y = -0.125
+  hitMesh.userData = { hexId: '__blackboard__', isHex: true }
+  group.add(hitMesh)
 
   return group
 }
