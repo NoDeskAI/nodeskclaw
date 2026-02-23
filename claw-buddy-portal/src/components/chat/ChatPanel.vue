@@ -61,6 +61,15 @@ function agentSlug(senderId: string): string | null {
   return a?.slug ?? null
 }
 
+const slugTooltipId = ref<string | null>(null)
+
+function onSlugEnter(e: MouseEvent, msgId: string) {
+  const el = (e.currentTarget as HTMLElement).querySelector('.slug-text')
+  if (el && el.scrollWidth > el.clientWidth) {
+    slugTooltipId.value = msgId
+  }
+}
+
 async function copySlug(agentId: string) {
   const slug = agentSlug(agentId)
   if (!slug) return
@@ -516,18 +525,15 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               >{{ msg.sender_name }}</span>
               <span
                 v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
-                class="slug-tag group/slug relative"
+                class="slug-tag"
+                @click="copySlug(msg.sender_id)"
+                @mouseenter="onSlugEnter($event, msg.id)"
+                @mouseleave="slugTooltipId = null"
               >
                 <span class="slug-text">{{ agentSlug(msg.sender_id) }}</span>
-                <span class="slug-tooltip">{{ agentSlug(msg.sender_id) }}</span>
+                <Copy class="slug-copy-icon" />
+                <span v-if="slugTooltipId === msg.id" class="slug-tooltip">{{ agentSlug(msg.sender_id) }}</span>
               </span>
-              <button
-                v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
-                class="opacity-0 group-hover/header:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted shrink-0 cursor-pointer"
-                @click="copySlug(msg.sender_id)"
-              >
-                <Copy class="w-3 h-3 text-muted-foreground" />
-              </button>
               <span class="text-[10px] text-muted-foreground shrink-0">{{ formatTime(msg.created_at) }}</span>
               <span
                 v-if="msg.message_type === 'collaboration'"
@@ -710,16 +716,29 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 .slug-tag {
   display: inline-flex;
   align-items: center;
+  position: relative;
   max-width: 140px;
-  cursor: default;
+  cursor: pointer;
+  gap: 2px;
+}
+.slug-tag:hover .slug-copy-icon {
+  opacity: 0.6;
+}
+.slug-copy-icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+  color: var(--muted-foreground);
 }
 .slug-text {
   display: block;
   font-size: 10px;
   padding: 2px 4px;
   border-radius: 4px;
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   line-height: 1;
   overflow: hidden;
@@ -727,25 +746,39 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
   white-space: nowrap;
 }
 .slug-tooltip {
-  display: none;
   position: absolute;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
   padding: 4px 8px;
   border-radius: 6px;
-  background: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
-  border: 1px solid hsl(var(--border));
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: nowrap;
   z-index: 50;
   pointer-events: none;
 }
-.group\/slug:hover .slug-tooltip {
-  display: block;
+.slug-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: var(--border);
+}
+.slug-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-bottom-color: var(--popover);
 }
 
 .chat-markdown :deep(p) { margin: 0.25em 0; }
