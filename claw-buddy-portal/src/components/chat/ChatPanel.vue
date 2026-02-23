@@ -7,10 +7,14 @@ import { Extension } from '@tiptap/core'
 import { PluginKey } from '@tiptap/pm/state'
 import { useWorkspaceStore, type GroupChatMessage, type AgentBrief } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
-import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal } from 'lucide-vue-next'
+import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal, Copy } from 'lucide-vue-next'
+import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { marked } from 'marked'
 import { AgentMention } from './extensions/agentMention'
 import { SlashCommand } from './extensions/slashCommand'
+
+marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps<{
   workspaceId: string
@@ -18,6 +22,7 @@ const props = defineProps<{
 
 const store = useWorkspaceStore()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const messagesEl = ref<HTMLElement | null>(null)
 
@@ -56,6 +61,13 @@ function agentSlug(senderId: string): string | null {
   return a?.slug ?? null
 }
 
+async function copySlug(agentId: string) {
+  const slug = agentSlug(agentId)
+  if (!slug) return
+  await navigator.clipboard.writeText(slug)
+  toast.success('Slug 已复制到剪贴板')
+}
+
 // ── Commands ────────────────────────────────────────
 const COMMANDS = [
   { name: 'status', label: '显示所有 Agent 状态', icon: Activity, needsAgent: false, immediate: true },
@@ -79,6 +91,7 @@ interface SuggestionState {
 
 const mentionState = ref<SuggestionState | null>(null)
 const commandState = ref<SuggestionState | null>(null)
+const pendingCommand = ref<{ id: string; label: string } | null>(null)
 
 function createSuggestionRenderer(stateRef: Ref<SuggestionState | null>) {
   return () => {
@@ -207,8 +220,10 @@ function getEditorContent(): { text: string; mentions: string[]; commands: strin
         parts.push(`@${node.attrs?.label || ''}`)
         if (node.attrs?.id) mentions.push(node.attrs.id)
       } else if (node.type === 'slashCommand') {
-        parts.push(`/${node.attrs?.label || ''}`)
+        const agentLbl = node.attrs?.agentLabel
+        parts.push(`/${node.attrs?.label || ''}${agentLbl ? ' @' + agentLbl : ''}`)
         if (node.attrs?.id) commands.push(node.attrs.id)
+        if (node.attrs?.agentId) mentions.push(node.attrs.agentId)
       }
     }
     parts.push('\n')
@@ -296,6 +311,26 @@ const editor = useEditor({
             }))
         },
         render: createSuggestionRenderer(mentionState),
+        command: ({ editor: ed, range, props: p }: any) => {
+          const pending = pendingCommand.value
+          if (pending) {
+            ed.chain().focus().insertContentAt(range, [
+              { type: 'slashCommand', attrs: {
+                id: pending.id, label: pending.label,
+                agentId: p.id, agentLabel: p.label,
+              }},
+              { type: 'text', text: ' ' },
+            ]).run()
+            pendingCommand.value = null
+            return
+          }
+          const nodeAfter = ed.view.state.selection.$to.nodeAfter
+          if (nodeAfter?.text?.startsWith(' ')) range.to += 1
+          ed.chain().focus().insertContentAt(range, [
+            { type: 'agentMention', attrs: { id: p.id, label: p.label, status: p.status, slug: p.slug } },
+            { type: 'text', text: ' ' },
+          ]).run()
+        },
       },
     }),
     SlashCommand.configure({
@@ -322,12 +357,20 @@ const editor = useEditor({
             nextTick(() => executeSlashCommand(p.id))
             return
           }
+          if (p.needsAgent) {
+            ed.chain().focus().deleteRange(range).run()
+            pendingCommand.value = { id: p.id, label: p.label }
+            nextTick(() => {
+              ed.chain().focus().insertContent('@').run()
+            })
+            return
+          }
           const nodeAfter = ed.view.state.selection.$to.nodeAfter
           const overrideSpace = nodeAfter?.text?.startsWith(' ')
           if (overrideSpace) range.to += 1
           ed.chain().focus().insertContentAt(range, [
             { type: 'slashCommand', attrs: { id: p.id, label: p.label } },
-            { type: 'text', text: p.needsAgent ? ' @' : ' ' },
+            { type: 'text', text: ' ' },
           ]).run()
           window.getSelection()?.collapseToEnd()
         },
@@ -385,6 +428,12 @@ function parseContent(content: string): Array<{ type: 'text' | 'mention'; value:
   }
   if (lastIdx < content.length) segments.push({ type: 'text', value: content.slice(lastIdx) })
   return segments.length ? segments : [{ type: 'text', value: content }]
+}
+
+// ── Markdown rendering ──────────────────────────────
+function renderMarkdown(content: string): string {
+  if (!content) return ''
+  return marked.parse(content) as string
 }
 
 // ── Misc ──────────────────────────────────────────
@@ -458,41 +507,51 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
           </div>
 
           <!-- Bubble -->
-          <div class="flex flex-col max-w-[75%]" :class="msg.sender_type === 'user' ? 'items-end' : 'items-start'">
-            <div class="flex items-center gap-1.5 mb-0.5">
-              <span class="text-xs font-medium" :style="{ color: msg.sender_type === 'agent' ? getAgentColor(msg.sender_id) : undefined }">
-                {{ msg.sender_name }}
-              </span>
+          <div class="flex flex-col" :class="msg.sender_type === 'user' ? 'max-w-[75%] items-end' : 'max-w-[92%] items-start'">
+            <div class="flex items-center gap-1.5 mb-0.5 max-w-full min-w-0 group/header">
+              <span
+                class="text-xs font-medium truncate max-w-[120px] cursor-default"
+                :style="{ color: msg.sender_type === 'agent' ? getAgentColor(msg.sender_id) : undefined }"
+                :title="msg.sender_name"
+              >{{ msg.sender_name }}</span>
               <span
                 v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
-                class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono leading-none"
+                class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono leading-none truncate max-w-[140px] cursor-default"
+                :title="agentSlug(msg.sender_id)"
               >{{ agentSlug(msg.sender_id) }}</span>
-              <span class="text-[10px] text-muted-foreground">{{ formatTime(msg.created_at) }}</span>
+              <button
+                v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
+                class="opacity-0 group-hover/header:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted shrink-0"
+                @click="copySlug(msg.sender_id)"
+              >
+                <Copy class="w-3 h-3 text-muted-foreground" />
+              </button>
+              <span class="text-[10px] text-muted-foreground shrink-0">{{ formatTime(msg.created_at) }}</span>
               <span
                 v-if="msg.message_type === 'collaboration'"
-                class="text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                class="text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0"
               >
                 collaboration
               </span>
             </div>
             <div
-              class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
-              :class="msg.sender_type === 'user'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-foreground'"
+              v-if="msg.sender_type === 'agent'"
+              class="rounded-lg px-3 py-2 text-sm bg-muted text-foreground chat-markdown"
+              v-html="renderMarkdown(msg.content)"
+            />
+            <div
+              v-else
+              class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap bg-primary text-primary-foreground"
             >
               <template v-for="(seg, si) in parseContent(msg.content)" :key="si">
                 <span
                   v-if="seg.type === 'mention'"
-                  class="inline-block rounded px-1 font-medium text-xs leading-5"
-                  :class="msg.sender_type === 'user'
-                    ? 'bg-white/30 text-primary-foreground font-semibold'
-                    : 'bg-primary/15 text-primary font-semibold'"
+                  class="inline-block rounded px-1 font-semibold text-xs leading-5 bg-white/30 text-primary-foreground"
                 >{{ seg.value }}</span>
                 <span v-else>{{ seg.value }}</span>
               </template>
-              <span v-if="msg.streaming" class="inline-block w-1.5 h-4 bg-current animate-pulse ml-0.5 align-text-bottom" />
             </div>
+            <span v-if="msg.streaming" class="inline-block w-1.5 h-4 bg-current animate-pulse ml-0.5 align-text-bottom" />
           </div>
         </div>
       </div>
@@ -552,6 +611,12 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               <component :is="item.icon" class="w-4 h-4 shrink-0 text-muted-foreground" />
               <span class="font-mono text-primary">/{{ item.id }}</span>
               <span class="text-xs text-muted-foreground ml-1">{{ item.displayLabel }}</span>
+              <span
+                class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                :class="item.immediate
+                  ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                  : 'bg-primary/10 text-primary'"
+              >{{ item.immediate ? '立即执行' : 'Tag' }}</span>
             </button>
           </div>
         </div>
@@ -605,20 +670,20 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 .tiptap-editor :deep(.ProseMirror) {
   min-height: 2.25rem;
   max-height: 10rem;
-  overflow-y: auto;
+  overflow-y: scroll;
   padding: 0.5rem 0.75rem 0.25rem;
   outline: none;
   font-size: 0.875rem;
   line-height: 1.5;
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
+  scrollbar-color: hsl(var(--border)) hsl(var(--border) / 0.3);
 }
 
 .tiptap-editor :deep(.ProseMirror::-webkit-scrollbar) {
   width: 4px;
 }
 .tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-track) {
-  background: transparent;
+  background: hsl(var(--border) / 0.3);
 }
 .tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-thumb) {
   background: hsl(var(--border));
@@ -635,5 +700,43 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
   pointer-events: none;
   float: left;
   height: 0;
+}
+
+.chat-markdown :deep(p) { margin: 0.25em 0; }
+.chat-markdown :deep(p:first-child) { margin-top: 0; }
+.chat-markdown :deep(p:last-child) { margin-bottom: 0; }
+.chat-markdown :deep(ul),
+.chat-markdown :deep(ol) { padding-left: 1.25em; margin: 0.25em 0; }
+.chat-markdown :deep(li) { margin: 0.1em 0; }
+.chat-markdown :deep(strong) { font-weight: 600; }
+.chat-markdown :deep(code) {
+  background: hsl(var(--primary) / 0.08);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.chat-markdown :deep(pre) {
+  background: hsl(var(--primary) / 0.06);
+  padding: 0.5em 0.75em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.chat-markdown :deep(pre code) { background: none; padding: 0; }
+.chat-markdown :deep(h1),
+.chat-markdown :deep(h2),
+.chat-markdown :deep(h3) {
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+.chat-markdown :deep(blockquote) {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 0.75em;
+  color: hsl(var(--muted-foreground));
+  margin: 0.25em 0;
+}
+.chat-markdown :deep(a) {
+  color: hsl(var(--primary));
+  text-decoration: underline;
 }
 </style>

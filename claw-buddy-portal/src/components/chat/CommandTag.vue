@@ -27,7 +27,7 @@ const hovered = ref(false)
       <X class="w-2.5 h-2.5" />
     </button>
     <Terminal v-else class="w-3 h-3 shrink-0 opacity-70" />
-    <span class="tag-label">/{{ node.attrs.label }}</span>
+    <span class="tag-label">/{{ node.attrs.label }}<span v-if="node.attrs.agentLabel" class="agent-part"> @{{ node.attrs.agentLabel }}</span></span>
   </NodeViewWrapper>
 </template>
 
@@ -62,5 +62,9 @@ const hovered = ref(false)
 }
 .tag-label {
   pointer-events: none;
+}
+.agent-part {
+  color: hsl(var(--primary));
+  font-weight: 600;
 }
 </style>

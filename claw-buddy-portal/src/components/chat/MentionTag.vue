@@ -78,8 +78,9 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--primary) / 0.12);
+  background: hsl(var(--primary) / 0.18);
   color: hsl(var(--primary));
+  border-left: 2px solid hsl(var(--primary) / 0.5);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 0.75rem;
