@@ -292,7 +292,7 @@ const editor = useEditor({
       dropcursor: false,
     }),
     Placeholder.configure({
-      placeholder: '输入消息，@ 提及 Agent，/ 执行命令',
+      placeholder: '输入消息到工作区，@ 提及 Agent，/ 执行命令',
     }),
     AgentMention.configure({
       suggestion: {
