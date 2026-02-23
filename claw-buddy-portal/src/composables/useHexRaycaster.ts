@@ -41,9 +41,52 @@ export function useHexRaycaster(
     return raycaster.intersectObjects(targets, true)
   }
 
+  const _proj = new THREE.Vector3()
+
+  /**
+   * When a ray hits multiple hex meshes (overlap zone due to cylinder side
+   * faces at oblique camera angles), pick the hex whose ground-plane center
+   * projects closest to the cursor in screen space (NDC).
+   */
+  function pickBestHexId(hits: THREE.Intersection[]): string | null {
+    if (hits.length === 0) return null
+
+    const seen = new Set<string>()
+    const candidates: { hexId: string; sx: number; sy: number }[] = []
+
+    for (const hit of hits) {
+      const hexId = getHexId(hit.object)
+      if (!hexId || seen.has(hexId)) continue
+      seen.add(hexId)
+
+      let obj: THREE.Object3D | null = hit.object
+      while (obj?.parent && obj.parent !== scene) obj = obj.parent
+      if (!obj) continue
+
+      _proj.set(obj.position.x, 0, obj.position.z)
+      _proj.project(camera)
+      candidates.push({ hexId, sx: _proj.x, sy: _proj.y })
+    }
+
+    if (candidates.length <= 1) return candidates[0]?.hexId ?? null
+
+    let bestId: string | null = null
+    let bestDist = Infinity
+    for (const c of candidates) {
+      const dx = c.sx - pointer.x
+      const dy = c.sy - pointer.y
+      const dist = dx * dx + dy * dy
+      if (dist < bestDist) {
+        bestDist = dist
+        bestId = c.hexId
+      }
+    }
+    return bestId
+  }
+
   function onPointerMove(e: MouseEvent) {
     const hits = cast(e)
-    hoveredId.value = hits.length > 0 ? getHexId(hits[0].object) : null
+    hoveredId.value = pickBestHexId(hits)
   }
 
   function onPointerDown(e: MouseEvent) {
@@ -57,7 +100,7 @@ export function useHexRaycaster(
     if (dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) return
 
     const hits = cast(e)
-    const id = hits.length > 0 ? getHexId(hits[0].object) : null
+    const id = pickBestHexId(hits)
     if (id) {
       selectedId.value = id
       triggerRef(selectedId)
@@ -66,7 +109,7 @@ export function useHexRaycaster(
 
   function onDblClick(e: MouseEvent) {
     const hits = cast(e)
-    const id = hits.length > 0 ? getHexId(hits[0].object) : null
+    const id = pickBestHexId(hits)
     if (id) {
       dblclickId.value = id
       triggerRef(dblclickId)
