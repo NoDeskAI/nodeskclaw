@@ -86,42 +86,55 @@ function formatTime(dateStr: string): string {
         发送消息开始群聊，所有 Agent 都会看到
       </div>
 
-      <div v-for="msg in messages" :key="msg.id" class="flex gap-2" :class="msg.sender_type === 'user' ? 'flex-row-reverse' : 'flex-row'">
-        <!-- Avatar -->
-        <div
-          class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-xs"
-          :style="{
-            backgroundColor: msg.sender_type === 'agent'
-              ? getAgentColor(msg.sender_id)
-              : '#6b7280',
-          }"
-        >
-          <Bot v-if="msg.sender_type === 'agent'" class="w-3.5 h-3.5" />
-          <User v-else class="w-3.5 h-3.5" />
+      <!-- System message (centered) -->
+      <div
+        v-for="msg in messages"
+        :key="msg.id"
+      >
+        <div v-if="msg.sender_type === 'system'" class="flex justify-center">
+          <span class="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+            {{ msg.content }}
+          </span>
         </div>
 
-        <!-- Bubble -->
-        <div class="flex flex-col max-w-[75%]" :class="msg.sender_type === 'user' ? 'items-end' : 'items-start'">
-          <div class="flex items-center gap-1.5 mb-0.5">
-            <span class="text-xs font-medium" :style="{ color: msg.sender_type === 'agent' ? getAgentColor(msg.sender_id) : undefined }">
-              {{ msg.sender_name }}
-            </span>
-            <span class="text-[10px] text-muted-foreground">{{ formatTime(msg.created_at) }}</span>
-            <span
-              v-if="msg.message_type === 'collaboration'"
-              class="text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
-            >
-              collaboration
-            </span>
-          </div>
+        <!-- User / Agent message -->
+        <div v-else class="flex gap-2" :class="msg.sender_type === 'user' ? 'flex-row-reverse' : 'flex-row'">
+          <!-- Avatar -->
           <div
-            class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
-            :class="msg.sender_type === 'user'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-foreground'"
+            class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-xs"
+            :style="{
+              backgroundColor: msg.sender_type === 'agent'
+                ? getAgentColor(msg.sender_id)
+                : '#6b7280',
+            }"
           >
-            {{ msg.content || '...' }}
-            <span v-if="msg.streaming" class="inline-block w-1.5 h-4 bg-current animate-pulse ml-0.5 align-text-bottom" />
+            <Bot v-if="msg.sender_type === 'agent'" class="w-3.5 h-3.5" />
+            <User v-else class="w-3.5 h-3.5" />
+          </div>
+
+          <!-- Bubble -->
+          <div class="flex flex-col max-w-[75%]" :class="msg.sender_type === 'user' ? 'items-end' : 'items-start'">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <span class="text-xs font-medium" :style="{ color: msg.sender_type === 'agent' ? getAgentColor(msg.sender_id) : undefined }">
+                {{ msg.sender_name }}
+              </span>
+              <span class="text-[10px] text-muted-foreground">{{ formatTime(msg.created_at) }}</span>
+              <span
+                v-if="msg.message_type === 'collaboration'"
+                class="text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+              >
+                collaboration
+              </span>
+            </div>
+            <div
+              class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
+              :class="msg.sender_type === 'user'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-foreground'"
+            >
+              {{ msg.content || '...' }}
+              <span v-if="msg.streaming" class="inline-block w-1.5 h-4 bg-current animate-pulse ml-0.5 align-text-bottom" />
+            </div>
           </div>
         </div>
       </div>

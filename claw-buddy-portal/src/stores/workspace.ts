@@ -56,7 +56,7 @@ export interface WorkspaceMemberInfo {
 
 export interface GroupChatMessage {
   id: string
-  sender_type: 'user' | 'agent'
+  sender_type: 'user' | 'agent' | 'system'
   sender_id: string
   sender_name: string
   content: string
@@ -181,6 +181,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const chatMessages = ref<GroupChatMessage[]>([])
   const chatLoading = ref(false)
   const typingAgents = ref<Map<string, string>>(new Map())
+  const unreadCount = ref(0)
+  const chatVisible = ref(false)
+
+  function setChatVisible(visible: boolean) {
+    chatVisible.value = visible
+    if (visible) unreadCount.value = 0
+  }
+
+  function _incrementUnread() {
+    if (!chatVisible.value) unreadCount.value++
+  }
 
   async function fetchChatHistory(workspaceId: string) {
     try {
@@ -188,7 +199,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const raw = res.data.data || []
       chatMessages.value = raw.map((m: Record<string, unknown>) => ({
         id: m.id as string,
-        sender_type: m.sender_type as 'user' | 'agent',
+        sender_type: m.sender_type as 'user' | 'agent' | 'system',
         sender_id: m.sender_id as string,
         sender_name: m.sender_name as string,
         content: m.content as string,
@@ -251,6 +262,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         created_at: new Date().toISOString(),
         streaming: true,
       })
+      _incrementUnread()
     }
   }
 
@@ -305,6 +317,23 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       message_type: 'collaboration',
       created_at: new Date().toISOString(),
     })
+    _incrementUnread()
+  }
+
+  function _handleSystemWelcome(data: Record<string, unknown>) {
+    const agentName = data.agent_name as string
+    const content = data.content as string
+
+    chatMessages.value.push({
+      id: `sys-${Date.now()}`,
+      sender_type: 'system',
+      sender_id: 'system',
+      sender_name: 'System',
+      content: content || `${agentName} 已加入工作区`,
+      message_type: 'system',
+      created_at: new Date().toISOString(),
+    })
+    _incrementUnread()
   }
 
   // ── SSE ───────────────────────────────────────────
@@ -338,6 +367,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       'agent:done': _handleAgentDone,
       'agent:error': _handleAgentError,
       'agent:collaboration': _handleAgentCollaboration,
+      'system:welcome': _handleSystemWelcome,
     }
 
     for (const [eventName, handler] of Object.entries(sseHandlers)) {
@@ -449,6 +479,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     chatMessages,
     chatLoading,
     typingAgents,
+    unreadCount,
+    setChatVisible,
     fetchWorkspaces,
     fetchWorkspace,
     createWorkspace,
