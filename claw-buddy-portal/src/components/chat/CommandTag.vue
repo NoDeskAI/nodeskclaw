@@ -19,15 +19,14 @@ const hovered = ref(false)
     @mouseleave="hovered = false"
   >
     <button
-      v-if="hovered"
       class="tag-icon-btn"
       contenteditable="false"
       @click.stop.prevent="deleteNode"
     >
-      <X class="w-2.5 h-2.5" />
+      <X class="tag-icon-x" :class="{ visible: hovered }" />
+      <Terminal class="tag-icon-default" :class="{ visible: !hovered }" />
     </button>
-    <Terminal v-else class="w-3 h-3 shrink-0 opacity-70" />
-    <span class="tag-label">/{{ node.attrs.label }}<span v-if="node.attrs.agentLabel" class="agent-part"> @{{ node.attrs.agentLabel }}</span></span>
+    <span class="tag-label">/{{ node.attrs.label }}<span v-if="node.attrs.agentLabel" class="agent-part"> {{ node.attrs.agentLabel }}</span></span>
   </NodeViewWrapper>
 </template>
 
@@ -36,8 +35,9 @@ const hovered = ref(false)
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: hsl(var(--primary) / 0.08);
+  background: hsl(var(--primary) / 0.18);
   color: hsl(var(--primary) / 0.9);
+  border-left: 2px solid hsl(var(--primary) / 0.4);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 0.75rem;
@@ -48,6 +48,7 @@ const hovered = ref(false)
   vertical-align: baseline;
 }
 .tag-icon-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -55,10 +56,33 @@ const hovered = ref(false)
   height: 14px;
   border-radius: 3px;
   cursor: pointer;
-  transition: background 0.15s;
+  flex-shrink: 0;
 }
 .tag-icon-btn:hover {
   background: hsl(var(--primary) / 0.15);
+}
+.tag-icon-x,
+.tag-icon-default {
+  position: absolute;
+  transition: opacity 0.12s;
+  opacity: 0;
+  pointer-events: none;
+}
+.tag-icon-x {
+  width: 10px;
+  height: 10px;
+}
+.tag-icon-default {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+}
+.tag-icon-x.visible,
+.tag-icon-default.visible {
+  opacity: 1;
+}
+.tag-icon-default.visible {
+  opacity: 0.7;
 }
 .tag-label {
   pointer-events: none;
