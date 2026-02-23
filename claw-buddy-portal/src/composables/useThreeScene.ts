@@ -25,6 +25,7 @@ export function useThreeScene(
   const clock = new THREE.Clock()
   let animationId = 0
   let disposed = false
+  let ro: ResizeObserver | null = null
 
   const loopCallbacks = new Set<(delta: number) => void>()
 
@@ -68,14 +69,16 @@ export function useThreeScene(
     camera.aspect = el.clientWidth / el.clientHeight
     camera.updateProjectionMatrix()
 
-    window.addEventListener('resize', resize)
+    ro = new ResizeObserver(resize)
+    ro.observe(el)
     loop()
   }
 
   function dispose() {
     disposed = true
     cancelAnimationFrame(animationId)
-    window.removeEventListener('resize', resize)
+    ro?.disconnect()
+    ro = null
     loopCallbacks.clear()
 
     if (rendererRef.value) {

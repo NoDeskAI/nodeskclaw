@@ -372,7 +372,7 @@ function handleKeydown(e: KeyboardEvent) {
     <!-- Main: Hex Grid + Chat Sidebar -->
     <div class="flex-1 flex min-h-0">
       <!-- Hex Grid -->
-      <div class="flex-1 relative min-h-0 min-w-0" @click="onCanvasAreaClick">
+      <div class="flex-1 relative min-h-0 min-w-0 overflow-hidden" @click="onCanvasAreaClick">
         <!-- 3D mode -->
         <div
           ref="threeRef"
