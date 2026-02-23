@@ -15,7 +15,7 @@ class DeployRequest(BaseModel):
     replicas: int = 1
     cpu_request: str = "500m"
     cpu_limit: str = "2000m"
-    mem_request: str = "512Mi"
+    mem_request: str = "2Gi"
     mem_limit: str = "2Gi"
     env_vars: dict[str, str] = {}
     quota_cpu: str = "4"

@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, computed, onMounted } from 'vue'
+import { ref, nextTick, watch, computed, onMounted, type Ref } from 'vue'
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
+import { Extension } from '@tiptap/core'
+import { PluginKey } from '@tiptap/pm/state'
 import { useWorkspaceStore, type GroupChatMessage, type AgentBrief } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
-import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle } from 'lucide-vue-next'
+import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal } from 'lucide-vue-next'
 import api from '@/services/api'
+import { AgentMention } from './extensions/agentMention'
+import { SlashCommand } from './extensions/slashCommand'
 
 const props = defineProps<{
   workspaceId: string
@@ -12,8 +19,6 @@ const props = defineProps<{
 const store = useWorkspaceStore()
 const authStore = useAuthStore()
 
-const input = ref('')
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const messagesEl = ref<HTMLElement | null>(null)
 
 const messages = computed(() => store.chatMessages)
@@ -51,164 +56,71 @@ function agentSlug(senderId: string): string | null {
   return a?.slug ?? null
 }
 
-// ── @ Mention autocomplete ────────────────────────
-const mentionOpen = ref(false)
-const mentionQuery = ref('')
-const mentionIdx = ref(0)
-
-const filteredAgents = computed(() => {
-  const q = mentionQuery.value.toLowerCase()
-  if (!q) return agents.value
-  return agents.value.filter(a => agentLabel(a).toLowerCase().includes(q))
-})
-
-watch(filteredAgents, () => { mentionIdx.value = 0 })
-
-function findMentionTrigger(): number | null {
-  const el = textareaRef.value
-  if (!el) return null
-  const text = el.value
-  const cursor = el.selectionStart
-  const before = text.slice(0, cursor)
-  const atIdx = before.lastIndexOf('@')
-  if (atIdx < 0) return null
-  if (atIdx > 0 && before[atIdx - 1] !== ' ' && before[atIdx - 1] !== '\n') return null
-  const query = before.slice(atIdx + 1)
-  if (query.includes(' ') || query.includes('\n')) return null
-  return atIdx
-}
-
-function selectMention(agent: AgentBrief) {
-  const el = textareaRef.value
-  if (!el) return
-  const atIdx = findMentionTrigger()
-  if (atIdx === null) return
-  const cursor = el.selectionStart
-  const name = agentLabel(agent)
-  const after = el.value.slice(cursor)
-  input.value = el.value.slice(0, atIdx) + `@${name} ` + after
-  mentionOpen.value = false
-  nextTick(() => {
-    const pos = atIdx + name.length + 2
-    el.setSelectionRange(pos, pos)
-    el.focus()
-  })
-}
-
-// ── / Command autocomplete ────────────────────────
+// ── Commands ────────────────────────────────────────
 const COMMANDS = [
-  { name: 'status', label: '显示所有 Agent 状态', icon: Activity, needsAgent: false },
-  { name: 'clear', label: '清空聊天记录', icon: XCircle, needsAgent: false },
-  { name: 'restart', label: '重启 Agent', icon: RotateCw, needsAgent: true },
-  { name: 'remove', label: '移除 Agent', icon: Trash2, needsAgent: true },
+  { name: 'status', label: '显示所有 Agent 状态', icon: Activity, needsAgent: false, immediate: true },
+  { name: 'clear', label: '清空聊天记录', icon: XCircle, needsAgent: false, immediate: true },
+  { name: 'restart', label: '重启 Agent', icon: RotateCw, needsAgent: true, immediate: false },
+  { name: 'remove', label: '移除 Agent', icon: Trash2, needsAgent: true, immediate: false },
 ]
 
-const commandOpen = ref(false)
-const commandQuery = ref('')
-const commandIdx = ref(0)
+// ── Suggestion state ─────────────────────────────────
+interface SuggestionItem {
+  id: string
+  label: string
+  [key: string]: any
+}
 
-const filteredCommands = computed(() => {
-  const q = commandQuery.value.toLowerCase()
-  if (!q) return COMMANDS
-  return COMMANDS.filter(c => c.name.includes(q) || c.label.includes(q))
-})
+interface SuggestionState {
+  items: SuggestionItem[]
+  selectedIndex: number
+  command: (item: SuggestionItem) => void
+}
 
-watch(filteredCommands, () => { commandIdx.value = 0 })
+const mentionState = ref<SuggestionState | null>(null)
+const commandState = ref<SuggestionState | null>(null)
 
-function selectCommand(cmd: typeof COMMANDS[number]) {
-  commandOpen.value = false
-  if (!cmd.needsAgent) {
-    executeSlashCommand(cmd.name)
-    input.value = ''
-    return
-  }
-  input.value = `/${cmd.name} @`
-  nextTick(() => {
-    const el = textareaRef.value
-    if (el) {
-      el.setSelectionRange(input.value.length, input.value.length)
-      el.focus()
-      mentionQuery.value = ''
-      mentionOpen.value = true
+function createSuggestionRenderer(stateRef: Ref<SuggestionState | null>) {
+  return () => {
+    let idx = 0
+    return {
+      onStart(p: any) {
+        idx = 0
+        stateRef.value = { items: p.items, selectedIndex: 0, command: p.command }
+      },
+      onUpdate(p: any) {
+        idx = 0
+        stateRef.value = p.items.length
+          ? { items: p.items, selectedIndex: 0, command: p.command }
+          : null
+      },
+      onKeyDown({ event }: { event: KeyboardEvent }): boolean {
+        if (!stateRef.value || !stateRef.value.items.length) return false
+        const len = stateRef.value.items.length
+        if (event.key === 'ArrowUp') {
+          idx = (idx - 1 + len) % len
+          stateRef.value = { ...stateRef.value, selectedIndex: idx }
+          return true
+        }
+        if (event.key === 'ArrowDown') {
+          idx = (idx + 1) % len
+          stateRef.value = { ...stateRef.value, selectedIndex: idx }
+          return true
+        }
+        if (event.key === 'Enter' || event.key === 'Tab') {
+          stateRef.value.command(stateRef.value.items[idx])
+          return true
+        }
+        if (event.key === 'Escape') {
+          stateRef.value = null
+          return true
+        }
+        return false
+      },
+      onExit() {
+        stateRef.value = null
+      },
     }
-  })
-}
-
-function triggerMention() {
-  const el = textareaRef.value
-  if (!el) return
-  const pos = el.selectionStart ?? input.value.length
-  const before = input.value.slice(0, pos)
-  const after = input.value.slice(pos)
-  const prefix = before.length > 0 && !before.endsWith(' ') ? ' @' : '@'
-  input.value = before + prefix + after
-  nextTick(() => {
-    const newPos = pos + prefix.length
-    el.setSelectionRange(newPos, newPos)
-    el.focus()
-    mentionQuery.value = ''
-    mentionOpen.value = true
-  })
-}
-
-function triggerSlash() {
-  const el = textareaRef.value
-  if (!el) return
-  input.value = '/'
-  nextTick(() => {
-    el.setSelectionRange(1, 1)
-    el.focus()
-    commandQuery.value = ''
-    commandOpen.value = true
-  })
-}
-
-// ── Input event detection ─────────────────────────
-function handleInputEvent() {
-  const el = textareaRef.value
-  if (!el) return
-  const text = el.value
-
-  if (text.startsWith('/') && !text.includes('\n')) {
-    const firstSpace = text.indexOf(' ')
-    commandQuery.value = firstSpace < 0 ? text.slice(1) : text.slice(1, firstSpace)
-    const afterCommand = firstSpace >= 0 ? text.slice(firstSpace) : ''
-    if (!afterCommand.includes('@')) {
-      commandOpen.value = true
-      mentionOpen.value = false
-      return
-    }
-  }
-  commandOpen.value = false
-
-  const atIdx = findMentionTrigger()
-  if (atIdx !== null) {
-    mentionQuery.value = el.value.slice(atIdx + 1, el.selectionStart)
-    mentionOpen.value = true
-  } else {
-    mentionOpen.value = false
-  }
-}
-
-// ── Keyboard nav ──────────────────────────────────
-function handleKeydown(e: KeyboardEvent) {
-  if (mentionOpen.value && filteredAgents.value.length > 0) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); mentionIdx.value = (mentionIdx.value + 1) % filteredAgents.value.length; return }
-    if (e.key === 'ArrowUp') { e.preventDefault(); mentionIdx.value = (mentionIdx.value - 1 + filteredAgents.value.length) % filteredAgents.value.length; return }
-    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectMention(filteredAgents.value[mentionIdx.value]); return }
-    if (e.key === 'Escape') { e.preventDefault(); mentionOpen.value = false; return }
-  }
-
-  if (commandOpen.value && filteredCommands.value.length > 0) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); commandIdx.value = (commandIdx.value + 1) % filteredCommands.value.length; return }
-    if (e.key === 'ArrowUp') { e.preventDefault(); commandIdx.value = (commandIdx.value - 1 + filteredCommands.value.length) % filteredCommands.value.length; return }
-    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectCommand(filteredCommands.value[commandIdx.value]); return }
-    if (e.key === 'Escape') { e.preventDefault(); commandOpen.value = false; return }
-  }
-
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    sendMessage()
   }
 }
 
@@ -278,39 +190,182 @@ async function doRemoveAgent(name: string) {
   }
 }
 
-// ── Message send ──────────────────────────────────
-function extractMentionIds(text: string): string[] {
-  const ids: string[] = []
-  const regex = /@(\S+)/g
-  let m
-  while ((m = regex.exec(text)) !== null) {
-    const agent = agents.value.find(a => agentLabel(a) === m![1])
-    if (agent) ids.push(agent.instance_id)
+// ── Content extraction ─────────────────────────────
+function getEditorContent(): { text: string; mentions: string[]; commands: string[] } {
+  const json = editor.value?.getJSON()
+  if (!json?.content) return { text: '', mentions: [], commands: [] }
+  const parts: string[] = []
+  const mentions: string[] = []
+  const commands: string[] = []
+
+  for (const block of json.content) {
+    if (!block.content) { parts.push('\n'); continue }
+    for (const node of block.content) {
+      if (node.type === 'text') {
+        parts.push(node.text || '')
+      } else if (node.type === 'agentMention') {
+        parts.push(`@${node.attrs?.label || ''}`)
+        if (node.attrs?.id) mentions.push(node.attrs.id)
+      } else if (node.type === 'slashCommand') {
+        parts.push(`/${node.attrs?.label || ''}`)
+        if (node.attrs?.id) commands.push(node.attrs.id)
+      }
+    }
+    parts.push('\n')
   }
-  return [...new Set(ids)]
+
+  return {
+    text: parts.join('').trim(),
+    mentions: [...new Set(mentions)],
+    commands: [...new Set(commands)],
+  }
 }
 
+// ── Message send ──────────────────────────────────
 async function sendMessage() {
-  const text = input.value.trim()
-  if (!text || sending.value) return
+  if (!editor.value || editor.value.isEmpty) return
+  if (sending.value) return
 
-  if (text.startsWith('/')) {
-    const parts = text.split(/\s+/)
-    const cmd = parts[0].slice(1)
-    const arg = parts.slice(1).join(' ').replace(/^@/, '')
-    executeSlashCommand(cmd, arg || undefined)
-    input.value = ''
-    mentionOpen.value = false
-    commandOpen.value = false
+  const { text, mentions, commands } = getEditorContent()
+  editor.value.commands.clearContent()
+
+  if (commands.length > 0) {
+    for (const cmdName of commands) {
+      const mentionedAgent = mentions.length > 0
+        ? agents.value.find(a => a.instance_id === mentions[0])
+        : undefined
+      executeSlashCommand(cmdName, mentionedAgent ? agentLabel(mentionedAgent) : undefined)
+    }
     return
   }
 
-  const mentions = extractMentionIds(text)
-  input.value = ''
-  mentionOpen.value = false
-  commandOpen.value = false
+  if (text.startsWith('/')) {
+    const words = text.split(/\s+/)
+    const cmd = words[0].slice(1)
+    const arg = words.slice(1).join(' ').replace(/^@/, '')
+    executeSlashCommand(cmd, arg || undefined)
+    return
+  }
+
+  if (!text.trim()) return
+
   await store.sendWorkspaceMessage(props.workspaceId, text, mentions.length > 0 ? mentions : undefined)
   scrollToBottom()
+}
+
+// ── Editor ────────────────────────────────────────────
+const AGENT_MENTION_KEY = new PluginKey('agentMention')
+const SLASH_COMMAND_KEY = new PluginKey('slashCommand')
+
+const editorEmpty = ref(true)
+
+const editor = useEditor({
+  extensions: [
+    StarterKit.configure({
+      heading: false,
+      bold: false,
+      italic: false,
+      strike: false,
+      code: false,
+      codeBlock: false,
+      blockquote: false,
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
+      horizontalRule: false,
+      gapcursor: false,
+      dropcursor: false,
+    }),
+    Placeholder.configure({
+      placeholder: '消息...',
+    }),
+    AgentMention.configure({
+      suggestion: {
+        pluginKey: AGENT_MENTION_KEY,
+        char: '@',
+        items: ({ query }: { query: string }) => {
+          const q = query.toLowerCase()
+          return agents.value
+            .filter(a => agentLabel(a).toLowerCase().includes(q))
+            .slice(0, 10)
+            .map(a => ({
+              id: a.instance_id,
+              label: agentLabel(a),
+              status: a.status,
+              slug: a.slug,
+            }))
+        },
+        render: createSuggestionRenderer(mentionState),
+      },
+    }),
+    SlashCommand.configure({
+      suggestion: {
+        pluginKey: SLASH_COMMAND_KEY,
+        char: '/',
+        items: ({ query }: { query: string }) => {
+          const q = query.toLowerCase()
+          return COMMANDS
+            .filter(c => c.name.includes(q) || c.label.includes(q))
+            .map(c => ({
+              id: c.name,
+              label: c.name,
+              displayLabel: c.label,
+              icon: c.icon,
+              immediate: c.immediate,
+              needsAgent: c.needsAgent,
+            }))
+        },
+        render: createSuggestionRenderer(commandState),
+        command: ({ editor: ed, range, props: p }: any) => {
+          if (p.immediate) {
+            ed.chain().focus().deleteRange(range).run()
+            nextTick(() => executeSlashCommand(p.id))
+            return
+          }
+          const nodeAfter = ed.view.state.selection.$to.nodeAfter
+          const overrideSpace = nodeAfter?.text?.startsWith(' ')
+          if (overrideSpace) range.to += 1
+          ed.chain().focus().insertContentAt(range, [
+            { type: 'slashCommand', attrs: { id: p.id, label: p.label } },
+            { type: 'text', text: p.needsAgent ? ' @' : ' ' },
+          ]).run()
+          window.getSelection()?.collapseToEnd()
+        },
+      },
+    }),
+    Extension.create({
+      name: 'sendOnEnter',
+      addKeyboardShortcuts() {
+        return {
+          Enter: () => {
+            sendMessage()
+            return true
+          },
+        }
+      },
+    }),
+  ],
+  editorProps: {
+    attributes: {
+      class: 'chat-editor-content',
+    },
+  },
+  onUpdate: ({ editor: ed }) => {
+    editorEmpty.value = ed.isEmpty
+  },
+})
+
+// ── Trigger buttons ──────────────────────────────
+function triggerMention() {
+  if (!editor.value) return
+  const text = editor.value.getText()
+  const prefix = text.length > 0 && !text.endsWith(' ') && !text.endsWith('\n') ? ' @' : '@'
+  editor.value.chain().focus().insertContent(prefix).run()
+}
+
+function triggerSlash() {
+  if (!editor.value) return
+  editor.value.chain().focus().setContent('/').run()
 }
 
 // ── Message content parsing (highlight @mentions) ─
@@ -351,6 +406,14 @@ function formatTime(dateStr: string): string {
   } catch {
     return ''
   }
+}
+
+function selectSuggestionItem(state: SuggestionState, item: SuggestionItem) {
+  state.command(item)
+}
+
+function updateSuggestionIndex(state: SuggestionState, idx: number) {
+  state.selectedIndex = idx
 }
 </script>
 
@@ -442,10 +505,10 @@ function formatTime(dateStr: string): string {
 
     <!-- Input area -->
     <div class="border-t border-border px-4 py-2 shrink-0 relative">
-      <!-- @ Mention dropdown -->
+      <!-- @ Agent suggestion dropdown -->
       <Transition name="dropdown">
         <div
-          v-if="mentionOpen && filteredAgents.length > 0"
+          v-if="mentionState && mentionState.items.length > 0"
           class="absolute bottom-full left-4 right-4 mb-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden z-10"
         >
           <div class="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide border-b border-border">
@@ -453,25 +516,25 @@ function formatTime(dateStr: string): string {
           </div>
           <div class="max-h-40 overflow-y-auto">
             <button
-              v-for="(agent, idx) in filteredAgents"
-              :key="agent.instance_id"
+              v-for="(item, idx) in mentionState.items"
+              :key="item.id"
               class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-              :class="idx === mentionIdx ? 'bg-accent' : ''"
-              @mousedown.prevent="selectMention(agent)"
-              @mouseenter="mentionIdx = idx"
+              :class="idx === mentionState.selectedIndex ? 'bg-accent' : ''"
+              @mousedown.prevent="selectSuggestionItem(mentionState!, item)"
+              @mouseenter="updateSuggestionIndex(mentionState!, idx)"
             >
-              <Bot class="w-4 h-4 shrink-0" :style="{ color: getAgentColor(agent.instance_id) }" />
-              <span class="font-medium truncate">{{ agentLabel(agent) }}</span>
-              <span class="text-xs text-muted-foreground ml-auto shrink-0">{{ agent.status }}</span>
+              <Bot class="w-4 h-4 shrink-0" :style="{ color: getAgentColor(item.id) }" />
+              <span class="font-medium truncate">{{ item.label }}</span>
+              <span class="text-xs text-muted-foreground ml-auto shrink-0">{{ item.status }}</span>
             </button>
           </div>
         </div>
       </Transition>
 
-      <!-- / Command dropdown -->
+      <!-- / Command suggestion dropdown -->
       <Transition name="dropdown">
         <div
-          v-if="commandOpen && filteredCommands.length > 0"
+          v-if="commandState && commandState.items.length > 0"
           class="absolute bottom-full left-4 right-4 mb-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden z-10"
         >
           <div class="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide border-b border-border">
@@ -479,32 +542,24 @@ function formatTime(dateStr: string): string {
           </div>
           <div class="max-h-40 overflow-y-auto">
             <button
-              v-for="(cmd, idx) in filteredCommands"
-              :key="cmd.name"
+              v-for="(item, idx) in commandState.items"
+              :key="item.id"
               class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-              :class="idx === commandIdx ? 'bg-accent' : ''"
-              @mousedown.prevent="selectCommand(cmd)"
-              @mouseenter="commandIdx = idx"
+              :class="idx === commandState.selectedIndex ? 'bg-accent' : ''"
+              @mousedown.prevent="selectSuggestionItem(commandState!, item)"
+              @mouseenter="updateSuggestionIndex(commandState!, idx)"
             >
-              <component :is="cmd.icon" class="w-4 h-4 shrink-0 text-muted-foreground" />
-              <span class="font-mono text-primary">/{{ cmd.name }}</span>
-              <span class="text-xs text-muted-foreground ml-1">{{ cmd.label }}</span>
+              <component :is="item.icon" class="w-4 h-4 shrink-0 text-muted-foreground" />
+              <span class="font-mono text-primary">/{{ item.id }}</span>
+              <span class="text-xs text-muted-foreground ml-1">{{ item.displayLabel }}</span>
             </button>
           </div>
         </div>
       </Transition>
 
-      <!-- Textarea container (Cursor-style) -->
+      <!-- Tiptap editor container -->
       <div class="rounded-lg border border-border bg-muted overflow-hidden focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-colors">
-        <textarea
-          ref="textareaRef"
-          v-model="input"
-          rows="3"
-          class="w-full resize-none overflow-y-auto bg-transparent px-3 pt-2 pb-1 text-sm outline-none chat-textarea"
-          placeholder="消息..."
-          @keydown="handleKeydown"
-          @input="handleInputEvent"
-        />
+        <EditorContent :editor="editor" class="tiptap-editor" />
         <div class="flex items-center justify-between px-2 pb-1.5">
           <div class="flex items-center gap-0.5">
             <button
@@ -524,7 +579,7 @@ function formatTime(dateStr: string): string {
           </div>
           <button
             class="p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
-            :disabled="!input.trim() || sending"
+            :disabled="editorEmpty || sending"
             @click="sendMessage"
           >
             <Loader2 v-if="sending" class="w-3.5 h-3.5 animate-spin" />
@@ -546,8 +601,39 @@ function formatTime(dateStr: string): string {
   opacity: 0;
   transform: translateY(4px);
 }
-.chat-textarea {
-  min-height: 4.5rem;
+
+.tiptap-editor :deep(.ProseMirror) {
+  min-height: 2.25rem;
   max-height: 10rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem 0.25rem;
+  outline: none;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar) {
+  width: 4px;
+}
+.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-track) {
+  background: transparent;
+}
+.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-thumb) {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+.tiptap-editor :deep(.ProseMirror p) {
+  margin: 0;
+}
+
+.tiptap-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 </style>

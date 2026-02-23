@@ -259,13 +259,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     _typingTimers.set(instanceId, setTimeout(() => {
       typingAgents.value.delete(instanceId)
       _typingTimers.delete(instanceId)
-    }, 15_000))
+    }, 45_000))
   }
 
   function _handleAgentChunk(data: Record<string, unknown>) {
     const instanceId = data.instance_id as string
     const agentName = data.agent_name as string
     const content = data.content as string
+
+    typingAgents.value.delete(instanceId)
+    _clearTypingTimer(instanceId)
 
     const existing = chatMessages.value.find(
       (m) => m.sender_id === instanceId && m.streaming,

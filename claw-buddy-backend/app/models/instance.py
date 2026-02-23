@@ -46,7 +46,7 @@ class Instance(BaseModel):
     # Resource requests/limits
     cpu_request: Mapped[str] = mapped_column(String(16), default="500m", nullable=False)
     cpu_limit: Mapped[str] = mapped_column(String(16), default="2000m", nullable=False)
-    mem_request: Mapped[str] = mapped_column(String(16), default="512Mi", nullable=False)
+    mem_request: Mapped[str] = mapped_column(String(16), default="2Gi", nullable=False)
     mem_limit: Mapped[str] = mapped_column(String(16), default="2Gi", nullable=False)
 
     # Network

@@ -231,7 +231,7 @@ def build_deployment(
     pvc_name: str | None = None,
     cpu_request: str = "500m",
     cpu_limit: str = "2",
-    mem_request: str = "512Mi",
+    mem_request: str = "2Gi",
     mem_limit: str = "2Gi",
     port: int = 18789,
     env_vars: dict[str, str] | None = None,

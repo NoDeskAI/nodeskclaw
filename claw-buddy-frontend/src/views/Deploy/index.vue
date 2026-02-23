@@ -172,9 +172,9 @@ const quotaPresets = [
 
 // 预设档位对应的容器资源配置
 const presetResources: Record<string, { cpu_request: string; cpu_limit: string; mem_request: string; mem_limit: string; storage_size: string }> = {
-  small:  { cpu_request: '1000m', cpu_limit: '2000m',  mem_request: '2Gi',  mem_limit: '4Gi',   storage_size: '20Gi' },
-  medium: { cpu_request: '2000m', cpu_limit: '4000m',  mem_request: '4Gi',  mem_limit: '8Gi',   storage_size: '80Gi' },
-  large:  { cpu_request: '4000m', cpu_limit: '8000m',  mem_request: '8Gi',  mem_limit: '16Gi',  storage_size: '160Gi' },
+  small:  { cpu_request: '1000m', cpu_limit: '2000m',  mem_request: '4Gi',  mem_limit: '4Gi',   storage_size: '20Gi' },
+  medium: { cpu_request: '2000m', cpu_limit: '4000m',  mem_request: '8Gi',  mem_limit: '8Gi',   storage_size: '80Gi' },
+  large:  { cpu_request: '4000m', cpu_limit: '8000m',  mem_request: '16Gi', mem_limit: '16Gi',  storage_size: '160Gi' },
 }
 
 function selectQuotaPreset(key: string) {
