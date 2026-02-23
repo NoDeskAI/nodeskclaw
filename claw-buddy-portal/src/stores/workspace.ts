@@ -240,6 +240,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  async function sendSystemMessage(workspaceId: string, content: string) {
+    try {
+      await api.post(`/workspaces/${workspaceId}/system-message`, { content })
+    } catch (e) {
+      console.error('sendSystemMessage error:', e)
+    }
+  }
+
   const _typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   function _handleAgentTyping(data: Record<string, unknown>) {
@@ -427,6 +435,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       try {
         const data = JSON.parse(e.data)
         externalCallback?.('system:info', data)
+        if (data.id && data.content) {
+          const exists = chatMessages.value.some(m => m.id === data.id)
+          if (!exists) {
+            chatMessages.value.push({
+              id: data.id as string,
+              sender_type: 'system',
+              sender_id: (data.sender_id as string) || 'system',
+              sender_name: (data.sender_name as string) || 'System',
+              content: data.content as string,
+              message_type: 'system',
+              created_at: (data.created_at as string) || new Date().toISOString(),
+            })
+          }
+        }
       } catch { /* ignore */ }
     })
 
@@ -514,6 +536,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     fetchMembers,
     fetchChatHistory,
     sendWorkspaceMessage,
+    sendSystemMessage,
     connectSSE,
     disconnectSSE,
     sendMessage,

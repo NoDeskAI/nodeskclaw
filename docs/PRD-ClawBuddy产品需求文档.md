@@ -724,17 +724,15 @@ eventBus.emit('deploy:started', { instanceId, config })
 #### 5.3.3 Toast 通知系统（参考 Vibecraft Toast）
 
 ```typescript
-// 参考 Vibecraft 的 showToast API
 interface ToastOptions {
   type: 'info' | 'success' | 'warning' | 'error'
-  duration?: number  // 默认 3000ms
-  icon?: string
+  duration?: number  // 默认 4000ms，带 action 时 8000ms
+  action?: { label: string; onClick: () => void }
 }
 
 toast.success('OpenClaw 部署成功')
 toast.error('部署失败：资源不足')
-toast.warning('Pod 重启次数过多')
-toast.info('正在滚动更新...')
+toast.success('Agent 已添加到工作区', { action: { label: '前往查看', onClick: () => router.push(...) } })
 ```
 
 - 位置：右上角堆叠
@@ -1097,8 +1095,11 @@ Glow:    box-shadow:0 0 8px <色值>
 - 用户头像：有 `avatar_url` 时显示真实头像图片，无则回退为灰色圆圈 + User 图标
 - @ 提及自动补全：输入 `@` 后弹出 Agent 列表浮动下拉，支持模糊搜索、键盘导航（方向键 + Enter），消息中的 `@AgentName` 高亮渲染（用户气泡内白色半透明底、Agent 气泡内主色调底）
 - / 命令自动补全：输入 `/` 后弹出命令列表浮动下拉，支持键盘导航；需要 Agent 参数的命令（如 `/restart`）选中后自动触发 @ 提及补全
+- 输入框采用 Cursor 风格设计：默认 3 行高度、底部操作栏（@ 提及按钮、/ 命令按钮、发送按钮），整体圆角边框包裹
+- Agent 消息名称旁显示 slug 标签（font-mono 灰底小字 tag 形式）
+- 斜杠命令结果（`/status` 等）持久化到后端，刷新后仍可见；`/clear` 仅清空前端显示
 
-### B.2.2 添加 Agent 进度
+### B.2.2 添加 Agent 进度与通知
 
 添加 Agent 到工作区时展示步骤进度条（替代原按钮 spinner），4 个阶段按时间推进：
 
@@ -1108,6 +1109,8 @@ Glow:    box-shadow:0 0 8px <色值>
 4. 连接中...
 
 API 返回后立即跳到"已添加"状态，1.5 秒后恢复列表。添加过程中其他实例的添加按钮 disabled。
+
+添加成功后弹出 Toast 通知，包含"前往查看"按钮，点击后跳转到工作区并将 3D 摄像机平滑聚焦到新 Agent 的工位。Agent 实例重启完成后，后端通过 `agent:status` SSE 事件实时推送状态变更，前端自动更新状态徽标（无需手动刷新）。
 
 ### B.2.3 Agent 状态颜色
 

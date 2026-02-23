@@ -30,7 +30,14 @@ const colors = {
           :class="colors[t.type]"
         >
           <component :is="icons[t.type]" class="w-4 h-4 mt-0.5 shrink-0" />
-          <span class="flex-1">{{ t.message }}</span>
+          <div class="flex-1 min-w-0">
+            <span>{{ t.message }}</span>
+            <button
+              v-if="t.action"
+              class="ml-2 underline underline-offset-2 font-medium hover:opacity-80 transition-opacity"
+              @click="t.action!.onClick(); remove(t.id)"
+            >{{ t.action!.label }}</button>
+          </div>
           <button class="shrink-0 opacity-60 hover:opacity-100 transition-opacity" @click="remove(t.id)">
             <X class="w-3.5 h-3.5" />
           </button>

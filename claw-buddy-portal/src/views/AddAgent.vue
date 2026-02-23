@@ -3,11 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
+const toast = useToast()
 
 const workspaceId = computed(() => route.params.id as string)
 const targetHexQ = computed(() => route.query.hex_q != null ? Number(route.query.hex_q) : undefined)
@@ -82,6 +84,15 @@ async function addToWorkspace(instanceId: string) {
     addingDone.value = instanceId
     setTimeout(() => { addingDone.value = null }, 1500)
     await fetchInstances()
+    toast.success('Agent 已添加到工作区', {
+      action: {
+        label: '前往查看',
+        onClick: () => router.push({
+          path: `/workspace/${workspaceId.value}`,
+          query: { focus_agent: instanceId },
+        }),
+      },
+    })
   } catch (e: any) {
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
     alert(e?.response?.data?.detail || '添加失败')

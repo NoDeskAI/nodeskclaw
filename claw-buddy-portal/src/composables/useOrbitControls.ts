@@ -110,6 +110,14 @@ export function useOrbitControls(
     _animateTo(newCamPos, newTarget)
   }
 
+  function focusOnPosition(worldX: number, worldZ: number) {
+    if (!controls) return
+    const newTarget = new THREE.Vector3(worldX, 0, worldZ)
+    const offset = camera.position.clone().sub(controls.target)
+    const newCamPos = newTarget.clone().add(offset)
+    _animateTo(newCamPos, newTarget)
+  }
+
   function getCameraXZDirections(): { right: { x: number; z: number }; forward: { x: number; z: number } } {
     if (!controls) return { right: { x: 1, z: 0 }, forward: { x: 0, z: -1 } }
 
@@ -132,5 +140,5 @@ export function useOrbitControls(
     controls = null
   })
 
-  return { update, zoomIn, zoomOut, resetView, panBy, getCameraXZDirections, get controls() { return controls } }
+  return { update, zoomIn, zoomOut, resetView, panBy, focusOnPosition, getCameraXZDirections, get controls() { return controls } }
 }

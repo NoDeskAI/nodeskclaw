@@ -224,6 +224,19 @@ _RESTART_POLL_INTERVAL = 5
 _RESTART_TIMEOUT = 120
 
 
+def _broadcast_agent_status(workspace_id: str | None, instance_id: str, status: str) -> None:
+    if not workspace_id:
+        return
+    try:
+        from app.api.workspaces import broadcast_event
+        broadcast_event(workspace_id, "agent:status", {
+            "instance_id": instance_id,
+            "status": status,
+        })
+    except Exception:
+        logger.debug("广播 agent:status 失败: instance=%s", instance_id)
+
+
 async def _monitor_restart(
     instance_id: str, cluster_id: str, kubeconfig_encrypted: str, namespace: str, deploy_name: str,
 ) -> None:
@@ -251,6 +264,7 @@ async def _monitor_restart(
                         inst.status = InstanceStatus.running
                         await db.commit()
                         logger.info("实例 %s 重启完成，状态已恢复为 running", inst.name)
+                        _broadcast_agent_status(inst.workspace_id, instance_id, "running")
                 return
         except Exception as e:
             logger.debug("重启监控轮询异常: instance=%s error=%s", instance_id, e)
@@ -266,6 +280,7 @@ async def _monitor_restart(
             if inst and inst.status == InstanceStatus.restarting:
                 inst.status = InstanceStatus.running
                 await db.commit()
+                _broadcast_agent_status(inst.workspace_id, instance_id, "running")
     except Exception:
         logger.exception("重启超时后恢复状态失败: instance=%s", instance_id)
 

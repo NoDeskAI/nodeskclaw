@@ -294,6 +294,7 @@ defineExpose({
   zoomOut: () => orbitControls.zoomOut(),
   resetView: () => orbitControls.resetView(),
   panBy: (dx: number, dy: number) => orbitControls.panBy(dx, dy),
+  focusOnPosition: (x: number, z: number) => orbitControls.focusOnPosition(x, z),
   getCameraXZDirections: () => orbitControls.getCameraXZDirections(),
 })
 </script>

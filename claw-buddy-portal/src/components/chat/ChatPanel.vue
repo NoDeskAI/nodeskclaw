@@ -134,14 +134,39 @@ function selectCommand(cmd: typeof COMMANDS[number]) {
   })
 }
 
+function triggerMention() {
+  const el = textareaRef.value
+  if (!el) return
+  const pos = el.selectionStart ?? input.value.length
+  const before = input.value.slice(0, pos)
+  const after = input.value.slice(pos)
+  const prefix = before.length > 0 && !before.endsWith(' ') ? ' @' : '@'
+  input.value = before + prefix + after
+  nextTick(() => {
+    const newPos = pos + prefix.length
+    el.setSelectionRange(newPos, newPos)
+    el.focus()
+    mentionQuery.value = ''
+    mentionOpen.value = true
+  })
+}
+
+function triggerSlash() {
+  const el = textareaRef.value
+  if (!el) return
+  input.value = '/'
+  nextTick(() => {
+    el.setSelectionRange(1, 1)
+    el.focus()
+    commandQuery.value = ''
+    commandOpen.value = true
+  })
+}
+
 // ── Input event detection ─────────────────────────
 function handleInputEvent() {
   const el = textareaRef.value
   if (!el) return
-
-  el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
-
   const text = el.value
 
   if (text.startsWith('/') && !text.includes('\n')) {
@@ -188,16 +213,20 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 // ── Slash command execution ───────────────────────
-function insertSystemMessage(content: string) {
-  store.chatMessages.push({
-    id: `sys-local-${Date.now()}`,
-    sender_type: 'system',
-    sender_id: 'system',
-    sender_name: 'System',
-    content,
-    message_type: 'system',
-    created_at: new Date().toISOString(),
-  })
+function insertSystemMessage(content: string, persist = true) {
+  if (persist) {
+    store.sendSystemMessage(props.workspaceId, content)
+  } else {
+    store.chatMessages.push({
+      id: `sys-local-${Date.now()}`,
+      sender_type: 'system',
+      sender_id: 'system',
+      sender_name: 'System',
+      content,
+      message_type: 'system',
+      created_at: new Date().toISOString(),
+    })
+  }
   scrollToBottom()
 }
 
@@ -210,7 +239,7 @@ function executeSlashCommand(name: string, arg?: string) {
     }
     case 'clear':
       store.chatMessages.splice(0, store.chatMessages.length)
-      insertSystemMessage('聊天记录已清空')
+      insertSystemMessage('聊天记录已清空', false)
       break
     case 'restart':
       if (arg) doRestartAgent(arg)
@@ -280,7 +309,6 @@ async function sendMessage() {
   input.value = ''
   mentionOpen.value = false
   commandOpen.value = false
-  if (textareaRef.value) textareaRef.value.style.height = 'auto'
   await store.sendWorkspaceMessage(props.workspaceId, text, mentions.length > 0 ? mentions : undefined)
   scrollToBottom()
 }
@@ -466,26 +494,43 @@ function formatTime(dateStr: string): string {
         </div>
       </Transition>
 
-      <!-- Textarea + send button -->
-      <div class="relative">
+      <!-- Textarea container (Cursor-style) -->
+      <div class="rounded-lg border border-border bg-muted overflow-hidden focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-colors">
         <textarea
           ref="textareaRef"
           v-model="input"
-          rows="1"
-          class="w-full resize-none overflow-y-auto bg-muted rounded-lg pl-3 pr-10 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50"
-          :style="{ maxHeight: '120px' }"
-          placeholder="消息... 输入 @ 提及 Agent，/ 执行命令"
+          rows="3"
+          class="w-full resize-none overflow-y-auto bg-transparent px-3 pt-2 pb-1 text-sm outline-none chat-textarea"
+          placeholder="消息..."
           @keydown="handleKeydown"
           @input="handleInputEvent"
         />
-        <button
-          class="absolute right-1.5 bottom-1.5 p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-          :disabled="!input.trim() || sending"
-          @click="sendMessage"
-        >
-          <Loader2 v-if="sending" class="w-4 h-4 animate-spin" />
-          <Send v-else class="w-4 h-4" />
-        </button>
+        <div class="flex items-center justify-between px-2 pb-1.5">
+          <div class="flex items-center gap-0.5">
+            <button
+              class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="@ 提及 Agent"
+              @click="triggerMention"
+            >
+              <AtSign class="w-3.5 h-3.5" />
+            </button>
+            <button
+              class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="/ 命令"
+              @click="triggerSlash"
+            >
+              <Slash class="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <button
+            class="p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
+            :disabled="!input.trim() || sending"
+            @click="sendMessage"
+          >
+            <Loader2 v-if="sending" class="w-3.5 h-3.5 animate-spin" />
+            <Send v-else class="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -500,5 +545,9 @@ function formatTime(dateStr: string): string {
 .dropdown-leave-to {
   opacity: 0;
   transform: translateY(4px);
+}
+.chat-textarea {
+  min-height: 4.5rem;
+  max-height: 10rem;
 }
 </style>

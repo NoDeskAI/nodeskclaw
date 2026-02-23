@@ -79,6 +79,17 @@ onMounted(async () => {
 
   store.connectSSE(workspaceId.value)
   window.addEventListener('keydown', handleKeydown)
+
+  const focusAgentId = route.query.focus_agent as string | undefined
+  if (focusAgentId) {
+    router.replace({ query: { ...route.query, focus_agent: undefined } })
+    await nextTick()
+    const agent = agents.value.find(a => a.instance_id === focusAgentId)
+    if (agent) {
+      const { x, y } = axialToWorld(agent.hex_q, agent.hex_r)
+      workspace3dRef.value?.focusOnPosition(x, y)
+    }
+  }
 })
 
 onUnmounted(() => {

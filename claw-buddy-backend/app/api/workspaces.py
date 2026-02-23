@@ -7,6 +7,7 @@ from datetime import timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -281,6 +282,39 @@ async def workspace_chat(
         )
 
     return _ok({"status": "broadcasting", "agent_count": len(running_agents)})
+
+
+class SystemMessageRequest(BaseModel):
+    content: str
+
+
+@router.post("/{workspace_id}/system-message")
+async def post_system_message(
+    workspace_id: str,
+    data: SystemMessageRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """Persist a system message (slash command result, etc.) without triggering agent responses."""
+    msg = await msg_service.record_message(
+        db,
+        workspace_id=workspace_id,
+        sender_type="system",
+        sender_id=user.id,
+        sender_name=user.name,
+        content=data.content,
+        message_type="system",
+    )
+    broadcast_event(workspace_id, "system:info", {
+        "id": msg.id,
+        "sender_type": "system",
+        "sender_id": user.id,
+        "sender_name": user.name,
+        "content": data.content,
+        "message_type": "system",
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+    })
+    return _ok({"id": msg.id})
 
 
 @router.get("/{workspace_id}/messages")
