@@ -168,10 +168,8 @@ function createBlackboardMesh(): THREE.Group {
   const edges = new THREE.LineSegments(edgeGeo, edgeMat)
   group.add(edges)
 
-  const hitGeo = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.05, 6)
   const hitMat = new THREE.MeshBasicMaterial({ visible: false })
-  const hitMesh = new THREE.Mesh(hitGeo, hitMat)
-  hitMesh.position.y = -0.125
+  const hitMesh = new THREE.Mesh(HEX_GEO, hitMat)
   hitMesh.userData = { hexId: '__blackboard__', isHex: true }
   group.add(hitMesh)
 
