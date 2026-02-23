@@ -144,7 +144,10 @@ function goBack() {
           <div class="flex items-center gap-3">
             <Bot class="w-5 h-5 text-primary" />
             <div>
-              <p class="text-sm font-medium">{{ inst.name }}</p>
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-medium">{{ inst.name }}</p>
+                <span v-if="inst.slug" class="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground leading-none">{{ inst.slug }}</span>
+              </div>
               <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
             </div>
           </div>
@@ -172,7 +175,10 @@ function goBack() {
             <div class="flex items-center gap-3">
               <Bot class="w-5 h-5 text-muted-foreground" />
               <div>
-                <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                  <span v-if="inst.slug" class="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground leading-none">{{ inst.slug }}</span>
+                </div>
                 <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
               </div>
             </div>
@@ -196,7 +202,10 @@ function goBack() {
             <div class="flex items-center gap-3">
               <Bot class="w-5 h-5 text-muted-foreground" />
               <div>
-                <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-medium text-muted-foreground">{{ inst.name }}</p>
+                  <span v-if="inst.slug" class="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground leading-none">{{ inst.slug }}</span>
+                </div>
                 <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
               </div>
             </div>
