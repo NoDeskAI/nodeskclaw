@@ -28,6 +28,7 @@ const statusColors: Record<string, string> = {
   thinking: '#fbbf24', pending: '#fbbf24',
   idle: '#6b7280',
   error: '#f87171', failed: '#f87171',
+  restarting: '#f97316', deploying: '#f97316', updating: '#f97316', creating: '#f97316',
 }
 </script>
 

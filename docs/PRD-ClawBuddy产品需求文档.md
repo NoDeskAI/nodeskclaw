@@ -1079,6 +1079,8 @@ Glow:    box-shadow:0 0 8px <色值>
 ### B.2 核心交互
 
 - **群聊广播**：用户消息自动发送给工作区内所有运行中 Agent
+- **@ 提及**：用户可 `@AgentName` 定向标记 Agent。被 @ 的 Agent 收到"必须回复"提示，未被 @ 的 Agent 收到"如无关可 NO_REPLY"提示。消息仍然全员广播
+- **/ 命令**：输入 `/` 触发命令菜单。Phase 1 支持 `/status`（查看状态）、`/clear`（清空聊天）、`/restart AgentName`（重启 Agent）、`/remove AgentName`（移除 Agent）。命令在前端本地执行，不发送给 Agent
 - **多 Agent 流式响应**：各 Agent 响应通过 SSE 实时推送到前端
 - **NO_REPLY 静默**：与话题无关的 Agent 回复 `NO_REPLY` 即可静默，前端无感知
 - **Agent 协同**：Agent 使用 `send -t clawbuddy -to "agent:xxx" -m "消息"` 主动联系其他 Agent
@@ -1092,6 +1094,24 @@ Glow:    box-shadow:0 0 8px <色值>
 - 打开时：六边形画布自适应缩窄（`flex-1`），右侧展示完整群聊面板（消息列表、打字指示器、输入框）
 - 关闭时：画布占满全宽，消息图标上显示未读消息计数红点角标
 - 系统消息（如"XXX 已加入工作区"）以居中灰色气泡展示，与 user/agent 消息区分
+- 用户头像：有 `avatar_url` 时显示真实头像图片，无则回退为灰色圆圈 + User 图标
+- @ 提及自动补全：输入 `@` 后弹出 Agent 列表浮动下拉，支持模糊搜索、键盘导航（方向键 + Enter），消息中的 `@AgentName` 以蓝色高亮 `<span>` 渲染
+- / 命令自动补全：输入 `/` 后弹出命令列表浮动下拉，支持键盘导航；需要 Agent 参数的命令（如 `/restart`）选中后自动触发 @ 提及补全
+
+### B.2.2 添加 Agent 进度
+
+添加 Agent 到工作区时展示步骤进度条（替代原按钮 spinner），4 个阶段按时间推进：
+
+1. 配置中...
+2. 部署插件...
+3. 重启实例...
+4. 连接中...
+
+API 返回后立即跳到"已添加"状态，1.5 秒后恢复列表。添加过程中其他实例的添加按钮 disabled。
+
+### B.2.3 Agent 状态颜色
+
+工作区视图中 Agent hex 使用橙色 `#f97316` 标识过渡状态（restarting、deploying、updating、creating），与运行中（绿色）、错误（红色）明确区分。适用于 2D 视图、3D 视图和 MiniHexPreview
 
 ### B.3 技术实现
 

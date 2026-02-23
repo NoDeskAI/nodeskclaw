@@ -16,13 +16,19 @@ const targetHexR = computed(() => route.query.hex_r != null ? Number(route.query
 interface InstanceItem {
   id: string
   name: string
+  slug?: string
   status: string
 }
 
 const instances = ref<InstanceItem[]>([])
 const loading = ref(false)
 const adding = ref<string | null>(null)
+const addingStep = ref(0)
+const addingDone = ref<string | null>(null)
+let stepTimer: ReturnType<typeof setInterval> | null = null
 const search = ref('')
+
+const ADDING_STEPS = ['配置中...', '部署插件...', '重启实例...', '连接中...']
 
 const alreadyInWorkspace = computed(() =>
   new Set(store.currentWorkspace?.agents?.map((a) => a.instance_id) || []),
@@ -51,6 +57,7 @@ async function fetchInstances() {
     instances.value = (res.data.data || []).map((i: any) => ({
       id: i.id,
       name: i.name,
+      slug: i.slug,
       status: i.status,
     }))
   } catch (e) {
@@ -64,11 +71,20 @@ onMounted(fetchInstances)
 
 async function addToWorkspace(instanceId: string) {
   adding.value = instanceId
+  addingStep.value = 0
+  stepTimer = setInterval(() => {
+    if (addingStep.value < ADDING_STEPS.length - 1) addingStep.value++
+  }, 4000)
   try {
     await store.addAgent(workspaceId.value, instanceId, undefined, targetHexQ.value, targetHexR.value)
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
+    adding.value = null
+    addingDone.value = instanceId
+    setTimeout(() => { addingDone.value = null }, 1500)
+    await fetchInstances()
   } catch (e: any) {
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
     alert(e?.response?.data?.detail || '添加失败')
-  } finally {
     adding.value = null
   }
 }
@@ -151,13 +167,35 @@ function goBack() {
               <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
             </div>
           </div>
+          <!-- Adding progress -->
+          <div v-if="adding === inst.id" class="flex items-center gap-2 min-w-[140px]">
+            <div class="flex-1">
+              <div class="flex items-center gap-1.5 mb-1">
+                <Loader2 class="w-3 h-3 animate-spin text-primary" />
+                <span class="text-xs text-muted-foreground">{{ ADDING_STEPS[addingStep] }}</span>
+              </div>
+              <div class="h-1 rounded-full bg-muted overflow-hidden">
+                <div
+                  class="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                  :style="{ width: `${((addingStep + 1) / ADDING_STEPS.length) * 100}%` }"
+                />
+              </div>
+            </div>
+          </div>
+          <span
+            v-else-if="addingDone === inst.id"
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-600 text-xs font-medium"
+          >
+            <Check class="w-3 h-3" />
+            已添加
+          </span>
           <button
+            v-else
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
-            :disabled="adding === inst.id"
+            :disabled="!!adding"
             @click="addToWorkspace(inst.id)"
           >
-            <Loader2 v-if="adding === inst.id" class="w-3 h-3 animate-spin" />
-            <Plus v-else class="w-3 h-3" />
+            <Plus class="w-3 h-3" />
             添加
           </button>
         </div>

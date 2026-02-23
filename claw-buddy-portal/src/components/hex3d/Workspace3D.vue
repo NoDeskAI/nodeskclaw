@@ -85,6 +85,7 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
     thinking: 0xfbbf24, pending: 0xfbbf24,
     idle: 0x8b8b9e,
     error: 0xf87171, failed: 0xf87171,
+    restarting: 0xf97316, deploying: 0xf97316, updating: 0xf97316, creating: 0xf97316,
   }
   const color = statusColors[agent.status] ?? 0xa78bfa
 

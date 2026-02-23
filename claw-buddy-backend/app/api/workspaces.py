@@ -276,6 +276,7 @@ async def workspace_chat(
                 user_name=user.name,
                 user_message=data.message,
                 ws_name=ws_info.name,
+                mentions=data.mentions,
             )
         )
 
@@ -492,6 +493,7 @@ async def _stream_agent_response(
     user_name: str,
     user_message: str,
     ws_name: str,
+    mentions: list[str] | None = None,
 ):
     """Stream a single agent's response and relay via SSE broadcast.
 
@@ -508,6 +510,13 @@ async def _stream_agent_response(
         members=members,
         recent_messages=recent_messages,
     )
+
+    if mentions and len(mentions) > 0:
+        is_mentioned = instance_id in mentions
+        if is_mentioned:
+            context_prompt += "\n[重要] 用户在消息中 @提及了你，请务必回复。\n"
+        else:
+            context_prompt += "\n[提示] 用户没有 @提及你。如果消息与你无关，请回复 NO_REPLY。\n"
 
     messages = [
         {"role": "system", "content": context_prompt},

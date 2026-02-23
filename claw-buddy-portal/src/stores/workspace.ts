@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 export interface AgentBrief {
   instance_id: string
@@ -211,15 +212,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function sendWorkspaceMessage(workspaceId: string, message: string) {
+  async function sendWorkspaceMessage(workspaceId: string, message: string, mentions?: string[]) {
     if (chatLoading.value) return
     chatLoading.value = true
 
+    const auth = useAuthStore()
     const userMsg: GroupChatMessage = {
       id: `local-${Date.now()}`,
       sender_type: 'user',
-      sender_id: 'me',
-      sender_name: 'Me',
+      sender_id: auth.user?.id || 'me',
+      sender_name: auth.user?.name || 'Me',
       content: message,
       message_type: 'chat',
       created_at: new Date().toISOString(),
@@ -227,7 +229,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     chatMessages.value.push(userMsg)
 
     try {
-      await api.post(`/workspaces/${workspaceId}/chat`, { message })
+      const body: Record<string, unknown> = { message }
+      if (mentions && mentions.length > 0) body.mentions = mentions
+      await api.post(`/workspaces/${workspaceId}/chat`, body)
     } catch (e) {
       console.error('sendWorkspaceMessage error:', e)
     } finally {

@@ -10,6 +10,7 @@ defineProps<{
 const statusLabels: Record<string, string> = {
   running: '运行中', active: '活跃', thinking: '思考中',
   pending: '等待中', idle: '空闲', error: '错误', failed: '失败',
+  restarting: '重启中', deploying: '部署中', updating: '更新中', creating: '创建中',
 }
 </script>
 
