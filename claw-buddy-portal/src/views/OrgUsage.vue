@@ -70,6 +70,32 @@ function barColor(percent: number): string {
   if (percent >= 70) return 'bg-amber-500'
   return 'bg-primary'
 }
+
+function formatCpu(val: string | undefined | null): string {
+  if (!val) return '0 核'
+  const s = String(val)
+  if (s.endsWith('m')) {
+    const cores = parseInt(s.slice(0, -1), 10) / 1000
+    return Number.isInteger(cores) ? `${cores} 核` : `${cores.toFixed(2)} 核`
+  }
+  return `${s} 核`
+}
+
+function formatMemory(val: string | undefined | null): string {
+  if (!val) return '0'
+  const s = String(val)
+  if (s.endsWith('Mi')) {
+    const mi = parseInt(s)
+    if (mi >= 1024) {
+      const gi = mi / 1024
+      return Number.isInteger(gi) ? `${gi} Gi` : `${gi.toFixed(1)} Gi`
+    }
+    return `${mi} Mi`
+  }
+  if (s.endsWith('Gi')) return `${parseInt(s)} Gi`
+  if (s.endsWith('Ti')) return `${parseInt(s)} Ti`
+  return s
+}
 </script>
 
 <template>
@@ -135,8 +161,8 @@ function barColor(percent: number): string {
             CPU
           </div>
           <div class="flex items-baseline gap-1">
-            <span class="text-2xl font-bold">{{ orgStore.usage?.cpu_used ?? '0' }}</span>
-            <span class="text-sm text-muted-foreground">/ {{ orgStore.usage?.cpu_limit ?? '0' }}</span>
+            <span class="text-2xl font-bold">{{ formatCpu(orgStore.usage?.cpu_used) }}</span>
+            <span class="text-sm text-muted-foreground">/ {{ formatCpu(orgStore.usage?.cpu_limit) }}</span>
           </div>
           <div class="w-full h-2 rounded-full bg-muted overflow-hidden">
             <div
@@ -155,8 +181,8 @@ function barColor(percent: number): string {
             内存
           </div>
           <div class="flex items-baseline gap-1">
-            <span class="text-2xl font-bold">{{ orgStore.usage?.mem_used ?? '0' }}</span>
-            <span class="text-sm text-muted-foreground">/ {{ orgStore.usage?.mem_limit ?? '0' }}</span>
+            <span class="text-2xl font-bold">{{ formatMemory(orgStore.usage?.mem_used) }}</span>
+            <span class="text-sm text-muted-foreground">/ {{ formatMemory(orgStore.usage?.mem_limit) }}</span>
           </div>
           <div class="w-full h-2 rounded-full bg-muted overflow-hidden">
             <div

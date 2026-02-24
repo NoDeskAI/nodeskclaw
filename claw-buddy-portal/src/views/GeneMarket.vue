@@ -142,34 +142,40 @@ function goToGenome(id: string) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background text-foreground">
-    <div class="max-w-6xl mx-auto px-6 py-8">
-      <h1 class="text-2xl font-bold mb-6">基因市场</h1>
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] bg-background text-foreground">
+    <div class="shrink-0 border-b border-border">
+      <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+        <h1 class="text-2xl font-bold mb-4">基因市场</h1>
 
-      <div class="flex flex-wrap items-center gap-2 mb-4">
-        <button
-          :class="[
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            viewMode === 'genes'
-              ? 'bg-primary/10 text-primary'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          ]"
-          @click="viewMode = 'genes'"
-        >
-          基因
-        </button>
-        <button
-          :class="[
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            viewMode === 'genomes'
-              ? 'bg-primary/10 text-primary'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-          ]"
-          @click="viewMode = 'genomes'"
-        >
-          基因组
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              viewMode === 'genes'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            ]"
+            @click="viewMode = 'genes'"
+          >
+            基因
+          </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              viewMode === 'genomes'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            ]"
+            @click="viewMode = 'genomes'"
+          >
+            基因组
+          </button>
+        </div>
       </div>
+    </div>
+
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <div class="max-w-6xl mx-auto px-6 pt-6 pb-8">
 
       <div class="flex flex-wrap gap-3 mb-6">
         <div class="relative flex-1 min-w-[200px]">
@@ -377,6 +383,7 @@ function goToGenome(id: string) {
           </button>
         </div>
       </template>
+      </div>
     </div>
   </div>
 </template>
