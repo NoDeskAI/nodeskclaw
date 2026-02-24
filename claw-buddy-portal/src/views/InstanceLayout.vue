@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings } from 'lucide-vue-next'
+import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings, Dna } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
@@ -57,6 +57,7 @@ onMounted(fetchBasic)
 
 const navItems = [
   { name: 'InstanceDetail', label: '概览', icon: LayoutDashboard },
+  { name: 'InstanceGenes', label: '基因', icon: Dna },
   { name: 'InstanceSettings', label: '设置', icon: Settings },
 ]
 </script>

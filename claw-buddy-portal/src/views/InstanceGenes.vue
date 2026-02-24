@@ -1,0 +1,240 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, inject, type ComputedRef } from 'vue'
+import { useRouter } from 'vue-router'
+import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X } from 'lucide-vue-next'
+import { useGeneStore } from '@/stores/gene'
+import type { InstanceGeneItem } from '@/stores/gene'
+import { useToast } from '@/composables/useToast'
+
+const router = useRouter()
+const toast = useToast()
+const instanceId = inject<ComputedRef<string>>('instanceId')!
+const store = useGeneStore()
+
+const loading = computed(() => store.loading)
+const instanceGenes = computed(() => store.instanceGenes)
+const createDialogOpen = ref(false)
+const createPrompt = ref('')
+const creating = ref(false)
+
+const statusBadgeClass: Record<string, string> = {
+  installed: 'bg-green-500/10 text-green-500',
+  learning: 'bg-yellow-500/10 text-yellow-500',
+  learn_failed: 'bg-red-500/10 text-red-500',
+  failed: 'bg-red-500/10 text-red-500',
+  installing: 'bg-blue-500/10 text-blue-500',
+  uninstalling: 'bg-gray-500/10 text-gray-500',
+}
+
+const statusLabels: Record<string, string> = {
+  installed: '已安装',
+  learning: '学习中',
+  learn_failed: '学习失败',
+  failed: '失败',
+  installing: '安装中',
+  uninstalling: '卸载中',
+}
+
+function getStatusClass(status: string): string {
+  return statusBadgeClass[status] ?? 'bg-gray-500/10 text-gray-500'
+}
+
+function getStatusLabel(status: string): string {
+  return statusLabels[status] ?? status
+}
+
+function effectivenessScore(item: InstanceGeneItem): number {
+  if (item.agent_self_eval != null) return item.agent_self_eval
+  return item.gene?.effectiveness_score ?? 0
+}
+
+function goToMarket() {
+  router.push('/gene-market')
+}
+
+async function handleUninstall(item: InstanceGeneItem) {
+  try {
+    await store.uninstallGene(instanceId.value, item.gene_id)
+    await store.fetchInstanceGenes(instanceId.value)
+    toast.success('已提交卸载')
+  } catch (e) {
+    toast.error('卸载失败')
+  }
+}
+
+async function handlePublishVariant(item: InstanceGeneItem) {
+  try {
+    await store.publishVariant(instanceId.value, item.gene_id)
+    await store.fetchInstanceGenes(instanceId.value)
+    toast.success('变体已发布')
+  } catch (e) {
+    toast.error('发布失败')
+  }
+}
+
+function openCreateDialog() {
+  createDialogOpen.value = true
+  createPrompt.value = ''
+}
+
+async function handleCreate() {
+  creating.value = true
+  try {
+    await store.triggerCreation(instanceId.value, createPrompt.value || undefined)
+    createDialogOpen.value = false
+    await store.fetchInstanceGenes(instanceId.value)
+    toast.success('已提交创造任务')
+  } catch (e) {
+    toast.error('提交失败')
+  } finally {
+    creating.value = false
+  }
+}
+
+onMounted(() => {
+  store.fetchInstanceGenes(instanceId.value)
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold">基因管理</h2>
+      <div class="flex items-center gap-2">
+        <button
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
+          @click="goToMarket"
+        >
+          <ExternalLink class="w-4 h-4" />
+          浏览市场
+        </button>
+        <button
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          @click="openCreateDialog"
+        >
+          <Sparkles class="w-4 h-4" />
+          创造基因
+        </button>
+      </div>
+    </div>
+
+    <div v-if="loading" class="flex items-center justify-center py-16">
+      <Loader2 class="w-8 h-8 animate-spin text-muted-foreground" />
+    </div>
+
+    <div v-else-if="instanceGenes.length === 0" class="rounded-xl border border-dashed border-border py-16 text-center text-muted-foreground">
+      <Package class="w-12 h-12 mx-auto mb-4 opacity-50" />
+      <p class="text-sm">暂无已安装基因</p>
+      <button
+        class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        @click="goToMarket"
+      >
+        <ExternalLink class="w-4 h-4" />
+        浏览市场
+      </button>
+    </div>
+
+    <div v-else class="space-y-3">
+      <div
+        v-for="item in instanceGenes"
+        :key="item.id"
+        class="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-medium">{{ item.gene?.name ?? '未知基因' }}</span>
+              <span class="text-xs text-muted-foreground">{{ item.gene?.slug }}</span>
+              <span class="text-xs text-muted-foreground">v{{ item.installed_version ?? item.gene?.version ?? '-' }}</span>
+              <span
+                class="px-2 py-0.5 rounded text-xs font-medium"
+                :class="getStatusClass(item.status)"
+              >
+                {{ getStatusLabel(item.status) }}
+              </span>
+            </div>
+            <div v-if="item.gene?.tags?.length" class="flex flex-wrap gap-1 mt-2">
+              <span
+                v-for="tag in item.gene.tags"
+                :key="tag"
+                class="px-2 py-0.5 rounded bg-muted text-xs text-muted-foreground"
+              >
+                {{ tag }}
+              </span>
+            </div>
+            <div class="mt-3 flex items-center gap-4">
+              <div class="flex-1 max-w-[200px]">
+                <div class="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>效能</span>
+                  <span>{{ Math.round(effectivenessScore(item) * 100) }}%</span>
+                </div>
+                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    class="h-full rounded-full bg-primary transition-all"
+                    :style="{ width: `${Math.min(100, effectivenessScore(item) * 100)}%` }"
+                  />
+                </div>
+              </div>
+              <span class="text-sm text-muted-foreground">使用 {{ item.usage_count }} 次</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="item.learning_output && !item.variant_published"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-muted/50 transition-colors"
+              @click="handlePublishVariant(item)"
+            >
+              <Upload class="w-3.5 h-3.5" />
+              发布变体
+            </button>
+            <button
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
+              :disabled="item.status === 'uninstalling'"
+              @click="handleUninstall(item)"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+              卸载
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="createDialogOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="createDialogOpen = false"
+    >
+      <div class="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">创造基因</h3>
+          <button class="text-muted-foreground hover:text-foreground" @click="createDialogOpen = false">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <p class="text-sm text-muted-foreground mb-4">描述你希望创造的基因能力，AI 将尝试学习并生成新基因。</p>
+        <textarea
+          v-model="createPrompt"
+          class="w-full h-24 px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder="例如：能够根据用户需求自动生成 SQL 查询..."
+        />
+        <div class="flex justify-end gap-2 mt-4">
+          <button
+            class="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50"
+            @click="createDialogOpen = false"
+          >
+            取消
+          </button>
+          <button
+            class="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            :disabled="creating"
+            @click="handleCreate"
+          >
+            <Loader2 v-if="creating" class="w-4 h-4 animate-spin inline mr-1" />
+            提交
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
