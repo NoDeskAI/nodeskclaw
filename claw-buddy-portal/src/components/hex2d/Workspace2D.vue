@@ -30,6 +30,13 @@ const HEX_RADIUS = HEX_SIZE * SCALE * 0.85
 const BB_RADIUS = HEX_RADIUS * 1.15
 const GRID_RANGE = 8
 
+const EDGE_X1 = -0.866 * HEX_RADIUS
+const EDGE_Y1 = -0.5 * HEX_RADIUS
+const EDGE_X2 = 0
+const EDGE_Y2 = -HEX_RADIUS
+const EDGE_MX = (EDGE_X1 + EDGE_X2) / 2
+const EDGE_MY = (EDGE_Y1 + EDGE_Y2) / 2
+
 const agentPositions = computed(() =>
   props.agents.map((a) => {
     const { x, y } = axialToWorld(a.hex_q, a.hex_r)
@@ -225,22 +232,34 @@ const emptyHexes = computed(() => {
             'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending'),
           }"
         />
+        <!-- Status indicator on upper-left edge -->
+        <line
+          :x1="EDGE_X1" :y1="EDGE_Y1"
+          :x2="EDGE_X2" :y2="EDGE_Y2"
+          :stroke="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#555566'"
+          stroke-width="3"
+          stroke-linecap="round"
+          :opacity="agent.sse_connected ? 0.9 : 0.4"
+        />
         <text
-          y="-8"
+          :x="EDGE_MX" :y="EDGE_MY"
+          :transform="`rotate(-30, ${EDGE_MX}, ${EDGE_MY})`"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          dy="-5"
+          :fill="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#6b7280'"
+          font-size="7"
+        >
+          {{ agent.sse_connected ? agent.status : 'disconnected' }}
+        </text>
+        <text
+          y="0"
           text-anchor="middle"
           :fill="agent.sse_connected ? 'white' : '#9ca3af'"
           font-size="11"
           font-weight="500"
         >
           {{ agent.display_name || agent.name }}
-        </text>
-        <text
-          y="10"
-          text-anchor="middle"
-          :fill="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#6b7280'"
-          font-size="9"
-        >
-          {{ agent.sse_connected ? agent.status : 'disconnected' }}
         </text>
       </g>
 
