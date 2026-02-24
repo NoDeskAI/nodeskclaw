@@ -110,22 +110,8 @@ const navItems = [
 </template>
 
 <style scoped>
-.content-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.content-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.content-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 3px;
-}
-.content-scroll::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--foreground) 30%, transparent);
-}
 .content-scroll {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
-  scrollbar-gutter: stable;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
 </style>
