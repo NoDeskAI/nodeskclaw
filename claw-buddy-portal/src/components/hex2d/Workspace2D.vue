@@ -232,21 +232,13 @@ const emptyHexes = computed(() => {
             'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending'),
           }"
         />
-        <!-- Status indicator on upper-left edge -->
-        <line
-          :x1="EDGE_X1" :y1="EDGE_Y1"
-          :x2="EDGE_X2" :y2="EDGE_Y2"
-          :stroke="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#555566'"
-          stroke-width="3"
-          stroke-linecap="round"
-          :opacity="agent.sse_connected ? 0.9 : 0.4"
-        />
+        <!-- Status text along upper-left edge (inside hex) -->
         <text
           :x="EDGE_MX" :y="EDGE_MY"
           :transform="`rotate(-30, ${EDGE_MX}, ${EDGE_MY})`"
           text-anchor="middle"
           dominant-baseline="middle"
-          dy="-5"
+          dy="5"
           :fill="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#6b7280'"
           font-size="7"
         >
