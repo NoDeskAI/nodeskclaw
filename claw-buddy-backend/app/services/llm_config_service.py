@@ -459,6 +459,13 @@ def _inject_channel_config(
     endpoints = http_cfg.setdefault("endpoints", {})
     endpoints["chatCompletions"] = {"enabled": True}
 
+    skills = config.setdefault("skills", {})
+    s_load = skills.setdefault("load", {})
+    extra_dirs = s_load.setdefault("extraDirs", [])
+    skills_dir = "/root/.openclaw/skills"
+    if skills_dir not in extra_dirs:
+        extra_dirs.append(skills_dir)
+
 
 async def deploy_clawbuddy_channel_plugin(
     instance: Instance, db: AsyncSession, workspace_id: str,

@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
 SKILLS_DIR_REL = Path(".openclaw") / "skills"
+SKILLS_EXTRA_DIR = "/root/.openclaw/skills"
 
 
 def _json_loads(raw: str | None) -> list | dict | None:
@@ -486,6 +487,7 @@ async def _direct_install(
                 skill_name = skill.get("name", gene.slug)
                 skill_content = skill.get("content", "")
                 _write_skill_file(mount_path, skill_name, skill_content)
+                _ensure_skills_discovery(mount_path)
 
                 openclaw_config = manifest.get("openclaw_config")
                 if openclaw_config:
@@ -613,6 +615,39 @@ def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
 
     skill_dir = mount_path / SKILLS_DIR_REL / skill_name
     shutil.rmtree(skill_dir, ignore_errors=True)
+
+
+def _ensure_skills_discovery(mount_path: Path) -> None:
+    """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir.
+
+    OpenClaw only auto-discovers native skills; custom skills in .openclaw/skills/
+    require an explicit extraDirs entry. Uses absolute path to avoid OpenClaw resolving
+    relative to its workspace directory.
+    """
+    import re
+
+    config_path = mount_path / OPENCLAW_CONFIG_REL
+    existing: dict = {}
+    if config_path.exists():
+        raw = config_path.read_text(encoding="utf-8")
+        raw = re.sub(r'//[^\n]*', '', raw)
+        raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
+        raw = re.sub(r',\s*([}\]])', r'\1', raw)
+        try:
+            existing = json.loads(raw)
+        except json.JSONDecodeError:
+            existing = {}
+
+    skills = existing.setdefault("skills", {})
+    load = skills.setdefault("load", {})
+    extra_dirs = load.setdefault("extraDirs", [])
+    if SKILLS_EXTRA_DIR not in extra_dirs:
+        extra_dirs.append(SKILLS_EXTRA_DIR)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
 
 # ── Learning callback handler ────────────────────
@@ -1123,6 +1158,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
             skill_name = manifest.get("skill", {}).get("name", gene.slug)
             async with nfs_mount(instance, db) as mount_path:
                 _remove_skill_file(mount_path, skill_name)
+                _ensure_skills_discovery(mount_path)
 
         ig.soft_delete()
         if gene:
