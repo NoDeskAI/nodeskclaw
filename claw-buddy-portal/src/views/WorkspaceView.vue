@@ -518,6 +518,7 @@ function handleKeydown(e: KeyboardEvent) {
       :hex-type="selectedHex?.type || 'empty'"
       :hex-position="selectedHex ? { q: selectedHex.q, r: selectedHex.r } : { q: 0, r: 0 }"
       :agent-info="hexAgentInfo"
+      :chat-sidebar-open="chatOpen"
       @close="closeHexDrawer"
       @action="onHexAction"
     />

@@ -6,6 +6,7 @@ defineProps<{
   hexType: 'empty' | 'agent' | 'blackboard'
   hexPosition: { q: number, r: number }
   agentInfo?: { id: string, name: string }
+  chatSidebarOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -18,7 +19,8 @@ const emit = defineEmits<{
   <Transition name="slide-up">
     <div
       v-if="open"
-      class="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-60 bg-card border border-border shadow-2xl rounded-t-xl"
+      class="fixed bottom-0 -translate-x-1/2 z-40 w-60 bg-card border border-border shadow-2xl rounded-t-xl transition-[left] duration-300"
+      :style="{ left: chatSidebarOpen ? 'calc(50% - 200px)' : '50%' }"
     >
       <div class="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
         <span class="text-sm font-medium text-foreground">
