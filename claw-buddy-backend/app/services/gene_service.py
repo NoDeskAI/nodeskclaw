@@ -583,17 +583,11 @@ def _write_skill_file(mount_path: Path, skill_name: str, content: str) -> None:
 
 
 def _merge_openclaw_config(mount_path: Path, patch: dict) -> None:
-    import re
-
     config_path = mount_path / OPENCLAW_CONFIG_REL
     existing: dict = {}
     if config_path.exists():
-        raw = config_path.read_text(encoding="utf-8")
-        raw = re.sub(r'//[^\n]*', '', raw)
-        raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
-        raw = re.sub(r',\s*([}\]])', r'\1', raw)
         try:
-            existing = json.loads(raw)
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             existing = {}
 
@@ -624,17 +618,11 @@ def _ensure_skills_discovery(mount_path: Path) -> None:
     require an explicit extraDirs entry. Uses absolute path to avoid OpenClaw resolving
     relative to its workspace directory.
     """
-    import re
-
     config_path = mount_path / OPENCLAW_CONFIG_REL
     existing: dict = {}
     if config_path.exists():
-        raw = config_path.read_text(encoding="utf-8")
-        raw = re.sub(r'//[^\n]*', '', raw)
-        raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
-        raw = re.sub(r',\s*([}\]])', r'\1', raw)
         try:
-            existing = json.loads(raw)
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             existing = {}
 
