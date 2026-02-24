@@ -74,6 +74,21 @@ const routes: RouteRecordRaw[] = [
     name: 'OrgUsage',
     component: () => import('@/views/OrgUsage.vue'),
   },
+  {
+    path: '/gene-market',
+    name: 'GeneMarket',
+    component: () => import('@/views/GeneMarket.vue'),
+  },
+  {
+    path: '/gene-market/gene/:id',
+    name: 'GeneDetail',
+    component: () => import('@/views/GeneDetail.vue'),
+  },
+  {
+    path: '/gene-market/genome/:id',
+    name: 'GenomeDetail',
+    component: () => import('@/views/GenomeDetail.vue'),
+  },
   // Legacy redirects
   {
     path: '/create',
