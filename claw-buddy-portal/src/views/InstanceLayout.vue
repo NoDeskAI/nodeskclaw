@@ -100,7 +100,7 @@ const navItems = [
       </nav>
 
       <!-- Content (可滚动) -->
-      <div class="flex-1 min-w-0 overflow-y-auto content-scroll pr-1">
+      <div class="flex-1 min-w-0 overflow-y-auto content-scroll">
         <div class="pb-4">
           <router-view />
         </div>
@@ -126,5 +126,6 @@ const navItems = [
 .content-scroll {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+  scrollbar-gutter: stable;
 }
 </style>
