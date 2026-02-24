@@ -451,6 +451,9 @@ def _inject_channel_config(
     if plugin_path not in paths:
         paths.append(plugin_path)
 
+    entries = plugins.setdefault("entries", {})
+    entries["clawbuddy"] = {"enabled": True}
+
     gw = config.setdefault("gateway", {})
     http_cfg = gw.setdefault("http", {})
     endpoints = http_cfg.setdefault("endpoints", {})
@@ -510,6 +513,8 @@ async def remove_clawbuddy_channel_plugin(
             plugin_path = f".openclaw/extensions/{CHANNEL_PLUGIN_DIR}"
             if plugin_path in paths:
                 paths.remove(plugin_path)
+
+            existing.get("plugins", {}).get("entries", {}).pop("clawbuddy", None)
 
             _write_config_file(mount_path, existing)
         logger.info("已移除 clawbuddy channel 配置: instance=%s", instance.name)

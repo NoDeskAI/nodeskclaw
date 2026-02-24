@@ -621,7 +621,7 @@ async def lifespan(app: FastAPI):
     summary_job = SummaryJob(async_session_factory)
     summary_job.start()
 
-    # ── 恢复工作区 SSE 连接 ────────────────────────────
+    # ── 修复工作区实例 channel plugin 配置 + 恢复 SSE 连接 ──
     from app.services.sse_listener import sse_listener_manager
 
     async with async_session_factory() as db:
@@ -634,9 +634,23 @@ async def lifespan(app: FastAPI):
                 Instance.deleted_at.is_(None),
             )
         )
-        for inst in ws_agents.scalars().all():
+        instances = ws_agents.scalars().all()
+
+        from app.services.llm_config_service import deploy_clawbuddy_channel_plugin
+        from app.services.instance_service import restart_instance
+        for inst in instances:
+            try:
+                await deploy_clawbuddy_channel_plugin(inst, db, inst.workspace_id)
+                await restart_instance(inst.id, db)
+                logger.info("已修复 channel plugin 配置并重启: %s", inst.name)
+            except Exception as e:
+                logger.warning("修复 channel plugin 失败（非致命）: %s: %s", inst.name, e)
+
+        for inst in instances:
             await sse_listener_manager.connect(
-                inst.id, inst.ingress_domain, workspace_id=inst.workspace_id,
+                inst.id, inst.ingress_domain,
+                workspace_id=inst.workspace_id,
+                delay=15,
             )
     logger.info(
         "已恢复 %d 个工作区 SSE 连接",
