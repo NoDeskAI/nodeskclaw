@@ -612,8 +612,7 @@ def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
     import shutil
 
     skill_dir = mount_path / SKILLS_DIR_REL / skill_name
-    if skill_dir.exists():
-        shutil.rmtree(skill_dir)
+    shutil.rmtree(skill_dir, ignore_errors=True)
 
 
 # ── Learning callback handler ────────────────────
