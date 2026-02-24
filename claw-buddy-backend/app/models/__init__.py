@@ -4,6 +4,14 @@ from app.models.base import Base, BaseModel  # noqa: F401
 from app.models.blackboard import Blackboard  # noqa: F401
 from app.models.cluster import Cluster  # noqa: F401
 from app.models.deploy_record import DeployRecord  # noqa: F401
+from app.models.gene import (  # noqa: F401
+    Gene,
+    GeneEffectLog,
+    GeneRating,
+    Genome,
+    GenomeRating,
+    InstanceGene,
+)
 from app.models.instance import Instance  # noqa: F401
 from app.models.llm_usage_log import LlmUsageLog  # noqa: F401
 from app.models.org_llm_key import OrgLlmKey  # noqa: F401

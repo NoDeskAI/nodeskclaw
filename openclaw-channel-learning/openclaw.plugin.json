@@ -1,0 +1,9 @@
+{
+  "id": "learning",
+  "channels": ["learning"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

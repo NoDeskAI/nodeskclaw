@@ -1,0 +1,23 @@
+{
+  "name": "learning",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw channel plugin for gene learning and creation tasks",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "learning",
+      "label": "Learning",
+      "selectionLabel": "Learning (Gene Evolution)",
+      "docsPath": "/channels/learning",
+      "blurb": "Gene learning and creation channel for ClawBuddy evolution ecosystem.",
+      "aliases": ["learn"]
+    }
+  }
+}

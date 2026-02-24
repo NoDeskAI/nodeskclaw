@@ -482,6 +482,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       } catch { /* ignore */ }
     })
 
+    const geneEvents = [
+      'gene:install_start', 'gene:learn_start', 'gene:learn_decided',
+      'gene:installed', 'gene:learn_failed', 'gene:variant_published',
+      'gene:created', 'gene:effect_logged', 'gene:recommended',
+    ]
+    for (const eventName of geneEvents) {
+      eventSource.addEventListener(eventName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          externalCallback?.(eventName, data)
+        } catch { /* ignore */ }
+      })
+    }
+
     eventSource.onerror = () => {
       setTimeout(() => {
         if (eventSource?.readyState === EventSource.CLOSED) {

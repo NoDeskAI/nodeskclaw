@@ -7,7 +7,7 @@ import { Extension } from '@tiptap/core'
 import { PluginKey } from '@tiptap/pm/state'
 import { useWorkspaceStore, type GroupChatMessage, type AgentBrief } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
-import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal, Copy } from 'lucide-vue-next'
+import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal, Copy, ThumbsUp, ThumbsDown } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { marked } from 'marked'
@@ -440,9 +440,41 @@ function parseContent(content: string): Array<{ type: 'text' | 'mention'; value:
 }
 
 // ── Markdown rendering ──────────────────────────────
+const GENE_SLUG_RE = /`([a-z][a-z0-9-]*(?:-[a-z0-9]+)*)`/g
+
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  return marked.parse(content) as string
+  let html = marked.parse(content) as string
+  html = html.replace(GENE_SLUG_RE, (_match, slug) => {
+    return `<a href="/gene-market" class="gene-slug-link" data-gene-slug="${slug}">${slug}</a>`
+  })
+  return html
+}
+
+const feedbackGiven = ref<Record<string, 'up' | 'down'>>({})
+
+async function handleFeedback(msg: GroupChatMessage, type: 'up' | 'down') {
+  const key = msg.id
+  feedbackGiven.value[key] = type
+  try {
+    const geneStore = await import('@/stores/gene').then(m => m.useGeneStore())
+    const agent = agents.value.find((a: AgentBrief) => a.instance_id === msg.sender_id)
+    if (agent) {
+      const instanceGenes = await api.get(`/instances/${agent.instance_id}/genes`)
+      const installed = instanceGenes.data?.data || []
+      for (const ig of installed) {
+        if (ig.status === 'installed' && ig.gene_id) {
+          await geneStore.logEffectiveness(
+            agent.instance_id,
+            ig.gene_id,
+            type === 'up' ? 'user_positive' : 'user_negative',
+          )
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Feedback error:', e)
+  }
 }
 
 // ── Misc ──────────────────────────────────────────
@@ -547,6 +579,25 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               class="rounded-lg px-3 py-2 text-sm bg-muted text-foreground chat-markdown"
               v-html="renderMarkdown(msg.content)"
             />
+            <div
+              v-if="msg.sender_type === 'agent' && !msg.streaming && msg.content"
+              class="flex items-center gap-1 mt-1"
+            >
+              <button
+                class="p-1 rounded hover:bg-muted/80 transition-colors"
+                :class="feedbackGiven[msg.id] === 'up' ? 'text-green-500' : 'text-muted-foreground/50 hover:text-green-500'"
+                @click="handleFeedback(msg, 'up')"
+              >
+                <ThumbsUp class="w-3 h-3" />
+              </button>
+              <button
+                class="p-1 rounded hover:bg-muted/80 transition-colors"
+                :class="feedbackGiven[msg.id] === 'down' ? 'text-red-500' : 'text-muted-foreground/50 hover:text-red-500'"
+                @click="handleFeedback(msg, 'down')"
+              >
+                <ThumbsDown class="w-3 h-3" />
+              </button>
+            </div>
             <div
               v-else
               class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap bg-primary text-primary-foreground"
@@ -833,6 +884,21 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 }
 .chat-markdown :deep(a) {
   color: hsl(var(--primary));
+  text-decoration: underline;
+}
+.chat-markdown :deep(a.gene-slug-link) {
+  display: inline-block;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  padding: 0.05em 0.4em;
+  border-radius: 4px;
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.chat-markdown :deep(a.gene-slug-link:hover) {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
   text-decoration: underline;
 }
 </style>

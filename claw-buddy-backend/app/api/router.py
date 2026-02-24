@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
+from app.api.genes import router as gene_router
 from app.api.clusters import router as cluster_router
 from app.api.deploy import router as deploy_router
 from app.api.events import router as events_router
@@ -36,3 +37,4 @@ api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓�
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])
 api_router.include_router(storage_router, prefix="/storage-classes", tags=["存储"])
 api_router.include_router(workspace_router, prefix="/workspaces", tags=["工作区"])
+api_router.include_router(gene_router, tags=["基因进化"])

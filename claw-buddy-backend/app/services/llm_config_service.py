@@ -522,6 +522,101 @@ async def remove_clawbuddy_channel_plugin(
         logger.warning("移除 channel 配置失败（非致命）: %s", e)
 
 
+# ── Learning Channel Plugin ──────────────────────
+
+LEARNING_PLUGIN_DIR = "openclaw-channel-learning"
+LEARNING_PLUGIN_FILES = [
+    "index.ts",
+    "package.json",
+    "openclaw.plugin.json",
+    "src/channel.ts",
+    "src/runtime.ts",
+    "src/types.ts",
+]
+
+
+def _get_learning_plugin_source_dir() -> Path:
+    candidates = [
+        Path(__file__).resolve().parents[3] / LEARNING_PLUGIN_DIR,
+        Path("/app") / LEARNING_PLUGIN_DIR,
+    ]
+    for p in candidates:
+        if p.exists() and (p / "index.ts").exists():
+            return p
+    raise FileNotFoundError(
+        f"Learning plugin source not found. Checked: {[str(c) for c in candidates]}"
+    )
+
+
+def _deploy_learning_plugin_files(mount_path: Path, plugin_source: Path) -> None:
+    target_dir = mount_path / ".openclaw" / "extensions" / LEARNING_PLUGIN_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "src").mkdir(parents=True, exist_ok=True)
+
+    for rel_path in LEARNING_PLUGIN_FILES:
+        src = plugin_source / rel_path
+        dst = target_dir / rel_path
+        if src.exists():
+            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _inject_learning_channel_config(
+    config: dict,
+    instance: Instance,
+) -> None:
+    if "channels" not in config:
+        config["channels"] = {}
+
+    callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or ""
+
+    config["channels"]["learning"] = {
+        "accounts": {
+            "default": {
+                "enabled": True,
+                "callbackBaseUrl": callback_base,
+                "instanceId": instance.id,
+            }
+        }
+    }
+
+    plugins = config.setdefault("plugins", {})
+    load = plugins.setdefault("load", {})
+    paths = load.setdefault("paths", [])
+    plugin_path = f".openclaw/extensions/{LEARNING_PLUGIN_DIR}"
+    if plugin_path not in paths:
+        paths.append(plugin_path)
+
+    entries = plugins.setdefault("entries", {})
+    entries["learning"] = {"enabled": True}
+
+
+async def deploy_learning_channel_plugin(
+    instance: Instance, db: AsyncSession,
+) -> None:
+    try:
+        plugin_source = _get_learning_plugin_source_dir()
+    except FileNotFoundError:
+        logger.warning("Learning plugin source not found, skipping deployment")
+        return
+
+    async with nfs_mount(instance, db) as mount_path:
+        _deploy_learning_plugin_files(mount_path, plugin_source)
+
+        try:
+            existing = _read_config_file(mount_path)
+        except ValueError as e:
+            logger.error("deploy_learning_plugin: openclaw.json parse error: %s", e)
+            raise
+
+        if existing is None:
+            existing = {}
+
+        _inject_learning_channel_config(existing, instance)
+        _write_config_file(mount_path, existing)
+
+    logger.info("已部署 learning channel plugin: instance=%s", instance.name)
+
+
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
     """Update openclaw.json via NFS and restart OpenClaw.
 

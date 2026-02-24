@@ -276,6 +276,12 @@ async def _deploy_channel_plugin(inst: Instance, db: AsyncSession, workspace_id:
         return
 
     try:
+        from app.services.llm_config_service import deploy_learning_channel_plugin
+        await deploy_learning_channel_plugin(inst, db)
+    except Exception as e:
+        logger.warning("部署 learning plugin 失败（非致命）: instance=%s error=%s", inst.name, e)
+
+    try:
         from app.services.instance_service import restart_instance
         await restart_instance(inst.id, db)
         logger.info("已重启实例以加载 channel plugin: %s", inst.name)
