@@ -100,7 +100,7 @@ const navItems = [
       </nav>
 
       <!-- Content (可滚动) -->
-      <div class="flex-1 min-w-0 overflow-y-auto content-scroll">
+      <div class="flex-1 min-w-0 overflow-y-auto content-scroll pr-3">
         <div class="pb-4">
           <router-view />
         </div>
