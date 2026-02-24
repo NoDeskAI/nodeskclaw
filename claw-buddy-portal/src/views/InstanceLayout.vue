@@ -100,9 +100,31 @@ const navItems = [
       </nav>
 
       <!-- Content (可滚动) -->
-      <div class="flex-1 min-w-0 overflow-y-auto">
-        <router-view />
+      <div class="flex-1 min-w-0 overflow-y-auto content-scroll pr-1">
+        <div class="pb-4">
+          <router-view />
+        </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.content-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.content-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.content-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 3px;
+}
+.content-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+}
+.content-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+}
+</style>
