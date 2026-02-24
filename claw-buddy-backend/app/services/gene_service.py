@@ -391,22 +391,31 @@ async def install_gene(
     genome_id: str | None = None,
 ) -> dict:
     from app.api.workspaces import broadcast_event
-    from app.services.instance_service import get_instance, restart_instance
+    from app.services.instance_service import get_instance
 
     instance = await get_instance(instance_id, db)
     gene = await get_gene_by_slug(db, gene_slug)
     if not gene:
         raise AppException(404, f"基因 '{gene_slug}' 不存在")
 
-    existing = await db.execute(
+    result = await db.execute(
         select(InstanceGene).where(
             InstanceGene.instance_id == instance_id,
             InstanceGene.gene_id == gene.id,
             not_deleted(InstanceGene),
         )
     )
-    if existing.scalar_one_or_none():
-        raise AppException(409, f"基因 '{gene_slug}' 已安装")
+    existing_ig = result.scalar_one_or_none()
+    if existing_ig:
+        if existing_ig.status in (InstanceGeneStatus.installing, InstanceGeneStatus.learning):
+            logger.warning(
+                "Found stuck %s record for gene %s on instance %s, marking as failed to allow re-install",
+                existing_ig.status, gene_slug, instance_id,
+            )
+            existing_ig.status = InstanceGeneStatus.failed
+            await db.commit()
+        else:
+            raise AppException(409, f"基因 '{gene_slug}' 已安装")
 
     has_learning = await _has_meta_learning(db, instance_id)
 
@@ -422,7 +431,7 @@ async def install_gene(
     await db.commit()
     await db.refresh(ig)
 
-    workspace_id = _get_workspace_id_for_instance(instance)
+    workspace_id = instance.workspace_id
 
     if has_learning:
         if workspace_id:
@@ -431,7 +440,7 @@ async def install_gene(
                 "gene_slug": gene_slug,
             })
         asyncio.create_task(
-            _send_learning_task(db, instance, gene, ig)
+            _send_learning_task(instance.id, gene.id, ig.id)
         )
     else:
         if workspace_id:
@@ -440,7 +449,7 @@ async def install_gene(
                 "gene_slug": gene_slug,
             })
         asyncio.create_task(
-            _direct_install(db, instance, gene, ig, workspace_id)
+            _direct_install(instance.id, gene.id, ig.id, workspace_id)
         )
 
     return {
@@ -451,100 +460,107 @@ async def install_gene(
     }
 
 
-def _get_workspace_id_for_instance(instance: Instance) -> str | None:
-    """Workspace ID from instance's advanced_config or None."""
-    if instance.advanced_config:
-        try:
-            cfg = json.loads(instance.advanced_config)
-            return cfg.get("workspace_id")
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return None
-
-
 async def _direct_install(
-    db: AsyncSession,
-    instance: Instance,
-    gene: Gene,
-    ig: InstanceGene,
+    instance_id: str,
+    gene_id: str,
+    ig_id: str,
     workspace_id: str | None,
 ) -> None:
     from app.api.workspaces import broadcast_event
+    from app.core.deps import async_session_factory
     from app.services.instance_service import restart_instance
 
-    try:
-        manifest = _json_loads(gene.manifest) or {}
-        skill = manifest.get("skill", {})
+    async with async_session_factory() as db:
+        ig = await db.get(InstanceGene, ig_id)
+        gene = await db.get(Gene, gene_id)
+        instance = await db.get(Instance, instance_id)
+        if not ig or not gene or not instance:
+            logger.error("_direct_install: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
+            return
 
-        async with nfs_mount(instance, db) as mount_path:
-            skill_name = skill.get("name", gene.slug)
-            skill_content = skill.get("content", "")
-            _write_skill_file(mount_path, skill_name, skill_content)
+        try:
+            manifest = _json_loads(gene.manifest) or {}
+            skill = manifest.get("skill", {})
 
-            openclaw_config = manifest.get("openclaw_config")
-            if openclaw_config:
-                _merge_openclaw_config(mount_path, openclaw_config)
+            async with nfs_mount(instance, db) as mount_path:
+                skill_name = skill.get("name", gene.slug)
+                skill_content = skill.get("content", "")
+                _write_skill_file(mount_path, skill_name, skill_content)
 
-        ig.status = InstanceGeneStatus.installed
-        ig.installed_at = datetime.now(timezone.utc)
-        ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
-        await db.commit()
+                openclaw_config = manifest.get("openclaw_config")
+                if openclaw_config:
+                    _merge_openclaw_config(mount_path, openclaw_config)
 
-        await restart_instance(instance.id, db)
+            ig.status = InstanceGeneStatus.installed
+            ig.installed_at = datetime.now(timezone.utc)
+            ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
+            await db.commit()
 
-        if workspace_id:
-            broadcast_event(workspace_id, "gene:installed", {
-                "instance_id": instance.id,
-                "gene_slug": gene.slug,
-                "method": "direct",
-            })
-    except Exception as e:
-        logger.error("Direct install failed for gene %s on %s: %s", gene.slug, instance.id, e)
-        ig.status = InstanceGeneStatus.failed
-        await db.commit()
+            await restart_instance(instance.id, db)
+
+            if workspace_id:
+                broadcast_event(workspace_id, "gene:installed", {
+                    "instance_id": instance.id,
+                    "gene_slug": gene.slug,
+                    "method": "direct",
+                })
+        except Exception as e:
+            logger.error("Direct install failed for gene %s on %s: %s", gene.slug, instance.id, e)
+            try:
+                ig.status = InstanceGeneStatus.failed
+                await db.commit()
+            except Exception:
+                logger.error("Failed to mark gene install as failed for ig=%s", ig_id)
 
 
 async def _send_learning_task(
-    db: AsyncSession,
-    instance: Instance,
-    gene: Gene,
-    ig: InstanceGene,
+    instance_id: str,
+    gene_id: str,
+    ig_id: str,
 ) -> None:
     """Send learning task to Learning Channel Plugin via webhook."""
-    manifest = _json_loads(gene.manifest) or {}
-    skill = manifest.get("skill", {})
-    learning = manifest.get("learning")
+    from app.core.deps import async_session_factory
 
-    from app.core.config import settings
+    async with async_session_factory() as db:
+        ig = await db.get(InstanceGene, ig_id)
+        gene = await db.get(Gene, gene_id)
+        instance = await db.get(Instance, instance_id)
+        if not ig or not gene or not instance:
+            logger.error("_send_learning_task: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
+            return
 
-    callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or ""
-    callback_url = f"{callback_base}/api/v1/genes/learning-callback"
+        manifest = _json_loads(gene.manifest) or {}
+        skill = manifest.get("skill", {})
+        learning = manifest.get("learning")
 
-    payload = {
-        "mode": "learn",
-        "task_id": ig.id,
-        "gene_slug": gene.slug,
-        "gene_content": skill.get("content", ""),
-        "learning": learning,
-        "callback_url": callback_url,
-    }
+        from app.core.config import settings
 
-    plugin_url = _get_learning_plugin_url(instance)
-    if not plugin_url:
-        logger.warning("No learning plugin URL for instance %s, falling back to direct install", instance.id)
-        workspace_id = _get_workspace_id_for_instance(instance)
-        await _direct_install(db, instance, gene, ig, workspace_id)
-        return
+        callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or ""
+        callback_url = f"{callback_base}/api/v1/genes/learning-callback"
 
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(f"{plugin_url}/webhook", json=payload)
-            resp.raise_for_status()
-        logger.info("Learning task sent for gene %s on %s", gene.slug, instance.id)
-    except Exception as e:
-        logger.error("Failed to send learning task: %s, falling back to direct install", e)
-        workspace_id = _get_workspace_id_for_instance(instance)
-        await _direct_install(db, instance, gene, ig, workspace_id)
+        payload = {
+            "mode": "learn",
+            "task_id": ig.id,
+            "gene_slug": gene.slug,
+            "gene_content": skill.get("content", ""),
+            "learning": learning,
+            "callback_url": callback_url,
+        }
+
+        plugin_url = _get_learning_plugin_url(instance)
+        if not plugin_url:
+            logger.warning("No learning plugin URL for instance %s, falling back to direct install", instance.id)
+            await _direct_install(instance.id, gene.id, ig.id, instance.workspace_id)
+            return
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(f"{plugin_url}/webhook", json=payload)
+                resp.raise_for_status()
+            logger.info("Learning task sent for gene %s on %s", gene.slug, instance.id)
+        except Exception as e:
+            logger.error("Failed to send learning task: %s, falling back to direct install", e)
+            await _direct_install(instance.id, gene.id, ig.id, instance.workspace_id)
 
 
 def _get_learning_plugin_url(instance: Instance) -> str | None:
@@ -622,7 +638,7 @@ async def handle_learning_callback(
     if not gene_obj:
         raise AppException(404, "基因不存在")
 
-    workspace_id = _get_workspace_id_for_instance(instance)
+    workspace_id = instance.workspace_id
 
     if workspace_id:
         broadcast_event(workspace_id, "gene:learn_decided", {
@@ -838,7 +854,7 @@ async def log_effectiveness(
     instance_result = await db.execute(select(Instance).where(Instance.id == instance_id))
     instance = instance_result.scalar_one_or_none()
     if instance and gene:
-        workspace_id = _get_workspace_id_for_instance(instance)
+        workspace_id = instance.workspace_id
         if workspace_id:
             broadcast_event(workspace_id, "gene:effect_logged", {
                 "instance_id": instance_id,
@@ -959,7 +975,7 @@ async def publish_variant(
     await db.commit()
     await db.refresh(variant)
 
-    workspace_id = _get_workspace_id_for_instance(instance) if instance else None
+    workspace_id = instance.workspace_id if instance else None
     if workspace_id:
         broadcast_event(workspace_id, "gene:variant_published", {
             "instance_id": instance_id,
@@ -1045,7 +1061,7 @@ async def handle_creation_callback(
     await db.commit()
     await db.refresh(gene)
 
-    workspace_id = _get_workspace_id_for_instance(instance) if instance else None
+    workspace_id = instance.workspace_id if instance else None
     if workspace_id:
         broadcast_event(workspace_id, "gene:created", {
             "instance_id": payload.instance_id,
