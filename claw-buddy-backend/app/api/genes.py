@@ -101,6 +101,16 @@ async def gene_synergies(
     return ApiResponse(data=synergies)
 
 
+@router.get("/genes/{gene_id}/genomes")
+async def gene_genomes(
+    gene_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    data = await gene_service.get_gene_genomes(db, gene_id)
+    return ApiResponse(data=data)
+
+
 @router.post("/genes/{gene_id}/rate")
 async def rate_gene(
     gene_id: str,

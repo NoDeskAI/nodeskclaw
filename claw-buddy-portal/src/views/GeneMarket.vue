@@ -123,7 +123,17 @@ async function onMount() {
 
 onMounted(onMount)
 
-watch([viewMode, keyword, selectedTag, selectedCategory, sortBy], () => {
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(keyword, () => {
+  if (keywordTimer) clearTimeout(keywordTimer)
+  keywordTimer = setTimeout(() => {
+    page.value = 1
+    loadData()
+  }, 300)
+})
+
+watch([viewMode, selectedTag, selectedCategory, sortBy], () => {
   page.value = 1
   loadFeatured()
   loadData()

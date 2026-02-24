@@ -151,6 +151,16 @@ export const useGeneStore = defineStore('gene', () => {
     }
   }
 
+  async function fetchGeneGenomes(id: string): Promise<GenomeItem[]> {
+    try {
+      const res = await api.get(`/genes/${id}/genomes`)
+      return res.data.data || []
+    } catch (e) {
+      console.error('fetchGeneGenomes error:', e)
+      return []
+    }
+  }
+
   async function rateGene(geneId: string, rating: number, comment?: string) {
     await api.post(`/genes/${geneId}/rate`, { rating, comment })
   }
@@ -302,6 +312,7 @@ export const useGeneStore = defineStore('gene', () => {
     fetchGene,
     fetchGeneVariants,
     fetchGeneSynergies,
+    fetchGeneGenomes,
     rateGene,
 
     fetchGenomes,

@@ -249,6 +249,26 @@ async def get_gene_synergies(db: AsyncSession, gene_id: str) -> list[dict]:
     return [_gene_to_dict(g) for g in result.scalars().all()]
 
 
+async def get_gene_genomes(db: AsyncSession, gene_id: str) -> list[dict]:
+    """返回包含该基因的所有基因组（通过 gene_slugs JSON 数组匹配）。"""
+    gene = await db.execute(
+        select(Gene).where(Gene.id == gene_id, not_deleted(Gene))
+    )
+    gene_obj = gene.scalar_one_or_none()
+    if not gene_obj:
+        return []
+
+    result = await db.execute(
+        select(Genome).where(not_deleted(Genome), Genome.is_published.is_(True))
+    )
+    matched = []
+    for g in result.scalars().all():
+        slugs = _json_loads(g.gene_slugs) or []
+        if gene_obj.slug in slugs:
+            matched.append(_genome_to_dict(g))
+    return matched
+
+
 # ── Genome CRUD ──────────────────────────────────
 
 
