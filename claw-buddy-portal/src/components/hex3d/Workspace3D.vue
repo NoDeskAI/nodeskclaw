@@ -74,29 +74,32 @@ const hexMeshes = new Map<string, THREE.Group>()
 
 const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
 
+const STATUS_COLORS_3D: Record<string, number> = {
+  running: 0x4ade80, active: 0x4ade80,
+  thinking: 0xfbbf24, pending: 0xfbbf24,
+  idle: 0x8b8b9e,
+  error: 0xf87171, failed: 0xf87171,
+  restarting: 0xf97316, deploying: 0xf97316, updating: 0xf97316, creating: 0xf97316,
+}
+const DISCONNECTED_COLOR = 0x555566
+
 function createHexMesh(agent: AgentBrief): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(agent.hex_q, agent.hex_r)
   group.position.set(x, 0.15, y)
-  group.userData = { hexId: agent.instance_id, isHex: true }
+  group.userData = { hexId: agent.instance_id, isHex: true, sseConnected: agent.sse_connected }
 
-  const statusColors: Record<string, number> = {
-    running: 0x4ade80, active: 0x4ade80,
-    thinking: 0xfbbf24, pending: 0xfbbf24,
-    idle: 0x8b8b9e,
-    error: 0xf87171, failed: 0xf87171,
-    restarting: 0xf97316, deploying: 0xf97316, updating: 0xf97316, creating: 0xf97316,
-  }
-  const color = statusColors[agent.status] ?? 0xa78bfa
+  const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
+  const color = agent.sse_connected ? baseColor : DISCONNECTED_COLOR
 
   const mat = new THREE.MeshStandardMaterial({
     color,
     emissive: new THREE.Color(color),
-    emissiveIntensity: 0.15,
+    emissiveIntensity: agent.sse_connected ? 0.15 : 0.05,
     metalness: 0.2,
     roughness: 0.6,
     transparent: true,
-    opacity: 0.9,
+    opacity: agent.sse_connected ? 0.9 : 0.5,
   })
 
   const mesh = new THREE.Mesh(HEX_GEO, mat)

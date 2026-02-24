@@ -26,10 +26,16 @@ class SSEListenerManager:
     def __init__(self) -> None:
         self._tasks: dict[str, asyncio.Task] = {}
         self._stop_events: dict[str, asyncio.Event] = {}
+        self._healthy: set[str] = set()
+        self._workspace_map: dict[str, str] = {}
 
     @property
     def connected_instances(self) -> list[str]:
         return [iid for iid, t in self._tasks.items() if not t.done()]
+
+    @property
+    def healthy_instances(self) -> set[str]:
+        return set(self._healthy)
 
     async def connect(
         self,
@@ -37,11 +43,15 @@ class SSEListenerManager:
         ingress_domain: str,
         *,
         delay: float = 0,
+        workspace_id: str = "",
     ) -> None:
         """Start an SSE listener for the given instance."""
         if instance_id in self._tasks and not self._tasks[instance_id].done():
             logger.debug("SSE listener already running for %s, skipping", instance_id)
             return
+
+        if workspace_id:
+            self._workspace_map[instance_id] = workspace_id
 
         stop_event = asyncio.Event()
         self._stop_events[instance_id] = stop_event
@@ -53,6 +63,10 @@ class SSEListenerManager:
 
     async def disconnect(self, instance_id: str) -> None:
         """Stop the SSE listener for the given instance."""
+        was_healthy = instance_id in self._healthy
+        self._healthy.discard(instance_id)
+        self._workspace_map.pop(instance_id, None)
+
         stop_event = self._stop_events.pop(instance_id, None)
         if stop_event:
             stop_event.set()
@@ -65,13 +79,36 @@ class SSEListenerManager:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
 
-        logger.info("SSE listener stopped for %s", instance_id)
+        if was_healthy:
+            logger.info("SSE listener stopped for %s (was healthy)", instance_id)
+        else:
+            logger.info("SSE listener stopped for %s", instance_id)
 
     async def disconnect_all(self) -> None:
         """Stop all SSE listeners (called on shutdown)."""
         ids = list(self._tasks.keys())
         for iid in ids:
             await self.disconnect(iid)
+
+    def _set_healthy(self, instance_id: str, healthy: bool) -> None:
+        """Update healthy state and broadcast change to workspace SSE stream."""
+        was_healthy = instance_id in self._healthy
+        if healthy == was_healthy:
+            return
+
+        if healthy:
+            self._healthy.add(instance_id)
+        else:
+            self._healthy.discard(instance_id)
+
+        ws_id = self._workspace_map.get(instance_id)
+        if ws_id:
+            try:
+                from app.api.workspaces import broadcast_event
+                event = "agent:sse_connected" if healthy else "agent:sse_disconnected"
+                broadcast_event(ws_id, event, {"instance_id": instance_id})
+            except Exception:
+                pass
 
     async def _listen_loop(
         self,
@@ -92,8 +129,10 @@ class SSEListenerManager:
                 await self._listen_once(instance_id, url, stop_event)
                 backoff = RECONNECT_BASE_S
             except asyncio.CancelledError:
+                self._set_healthy(instance_id, False)
                 return
             except Exception as e:
+                self._set_healthy(instance_id, False)
                 logger.warning(
                     "SSE connection lost for %s: %s (reconnect in %.0fs)",
                     instance_id, e, backoff,
@@ -122,6 +161,7 @@ class SSEListenerManager:
                 if resp.status_code != 200:
                     raise ConnectionError(f"SSE endpoint returned {resp.status_code}")
 
+                self._set_healthy(instance_id, True)
                 logger.info("SSE connected to %s (%s)", instance_id, url)
 
                 event_type = ""

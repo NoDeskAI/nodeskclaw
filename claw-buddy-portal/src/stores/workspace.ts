@@ -11,6 +11,7 @@ export interface AgentBrief {
   status: string
   hex_q: number
   hex_r: number
+  sse_connected: boolean
 }
 
 export interface WorkspaceListItem {
@@ -420,6 +421,32 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             (a) => a.instance_id === data.instance_id,
           )
           if (agent) agent.status = data.status as string
+        }
+      } catch { /* ignore */ }
+    })
+
+    eventSource.addEventListener('agent:sse_connected', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        externalCallback?.('agent:sse_connected', data)
+        if (currentWorkspace.value) {
+          const agent = currentWorkspace.value.agents.find(
+            (a) => a.instance_id === data.instance_id,
+          )
+          if (agent) agent.sse_connected = true
+        }
+      } catch { /* ignore */ }
+    })
+
+    eventSource.addEventListener('agent:sse_disconnected', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        externalCallback?.('agent:sse_disconnected', data)
+        if (currentWorkspace.value) {
+          const agent = currentWorkspace.value.agents.find(
+            (a) => a.instance_id === data.instance_id,
+          )
+          if (agent) agent.sse_connected = false
         }
       } catch { /* ignore */ }
     })

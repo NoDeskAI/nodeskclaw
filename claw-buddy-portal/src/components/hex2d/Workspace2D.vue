@@ -215,18 +215,20 @@ const emptyHexes = computed(() => {
         />
         <polygon
           :points="hexPoints(0, 0)"
-          :fill="(statusColors[agent.status] || '#a78bfa') + '22'"
-          :stroke="statusColors[agent.status] || '#a78bfa'"
+          :fill="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') + '22' : '#55556622'"
+          :stroke="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#555566'"
           stroke-width="2"
+          :stroke-dasharray="agent.sse_connected ? 'none' : '6,4'"
+          :opacity="agent.sse_connected ? 1 : 0.6"
           :class="{
-            'animate-pulse': agent.status === 'running' || agent.status === 'active',
-            'animate-hex-thinking': agent.status === 'thinking' || agent.status === 'pending',
+            'animate-pulse': agent.sse_connected && (agent.status === 'running' || agent.status === 'active'),
+            'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending'),
           }"
         />
         <text
           y="-8"
           text-anchor="middle"
-          fill="white"
+          :fill="agent.sse_connected ? 'white' : '#9ca3af'"
           font-size="11"
           font-weight="500"
         >
@@ -235,10 +237,10 @@ const emptyHexes = computed(() => {
         <text
           y="10"
           text-anchor="middle"
-          :fill="statusColors[agent.status] || '#a78bfa'"
+          :fill="agent.sse_connected ? (statusColors[agent.status] || '#a78bfa') : '#6b7280'"
           font-size="9"
         >
-          {{ agent.status }}
+          {{ agent.sse_connected ? agent.status : 'disconnected' }}
         </text>
       </g>
 

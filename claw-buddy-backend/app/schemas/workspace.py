@@ -29,6 +29,7 @@ class AgentBrief(BaseModel):
     status: str
     hex_q: int
     hex_r: int
+    sse_connected: bool = False
 
 
 class WorkspaceInfo(BaseModel):

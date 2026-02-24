@@ -142,6 +142,10 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
     """逻辑删除实例：标记 deleted_at，从 K8s 删除整个命名空间（级联删除所有资源）。"""
     instance = await get_instance(instance_id, db)
 
+    if instance.workspace_id:
+        from app.services.sse_listener import sse_listener_manager
+        await sse_listener_manager.disconnect(instance_id)
+
     if delete_k8s:
         cluster_result = await db.execute(
             select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))

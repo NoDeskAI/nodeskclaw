@@ -635,7 +635,9 @@ async def lifespan(app: FastAPI):
             )
         )
         for inst in ws_agents.scalars().all():
-            await sse_listener_manager.connect(inst.id, inst.ingress_domain)
+            await sse_listener_manager.connect(
+                inst.id, inst.ingress_domain, workspace_id=inst.workspace_id,
+            )
     logger.info(
         "已恢复 %d 个工作区 SSE 连接",
         len(sse_listener_manager.connected_instances),

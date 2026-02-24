@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _agent_brief(inst: Instance) -> AgentBrief:
+    from app.services.sse_listener import sse_listener_manager
     return AgentBrief(
         instance_id=inst.id,
         name=inst.name,
@@ -35,6 +36,7 @@ def _agent_brief(inst: Instance) -> AgentBrief:
         status=inst.status,
         hex_q=inst.hex_position_q,
         hex_r=inst.hex_position_r,
+        sse_connected=inst.id in sse_listener_manager.healthy_instances,
     )
 
 
@@ -286,6 +288,7 @@ async def _deploy_channel_plugin(inst: Instance, db: AsyncSession, workspace_id:
             inst.id,
             inst.ingress_domain,
             delay=15,
+            workspace_id=workspace_id,
         )
 
 
