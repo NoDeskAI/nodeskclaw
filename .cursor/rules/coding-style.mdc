@@ -120,18 +120,29 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 - **严禁**：基于 UI 表现推测内部机制（如看到 Skills 页面显示 enabled 就断言 agent 一定能用）
 - **严禁**：只查了一层就下结论（如只看 `loadSkillsFromDir` 返回了 skill 就说"skill 已加载"，必须追到 system prompt 层确认 skill 是否真的在 prompt 中）
 
-### 常用 OpenClaw 源码路径
+### 源码获取方式
+
+OpenClaw 是闭源 npm 包，本项目没有本地副本。获取源码有两种方式，按优先级：
+
+1. **有运行中的实例**：通过 `kubectl exec <pod> -n <ns> -- node -e "..."` 读取 Pod 上的 dist 文件
+2. **没有运行中的实例**：通过 `npm pack openclaw` 或 `npm view openclaw dist.tarball` 下载 npm 包，解压后读取 dist 文件。也可以用 `npx openclaw` 的安装缓存路径
+
+无论哪种方式，最终都是读取 **minified 的 dist JS 文件**，用 `node -e` 脚本搜索关键词定位函数，再逐段读取。
+
+### 常用 OpenClaw 源码路径（Pod 内）
 
 | 模块 | 路径 |
 |---|---|
 | Skill 加载与过滤 | `/usr/local/lib/node_modules/openclaw/dist/skills-*.js` |
-| System Prompt 构建 | `/usr/local/lib/node_modules/openclaw/dist/extensionAPI.js` 中 `buildAgentSystemPrompt`、`buildSkillsSection` |
+| System Prompt 构建 | `dist/extensionAPI.js` 中 `buildAgentSystemPrompt`、`buildSkillsSection` |
 | Agent Session 创建 | `extensionAPI.js` 中 `createAgentSession`、`runEmbeddedPiAgent`、`runEmbeddedAttempt` |
-| Session 消息处理 | `/usr/local/lib/node_modules/openclaw/dist/reply-*.js` |
-| Resource Loader | `/usr/local/lib/node_modules/openclaw/node_modules/@mariozechner/pi-coding-agent/dist/core/resource-loader.js` |
+| Session 消息处理 | `dist/reply-*.js` |
+| Resource Loader | `node_modules/@mariozechner/pi-coding-agent/dist/core/resource-loader.js` |
 | Package Manager（Skill 发现） | `.../pi-coding-agent/dist/core/package-manager.js` |
-| 配置加载 | `/usr/local/lib/node_modules/openclaw/dist/config-*.js` |
+| Skill 文件加载 | `.../pi-coding-agent/dist/core/skills.js`（`loadSkillsFromDir`、`formatSkillsForPrompt`） |
+| 配置加载 | `dist/config-*.js` |
 | Session Store | `/root/.openclaw/agents/main/sessions/sessions.json` |
+| Gateway 路由 | `dist/gateway-cli-*.js` |
 
 ### 必查项
 

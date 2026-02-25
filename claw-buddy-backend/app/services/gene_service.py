@@ -520,6 +520,8 @@ async def _direct_install(
                 if openclaw_config:
                     _merge_openclaw_config(mount_path, openclaw_config)
 
+                _invalidate_skill_snapshots(mount_path)
+
             ig.status = InstanceGeneStatus.installed
             ig.installed_at = datetime.now(timezone.utc)
             ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
@@ -656,6 +658,33 @@ def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
     shutil.rmtree(skill_dir, ignore_errors=True)
 
 
+def _invalidate_skill_snapshots(mount_path: Path) -> None:
+    """Clear cached skillsSnapshot from all OpenClaw sessions.
+
+    OpenClaw caches a skillsSnapshot per session in sessions.json. On NFS mounts
+    chokidar file watching doesn't work (no inotify support), so the snapshot
+    version counter never increments and stale sessions never refresh. We clear
+    the snapshot field so the next chat message rebuilds it with the latest skills.
+    """
+    sessions_path = mount_path / ".openclaw" / "agents" / "main" / "sessions" / "sessions.json"
+    if not sessions_path.exists():
+        return
+    try:
+        store = json.loads(sessions_path.read_text(encoding="utf-8"))
+        changed = False
+        for key, entry in store.items():
+            if isinstance(entry, dict) and "skillsSnapshot" in entry:
+                del entry["skillsSnapshot"]
+                changed = True
+        if changed:
+            sessions_path.write_text(
+                json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info("Cleared stale skillsSnapshot from %d session(s)", len(store))
+    except Exception as e:
+        logger.warning("Failed to invalidate skill snapshots: %s", e)
+
+
 def _ensure_skills_discovery(mount_path: Path) -> None:
     """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir.
 
@@ -724,6 +753,7 @@ async def handle_learning_callback(
             openclaw_config = manifest.get("openclaw_config")
             if openclaw_config:
                 _merge_openclaw_config(mount_path, openclaw_config)
+            _invalidate_skill_snapshots(mount_path)
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -737,6 +767,7 @@ async def handle_learning_callback(
             openclaw_config = manifest.get("openclaw_config")
             if openclaw_config:
                 _merge_openclaw_config(mount_path, openclaw_config)
+            _invalidate_skill_snapshots(mount_path)
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -1206,6 +1237,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
             async with nfs_mount(instance, db) as mount_path:
                 _remove_skill_file(mount_path, skill_name)
                 _ensure_skills_discovery(mount_path)
+                _invalidate_skill_snapshots(mount_path)
 
         ig.soft_delete()
         if gene:
