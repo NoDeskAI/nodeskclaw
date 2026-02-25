@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy import Integer, Select, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AppException
+from app.core.exceptions import AppException, BadRequestError, ConflictError, NotFoundError
 from app.models.base import not_deleted
 from app.models.gene import (
     EffectMetricType,
@@ -79,8 +79,7 @@ def _validate_skill_metadata(
     if content.lstrip().startswith("---"):
         return
     if not (short_description or description):
-        raise AppException(
-            400,
+        raise BadRequestError(
             "带 skill 的基因必须提供 short_description 或 description"
             "（OpenClaw 需要 YAML front matter 中的 description 字段来发现 skill）",
         )
@@ -187,7 +186,7 @@ async def get_gene(db: AsyncSession, gene_id: str) -> dict:
     )
     gene = result.scalar_one_or_none()
     if not gene:
-        raise AppException(404, "基因不存在")
+        raise NotFoundError("基因不存在")
     return _gene_to_dict(gene)
 
 
@@ -203,7 +202,7 @@ async def create_gene(
 ) -> dict:
     existing = await get_gene_by_slug(db, req.slug)
     if existing:
-        raise AppException(409, f"基因 slug '{req.slug}' 已存在")
+        raise ConflictError(f"基因 slug '{req.slug}' 已存在")
 
     _validate_skill_metadata(req.manifest, req.short_description, req.description)
 
@@ -329,7 +328,7 @@ async def get_genome(db: AsyncSession, genome_id: str) -> dict:
     )
     genome = result.scalar_one_or_none()
     if not genome:
-        raise AppException(404, "基因组不存在")
+        raise NotFoundError("基因组不存在")
     return _genome_to_dict(genome)
 
 
@@ -428,7 +427,7 @@ async def install_gene(
     instance = await get_instance(instance_id, db)
     gene = await get_gene_by_slug(db, gene_slug)
     if not gene:
-        raise AppException(404, f"基因 '{gene_slug}' 不存在")
+        raise NotFoundError(f"基因 '{gene_slug}' 不存在")
 
     result = await db.execute(
         select(InstanceGene).where(
@@ -439,15 +438,16 @@ async def install_gene(
     )
     existing_ig = result.scalar_one_or_none()
     if existing_ig:
-        if existing_ig.status in (InstanceGeneStatus.installing, InstanceGeneStatus.learning):
-            logger.warning(
-                "Found stuck %s record for gene %s on instance %s, marking as failed to allow re-install",
-                existing_ig.status, gene_slug, instance_id,
-            )
-            existing_ig.status = InstanceGeneStatus.failed
+        if existing_ig.status in (
+            InstanceGeneStatus.installing,
+            InstanceGeneStatus.learning,
+            InstanceGeneStatus.failed,
+            InstanceGeneStatus.learn_failed,
+        ):
+            existing_ig.soft_delete()
             await db.commit()
         else:
-            raise AppException(409, f"基因 '{gene_slug}' 已安装")
+            raise ConflictError(f"基因 '{gene_slug}' 已安装")
 
     has_learning = await _has_meta_learning(db, instance_id)
 
@@ -679,13 +679,13 @@ async def handle_learning_callback(
     )
     ig_obj = ig.scalar_one_or_none()
     if not ig_obj:
-        raise AppException(404, f"学习任务 '{payload.task_id}' 不存在")
+        raise NotFoundError(f"学习任务 '{payload.task_id}' 不存在")
 
     instance = await get_instance(ig_obj.instance_id, db)
     gene = await db.execute(select(Gene).where(Gene.id == ig_obj.gene_id))
     gene_obj = gene.scalar_one_or_none()
     if not gene_obj:
-        raise AppException(404, "基因不存在")
+        raise NotFoundError("基因不存在")
 
     workspace_id = instance.workspace_id
 
@@ -742,7 +742,7 @@ async def handle_learning_callback(
         return {"status": "learn_failed"}
 
     else:
-        raise AppException(400, f"未知决策: {payload.decision}")
+        raise BadRequestError(f"未知决策: {payload.decision}")
 
     await db.commit()
     await restart_instance(instance.id, db)
@@ -766,7 +766,7 @@ async def apply_genome(db: AsyncSession, instance_id: str, genome_id: str) -> di
     )
     genome = genome_result.scalar_one_or_none()
     if not genome:
-        raise AppException(404, "基因组不存在")
+        raise NotFoundError("基因组不存在")
 
     gene_slugs = _json_loads(genome.gene_slugs) or []
     if not gene_slugs:
@@ -986,16 +986,16 @@ async def publish_variant(
     )
     ig = ig_result.scalar_one_or_none()
     if not ig:
-        raise AppException(404, "未找到已安装的基因")
+        raise NotFoundError("未找到已安装的基因")
     if not ig.learning_output:
-        raise AppException(400, "该基因未通过深度学习，无个性化内容可发布")
+        raise BadRequestError("该基因未通过深度学习，无个性化内容可发布")
     if ig.variant_published:
-        raise AppException(409, "该基因的变体已发布")
+        raise ConflictError("该基因的变体已发布")
 
     parent_gene = await db.execute(select(Gene).where(Gene.id == gene_id))
     parent = parent_gene.scalar_one_or_none()
     if not parent:
-        raise AppException(404, "原始基因不存在")
+        raise NotFoundError("原始基因不存在")
 
     instance_result = await db.execute(select(Instance).where(Instance.id == instance_id))
     instance = instance_result.scalar_one_or_none()
@@ -1072,7 +1072,7 @@ async def trigger_gene_creation(
 
     plugin_url = _get_learning_plugin_url(instance)
     if not plugin_url:
-        raise AppException(400, "实例未配置 Learning Plugin")
+        raise BadRequestError("实例未配置 Learning Plugin")
 
     try:
         async with httpx.AsyncClient(
@@ -1082,7 +1082,7 @@ async def trigger_gene_creation(
             resp = await client.post(f"{plugin_url}/webhook", json=payload)
             resp.raise_for_status()
     except Exception as e:
-        raise AppException(500, f"发送创造任务失败: {e}")
+        raise AppException(code=50001, message=f"发送创造任务失败: {e}", status_code=500)
 
     return {"task_id": task_id, "status": "sent"}
 
@@ -1144,7 +1144,7 @@ async def review_gene(db: AsyncSession, gene_id: str, action: str, reason: str |
     result = await db.execute(select(Gene).where(Gene.id == gene_id, not_deleted(Gene)))
     gene = result.scalar_one_or_none()
     if not gene:
-        raise AppException(404, "基因不存在")
+        raise NotFoundError("基因不存在")
 
     if action == "approve":
         if gene.review_status == GeneReviewStatus.pending_owner:
@@ -1153,12 +1153,12 @@ async def review_gene(db: AsyncSession, gene_id: str, action: str, reason: str |
             gene.review_status = GeneReviewStatus.approved
             gene.is_published = True
         else:
-            raise AppException(400, f"当前审核状态 '{gene.review_status}' 不可审核通过")
+            raise BadRequestError(f"当前审核状态 '{gene.review_status}' 不可审核通过")
     elif action == "reject":
         gene.review_status = GeneReviewStatus.rejected
         gene.is_published = False
     else:
-        raise AppException(400, f"未知审核动作: {action}")
+        raise BadRequestError(f"未知审核动作: {action}")
 
     await db.commit()
     return {"review_status": gene.review_status, "is_published": gene.is_published}
@@ -1178,7 +1178,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
     )
     ig = ig_result.scalar_one_or_none()
     if not ig:
-        raise AppException(404, "未找到已安装的基因")
+        raise NotFoundError("未找到已安装的基因")
 
     gene_result = await db.execute(select(Gene).where(Gene.id == gene_id))
     gene = gene_result.scalar_one_or_none()
@@ -1206,7 +1206,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
         logger.error("Uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
         ig.status = InstanceGeneStatus.installed
         await db.commit()
-        raise AppException(500, f"卸载失败: {e}")
+        raise AppException(code=50002, message=f"卸载失败: {e}", status_code=500)
 
     return {"status": "uninstalled"}
 
