@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, Dna, FlaskConical, User } from 'lucide-vue-next'
@@ -12,11 +12,23 @@ const authStore = useAuthStore()
 const isLoginPage = computed(() => route.path === '/login')
 const hideNav = computed(() => route.meta.hideNav === true)
 const showUserMenu = ref(false)
+const userMenuRef = ref<HTMLElement>()
+
+function onDocumentClick(e: MouseEvent) {
+  if (showUserMenu.value && userMenuRef.value && !userMenuRef.value.contains(e.target as Node)) {
+    showUserMenu.value = false
+  }
+}
 
 onMounted(async () => {
+  document.addEventListener('click', onDocumentClick)
   if (authStore.isLoggedIn && !authStore.user) {
     await authStore.fetchUser()
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
 })
 
 function handleLogout() {
@@ -114,7 +126,7 @@ function navigateFromMenu(path: string) {
             </button>
           </nav>
         </div>
-        <div class="relative">
+        <div class="relative" ref="userMenuRef">
           <button
             class="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-primary/10 hover:ring-2 hover:ring-primary/30 transition-all"
             @click="showUserMenu = !showUserMenu"
@@ -128,10 +140,6 @@ function navigateFromMenu(path: string) {
             <User v-else class="w-4 h-4 text-primary" />
           </button>
 
-          <Teleport to="body">
-            <div v-if="showUserMenu" class="fixed inset-0 z-99" @click="showUserMenu = false" />
-          </Teleport>
-
           <Transition
             enter-active-class="transition duration-150 ease-out"
             enter-from-class="opacity-0 scale-95 -translate-y-1"
@@ -142,7 +150,7 @@ function navigateFromMenu(path: string) {
           >
             <div
               v-if="showUserMenu"
-              class="absolute right-0 top-full mt-2 w-64 bg-card border border-border rounded-xl shadow-xl z-100 py-1 origin-top-right"
+              class="absolute right-0 top-full mt-2 w-64 bg-card border border-border rounded-xl shadow-xl z-10 py-1 origin-top-right"
             >
               <div class="px-4 py-3 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
