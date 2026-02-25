@@ -298,6 +298,32 @@ async def creation_callback(
     return ApiResponse(data=result)
 
 
+@router.post("/genes/forgetting-callback")
+async def forgetting_callback(
+    payload: LearningCallbackPayload,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await gene_service.handle_forgetting_callback(db, payload)
+    return ApiResponse(data=result)
+
+
+# ═══════════════════════════════════════════════════
+#  Evolution Log
+# ═══════════════════════════════════════════════════
+
+
+@router.get("/instances/{instance_id}/evolution-log")
+async def get_evolution_log(
+    instance_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    events = await gene_service.get_evolution_log(db, instance_id, page, page_size)
+    return ApiResponse(data=events)
+
+
 # ═══════════════════════════════════════════════════
 #  Admin
 # ═══════════════════════════════════════════════════

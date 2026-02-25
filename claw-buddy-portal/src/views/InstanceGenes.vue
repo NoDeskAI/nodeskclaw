@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X } from 'lucide-vue-next'
+import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { InstanceGeneItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
@@ -17,6 +17,15 @@ const createDialogOpen = ref(false)
 const createPrompt = ref('')
 const creating = ref(false)
 
+const forgetTarget = ref<InstanceGeneItem | null>(null)
+const confirmInput = ref('')
+const forgetting = ref(false)
+
+const isConfirmed = computed(() => {
+  if (!forgetTarget.value?.gene?.name) return false
+  return confirmInput.value === forgetTarget.value.gene.name
+})
+
 const statusBadgeClass: Record<string, string> = {
   installed: 'bg-green-500/10 text-green-500',
   learning: 'bg-yellow-500/10 text-yellow-500',
@@ -24,6 +33,9 @@ const statusBadgeClass: Record<string, string> = {
   failed: 'bg-red-500/10 text-red-500',
   installing: 'bg-blue-500/10 text-blue-500',
   uninstalling: 'bg-gray-500/10 text-gray-500',
+  forgetting: 'bg-amber-500/10 text-amber-500',
+  forget_failed: 'bg-red-500/10 text-red-500',
+  simplified: 'bg-blue-500/10 text-blue-500',
 }
 
 const statusLabels: Record<string, string> = {
@@ -33,6 +45,9 @@ const statusLabels: Record<string, string> = {
   failed: '失败',
   installing: '学习中',
   uninstalling: '遗忘中',
+  forgetting: '深度遗忘中',
+  forget_failed: '遗忘失败',
+  simplified: '已简化',
 }
 
 function getStatusClass(status: string): string {
@@ -48,17 +63,40 @@ function effectivenessScore(item: InstanceGeneItem): number {
   return item.gene?.effectiveness_score ?? 0
 }
 
+const busyStatuses = new Set(['uninstalling', 'forgetting', 'installing', 'learning'])
+
 function goToMarket() {
   router.push('/gene-market')
 }
 
-async function handleUninstall(item: InstanceGeneItem) {
+function openForgetDialog(item: InstanceGeneItem) {
+  forgetTarget.value = item
+  confirmInput.value = ''
+}
+
+async function confirmForget() {
+  if (!forgetTarget.value || !isConfirmed.value) return
+  forgetting.value = true
   try {
-    await store.uninstallGene(instanceId.value, item.gene_id)
+    await store.uninstallGene(instanceId.value, forgetTarget.value.gene_id)
+    forgetTarget.value = null
     await store.fetchInstanceGenes(instanceId.value)
     toast.success('已提交遗忘')
   } catch (e) {
     toast.error('遗忘失败')
+  } finally {
+    forgetting.value = false
+  }
+}
+
+async function handleRelearn(item: InstanceGeneItem) {
+  if (!item.gene?.slug) return
+  try {
+    await store.installGene(instanceId.value, item.gene.slug)
+    await store.fetchInstanceGenes(instanceId.value)
+    toast.success('已提交重新学习')
+  } catch (e) {
+    toast.error('重新学习失败')
   }
 }
 
@@ -180,7 +218,7 @@ onMounted(() => {
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="item.learning_output && !item.variant_published"
+              v-if="item.learning_output && !item.variant_published && item.status === 'installed'"
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-muted/50 transition-colors"
               @click="handlePublishVariant(item)"
             >
@@ -188,14 +226,89 @@ onMounted(() => {
               发布变体
             </button>
             <button
+              v-if="item.status === 'simplified'"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-muted/50 transition-colors"
+              @click="handleRelearn(item)"
+            >
+              <RefreshCw class="w-3.5 h-3.5" />
+              恢复学习
+            </button>
+            <button
+              v-if="!busyStatuses.has(item.status)"
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
-              :disabled="item.status === 'uninstalling'"
-              @click="handleUninstall(item)"
+              @click="openForgetDialog(item)"
             >
               <Trash2 class="w-3.5 h-3.5" />
-              遗忘
+              {{ item.status === 'simplified' ? '完全遗忘' : '遗忘' }}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forgetting Ceremony Dialog -->
+    <div
+      v-if="forgetTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="forgetTarget = null"
+    >
+      <div class="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">遗忘确认</h3>
+          <button class="text-muted-foreground hover:text-foreground" @click="forgetTarget = null">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="rounded-lg border border-border bg-muted/30 p-3 mb-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm">{{ forgetTarget.gene?.name ?? '未知基因' }}</span>
+            <span class="text-xs text-muted-foreground">{{ forgetTarget.gene?.slug }}</span>
+          </div>
+          <p v-if="forgetTarget.gene?.short_description || forgetTarget.gene?.description" class="text-xs text-muted-foreground line-clamp-2">
+            {{ forgetTarget.gene?.short_description || forgetTarget.gene?.description }}
+          </p>
+        </div>
+
+        <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 mb-4">
+          <div class="flex items-start gap-2">
+            <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <div class="text-xs text-muted-foreground space-y-1">
+              <p>Agent 将进入深度遗忘，回顾使用经验并产出遗忘总结。Agent 可能选择完全遗忘或简化保留核心认知。</p>
+              <p>遗忘完成后实例将自动重启。</p>
+              <p>此操作不可撤销，但可以重新学习。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm text-muted-foreground mb-2">
+            请输入基因名称
+            <span class="font-medium text-foreground">{{ forgetTarget.gene?.name }}</span>
+            以确认遗忘
+          </label>
+          <input
+            v-model="confirmInput"
+            class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-destructive/50"
+            :placeholder="forgetTarget.gene?.name"
+          />
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button
+            class="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50"
+            @click="forgetTarget = null"
+          >
+            取消
+          </button>
+          <button
+            class="px-4 py-2 rounded-lg text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+            :disabled="!isConfirmed || forgetting"
+            @click="confirmForget"
+          >
+            <Loader2 v-if="forgetting" class="w-4 h-4 animate-spin inline mr-1" />
+            确认遗忘
+          </button>
         </div>
       </div>
     </div>

@@ -64,6 +64,18 @@ export interface GeneStats {
   agent_created_count: number
 }
 
+export interface EvolutionEventItem {
+  id: string
+  instance_id: string
+  event_type: string
+  gene_name: string
+  gene_slug?: string
+  gene_id?: string
+  genome_id?: string
+  details?: Record<string, unknown>
+  created_at?: string
+}
+
 export const useGeneStore = defineStore('gene', () => {
   const genes = ref<GeneItem[]>([])
   const genomes = ref<GenomeItem[]>([])
@@ -249,6 +261,13 @@ export const useGeneStore = defineStore('gene', () => {
     })
   }
 
+  async function fetchEvolutionLog(instanceId: string, page = 1, pageSize = 20): Promise<EvolutionEventItem[]> {
+    const res = await api.get(`/instances/${instanceId}/evolution-log`, {
+      params: { page, page_size: pageSize },
+    })
+    return res.data.data || []
+  }
+
   async function triggerCreation(instanceId: string, prompt?: string) {
     const res = await api.post(`/instances/${instanceId}/genes/create`, {
       creation_prompt: prompt,
@@ -327,6 +346,7 @@ export const useGeneStore = defineStore('gene', () => {
     publishVariant,
     logEffectiveness,
     triggerCreation,
+    fetchEvolutionLog,
 
     fetchGeneStats,
     fetchGeneActivity,

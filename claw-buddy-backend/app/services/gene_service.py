@@ -14,6 +14,8 @@ from app.core.exceptions import AppException, BadRequestError, ConflictError, No
 from app.models.base import not_deleted
 from app.models.gene import (
     EffectMetricType,
+    EvolutionEvent,
+    EvolutionEventType,
     Gene,
     GeneEffectLog,
     GeneRating,
@@ -59,6 +61,28 @@ def _json_dumps(obj) -> str | None:
     if obj is None:
         return None
     return json.dumps(obj, ensure_ascii=False)
+
+
+async def _record_evolution(
+    db: AsyncSession,
+    instance_id: str,
+    event_type: EvolutionEventType,
+    gene_name: str,
+    gene_slug: str | None = None,
+    gene_id: str | None = None,
+    genome_id: str | None = None,
+    details: dict | None = None,
+) -> None:
+    ev = EvolutionEvent(
+        instance_id=instance_id,
+        gene_id=gene_id,
+        genome_id=genome_id,
+        event_type=event_type.value,
+        gene_name=gene_name,
+        gene_slug=gene_slug,
+        details=_json_dumps(details),
+    )
+    db.add(ev)
 
 
 def _validate_skill_metadata(
@@ -542,6 +566,11 @@ async def _direct_install(
             ig.status = InstanceGeneStatus.installed
             ig.installed_at = datetime.now(timezone.utc)
             ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
+            await _record_evolution(
+                db, instance_id, EvolutionEventType.learned, gene.name,
+                gene_slug=gene.slug, gene_id=gene_id,
+                details={"version": gene.version, "learning_type": "direct"},
+            )
             await db.commit()
 
             await restart_instance(instance.id, db)
@@ -744,6 +773,11 @@ async def handle_learning_callback(
 
     elif payload.decision == "failed":
         ig_obj.status = InstanceGeneStatus.learn_failed
+        await _record_evolution(
+            db, instance.id, EvolutionEventType.learn_failed, gene_obj.name,
+            gene_slug=gene_obj.slug, gene_id=gene_obj.id,
+            details={"reason": payload.reason},
+        )
         if workspace_id:
             broadcast_event(workspace_id, "gene:learn_failed", {
                 "instance_id": instance.id,
@@ -756,6 +790,11 @@ async def handle_learning_callback(
     else:
         raise BadRequestError(f"未知决策: {payload.decision}")
 
+    await _record_evolution(
+        db, instance.id, EvolutionEventType.learned, gene_obj.name,
+        gene_slug=gene_obj.slug, gene_id=gene_obj.id,
+        details={"version": gene_obj.version, "learning_type": payload.decision},
+    )
     await db.commit()
     await restart_instance(instance.id, db)
 
@@ -803,6 +842,11 @@ async def apply_genome(db: AsyncSession, instance_id: str, genome_id: str) -> di
             results["skipped"].append(slug)
 
     genome.install_count += 1
+    await _record_evolution(
+        db, instance_id, EvolutionEventType.genome_applied, genome.name,
+        genome_id=genome.id,
+        details={"genome_slug": genome.slug, "gene_slugs": gene_slugs, "installed": results["installed"], "skipped": results["skipped"]},
+    )
     await db.commit()
     return results
 
@@ -1043,6 +1087,11 @@ async def publish_variant(
     db.add(variant)
 
     ig.variant_published = True
+    await _record_evolution(
+        db, instance_id, EvolutionEventType.variant_published, parent.name,
+        gene_slug=parent.slug, gene_id=gene_id,
+        details={"variant_gene_id": variant.id, "variant_slug": slug},
+    )
     await db.commit()
     await db.refresh(variant)
 
@@ -1177,7 +1226,7 @@ async def review_gene(db: AsyncSession, gene_id: str, action: str, reason: str |
 
 
 async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> dict:
-    from app.services.instance_service import get_instance, restart_instance
+    from app.services.instance_service import get_instance
 
     instance = await get_instance(instance_id, db)
 
@@ -1192,35 +1241,261 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
     if not ig:
         raise NotFoundError("未找到已学习的基因")
 
-    gene_result = await db.execute(select(Gene).where(Gene.id == gene_id))
+    has_learning = await _has_meta_learning(db, instance_id)
+
+    if has_learning:
+        ig.status = InstanceGeneStatus.forgetting
+        await db.commit()
+        asyncio.create_task(_send_forgetting_task(instance_id, gene_id, ig.id))
+        return {"status": "forgetting", "method": "deep"}
+    else:
+        ig.status = InstanceGeneStatus.uninstalling
+        await db.commit()
+        asyncio.create_task(_direct_uninstall(instance_id, gene_id, ig.id))
+        return {"status": "uninstalling", "method": "direct"}
+
+
+async def _direct_uninstall(
+    instance_id: str,
+    gene_id: str,
+    ig_id: str,
+) -> None:
+    """Remove skill file and soft-delete InstanceGene without Agent involvement."""
+    from app.core.deps import async_session_factory
+    from app.services.instance_service import restart_instance
+
+    async with async_session_factory() as db:
+        ig = await db.get(InstanceGene, ig_id)
+        gene = await db.get(Gene, gene_id)
+        instance = await db.get(Instance, instance_id)
+        if not ig or not instance:
+            logger.error("_direct_uninstall: record missing ig=%s inst=%s", ig_id, instance_id)
+            return
+
+        try:
+            if gene:
+                manifest = _json_loads(gene.manifest) or {}
+                skill_name = manifest.get("skill", {}).get("name", gene.slug)
+                async with nfs_mount(instance, db) as mount_path:
+                    _remove_skill_file(mount_path, skill_name)
+                    ensure_skills_discovery(mount_path)
+                    invalidate_skill_snapshots(mount_path)
+                    inject_evolution_notification(mount_path, skill_name, "uninstalled")
+
+            ig.soft_delete()
+            if gene:
+                gene.install_count = max(0, gene.install_count - 1)
+            await _record_evolution(
+                db, instance_id, EvolutionEventType.forgotten,
+                gene.name if gene else "unknown",
+                gene_slug=gene.slug if gene else None,
+                gene_id=gene_id,
+                details={"version": ig.installed_version, "usage_count": ig.usage_count, "method": "direct"},
+            )
+            await db.commit()
+
+            await restart_instance(instance.id, db)
+            logger.info("Direct uninstall completed for gene %s on %s", gene_id, instance_id)
+        except Exception as e:
+            logger.error("Direct uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
+            ig.status = InstanceGeneStatus.installed
+            await db.commit()
+
+
+async def _send_forgetting_task(
+    instance_id: str,
+    gene_id: str,
+    ig_id: str,
+) -> None:
+    """Send forgetting task to Learning Channel Plugin via webhook."""
+    from app.core.deps import async_session_factory
+
+    async with async_session_factory() as db:
+        ig = await db.get(InstanceGene, ig_id)
+        gene = await db.get(Gene, gene_id)
+        instance = await db.get(Instance, instance_id)
+        if not ig or not gene or not instance:
+            logger.error("_send_forgetting_task: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
+            return
+
+        manifest = _json_loads(gene.manifest) or {}
+        skill_content = manifest.get("skill", {}).get("content", "")
+
+        from app.core.config import settings
+
+        callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or ""
+        callback_url = f"{callback_base}/api/v1/genes/forgetting-callback"
+
+        payload = {
+            "mode": "forget",
+            "task_id": ig.id,
+            "gene_slug": gene.slug,
+            "gene_content": skill_content,
+            "learning_output": ig.learning_output or "",
+            "usage_count": ig.usage_count,
+            "callback_url": callback_url,
+        }
+
+        plugin_url = _get_learning_plugin_url(instance)
+        if not plugin_url:
+            logger.warning("No learning plugin URL for instance %s, falling back to direct uninstall", instance.id)
+            await _direct_uninstall(instance.id, gene.id, ig.id)
+            return
+
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
+                timeout=30,
+            ) as client:
+                resp = await client.post(f"{plugin_url}/webhook", json=payload)
+                resp.raise_for_status()
+            logger.info("Forgetting task sent for gene %s on %s", gene.slug, instance.id)
+        except Exception as e:
+            logger.error("Failed to send forgetting task: %s, falling back to direct uninstall", e)
+            await _direct_uninstall(instance.id, gene.id, ig.id)
+
+
+# ── Forgetting callback handler ──────────────────
+
+
+async def handle_forgetting_callback(
+    db: AsyncSession, payload: LearningCallbackPayload
+) -> dict:
+    from app.api.workspaces import broadcast_event
+    from app.services.instance_service import get_instance, restart_instance
+
+    ig = await db.get(InstanceGene, payload.task_id)
+    if not ig:
+        raise NotFoundError(f"InstanceGene not found: {payload.task_id}")
+
+    instance = await get_instance(ig.instance_id, db)
+    gene_result = await db.execute(select(Gene).where(Gene.id == ig.gene_id))
     gene = gene_result.scalar_one_or_none()
 
-    ig.status = InstanceGeneStatus.uninstalling
-    await db.commit()
+    workspace_id = instance.workspace_id
 
-    try:
-        if gene:
-            manifest = _json_loads(gene.manifest) or {}
-            skill_name = manifest.get("skill", {}).get("name", gene.slug)
-            async with nfs_mount(instance, db) as mount_path:
-                _remove_skill_file(mount_path, skill_name)
-                ensure_skills_discovery(mount_path)
-                invalidate_skill_snapshots(mount_path)
-                inject_evolution_notification(mount_path, skill_name, "uninstalled")
+    gene_name = gene.name if gene else "unknown"
+    gene_slug = gene.slug if gene else None
 
-        ig.soft_delete()
-        if gene:
-            gene.install_count = max(0, gene.install_count - 1)
+    if payload.decision == "forget_failed":
+        ig.status = InstanceGeneStatus.forget_failed
+        await _record_evolution(
+            db, ig.instance_id, EvolutionEventType.forget_failed, gene_name,
+            gene_slug=gene_slug, gene_id=ig.gene_id,
+            details={"reason": payload.reason},
+        )
         await db.commit()
+        if workspace_id:
+            await broadcast_event(workspace_id, "gene:forget_failed", {
+                "instance_id": ig.instance_id,
+                "gene_id": ig.gene_id,
+                "reason": payload.reason,
+            })
+        return {"status": "forget_failed"}
 
+    if payload.decision == "simplified" and gene:
+        manifest = _json_loads(gene.manifest) or {}
+        skill_name = manifest.get("skill", {}).get("name", gene.slug)
+        content = payload.content or ""
+        async with nfs_mount(instance, db) as mount_path:
+            _write_skill_file(mount_path, skill_name, content, gene.short_description or "")
+            invalidate_skill_snapshots(mount_path)
+            inject_evolution_notification(mount_path, skill_name, "uninstalled")
+
+        ig.status = InstanceGeneStatus.simplified
+        await _record_evolution(
+            db, ig.instance_id, EvolutionEventType.simplified, gene_name,
+            gene_slug=gene_slug, gene_id=ig.gene_id,
+            details={
+                "version": ig.installed_version,
+                "usage_count": ig.usage_count,
+                "simplified_reason": payload.reason,
+                "method": "deep",
+            },
+        )
+        await db.commit()
         await restart_instance(instance.id, db)
-    except Exception as e:
-        logger.error("Uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
-        ig.status = InstanceGeneStatus.installed
-        await db.commit()
-        raise AppException(code=50002, message=f"遗忘失败: {e}", status_code=500)
 
-    return {"status": "uninstalled"}
+        if workspace_id:
+            await broadcast_event(workspace_id, "gene:simplified", {
+                "instance_id": ig.instance_id,
+                "gene_id": ig.gene_id,
+                "gene_name": gene_name,
+                "reason": payload.reason,
+            })
+        return {"status": "simplified"}
+
+    # Default: "forgotten" -- complete removal
+    if gene:
+        manifest = _json_loads(gene.manifest) or {}
+        skill_name = manifest.get("skill", {}).get("name", gene.slug)
+        async with nfs_mount(instance, db) as mount_path:
+            _remove_skill_file(mount_path, skill_name)
+            ensure_skills_discovery(mount_path)
+            invalidate_skill_snapshots(mount_path)
+            inject_evolution_notification(mount_path, skill_name, "uninstalled")
+
+    ig.soft_delete()
+    if gene:
+        gene.install_count = max(0, gene.install_count - 1)
+    await _record_evolution(
+        db, ig.instance_id, EvolutionEventType.forgotten, gene_name,
+        gene_slug=gene_slug, gene_id=ig.gene_id,
+        details={
+            "version": ig.installed_version,
+            "usage_count": ig.usage_count,
+            "forgetting_summary": payload.content,
+            "self_eval": payload.self_eval,
+            "method": "deep",
+        },
+    )
+    await db.commit()
+    await restart_instance(instance.id, db)
+
+    if workspace_id:
+        await broadcast_event(workspace_id, "gene:forgotten", {
+            "instance_id": ig.instance_id,
+            "gene_id": ig.gene_id,
+            "gene_name": gene_name,
+        })
+    return {"status": "forgotten"}
+
+
+# ═══════════════════════════════════════════════════
+#  Evolution Log
+# ═══════════════════════════════════════════════════
+
+
+async def get_evolution_log(
+    db: AsyncSession,
+    instance_id: str,
+    page: int = 1,
+    page_size: int = 20,
+) -> list[dict]:
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        select(EvolutionEvent)
+        .where(EvolutionEvent.instance_id == instance_id, not_deleted(EvolutionEvent))
+        .order_by(EvolutionEvent.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    events = result.scalars().all()
+    out = []
+    for ev in events:
+        details = _json_loads(ev.details)
+        out.append({
+            "id": ev.id,
+            "instance_id": ev.instance_id,
+            "event_type": ev.event_type,
+            "gene_name": ev.gene_name,
+            "gene_slug": ev.gene_slug,
+            "gene_id": ev.gene_id,
+            "genome_id": ev.genome_id,
+            "details": details,
+            "created_at": ev.created_at.isoformat() if ev.created_at else None,
+        })
+    return out
 
 
 # ═══════════════════════════════════════════════════

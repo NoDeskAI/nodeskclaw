@@ -13,7 +13,7 @@ export interface ResolvedLearningAccount {
 }
 
 export interface LearningTask {
-  mode: "learn" | "create";
+  mode: "learn" | "create" | "forget";
   task_id: string;
   gene_slug?: string;
   gene_content?: string;
@@ -26,14 +26,20 @@ export interface LearningTask {
     }>;
   };
   creation_prompt?: string;
+  /** Agent's personalized learning output (forget mode only). */
+  learning_output?: string;
+  /** How many times the gene has been used (forget mode only). */
+  usage_count?: number;
   callback_url: string;
 }
 
 export interface LearningResult {
   task_id: string;
   instance_id: string;
-  mode: "learn" | "create";
-  decision: "direct_install" | "learned" | "failed" | "created";
+  mode: "learn" | "create" | "forget";
+  decision:
+    | "direct_install" | "learned" | "failed" | "created"
+    | "forgotten" | "simplified" | "forget_failed";
   content?: string;
   self_eval?: number;
   meta?: {

@@ -39,6 +39,19 @@ class InstanceGeneStatus(str, Enum):
     learn_failed = "learn_failed"
     failed = "failed"
     uninstalling = "uninstalling"
+    forgetting = "forgetting"
+    forget_failed = "forget_failed"
+    simplified = "simplified"
+
+
+class EvolutionEventType(str, Enum):
+    learned = "learned"
+    forgotten = "forgotten"
+    simplified = "simplified"
+    learn_failed = "learn_failed"
+    forget_failed = "forget_failed"
+    variant_published = "variant_published"
+    genome_applied = "genome_applied"
 
 
 class EffectMetricType(str, Enum):
@@ -152,7 +165,7 @@ class InstanceGene(BaseModel):
         String(36), ForeignKey("genomes.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(
-        String(16), default=InstanceGeneStatus.installing, nullable=False
+        String(20), default=InstanceGeneStatus.installing, nullable=False
     )
     installed_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
     learning_output: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -223,3 +236,25 @@ class GenomeRating(BaseModel):
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class EvolutionEvent(BaseModel):
+    """Records every gene-related evolution event for an instance timeline."""
+
+    __tablename__ = "evolution_events"
+
+    instance_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("instances.id"), nullable=False, index=True
+    )
+    gene_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    genome_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    event_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True
+    )
+    gene_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    gene_slug: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)

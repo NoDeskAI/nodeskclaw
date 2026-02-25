@@ -111,11 +111,15 @@ export const learningPlugin: ChannelPlugin<ResolvedLearningAccount> = {
       try {
         result = JSON.parse(text);
       } catch {
+        const fallbackDecision =
+          task.mode === "learn" ? "learned"
+          : task.mode === "create" ? "created"
+          : "forgotten";
         result = {
           task_id: task.task_id,
           instance_id: account.instanceId,
           mode: task.mode,
-          decision: task.mode === "learn" ? "learned" : "created",
+          decision: fallbackDecision,
           content: text,
           reason: "Agent provided raw text response",
         };
@@ -155,8 +159,9 @@ export function handleWebhook(body: LearningTask): { ok: boolean } {
   injectLearningTask(body);
 
   const runtime = getLearningRuntime();
-  const taskPrompt = body.mode === "learn"
-    ? buildLearnPrompt(body)
+  const taskPrompt =
+    body.mode === "learn" ? buildLearnPrompt(body)
+    : body.mode === "forget" ? buildForgetPrompt(body)
     : buildCreatePrompt(body);
 
   runtime.channel.messages.inject({
@@ -199,6 +204,38 @@ function buildLearnPrompt(task: LearningTask): string {
   prompt += `2. "learned" - if you processed and personalized the content (include your personalized SKILL.md)\n`;
   prompt += `3. "failed" - if you cannot learn this content\n\n`;
   prompt += `Respond with JSON: { "decision": "...", "content": "personalized SKILL.md if learned", "self_eval": 0.0-1.0, "reason": "..." }\n`;
+  prompt += `Send your response via: send -t learning -to "task:${task.task_id}" -m "your JSON"`;
+
+  return prompt;
+}
+
+function buildForgetPrompt(task: LearningTask): string {
+  let prompt = `[Gene Forgetting Task] task_id: ${task.task_id}\n\n`;
+  prompt += `You are about to forget the gene "${task.gene_slug}". `;
+  prompt += `Before it is removed, review your experience and produce a forgetting summary.\n\n`;
+
+  if (task.gene_content) {
+    prompt += `Current gene skill content:\n\`\`\`\n${task.gene_content}\n\`\`\`\n\n`;
+  }
+  if (task.learning_output) {
+    prompt += `Your personalized learning from this gene:\n\`\`\`\n${task.learning_output}\n\`\`\`\n\n`;
+  }
+  if (task.usage_count != null) {
+    prompt += `Usage statistics: This gene has been used ${task.usage_count} times.\n\n`;
+  }
+
+  prompt += `Review your experience and decide:\n\n`;
+  prompt += `1. "forgotten" - Completely forget: produce a summary of key insights and lessons learned, then the skill will be fully removed.\n`;
+  prompt += `2. "simplified" - Simplify and retain: produce a reduced SKILL.md that keeps only core knowledge while removing specialized capabilities.\n`;
+  prompt += `3. "forget_failed" - Unable to process this forgetting request.\n\n`;
+
+  prompt += `Respond with JSON:\n`;
+  prompt += `{\n`;
+  prompt += `  "decision": "forgotten" | "simplified" | "forget_failed",\n`;
+  prompt += `  "content": "forgetting summary (if forgotten) OR simplified SKILL.md (if simplified)",\n`;
+  prompt += `  "self_eval": 0.0-1.0,\n`;
+  prompt += `  "reason": "why this decision was made"\n`;
+  prompt += `}\n\n`;
   prompt += `Send your response via: send -t learning -to "task:${task.task_id}" -m "your JSON"`;
 
   return prompt;

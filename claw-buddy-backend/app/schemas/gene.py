@@ -221,12 +221,29 @@ class CreateGeneRequest(BaseModel):
 class LearningCallbackPayload(BaseModel):
     task_id: str
     instance_id: str
-    mode: str  # "learn" | "create"
-    decision: str  # "direct_install" | "learned" | "failed" | "created"
+    mode: str  # "learn" | "create" | "forget"
+    decision: str  # "direct_install" | "learned" | "failed" | "created" | "forgotten" | "simplified" | "forget_failed"
     content: str | None = None
     self_eval: float | None = None
     meta: dict | None = None
     reason: str | None = None
+
+
+# ── Evolution Log ────────────────────────────────
+
+
+class EvolutionEventInfo(BaseModel):
+    id: str
+    instance_id: str
+    event_type: str
+    gene_name: str
+    gene_slug: str | None = None
+    gene_id: str | None = None
+    genome_id: str | None = None
+    details: dict | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
 
 # ── Admin ────────────────────────────────────────
