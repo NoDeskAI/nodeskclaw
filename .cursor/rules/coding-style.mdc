@@ -111,38 +111,39 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 
 ### OpenClaw 行为判断必须有源码依据
 
-**对 OpenClaw 内部行为（skill 加载、session 管理、system prompt 构建、配置生效机制等）的任何判断，必须通过读取 Pod 上的实际源码来验证。** 不允许凭"可能是这样"、"一般框架都这么做"等推测下结论。
+**对 OpenClaw 内部行为（skill 加载、session 管理、system prompt 构建、配置生效机制等）的任何判断，必须通过读取实际源码来验证。** 不允许凭"可能是这样"、"一般框架都这么做"等推测下结论。
 
-- **必须做**：通过 `kubectl exec` 读取 OpenClaw 的 dist JS 文件，找到具体函数和行号作为依据
+- **必须做**：读取 OpenClaw 源码，找到具体函数和文件作为依据
 - **必须做**：涉及多个模块的交互时，追踪完整调用链（如 gateway → skills → pi-coding-agent → system-prompt），不能只看一层就下结论
-- **必须做**：结论中明确引用源码位置（如 "extensionAPI.js 第 21179 行 `buildSkillsSection` 函数"）
+- **必须做**：结论中明确引用源码位置（如 "`src/agents/system-prompt.ts` 中的 `buildSkillsSection` 函数"）
 - **严禁**：没读过 OpenClaw 源码就断言"这属于 OpenClaw 自身的行为"、"不是我们的 bug"
 - **严禁**：基于 UI 表现推测内部机制（如看到 Skills 页面显示 enabled 就断言 agent 一定能用）
 - **严禁**：只查了一层就下结论（如只看 `loadSkillsFromDir` 返回了 skill 就说"skill 已加载"，必须追到 system prompt 层确认 skill 是否真的在 prompt 中）
 
 ### 源码获取方式
 
-OpenClaw 是闭源 npm 包，本项目没有本地副本。获取源码有两种方式，按优先级：
+**本项目在 `/Users/xy718/workspace/ClawBuddy/openclaw/` 有 OpenClaw 的完整 TypeScript 源码副本。** 优先使用本地源码，可读性远优于 Pod 上的 minified dist 文件。
 
-1. **有运行中的实例**：通过 `kubectl exec <pod> -n <ns> -- node -e "..."` 读取 Pod 上的 dist 文件
-2. **没有运行中的实例**：通过 `npm pack openclaw` 或 `npm view openclaw dist.tarball` 下载 npm 包，解压后读取 dist 文件。也可以用 `npx openclaw` 的安装缓存路径
+按优先级：
 
-无论哪种方式，最终都是读取 **minified 的 dist JS 文件**，用 `node -e` 脚本搜索关键词定位函数，再逐段读取。
+1. **本地源码（首选）**：直接读取 `openclaw/src/` 下的 TypeScript 源文件。用 Grep/SemanticSearch 搜索关键词定位函数
+2. **Pod 上验证**：需要确认运行时实际状态（如 session store 内容、config 文件）时，通过 `kubectl exec` 查看
+3. **Pod 上读 dist（备用）**：本地源码版本与线上不一致时，通过 `kubectl exec <pod> -- node -e "..."` 读取 dist 文件
 
-### 常用 OpenClaw 源码路径（Pod 内）
+### 常用 OpenClaw 源码路径
 
-| 模块 | 路径 |
-|---|---|
-| Skill 加载与过滤 | `/usr/local/lib/node_modules/openclaw/dist/skills-*.js` |
-| System Prompt 构建 | `dist/extensionAPI.js` 中 `buildAgentSystemPrompt`、`buildSkillsSection` |
-| Agent Session 创建 | `extensionAPI.js` 中 `createAgentSession`、`runEmbeddedPiAgent`、`runEmbeddedAttempt` |
-| Session 消息处理 | `dist/reply-*.js` |
-| Resource Loader | `node_modules/@mariozechner/pi-coding-agent/dist/core/resource-loader.js` |
-| Package Manager（Skill 发现） | `.../pi-coding-agent/dist/core/package-manager.js` |
-| Skill 文件加载 | `.../pi-coding-agent/dist/core/skills.js`（`loadSkillsFromDir`、`formatSkillsForPrompt`） |
-| 配置加载 | `dist/config-*.js` |
-| Session Store | `/root/.openclaw/agents/main/sessions/sessions.json` |
-| Gateway 路由 | `dist/gateway-cli-*.js` |
+| 模块 | 本地路径（`openclaw/src/`） | Pod 内 dist 路径 |
+|---|---|---|
+| Skill 加载与过滤 | `agents/skills.ts` | `dist/skills-*.js` |
+| System Prompt 构建 | `agents/system-prompt.ts` | `dist/extensionAPI.js` |
+| Agent Session / 嵌入式运行 | `agents/pi-embedded-runner.ts` | `dist/extensionAPI.js` |
+| Session 消息处理 / Reply | `auto-reply/` | `dist/reply-*.js` |
+| Skill 快照与版本 | `agents/skills.ts`（`getSkillsSnapshotVersion`、`ensureSkillsWatcher`） | `dist/extensionAPI.js` |
+| Gateway 路由 | `gateway/` | `dist/gateway-cli-*.js` |
+| 配置加载 | `config/` | `dist/config-*.js` |
+| Session Store（运行时） | — | `/root/.openclaw/agents/main/sessions/sessions.json` |
+
+> 注：`pi-coding-agent` 是 OpenClaw 的依赖包，源码不在本地。相关逻辑（`loadSkillsFromDir`、`formatSkillsForPrompt`、`ResourceLoader`、`PackageManager`）需通过 Pod 上的 `node_modules/@mariozechner/pi-coding-agent/dist/core/` 读取。
 
 ### 必查项
 
