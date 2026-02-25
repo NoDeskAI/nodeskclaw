@@ -459,7 +459,7 @@ async def install_gene(
             existing_ig.soft_delete()
             await db.commit()
         else:
-            raise ConflictError(f"基因 '{gene_slug}' 已安装")
+            raise ConflictError(f"基因 '{gene_slug}' 已学习")
 
     has_learning = await _has_meta_learning(db, instance_id)
 
@@ -998,7 +998,7 @@ async def publish_variant(
     )
     ig = ig_result.scalar_one_or_none()
     if not ig:
-        raise NotFoundError("未找到已安装的基因")
+        raise NotFoundError("未找到已学习的基因")
     if not ig.learning_output:
         raise BadRequestError("该基因未通过深度学习，无个性化内容可发布")
     if ig.variant_published:
@@ -1190,7 +1190,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
     )
     ig = ig_result.scalar_one_or_none()
     if not ig:
-        raise NotFoundError("未找到已安装的基因")
+        raise NotFoundError("未找到已学习的基因")
 
     gene_result = await db.execute(select(Gene).where(Gene.id == gene_id))
     gene = gene_result.scalar_one_or_none()
@@ -1218,7 +1218,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
         logger.error("Uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
         ig.status = InstanceGeneStatus.installed
         await db.commit()
-        raise AppException(code=50002, message=f"卸载失败: {e}", status_code=500)
+        raise AppException(code=50002, message=f"遗忘失败: {e}", status_code=500)
 
     return {"status": "uninstalled"}
 

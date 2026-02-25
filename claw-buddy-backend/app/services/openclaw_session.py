@@ -86,10 +86,10 @@ def inject_evolution_notification(
         assistant_text = f"收到，我已获取新基因「{gene_name}」并完成进化。我的技能列表已更新。"
     else:
         user_text = (
-            f"[System] 基因系统通知: 基因「{gene_name}」已卸载。"
+            f"[System] 基因系统通知: 基因「{gene_name}」已遗忘。"
             f"你的技能列表已更新，请以 system prompt 中 <available_skills> 为准。"
         )
-        assistant_text = f"收到，基因「{gene_name}」已卸载。我的技能列表已更新。"
+        assistant_text = f"收到，基因「{gene_name}」已遗忘。我的技能列表已更新。"
 
     try:
         store = json.loads(sessions_path.read_text(encoding="utf-8"))

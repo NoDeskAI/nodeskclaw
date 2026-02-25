@@ -27,12 +27,12 @@ const statusBadgeClass: Record<string, string> = {
 }
 
 const statusLabels: Record<string, string> = {
-  installed: '已安装',
+  installed: '已学习',
   learning: '学习中',
   learn_failed: '学习失败',
   failed: '失败',
-  installing: '安装中',
-  uninstalling: '卸载中',
+  installing: '学习中',
+  uninstalling: '遗忘中',
 }
 
 function getStatusClass(status: string): string {
@@ -56,9 +56,9 @@ async function handleUninstall(item: InstanceGeneItem) {
   try {
     await store.uninstallGene(instanceId.value, item.gene_id)
     await store.fetchInstanceGenes(instanceId.value)
-    toast.success('已提交卸载')
+    toast.success('已提交遗忘')
   } catch (e) {
-    toast.error('卸载失败')
+    toast.error('遗忘失败')
   }
 }
 
@@ -124,7 +124,7 @@ onMounted(() => {
 
     <div v-else-if="instanceGenes.length === 0" class="rounded-xl border border-dashed border-border py-16 text-center text-muted-foreground">
       <Package class="w-12 h-12 mx-auto mb-4 opacity-50" />
-      <p class="text-sm">暂无已安装基因</p>
+      <p class="text-sm">暂无已学习基因</p>
       <button
         class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         @click="goToMarket"
@@ -193,7 +193,7 @@ onMounted(() => {
               @click="handleUninstall(item)"
             >
               <Trash2 class="w-3.5 h-3.5" />
-              卸载
+              遗忘
             </button>
           </div>
         </div>

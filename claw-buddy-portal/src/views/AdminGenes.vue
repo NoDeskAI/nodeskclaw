@@ -109,7 +109,7 @@ onMounted(async () => {
           <div class="rounded-xl border border-border bg-card p-4">
             <div class="flex items-center gap-2 text-muted-foreground mb-1">
               <Download class="w-4 h-4" />
-              <span class="text-sm">总安装数</span>
+              <span class="text-sm">总学习数</span>
             </div>
             <div class="text-2xl font-bold">{{ stats?.total_installs ?? 0 }}</div>
           </div>

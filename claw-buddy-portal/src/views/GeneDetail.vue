@@ -171,7 +171,7 @@ function selectInstance(instanceId: string) {
             @click="openInstallDialog"
           >
             <Download class="w-4 h-4" />
-            安装
+            学习
           </button>
         </div>
       </div>
@@ -327,7 +327,7 @@ function selectInstance(instanceId: string) {
             </button>
           </div>
           <p class="text-sm text-muted-foreground mb-4">
-            选择要安装基因 {{ gene?.slug }} 的实例
+            选择要学习基因 {{ gene?.slug }} 的实例
           </p>
           <div v-if="instancesLoading" class="flex justify-center py-8">
             <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
@@ -337,9 +337,9 @@ function selectInstance(instanceId: string) {
               暂无可用实例
             </div>
             <template v-else>
-              <!-- 可安装 -->
+              <!-- 可学习 -->
               <div v-if="availableInstances.length > 0">
-                <p class="text-xs text-muted-foreground mb-2 px-1">可安装</p>
+                <p class="text-xs text-muted-foreground mb-2 px-1">可学习</p>
                 <div class="space-y-1.5">
                   <button
                     v-for="inst in availableInstances"
@@ -373,9 +373,9 @@ function selectInstance(instanceId: string) {
                   </button>
                 </div>
               </div>
-              <!-- 已安装 -->
+              <!-- 已学习 -->
               <div v-if="installedInstances.length > 0">
-                <p class="text-xs text-muted-foreground mb-2 px-1">已安装</p>
+                <p class="text-xs text-muted-foreground mb-2 px-1">已学习</p>
                 <div class="space-y-1.5">
                   <div
                     v-for="inst in installedInstances"
@@ -385,7 +385,7 @@ function selectInstance(instanceId: string) {
                     <span class="w-2 h-2 rounded-full shrink-0 bg-muted-foreground/30" />
                     <span class="font-medium text-sm truncate flex-1">{{ inst.name }}</span>
                     <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
-                      已安装
+                      已学习
                     </span>
                   </div>
                 </div>

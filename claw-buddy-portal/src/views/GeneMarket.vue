@@ -273,7 +273,7 @@ function goToGenome(id: string) {
                   <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   {{ ((item as GeneItem).avg_rating ?? (item as GenomeItem).avg_rating ?? 0).toFixed(1) }}
                 </span>
-                <span>{{ (item as GeneItem).install_count ?? (item as GenomeItem).install_count ?? 0 }} 安装</span>
+                <span>{{ (item as GeneItem).install_count ?? (item as GenomeItem).install_count ?? 0 }} 次学习</span>
               </div>
             </div>
           </div>
@@ -326,7 +326,7 @@ function goToGenome(id: string) {
                     />
                   </div>
                 </div>
-                <span class="shrink-0">{{ gene.install_count ?? 0 }} 安装</span>
+                <span class="shrink-0">{{ gene.install_count ?? 0 }} 次学习</span>
               </div>
               </div>
             </template>
@@ -353,7 +353,7 @@ function goToGenome(id: string) {
                   <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   {{ (genome.avg_rating ?? 0).toFixed(1) }}
                 </span>
-                <span class="shrink-0">{{ genome.install_count ?? 0 }} 安装</span>
+                <span class="shrink-0">{{ genome.install_count ?? 0 }} 次学习</span>
               </div>
             </div>
             </template>
