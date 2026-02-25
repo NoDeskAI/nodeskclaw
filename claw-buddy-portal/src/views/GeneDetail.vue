@@ -77,6 +77,12 @@ const descriptionHtml = computed(() => {
   return marked(d) as string
 })
 
+const skillContentHtml = computed(() => {
+  const content = (gene.value?.manifest as Record<string, any>)?.skill?.content
+  if (!content) return ''
+  return marked(content) as string
+})
+
 async function onMount() {
   await store.fetchGene(geneId.value)
   const [s, v, pg] = await Promise.all([
@@ -225,6 +231,14 @@ async function confirmForgetFromDetail() {
             <div
               class="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary"
               v-html="descriptionHtml"
+            />
+          </section>
+
+          <section v-if="skillContentHtml" class="mb-8">
+            <h2 class="text-lg font-semibold mb-3">基因内容</h2>
+            <div
+              class="rounded-xl border border-border bg-card p-6 prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary prose-strong:text-foreground prose-code:text-primary prose-li:text-foreground"
+              v-html="skillContentHtml"
             />
           </section>
 

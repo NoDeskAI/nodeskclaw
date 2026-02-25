@@ -20,6 +20,7 @@ import {
   Layers,
   Check,
 } from 'lucide-vue-next'
+import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem } from '@/stores/gene'
 import api from '@/services/api'
@@ -31,6 +32,18 @@ const store = useGeneStore()
 const genomeId = computed(() => route.params.id as string)
 const genome = computed(() => store.currentGenome)
 const geneMap = ref<Record<string, GeneItem>>({})
+const activeGeneTab = ref<string>('')
+
+const activeGeneContentHtml = computed(() => {
+  const gene = geneMap.value[activeGeneTab.value]
+  const content = (gene?.manifest as Record<string, any>)?.skill?.content
+  if (!content) return ''
+  return marked(content) as string
+})
+
+const activeGeneDescription = computed(() => {
+  return geneMap.value[activeGeneTab.value]?.description ?? ''
+})
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -76,7 +89,8 @@ async function fetchGenesForSlugs(slugs: string[]) {
 async function onMount() {
   await store.fetchGenome(genomeId.value)
   if (genome.value?.gene_slugs?.length) {
-    fetchGenesForSlugs(genome.value.gene_slugs)
+    activeGeneTab.value = genome.value.gene_slugs[0]
+    await fetchGenesForSlugs(genome.value.gene_slugs)
   }
 }
 
@@ -138,23 +152,44 @@ function goToGene(slug: string) {
           </section>
 
           <section v-if="genome.gene_slugs?.length" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">包含基因</h2>
-            <div class="flex flex-wrap gap-3">
-              <div
+            <h2 class="text-lg font-semibold mb-4">包含基因</h2>
+            <!-- Tab 栏 -->
+            <div class="flex gap-0 border-b border-border mb-0 overflow-x-auto">
+              <button
                 v-for="slug in genome.gene_slugs"
                 :key="slug"
                 :class="[
-                  'px-4 py-3 rounded-xl border border-border bg-card transition',
-                  geneMap[slug]
-                    ? 'hover:border-primary/30 cursor-pointer'
-                    : '',
+                  'shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
+                  activeGeneTab === slug
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
                 ]"
-                @click="goToGene(slug)"
+                @click="activeGeneTab = slug"
               >
-                <div class="font-medium">{{ geneMap[slug]?.name ?? slug }}</div>
-                <p v-if="geneMap[slug]?.short_description" class="text-xs text-muted-foreground mt-1 line-clamp-2">
-                  {{ geneMap[slug].short_description }}
-                </p>
+                {{ geneMap[slug]?.name ?? slug }}
+              </button>
+            </div>
+            <!-- Tab 内容 -->
+            <div class="rounded-b-xl border border-t-0 border-border bg-card p-6">
+              <div v-if="activeGeneDescription" class="text-sm text-muted-foreground mb-4">
+                {{ activeGeneDescription }}
+              </div>
+              <div v-if="activeGeneContentHtml" class="flex items-center gap-2 mb-3">
+                <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">SKILL.md</span>
+                <button
+                  class="text-xs text-primary hover:underline"
+                  @click="goToGene(activeGeneTab)"
+                >
+                  查看详情
+                </button>
+              </div>
+              <div
+                v-if="activeGeneContentHtml"
+                class="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary prose-strong:text-foreground prose-code:text-primary prose-li:text-foreground"
+                v-html="activeGeneContentHtml"
+              />
+              <div v-else class="py-8 text-center text-sm text-muted-foreground">
+                暂无基因内容
               </div>
             </div>
           </section>
