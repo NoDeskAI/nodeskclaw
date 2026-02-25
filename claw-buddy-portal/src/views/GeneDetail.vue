@@ -23,6 +23,8 @@ import {
   Trash2,
   AlertTriangle,
   FileText,
+  Copy,
+  Check,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
@@ -96,9 +98,17 @@ const skillContentRaw = computed(() => {
   return (gene.value?.manifest as Record<string, any>)?.skill?.content ?? ''
 })
 
+function stripFrontmatter(content: string): string {
+  const trimmed = content.trimStart()
+  if (!trimmed.startsWith('---')) return content
+  const closing = trimmed.indexOf('---', 3)
+  if (closing === -1) return content
+  return trimmed.slice(closing + 3).trimStart()
+}
+
 const skillContentHtml = computed(() => {
   if (!skillContentRaw.value) return ''
-  return marked(skillContentRaw.value) as string
+  return marked(stripFrontmatter(skillContentRaw.value)) as string
 })
 
 const contentViewMode = ref<'rendered' | 'source'>('rendered')
@@ -159,6 +169,15 @@ function openInstallDialog() {
 
 function closeInstallDialog() {
   installDialogOpen.value = false
+}
+
+const copiedSlug = ref<string | null>(null)
+async function copySlug(slug: string) {
+  try {
+    await navigator.clipboard.writeText(slug)
+    copiedSlug.value = slug
+    setTimeout(() => { copiedSlug.value = null }, 1500)
+  } catch { /* ignore */ }
 }
 
 function selectInstance(instanceId: string) {
@@ -467,7 +486,19 @@ async function confirmForgetFromDetail() {
                     />
                     <div class="flex items-center gap-2 min-w-0 flex-1">
                       <span class="font-medium text-sm truncate">{{ inst.name }}</span>
-                      <span v-if="inst.slug" class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{{ inst.slug }}</span>
+                      <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
+                        <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
+                        <button
+                          class="ml-0.5 p-0.5 rounded opacity-0 group-hover/slug:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                          @click.stop="copySlug(inst.slug)"
+                        >
+                          <Check v-if="copiedSlug === inst.slug" class="w-3 h-3 text-emerald-500" />
+                          <Copy v-else class="w-3 h-3" />
+                        </button>
+                        <div class="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 rounded bg-popover border border-border text-xs text-popover-foreground shadow-md whitespace-nowrap opacity-0 group-hover/slug:opacity-100 transition-opacity pointer-events-none z-10">
+                          {{ inst.slug }}
+                        </div>
+                      </div>
                     </div>
                     <span
                       :class="[
@@ -495,7 +526,19 @@ async function confirmForgetFromDetail() {
                     />
                     <div class="flex items-center gap-2 min-w-0 flex-1">
                       <span class="font-medium text-sm truncate">{{ inst.name }}</span>
-                      <span v-if="inst.slug" class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{{ inst.slug }}</span>
+                      <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
+                        <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
+                        <button
+                          class="ml-0.5 p-0.5 rounded opacity-0 group-hover/slug:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                          @click.stop="copySlug(inst.slug)"
+                        >
+                          <Check v-if="copiedSlug === inst.slug" class="w-3 h-3 text-emerald-500" />
+                          <Copy v-else class="w-3 h-3" />
+                        </button>
+                        <div class="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 rounded bg-popover border border-border text-xs text-popover-foreground shadow-md whitespace-nowrap opacity-0 group-hover/slug:opacity-100 transition-opacity pointer-events-none z-10">
+                          {{ inst.slug }}
+                        </div>
+                      </div>
                     </div>
                     <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
                       已学习
