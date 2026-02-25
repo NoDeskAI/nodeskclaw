@@ -464,6 +464,75 @@ async def lifespan(app: FastAPI):
         gene_result = await db.execute(select(Gene).limit(1))
         if gene_result.scalar_one_or_none() is None:
             import json as _json
+
+            _meta_learning_content = (
+                "---\n"
+                "name: meta-learning\n"
+                "description: Agent learning meta-skill that evaluates gene content and decides between direct install or deep learning. Handles social gene recommendations in workspace chat.\n"
+                "metadata:\n"
+                '  { "openclaw": { "always": true } }\n'
+                "---\n\n"
+                "# Meta-Learning\n\n"
+                "## Learning Ability\n\n"
+                "You can learn new skills/genes. When presented with a gene to learn:\n\n"
+                "1. Evaluate content complexity and your existing knowledge\n"
+                "2. Decide: direct install (simple, already understood) or deep learn (complex, novel)\n"
+                "3. If deep learning: study the content, practice with provided scenarios, generate your personalized version\n"
+                "4. Self-evaluate understanding (0.0-1.0 score)\n\n"
+                "## SKILL.md Frontmatter Standard\n\n"
+                "When you deep-learn a gene or create a new skill, your output SKILL.md MUST begin with YAML frontmatter.\n"
+                "OpenClaw uses this frontmatter to discover and configure skills.\n\n"
+                "### Format\n\n"
+                "```yaml\n"
+                "---\n"
+                "name: skill-name\n"
+                "description: One-line description of what the skill does and when to use it.\n"
+                "metadata:\n"
+                '  { "openclaw": { "always": true } }\n'
+                "---\n"
+                "```\n\n"
+                "### Required fields\n\n"
+                "- `name`: kebab-case identifier matching the skill directory name\n"
+                "- `description`: concise description including trigger words if user-invocable\n\n"
+                "### Optional metadata fields (under metadata.openclaw)\n\n"
+                "- `always: true` -- skill is always active regardless of runtime requirements\n"
+                '- `requires.bins: ["cmd"]` -- require specific binaries\n'
+                '- `requires.env: ["API_KEY"]` -- require specific environment variables\n'
+                "- `emoji` -- display emoji for the skill\n\n"
+                "### Example\n\n"
+                "```yaml\n"
+                "---\n"
+                "name: code-review\n"
+                "description: Systematic code review covering security, performance, and maintainability.\n"
+                "metadata:\n"
+                '  { "openclaw": { "always": true } }\n'
+                "---\n\n"
+                "# Code Review\n"
+                "(skill content here)\n"
+                "```\n\n"
+                "### Rules\n\n"
+                "- NEVER output a SKILL.md without frontmatter\n"
+                "- Set `always: true` for behavioral/personality skills that should always be active\n"
+                "- Set `requires` only when the skill depends on external tools or env vars\n\n"
+                "## Social Gene Recommendation\n\n"
+                "When you join a workspace or during ongoing collaboration:\n\n"
+                "1. Analyze the workspace team goals (from workspace description)\n"
+                "2. Review the current team members' installed genes and capabilities\n"
+                "3. Identify missing capabilities that would benefit the team\n"
+                "4. Recommend specific genes to one or more agents (including yourself) via group chat\n"
+                "5. Format: '@AgentName I recommend you learn the `gene-slug` gene because [reason based on team goals]'\n\n"
+                "## Responding to Recommendations\n\n"
+                "When another agent recommends a gene to you in chat:\n\n"
+                "1. Evaluate whether the recommendation aligns with your role and team goals\n"
+                "2. If relevant, express acceptance and the gene will be auto-installed via the learning channel\n"
+                "3. If not relevant, explain why and suggest alternatives\n\n"
+                "## Periodic Self-Evaluation\n\n"
+                "After learning a gene and using it in practice:\n\n"
+                "1. Periodically assess how much the gene improved your capabilities (every ~10 interactions)\n"
+                "2. Report self-evaluation scores through the learning channel\n"
+                "3. If a gene is no longer useful, recommend removal"
+            )
+
             seed_genes = [
                 Gene(
                     name="Meta-Learning", slug="meta-learning",
@@ -472,7 +541,7 @@ async def lifespan(app: FastAPI):
                     category="效率", tags=_json.dumps(["能力"]),
                     source="official", icon="GraduationCap", version="1.0.0",
                     manifest=_json.dumps({
-                        "skill": {"name": "meta-learning", "content": "# Meta-Learning\n\nalways: true\n\n## Learning Ability\n\nYou can learn new skills/genes. When presented with a gene to learn:\n\n1. Evaluate content complexity and your existing knowledge\n2. Decide: direct install (simple, already understood) or deep learn (complex, novel)\n3. If deep learning: study the content, practice with provided scenarios, generate your personalized version\n4. Self-evaluate understanding (0.0-1.0 score)\n\n## Social Gene Recommendation\n\nWhen you join a workspace or during ongoing collaboration:\n\n1. Analyze the workspace team goals (from workspace description)\n2. Review the current team members' installed genes and capabilities\n3. Identify missing capabilities that would benefit the team\n4. Recommend specific genes to one or more agents (including yourself) via group chat\n5. Format: '@AgentName I recommend you learn the `gene-slug` gene because [reason based on team goals]'\n\n## Responding to Recommendations\n\nWhen another agent recommends a gene to you in chat:\n\n1. Evaluate whether the recommendation aligns with your role and team goals\n2. If relevant, express acceptance and the gene will be auto-installed via the learning channel\n3. If not relevant, explain why and suggest alternatives\n\n## Periodic Self-Evaluation\n\nAfter learning a gene and using it in practice:\n\n1. Periodically assess how much the gene improved your capabilities (every ~10 interactions)\n2. Report self-evaluation scores through the learning channel\n3. If a gene is no longer useful, recommend removal"},
+                        "skill": {"name": "meta-learning", "content": _meta_learning_content},
                     }),
                     is_featured=True, is_published=True,
                 ),
@@ -483,7 +552,7 @@ async def lifespan(app: FastAPI):
                     category="效率", tags=_json.dumps(["能力"]),
                     source="official", icon="Sparkles", version="1.0.0",
                     manifest=_json.dumps({
-                        "skill": {"name": "meta-creation", "content": "# Meta-Creation\n\nYou can create new genes from your work experience. When you accumulate enough expertise in a domain:\n\n1. Identify a reusable methodology or skill\n2. Structure it as a complete gene: SKILL.md content + metadata (tags, category, synergies)\n3. Include learning objectives and scenarios for other agents\n4. Submit for review\n\nYou can also mark gene synergies when you discover that two genes work well together."},
+                        "skill": {"name": "meta-creation", "content": "---\nname: meta-creation\ndescription: Create new genes from work experience. Identify reusable methodologies, structure them as complete gene packages with SKILL.md and metadata.\nmetadata:\n  { \"openclaw\": { \"always\": true } }\n---\n\n# Meta-Creation\n\nYou can create new genes from your work experience. When you accumulate enough expertise in a domain:\n\n1. Identify a reusable methodology or skill\n2. Structure it as a complete gene: SKILL.md content + metadata (tags, category, synergies)\n3. Include learning objectives and scenarios for other agents\n4. Submit for review\n\nYou can also mark gene synergies when you discover that two genes work well together."},
                     }),
                     synergies=_json.dumps(["meta-learning"]),
                     is_featured=True, is_published=True,
@@ -495,7 +564,7 @@ async def lifespan(app: FastAPI):
                     category="开发", tags=_json.dumps(["能力"]),
                     source="official", icon="FileSearch", version="1.0.0",
                     manifest=_json.dumps({
-                        "skill": {"name": "code-review", "content": "# Code Review\n\nWhen reviewing code, follow this systematic approach:\n\n1. **Security**: Check for injection, auth bypass, data exposure\n2. **Performance**: Identify N+1 queries, memory leaks, unnecessary computation\n3. **Maintainability**: Assess naming, structure, test coverage\n4. **Best Practices**: Language-specific idioms, design patterns"},
+                        "skill": {"name": "code-review", "content": "---\nname: code-review\ndescription: Systematic code review covering security, performance, maintainability, and best practices. Use when reviewing PRs or auditing codebases.\n---\n\n# Code Review\n\nWhen reviewing code, follow this systematic approach:\n\n1. **Security**: Check for injection, auth bypass, data exposure\n2. **Performance**: Identify N+1 queries, memory leaks, unnecessary computation\n3. **Maintainability**: Assess naming, structure, test coverage\n4. **Best Practices**: Language-specific idioms, design patterns"},
                         "learning": {
                             "objectives": ["掌握系统化代码审查流程", "识别常见安全漏洞"],
                             "scenarios": [{"prompt": "审查一个包含 SQL 拼接的 Python 函数", "context": "Web API 端点", "expected_focus": ["SQL 注入", "参数化查询"]}],
@@ -511,7 +580,7 @@ async def lifespan(app: FastAPI):
                     category="效率", tags=_json.dumps(["性格"]),
                     source="official", icon="Brain", version="1.0.0",
                     manifest=_json.dumps({
-                        "skill": {"name": "analytical-thinking", "content": "# Analytical Thinking\n\nalways: true\n\nApproach every problem systematically:\n1. Decompose into sub-problems\n2. Identify assumptions and constraints\n3. Reason step by step\n4. Validate conclusions against evidence\n5. Consider edge cases and failure modes"},
+                        "skill": {"name": "analytical-thinking", "content": "---\nname: analytical-thinking\ndescription: Structured analytical thinking pattern. Decompose problems, reason step by step, validate conclusions.\nmetadata:\n  { \"openclaw\": { \"always\": true } }\n---\n\n# Analytical Thinking\n\nApproach every problem systematically:\n1. Decompose into sub-problems\n2. Identify assumptions and constraints\n3. Reason step by step\n4. Validate conclusions against evidence\n5. Consider edge cases and failure modes"},
                     }),
                     is_featured=True, is_published=True,
                 ),
@@ -522,7 +591,7 @@ async def lifespan(app: FastAPI):
                     category="安全", tags=_json.dumps(["能力"]),
                     source="official", icon="Shield", version="1.0.0",
                     manifest=_json.dumps({
-                        "skill": {"name": "security-audit", "content": "# Security Audit\n\nSystematically audit code and infrastructure for security vulnerabilities:\n\n- OWASP Top 10 checks\n- Authentication and authorization review\n- Input validation and sanitization\n- Cryptographic best practices\n- Secrets management"},
+                        "skill": {"name": "security-audit", "content": "---\nname: security-audit\ndescription: Security audit capability covering OWASP Top 10, auth review, input validation, crypto best practices, and secrets management.\n---\n\n# Security Audit\n\nSystematically audit code and infrastructure for security vulnerabilities:\n\n- OWASP Top 10 checks\n- Authentication and authorization review\n- Input validation and sanitization\n- Cryptographic best practices\n- Secrets management"},
                         "learning": {
                             "objectives": ["掌握 OWASP Top 10 漏洞识别"],
                             "scenarios": [{"prompt": "审计一个 JWT 认证实现", "context": "Node.js Express API", "expected_focus": ["token 验证", "过期处理", "密钥管理"]}],
