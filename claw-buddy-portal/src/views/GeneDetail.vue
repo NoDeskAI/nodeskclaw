@@ -39,9 +39,23 @@ const synergies = ref<GeneItem[]>([])
 const variants = ref<GeneItem[]>([])
 const parentGenomes = ref<GenomeItem[]>([])
 const installDialogOpen = ref(false)
-const instances = ref<{ id: string; name: string; status: string }[]>([])
+const instances = ref<{ id: string; name: string; slug: string; status: string }[]>([])
 const instancesLoading = ref(false)
 const installedInstanceIds = ref<Set<string>>(new Set())
+
+const statusConfig: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+  running: { label: '运行中', dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  creating: { label: '创建中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  pending: { label: '等待中', dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/40' },
+  deploying: { label: '部署中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  updating: { label: '更新中', dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+  failed: { label: '失败', dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
+  deleting: { label: '删除中', dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' },
+}
+
+function getStatusConfig(status: string) {
+  return statusConfig[status] ?? { label: status, dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' }
+}
 
 const availableInstances = computed(() =>
   instances.value.filter(i => !installedInstanceIds.value.has(i.id))
@@ -122,9 +136,10 @@ function openInstallDialog() {
   installedInstanceIds.value = new Set()
 
   const fetchInstances = api.get('/instances').then((res) => {
-    instances.value = (res.data.data || []).map((i: { id: string; name: string; status: string }) => ({
+    instances.value = (res.data.data || []).map((i: { id: string; name: string; slug: string; status: string }) => ({
       id: i.id,
       name: i.name,
+      slug: i.slug,
       status: i.status,
     }))
   }).catch(() => {
@@ -448,21 +463,20 @@ async function confirmForgetFromDetail() {
                     @click="inst.status === 'running' && selectInstance(inst.id)"
                   >
                     <span
-                      :class="[
-                        'w-2 h-2 rounded-full shrink-0',
-                        inst.status === 'running' ? 'bg-emerald-500' : 'bg-muted-foreground/40',
-                      ]"
+                      :class="['w-2 h-2 rounded-full shrink-0', getStatusConfig(inst.status).dot]"
                     />
-                    <span class="font-medium text-sm truncate flex-1">{{ inst.name }}</span>
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <span class="font-medium text-sm truncate">{{ inst.name }}</span>
+                      <span v-if="inst.slug" class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{{ inst.slug }}</span>
+                    </div>
                     <span
                       :class="[
                         'text-xs shrink-0 px-2 py-0.5 rounded-full',
-                        inst.status === 'running'
-                          ? 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40'
-                          : 'text-muted-foreground bg-muted',
+                        getStatusConfig(inst.status).text,
+                        getStatusConfig(inst.status).bg,
                       ]"
                     >
-                      {{ inst.status === 'running' ? '运行中' : inst.status }}
+                      {{ getStatusConfig(inst.status).label }}
                     </span>
                   </button>
                 </div>
@@ -474,10 +488,15 @@ async function confirmForgetFromDetail() {
                   <div
                     v-for="inst in installedInstances"
                     :key="inst.id"
-                    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-muted/20 text-muted-foreground"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-muted/20"
                   >
-                    <span class="w-2 h-2 rounded-full shrink-0 bg-muted-foreground/30" />
-                    <span class="font-medium text-sm truncate flex-1">{{ inst.name }}</span>
+                    <span
+                      :class="['w-2 h-2 rounded-full shrink-0', getStatusConfig(inst.status).dot]"
+                    />
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <span class="font-medium text-sm truncate">{{ inst.name }}</span>
+                      <span v-if="inst.slug" class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{{ inst.slug }}</span>
+                    </div>
                     <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
                       已学习
                     </span>
