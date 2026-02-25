@@ -203,7 +203,10 @@ async def _invoke_target_agent(
     flushed = False
 
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
+            timeout=120,
+        ) as client:
             async with client.stream(
                 "POST",
                 f"{base_url}/v1/chat/completions",

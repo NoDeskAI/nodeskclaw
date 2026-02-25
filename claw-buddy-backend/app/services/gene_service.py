@@ -556,7 +556,10 @@ async def _send_learning_task(
             return
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
+                timeout=30,
+            ) as client:
                 resp = await client.post(f"{plugin_url}/webhook", json=payload)
                 resp.raise_for_status()
             logger.info("Learning task sent for gene %s on %s", gene.slug, instance.id)
@@ -1038,7 +1041,10 @@ async def trigger_gene_creation(
         raise AppException(400, "实例未配置 Learning Plugin")
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
+            timeout=30,
+        ) as client:
             resp = await client.post(f"{plugin_url}/webhook", json=payload)
             resp.raise_for_status()
     except Exception as e:

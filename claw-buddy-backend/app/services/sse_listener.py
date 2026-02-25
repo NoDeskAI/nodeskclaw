@@ -134,8 +134,8 @@ class SSEListenerManager:
             except Exception as e:
                 self._set_healthy(instance_id, False)
                 logger.warning(
-                    "SSE connection lost for %s: %s (reconnect in %.0fs)",
-                    instance_id, e, backoff,
+                    "SSE connection lost for %s: %s: %s (reconnect in %.0fs)",
+                    instance_id, type(e).__name__, e or "(no detail)", backoff,
                 )
 
             if stop_event.is_set():
@@ -154,8 +154,11 @@ class SSEListenerManager:
         last_event_time = time.monotonic()
 
         async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(
+                verify=False,
+                local_address="0.0.0.0",
+            ),
             timeout=httpx.Timeout(connect=10, read=HEARTBEAT_TIMEOUT_S + 10, write=10, pool=10),
-            verify=False,
         ) as client:
             async with client.stream("GET", url) as resp:
                 if resp.status_code != 200:
