@@ -1,10 +1,35 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, inject, type ComputedRef } from 'vue'
+import { ref, computed, watch, onMounted, inject, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
+import {
+  Loader2,
+  Package,
+  ExternalLink,
+  Trash2,
+  Upload,
+  Sparkles,
+  X,
+  AlertTriangle,
+  RefreshCw,
+  Search,
+  Star,
+  Download,
+  Code,
+  Database,
+  Cpu,
+  Server,
+  Shield,
+  Zap,
+  Wrench,
+  Palette,
+  MessageSquare,
+  Network,
+  Layers,
+} from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
-import type { InstanceGeneItem } from '@/stores/gene'
+import type { InstanceGeneItem, GeneItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
+import api from '@/services/api'
 
 const router = useRouter()
 const toast = useToast()
@@ -129,6 +154,97 @@ async function handleCreate() {
   }
 }
 
+const learnDialogOpen = ref(false)
+const marketGenes = ref<GeneItem[]>([])
+const marketLoading = ref(false)
+const marketKeyword = ref('')
+const marketPage = ref(1)
+const marketTotal = ref(0)
+const learningSlug = ref<string | null>(null)
+const marketPageSize = 12
+const marketTotalPages = computed(() => Math.ceil(marketTotal.value / marketPageSize) || 1)
+
+const instanceGeneStatusMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const ig of instanceGenes.value) {
+    if (ig.gene?.slug) map.set(ig.gene.slug, ig.status)
+  }
+  return map
+})
+
+const iconMap: Record<string, typeof Package> = {
+  code: Code, database: Database, cpu: Cpu, server: Server, shield: Shield,
+  zap: Zap, wrench: Wrench, palette: Palette, message: MessageSquare,
+  network: Network, sparkles: Sparkles, layers: Layers, package: Package,
+}
+
+function resolveIcon(iconName?: string) {
+  if (!iconName) return Package
+  const key = iconName.toLowerCase().replace(/[- ]/g, '')
+  return iconMap[key] ?? iconMap[iconName] ?? Package
+}
+
+async function fetchMarketGenes() {
+  marketLoading.value = true
+  try {
+    const res = await api.get('/genes', {
+      params: {
+        keyword: marketKeyword.value || undefined,
+        page: marketPage.value,
+        page_size: marketPageSize,
+        sort: 'popularity',
+      },
+    })
+    marketGenes.value = res.data.data || []
+    marketTotal.value = res.data.pagination?.total || 0
+  } catch {
+    marketGenes.value = []
+  } finally {
+    marketLoading.value = false
+  }
+}
+
+function openLearnDialog() {
+  learnDialogOpen.value = true
+  marketKeyword.value = ''
+  marketPage.value = 1
+  fetchMarketGenes()
+}
+
+let marketKeywordTimer: ReturnType<typeof setTimeout> | null = null
+watch(marketKeyword, () => {
+  if (marketKeywordTimer) clearTimeout(marketKeywordTimer)
+  marketKeywordTimer = setTimeout(() => {
+    marketPage.value = 1
+    fetchMarketGenes()
+  }, 300)
+})
+
+watch(marketPage, () => {
+  if (learnDialogOpen.value) fetchMarketGenes()
+})
+
+const learnableRetryStatuses = new Set(['failed', 'learn_failed', 'forget_failed'])
+
+function canLearnGene(slug: string): boolean {
+  const status = instanceGeneStatusMap.value.get(slug)
+  if (!status) return true
+  return learnableRetryStatuses.has(status)
+}
+
+async function handleLearn(gene: GeneItem) {
+  learningSlug.value = gene.slug
+  try {
+    await store.installGene(instanceId.value, gene.slug)
+    await store.fetchInstanceGenes(instanceId.value)
+    toast.success(`已提交学习: ${gene.name}`)
+  } catch {
+    toast.error('学习失败')
+  } finally {
+    learningSlug.value = null
+  }
+}
+
 onMounted(() => {
   store.fetchInstanceGenes(instanceId.value)
 })
@@ -148,6 +264,13 @@ onMounted(() => {
         </button>
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          @click="openLearnDialog"
+        >
+          <Download class="w-4 h-4" />
+          学习基因
+        </button>
+        <button
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
           @click="openCreateDialog"
         >
           <Sparkles class="w-4 h-4" />
@@ -163,13 +286,22 @@ onMounted(() => {
     <div v-else-if="instanceGenes.length === 0" class="rounded-xl border border-dashed border-border py-16 text-center text-muted-foreground">
       <Package class="w-12 h-12 mx-auto mb-4 opacity-50" />
       <p class="text-sm">暂无已学习基因</p>
-      <button
-        class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        @click="goToMarket"
-      >
-        <ExternalLink class="w-4 h-4" />
-        浏览市场
-      </button>
+      <div class="mt-4 flex items-center justify-center gap-2">
+        <button
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          @click="openLearnDialog"
+        >
+          <Download class="w-4 h-4" />
+          学习基因
+        </button>
+        <button
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
+          @click="goToMarket"
+        >
+          <ExternalLink class="w-4 h-4" />
+          浏览市场
+        </button>
+      </div>
     </div>
 
     <div v-else class="space-y-3">
@@ -345,6 +477,119 @@ onMounted(() => {
           >
             <Loader2 v-if="creating" class="w-4 h-4 animate-spin inline mr-1" />
             提交
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Learn Gene Dialog -->
+    <div
+      v-if="learnDialogOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="learnDialogOpen = false"
+    >
+      <div class="bg-card rounded-xl border border-border shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        <div class="shrink-0 flex items-center justify-between px-6 pt-6 pb-4">
+          <h3 class="text-lg font-semibold">学习基因</h3>
+          <button class="text-muted-foreground hover:text-foreground" @click="learnDialogOpen = false">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="shrink-0 px-6 pb-4">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              v-model="marketKeyword"
+              type="text"
+              placeholder="搜索基因..."
+              class="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-y-auto px-6">
+          <div v-if="marketLoading" class="flex justify-center py-12">
+            <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="marketGenes.length === 0" class="py-12 text-center text-muted-foreground text-sm">
+            暂无匹配基因
+          </div>
+          <div v-else class="space-y-2 pb-2">
+            <div
+              v-for="gene in marketGenes"
+              :key="gene.id"
+              class="p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
+            >
+              <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <component :is="resolveIcon(gene.icon)" class="w-4 h-4 text-primary" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-medium text-sm">{{ gene.name }}</span>
+                    <span class="text-xs text-muted-foreground">{{ gene.slug }}</span>
+                    <span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">v{{ gene.version }}</span>
+                  </div>
+                  <p v-if="gene.short_description || gene.description" class="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                    {{ gene.short_description ?? gene.description }}
+                  </p>
+                  <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <span
+                      v-for="tag in (gene.tags || []).slice(0, 3)"
+                      :key="tag"
+                      class="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary"
+                    >
+                      {{ tag }}
+                    </span>
+                    <span class="flex items-center gap-0.5 text-xs text-muted-foreground">
+                      <Star class="w-3 h-3 fill-amber-400 text-amber-400" />
+                      {{ (gene.avg_rating ?? 0).toFixed(1) }}
+                    </span>
+                  </div>
+                </div>
+                <div class="shrink-0 mt-0.5">
+                  <button
+                    v-if="canLearnGene(gene.slug)"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    :disabled="learningSlug === gene.slug"
+                    @click="handleLearn(gene)"
+                  >
+                    <Loader2 v-if="learningSlug === gene.slug" class="w-3.5 h-3.5 animate-spin" />
+                    <Download v-else class="w-3.5 h-3.5" />
+                    学习
+                  </button>
+                  <span
+                    v-else
+                    class="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs"
+                    :class="getStatusClass(instanceGeneStatusMap.get(gene.slug)!)"
+                  >
+                    {{ getStatusLabel(instanceGeneStatusMap.get(gene.slug)!) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="!marketLoading && marketTotalPages > 1"
+          class="shrink-0 flex items-center justify-center gap-2 px-6 py-3 border-t border-border"
+        >
+          <button
+            :disabled="marketPage <= 1"
+            :class="['px-3 py-1 rounded-lg text-sm transition-colors', marketPage > 1 ? 'hover:bg-muted' : 'text-muted-foreground cursor-not-allowed']"
+            @click="marketPage = Math.max(1, marketPage - 1)"
+          >
+            上一页
+          </button>
+          <span class="text-sm text-muted-foreground">{{ marketPage }} / {{ marketTotalPages }}</span>
+          <button
+            :disabled="marketPage >= marketTotalPages"
+            :class="['px-3 py-1 rounded-lg text-sm transition-colors', marketPage < marketTotalPages ? 'hover:bg-muted' : 'text-muted-foreground cursor-not-allowed']"
+            @click="marketPage = Math.min(marketTotalPages, marketPage + 1)"
+          >
+            下一页
           </button>
         </div>
       </div>
