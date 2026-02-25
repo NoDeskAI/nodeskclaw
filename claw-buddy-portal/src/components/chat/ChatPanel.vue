@@ -399,7 +399,7 @@ const editor = useEditor({
   ],
   editorProps: {
     attributes: {
-      class: 'chat-editor-content',
+      class: 'chat-editor-content scrollbar-compact',
     },
   },
   onUpdate: ({ editor: ed }) => {
@@ -734,19 +734,6 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
   outline: none;
   font-size: 0.875rem;
   line-height: 1.5;
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) hsl(var(--border) / 0.3);
-}
-
-.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar) {
-  width: 4px;
-}
-.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-track) {
-  background: hsl(var(--border) / 0.3);
-}
-.tiptap-editor :deep(.ProseMirror::-webkit-scrollbar-thumb) {
-  background: hsl(var(--border));
-  border-radius: 2px;
 }
 
 .tiptap-editor :deep(.ProseMirror p) {
@@ -834,19 +821,6 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 
 .messages-scroll {
   overflow-y: scroll;
-}
-.messages-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.messages-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.messages-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 3px;
-}
-.messages-scroll::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--foreground) 30%, transparent);
 }
 
 .chat-markdown :deep(p) { margin: 0.25em 0; }

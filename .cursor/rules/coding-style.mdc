@@ -368,6 +368,22 @@ docker build -t my-image:latest .
 3. 确认新文件已加入列表
 4. 如果遗漏，立即补上
 
+## 滚动条样式规则
+
+**禁止在组件内自定义滚动条样式。** 全局样式已在 `globals.css` 中统一定义。
+
+### 必须做
+
+- 使用 Tailwind 的 `overflow-y-auto` / `overflow-x-auto` 即可，全局样式自动生效
+- 输入框等紧凑场景使用 `.scrollbar-compact` 类
+- 需要滚动条始终可见时使用 `overflow-y-scroll`
+
+### 严禁
+
+- 在组件 `<style>` 中写 `::-webkit-scrollbar` 相关样式
+- 在组件中写 `scrollbar-width` / `scrollbar-color`
+- 使用 Tailwind 的 `scrollbar-thin` 等第三方插件类
+
 ## 变更规模判断规则
 
 **当需要改动的内容涉及 ≥1 个独立功能点时，必须提示用户进入 Plan 模式。**

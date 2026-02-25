@@ -247,7 +247,7 @@ function goToGenome(id: string) {
       <template v-else>
         <section v-if="hasFeatured" class="mb-8">
           <h2 class="text-lg font-semibold mb-4">精选</h2>
-          <div class="flex gap-4 overflow-x-auto pb-2 -mx-1 scrollbar-thin">
+          <div class="flex gap-4 overflow-x-auto pb-2 -mx-1">
             <div
               v-for="item in featuredItems"
               :key="item.id"
