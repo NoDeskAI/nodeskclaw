@@ -94,4 +94,11 @@
   .scrollbar-compact::-webkit-scrollbar-thumb:hover {
     background: color-mix(in srgb, var(--foreground) 30%, transparent);
   }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }

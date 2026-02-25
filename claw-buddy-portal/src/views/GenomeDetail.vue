@@ -167,7 +167,7 @@ function goToGene(slug: string) {
           <section v-if="genome.gene_slugs?.length" class="mb-8">
             <h2 class="text-lg font-semibold mb-4">包含基因</h2>
             <!-- Tab 栏 -->
-            <div class="flex gap-0 border-b border-border mb-0 overflow-x-auto">
+            <div class="flex gap-0 border-b border-border mb-0 overflow-x-auto scrollbar-none">
               <button
                 v-for="slug in genome.gene_slugs"
                 :key="slug"
