@@ -38,6 +38,7 @@ const parentGenomes = ref<GenomeItem[]>([])
 const installDialogOpen = ref(false)
 const instances = ref<{ id: string; name: string; status: string }[]>([])
 const instancesLoading = ref(false)
+const installedInstanceIds = ref<Set<string>>(new Set())
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -92,21 +93,27 @@ function goToGene(id: string) {
 function openInstallDialog() {
   installDialogOpen.value = true
   instancesLoading.value = true
-  api
-    .get('/instances')
-    .then((res) => {
-      instances.value = (res.data.data || []).map((i: { id: string; name: string; status: string }) => ({
-        id: i.id,
-        name: i.name,
-        status: i.status,
-      }))
-    })
-    .catch(() => {
-      instances.value = []
-    })
-    .finally(() => {
-      instancesLoading.value = false
-    })
+  installedInstanceIds.value = new Set()
+
+  const fetchInstances = api.get('/instances').then((res) => {
+    instances.value = (res.data.data || []).map((i: { id: string; name: string; status: string }) => ({
+      id: i.id,
+      name: i.name,
+      status: i.status,
+    }))
+  }).catch(() => {
+    instances.value = []
+  })
+
+  const fetchInstalled = api.get(`/genes/${geneId.value}/installed-instances`).then((res) => {
+    installedInstanceIds.value = new Set(res.data.data || [])
+  }).catch(() => {
+    installedInstanceIds.value = new Set()
+  })
+
+  Promise.all([fetchInstances, fetchInstalled]).finally(() => {
+    instancesLoading.value = false
+  })
 }
 
 function closeInstallDialog() {
@@ -322,17 +329,22 @@ function selectInstance(instanceId: string) {
             <button
               v-for="inst in instances"
               :key="inst.id"
-              :disabled="inst.status !== 'running'"
+              :disabled="inst.status !== 'running' || installedInstanceIds.has(inst.id)"
               :class="[
                 'w-full flex items-center justify-between px-4 py-3 rounded-lg border transition text-left',
-                inst.status === 'running'
-                  ? 'border-border bg-background hover:border-primary/30 cursor-pointer'
-                  : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed',
+                installedInstanceIds.has(inst.id)
+                  ? 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed'
+                  : inst.status === 'running'
+                    ? 'border-border bg-background hover:border-primary/30 cursor-pointer'
+                    : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed',
               ]"
-              @click="inst.status === 'running' && selectInstance(inst.id)"
+              @click="inst.status === 'running' && !installedInstanceIds.has(inst.id) && selectInstance(inst.id)"
             >
               <span class="font-medium truncate">{{ inst.name }}</span>
-              <span class="text-xs shrink-0 ml-2">{{ inst.status === 'running' ? '运行中' : inst.status }}</span>
+              <span v-if="installedInstanceIds.has(inst.id)" class="text-xs shrink-0 ml-2 px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                已安装
+              </span>
+              <span v-else class="text-xs shrink-0 ml-2">{{ inst.status === 'running' ? '运行中' : inst.status }}</span>
             </button>
             <p v-if="!instancesLoading && instances.length === 0" class="text-sm text-muted-foreground py-4 text-center">
               暂无可用实例

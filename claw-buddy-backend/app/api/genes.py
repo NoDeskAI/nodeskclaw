@@ -111,6 +111,16 @@ async def gene_genomes(
     return ApiResponse(data=data)
 
 
+@router.get("/genes/{gene_id}/installed-instances")
+async def gene_installed_instances(
+    gene_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    ids = await gene_service.get_gene_installed_instance_ids(db, gene_id)
+    return ApiResponse(data=ids)
+
+
 @router.post("/genes/{gene_id}/rate")
 async def rate_gene(
     gene_id: str,

@@ -400,6 +400,18 @@ async def get_instance_genes(db: AsyncSession, instance_id: str) -> list[dict]:
     return items
 
 
+async def get_gene_installed_instance_ids(db: AsyncSession, gene_id: str) -> list[str]:
+    """Return instance IDs where this gene is currently installed."""
+    result = await db.execute(
+        select(InstanceGene.instance_id).where(
+            InstanceGene.gene_id == gene_id,
+            InstanceGene.status == InstanceGeneStatus.installed,
+            not_deleted(InstanceGene),
+        )
+    )
+    return [row[0] for row in result.all()]
+
+
 async def _has_meta_learning(db: AsyncSession, instance_id: str) -> bool:
     """Check if instance has meta-learning gene installed."""
     result = await db.execute(
