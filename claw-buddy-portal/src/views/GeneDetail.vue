@@ -98,17 +98,24 @@ const skillContentRaw = computed(() => {
   return (gene.value?.manifest as Record<string, any>)?.skill?.content ?? ''
 })
 
-function stripFrontmatter(content: string): string {
+function parseFrontmatter(content: string): { fm: string; body: string } {
   const trimmed = content.trimStart()
-  if (!trimmed.startsWith('---')) return content
+  if (!trimmed.startsWith('---')) return { fm: '', body: content }
   const closing = trimmed.indexOf('---', 3)
-  if (closing === -1) return content
-  return trimmed.slice(closing + 3).trimStart()
+  if (closing === -1) return { fm: '', body: content }
+  return {
+    fm: trimmed.slice(3, closing).trim(),
+    body: trimmed.slice(closing + 3).trimStart(),
+  }
 }
 
 const skillContentHtml = computed(() => {
   if (!skillContentRaw.value) return ''
-  return marked(stripFrontmatter(skillContentRaw.value)) as string
+  const { fm, body } = parseFrontmatter(skillContentRaw.value)
+  const fmHtml = fm
+    ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">YAML Frontmatter</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
+    : ''
+  return fmHtml + (marked(body) as string)
 })
 
 const contentViewMode = ref<'rendered' | 'source'>('rendered')
