@@ -41,9 +41,17 @@ const activeGeneContentRaw = computed(() => {
   return (gene?.manifest as Record<string, any>)?.skill?.content ?? ''
 })
 
+function stripFrontmatter(content: string): string {
+  const trimmed = content.trimStart()
+  if (!trimmed.startsWith('---')) return content
+  const closing = trimmed.indexOf('---', 3)
+  if (closing === -1) return content
+  return trimmed.slice(closing + 3).trimStart()
+}
+
 const activeGeneContentHtml = computed(() => {
   if (!activeGeneContentRaw.value) return ''
-  return marked(activeGeneContentRaw.value) as string
+  return marked(stripFrontmatter(activeGeneContentRaw.value)) as string
 })
 
 const activeGeneDescription = computed(() => {
