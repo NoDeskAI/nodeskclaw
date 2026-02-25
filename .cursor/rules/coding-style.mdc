@@ -368,6 +368,24 @@ docker build -t my-image:latest .
 3. 确认新文件已加入列表
 4. 如果遗漏，立即补上
 
+## 按钮光标规则
+
+**全局 CSS 已在 `globals.css` 的 `@layer base` 中为 `button:not(:disabled)` 和 `[role="button"]:not(:disabled)` 设置了 `cursor: pointer`。** 两个前端项目（`claw-buddy-frontend`、`claw-buddy-portal`）均已配置。
+
+### 禁止
+
+- **禁止给 `<button>` 元素手动加 `cursor-pointer` 类** — 全局规则已覆盖，手动添加纯属冗余
+- **禁止在组件 `<style>` 中给 button 写 `cursor: pointer`** — 同上
+
+### 非按钮可点击元素仍需手动处理
+
+全局规则只覆盖 `<button>` 和 `[role="button"]`。以下元素如果可点击，仍需在模板中手动加 `cursor-pointer`：
+
+- 带 `@click` 的 `<div>`、`<span>`、`<li>` 等非语义化按钮元素
+- `<select>` 下拉框
+- `<label>` 标签（用作切换开关等）
+- 带 `@click` 的卡片容器
+
 ## 滚动条样式规则
 
 **禁止在组件内自定义滚动条样式。** 全局样式已在 `globals.css` 中统一定义。

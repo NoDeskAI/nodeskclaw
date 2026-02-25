@@ -597,7 +597,7 @@ async function handleDeploy() {
                 <button
                   v-for="p in unusedProviders"
                   :key="p"
-                  class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
+                  class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors"
                   @click="newProvider = p; addProvider()"
                 >
                   {{ PROVIDER_LABELS[p] || p }}
@@ -626,7 +626,7 @@ async function handleDeploy() {
           </button>
           <button
             v-if="!llmSkipped"
-            class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center cursor-pointer"
+            class="w-full py-2.5 px-4 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors text-center"
             @click="llmSkipped = true; llmConfigs.splice(0); handleDeploy()"
           >
             跳过，稍后配置大模型
