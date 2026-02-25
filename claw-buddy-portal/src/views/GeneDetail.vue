@@ -40,6 +40,13 @@ const instances = ref<{ id: string; name: string; status: string }[]>([])
 const instancesLoading = ref(false)
 const installedInstanceIds = ref<Set<string>>(new Set())
 
+const availableInstances = computed(() =>
+  instances.value.filter(i => !installedInstanceIds.value.has(i.id))
+)
+const installedInstances = computed(() =>
+  instances.value.filter(i => installedInstanceIds.value.has(i.id))
+)
+
 const iconMap: Record<string, typeof Package> = {
   code: Code,
   database: Database,
@@ -325,30 +332,65 @@ function selectInstance(instanceId: string) {
           <div v-if="instancesLoading" class="flex justify-center py-8">
             <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-          <div v-else class="space-y-2 max-h-64 overflow-y-auto">
-            <button
-              v-for="inst in instances"
-              :key="inst.id"
-              :disabled="inst.status !== 'running' || installedInstanceIds.has(inst.id)"
-              :class="[
-                'w-full flex items-center justify-between px-4 py-3 rounded-lg border transition text-left',
-                installedInstanceIds.has(inst.id)
-                  ? 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed'
-                  : inst.status === 'running'
-                    ? 'border-border bg-background hover:border-primary/30 cursor-pointer'
-                    : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed',
-              ]"
-              @click="inst.status === 'running' && !installedInstanceIds.has(inst.id) && selectInstance(inst.id)"
-            >
-              <span class="font-medium truncate">{{ inst.name }}</span>
-              <span v-if="installedInstanceIds.has(inst.id)" class="text-xs shrink-0 ml-2 px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                已安装
-              </span>
-              <span v-else class="text-xs shrink-0 ml-2">{{ inst.status === 'running' ? '运行中' : inst.status }}</span>
-            </button>
-            <p v-if="!instancesLoading && instances.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+          <div v-else class="max-h-72 overflow-y-auto space-y-4">
+            <div v-if="instances.length === 0" class="text-sm text-muted-foreground py-4 text-center">
               暂无可用实例
-            </p>
+            </div>
+            <template v-else>
+              <!-- 可安装 -->
+              <div v-if="availableInstances.length > 0">
+                <p class="text-xs text-muted-foreground mb-2 px-1">可安装</p>
+                <div class="space-y-1.5">
+                  <button
+                    v-for="inst in availableInstances"
+                    :key="inst.id"
+                    :disabled="inst.status !== 'running'"
+                    :class="[
+                      'w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition text-left',
+                      inst.status === 'running'
+                        ? 'border-border bg-background hover:border-emerald-300 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 cursor-pointer'
+                        : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60',
+                    ]"
+                    @click="inst.status === 'running' && selectInstance(inst.id)"
+                  >
+                    <span
+                      :class="[
+                        'w-2 h-2 rounded-full shrink-0',
+                        inst.status === 'running' ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                      ]"
+                    />
+                    <span class="font-medium text-sm truncate flex-1">{{ inst.name }}</span>
+                    <span
+                      :class="[
+                        'text-xs shrink-0 px-2 py-0.5 rounded-full',
+                        inst.status === 'running'
+                          ? 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40'
+                          : 'text-muted-foreground bg-muted',
+                      ]"
+                    >
+                      {{ inst.status === 'running' ? '运行中' : inst.status }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <!-- 已安装 -->
+              <div v-if="installedInstances.length > 0">
+                <p class="text-xs text-muted-foreground mb-2 px-1">已安装</p>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="inst in installedInstances"
+                    :key="inst.id"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-muted/20 text-muted-foreground"
+                  >
+                    <span class="w-2 h-2 rounded-full shrink-0 bg-muted-foreground/30" />
+                    <span class="font-medium text-sm truncate flex-1">{{ inst.name }}</span>
+                    <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
+                      已安装
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>
