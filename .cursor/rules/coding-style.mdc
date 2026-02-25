@@ -143,7 +143,7 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 | 配置加载 | `config/` | `dist/config-*.js` |
 | Session Store（运行时） | — | `/root/.openclaw/agents/main/sessions/sessions.json` |
 
-> 注：`pi-coding-agent` 是 OpenClaw 的依赖包，源码不在本地。相关逻辑（`loadSkillsFromDir`、`formatSkillsForPrompt`、`ResourceLoader`、`PackageManager`）需通过 Pod 上的 `node_modules/@mariozechner/pi-coding-agent/dist/core/` 读取。
+> 注：`pi-coding-agent` 是 OpenClaw 的闭源 NPM 依赖，源码不在本地。相关逻辑（`loadSkillsFromDir`、`formatSkillsForPrompt`、`ResourceLoader`、`PackageManager`、以及 `systemSent` 的读取逻辑）需通过 Pod 上的 `node_modules/@mariozechner/pi-coding-agent/dist/core/` 读取。**搜不到不等于不存在**——OpenClaw 开源代码可能仅定义了类型（如 `SessionEntry.systemSent`），而运行时逻辑在 pi-coding-agent 中。判断某字段"被忽略"前，必须同时搜索开源代码和 dist 文件，或通过实际行为验证（如修改字段后观察 Pod 行为变化）。
 
 ### 必查项
 
@@ -170,6 +170,24 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 - **禁止不查就猜**：不跑 kubectl 就说"应该是 xxx 问题"
 - **禁止只看代码**：代码逻辑正确不代表集群状态正确，必须用 kubectl 拿到第一手证据
 - **禁止省略关键步骤**：不要只查 Pod 状态就下结论，日志和 Events 同样重要
+
+## NFS 路径映射规则
+
+**通过 NFS 挂载操作 Pod 文件时，从文件内容中读出的路径都是容器视角的绝对路径，不能直接在本地使用。**
+
+这个问题已经发生过：`sessions.json` 的 `sessionFile` 存的是 `/root/.openclaw/agents/main/sessions/xxx.jsonl`（Pod 内路径），代码直接 `Path(session_file).exists()` 检查，在本地必然返回 `False`，导致进化通知注入被静默跳过。
+
+### 必须做
+
+- **读到路径字段就问"这是谁的视角"**：容器的、NFS 挂载的、还是本地的？
+- **容器路径必须转换**：从 NFS 文件中读出的绝对路径（如 `/root/.openclaw/xxx`）必须转换为本地 NFS 挂载路径后使用
+- **转换模式**：`local_path = sessions_path.parent / Path(container_path).name`（同目录文件用 name），或 `mount_path / ".openclaw" / container_path.split("/.openclaw/", 1)[-1]`（通用）
+- **涉及文件**：`nfs_mount.py`、`gene_service.py` 中所有 `async with nfs_mount(...)` 上下文内的代码
+
+### 严禁
+
+- **禁止直接使用容器路径**：`Path(entry.get("sessionFile")).exists()` 这种写法在本地永远不通
+- **禁止静默跳过**：路径不存在时至少要 `logger.warning`，不能 `continue` 了事让 bug 隐形
 
 ## 排查问题方法论
 

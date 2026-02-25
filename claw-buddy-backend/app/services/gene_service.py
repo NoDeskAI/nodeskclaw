@@ -660,6 +660,17 @@ def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
     shutil.rmtree(skill_dir, ignore_errors=True)
 
 
+def _write_sessions_json(sessions_path: Path, store: dict) -> None:
+    """Write sessions.json preserving Node.js JSON.stringify compatibility.
+
+    OpenClaw (Node.js) reads this file; we must produce output that round-trips
+    cleanly through both Python json and Node JSON.parse/stringify.
+    """
+    payload = json.dumps(store, indent=2, ensure_ascii=False)
+    json.loads(payload)  # validate round-trip before writing
+    sessions_path.write_text(payload + "\n", encoding="utf-8")
+
+
 def _invalidate_skill_snapshots(mount_path: Path) -> None:
     """Clear cached skillsSnapshot from all OpenClaw sessions.
 
@@ -672,16 +683,15 @@ def _invalidate_skill_snapshots(mount_path: Path) -> None:
     if not sessions_path.exists():
         return
     try:
-        store = json.loads(sessions_path.read_text(encoding="utf-8"))
+        raw = sessions_path.read_text(encoding="utf-8")
+        store = json.loads(raw)
         changed = False
         for key, entry in store.items():
             if isinstance(entry, dict) and "skillsSnapshot" in entry:
                 del entry["skillsSnapshot"]
                 changed = True
         if changed:
-            sessions_path.write_text(
-                json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            _write_sessions_json(sessions_path, store)
             logger.info("Cleared stale skillsSnapshot from %d session(s)", len(store))
     except Exception as e:
         logger.warning("Failed to invalidate skill snapshots: %s", e)
@@ -789,9 +799,7 @@ def _inject_evolution_notification(
             store_changed = True
 
         if store_changed:
-            sessions_path.write_text(
-                json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            _write_sessions_json(sessions_path, store)
             logger.info("Reset systemSent for %d session(s)", sum(
                 1 for v in store.values() if isinstance(v, dict) and v.get("systemSent") is False
             ))
