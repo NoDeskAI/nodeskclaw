@@ -85,6 +85,11 @@ async def _record_evolution(
     db.add(ev)
 
 
+def _has_frontmatter(content: str) -> bool:
+    """Check whether SKILL.md content begins with YAML front matter (``---``)."""
+    return content.lstrip().startswith("---")
+
+
 def _validate_skill_metadata(
     manifest: dict | None,
     short_description: str | None,
@@ -100,7 +105,7 @@ def _validate_skill_metadata(
         return
     skill = manifest["skill"]
     content = skill.get("content", "")
-    if content.lstrip().startswith("---"):
+    if _has_frontmatter(content):
         return
     if not (short_description or description):
         raise BadRequestError(
@@ -615,14 +620,27 @@ async def _send_learning_task(
         callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or ""
         callback_url = f"{callback_base}/api/v1/genes/learning-callback"
 
-        payload = {
+        gene_content = skill.get("content", "")
+        force_deep = not _has_frontmatter(gene_content)
+
+        payload: dict = {
             "mode": "learn",
             "task_id": ig.id,
             "gene_slug": gene.slug,
-            "gene_content": skill.get("content", ""),
+            "gene_content": gene_content,
             "learning": learning,
             "callback_url": callback_url,
+            "force_deep_learn": force_deep,
+            "gene_meta": {
+                "name": gene.name,
+                "description": gene.short_description or gene.description or "",
+                "category": gene.category or "",
+            },
         }
+
+        if force_deep:
+            ig.config_snapshot = _json_dumps({"force_deep_learn": True})
+            await db.commit()
 
         plugin_url = _get_learning_plugin_url(instance)
         if not plugin_url:
@@ -738,7 +756,16 @@ async def handle_learning_callback(
             "reason": payload.reason,
         })
 
+    snapshot = _json_loads(ig_obj.config_snapshot) if ig_obj.config_snapshot else {}
+    was_forced = snapshot.get("force_deep_learn", False) if isinstance(snapshot, dict) else False
+
     if payload.decision == "direct_install":
+        if was_forced:
+            logger.warning(
+                "Agent chose direct_install despite force_deep_learn for gene %s on %s, "
+                "falling back to auto-generated frontmatter install",
+                gene_obj.slug, instance.id,
+            )
         manifest = _json_loads(gene_obj.manifest) or {}
         skill = manifest.get("skill", {})
         gene_desc = gene_obj.short_description or gene_obj.description or ""

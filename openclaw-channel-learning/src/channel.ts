@@ -182,6 +182,10 @@ export function handleWebhook(body: LearningTask): { ok: boolean } {
 }
 
 function buildLearnPrompt(task: LearningTask): string {
+  if (task.force_deep_learn) {
+    return buildForceDeepLearnPrompt(task);
+  }
+
   let prompt = `[Gene Learning Task] task_id: ${task.task_id}\n\n`;
   prompt += `You are asked to learn the gene "${task.gene_slug}".\n\n`;
   prompt += `Gene content:\n\`\`\`\n${task.gene_content}\n\`\`\`\n\n`;
@@ -204,6 +208,53 @@ function buildLearnPrompt(task: LearningTask): string {
   prompt += `2. "learned" - if you processed and personalized the content (include your personalized SKILL.md)\n`;
   prompt += `3. "failed" - if you cannot learn this content\n\n`;
   prompt += `Respond with JSON: { "decision": "...", "content": "personalized SKILL.md if learned", "self_eval": 0.0-1.0, "reason": "..." }\n`;
+  prompt += `Send your response via: send -t learning -to "task:${task.task_id}" -m "your JSON"`;
+
+  return prompt;
+}
+
+function buildForceDeepLearnPrompt(task: LearningTask): string {
+  const meta = task.gene_meta;
+
+  let prompt = `[Gene Deep Learning Task - Frontmatter Required] task_id: ${task.task_id}\n\n`;
+  prompt += `You MUST deep-learn the gene "${task.gene_slug}" and produce a complete SKILL.md.\n\n`;
+  prompt += `This gene is missing YAML frontmatter. You must study the content, internalize it, `;
+  prompt += `and output a complete SKILL.md that includes proper YAML frontmatter.\n\n`;
+
+  prompt += `Original gene content:\n\`\`\`\n${task.gene_content}\n\`\`\`\n\n`;
+
+  if (meta) {
+    prompt += `Reference metadata (use to generate frontmatter):\n`;
+    if (meta.name) prompt += `- Name: ${meta.name}\n`;
+    if (meta.description) prompt += `- Description: ${meta.description}\n`;
+    if (meta.category) prompt += `- Category: ${meta.category}\n`;
+    prompt += `\n`;
+  }
+
+  if (task.learning) {
+    if (task.learning.objectives?.length) {
+      prompt += `Learning objectives:\n${task.learning.objectives.map((o) => `- ${o}`).join("\n")}\n\n`;
+    }
+    if (task.learning.scenarios?.length) {
+      prompt += `Practice scenarios:\n`;
+      for (const s of task.learning.scenarios) {
+        prompt += `- Scenario: ${s.prompt}\n  Context: ${s.context || "N/A"}\n  Focus: ${(s.expected_focus || []).join(", ")}\n`;
+      }
+      prompt += "\n";
+    }
+  }
+
+  prompt += `IMPORTANT: You CANNOT choose "direct_install". You must deep-learn this gene.\n\n`;
+  prompt += `Your output SKILL.md MUST start with YAML frontmatter in this format:\n`;
+  prompt += `\`\`\`\n---\nname: <skill-name>\ndescription: <one-line description>\nmetadata:\n`;
+  prompt += `  { "openclaw": { "always": true } }\n---\n\n<your personalized skill content>\n\`\`\`\n\n`;
+  prompt += `Set "always": true if this skill should always be active. `;
+  prompt += `Add "requires" if the skill needs specific binaries or environment variables.\n\n`;
+
+  prompt += `Decide:\n`;
+  prompt += `1. "learned" - you have studied and personalized the content (REQUIRED: include complete SKILL.md with frontmatter)\n`;
+  prompt += `2. "failed" - you truly cannot learn this content\n\n`;
+  prompt += `Respond with JSON: { "decision": "learned", "content": "your complete SKILL.md with frontmatter", "self_eval": 0.0-1.0, "reason": "..." }\n`;
   prompt += `Send your response via: send -t learning -to "task:${task.task_id}" -m "your JSON"`;
 
   return prompt;

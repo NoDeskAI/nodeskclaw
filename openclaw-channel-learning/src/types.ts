@@ -26,6 +26,14 @@ export interface LearningTask {
     }>;
   };
   creation_prompt?: string;
+  /** When true, Agent must deep-learn and produce a complete SKILL.md with YAML frontmatter. */
+  force_deep_learn?: boolean;
+  /** Reference metadata for the Agent to generate proper frontmatter. */
+  gene_meta?: {
+    name?: string;
+    description?: string;
+    category?: string;
+  };
   /** Agent's personalized learning output (forget mode only). */
   learning_output?: string;
   /** How many times the gene has been used (forget mode only). */
