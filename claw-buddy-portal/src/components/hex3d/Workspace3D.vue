@@ -75,7 +75,7 @@ const hexMeshes = new Map<string, THREE.Group>()
 const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
 
 const STATUS_COLORS_3D: Record<string, number> = {
-  running: 0x4ade80, active: 0x4ade80,
+  running: 0x4ade80, active: 0x4ade80, learning: 0x60a5fa,
   thinking: 0xfbbf24, pending: 0xfbbf24,
   idle: 0x8b8b9e,
   error: 0xf87171, failed: 0xf87171,

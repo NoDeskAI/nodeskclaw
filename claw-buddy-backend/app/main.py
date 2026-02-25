@@ -830,7 +830,7 @@ async def lifespan(app: FastAPI):
         ws_agents = await db.execute(
             select(Instance).where(
                 Instance.workspace_id.isnot(None),
-                Instance.status.in_(["running", "restarting"]),
+                Instance.status.in_(["running", "restarting", "learning"]),
                 Instance.ingress_domain.isnot(None),
                 Instance.deleted_at.is_(None),
             )
@@ -838,9 +838,9 @@ async def lifespan(app: FastAPI):
         instances = ws_agents.scalars().all()
 
         for inst in instances:
-            if inst.status == "restarting":
+            if inst.status in ("restarting", "learning"):
                 inst.status = "running"
-                logger.info("修复卡死状态: %s restarting -> running", inst.name)
+                logger.info("修复卡死状态: %s %s -> running", inst.name, inst.status)
         if instances:
             await db.commit()
 

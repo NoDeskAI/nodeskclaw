@@ -27,6 +27,7 @@ const error = ref('')
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   running: { label: '运行中', color: 'text-emerald-400', bg: 'bg-emerald-400' },
+  learning: { label: '学习中', color: 'text-blue-400', bg: 'bg-blue-400' },
   creating: { label: '创建中', color: 'text-blue-400', bg: 'bg-blue-400' },
   pending: { label: '等待中', color: 'text-yellow-400', bg: 'bg-yellow-400' },
   deploying: { label: '部署中', color: 'text-blue-400', bg: 'bg-blue-400' },
@@ -35,7 +36,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   deleting: { label: '删除中', color: 'text-gray-400', bg: 'bg-gray-400' },
 }
 
-const animatingStatuses = new Set(['creating', 'pending', 'deploying', 'updating', 'deleting'])
+const animatingStatuses = new Set(['creating', 'pending', 'deploying', 'updating', 'deleting', 'learning'])
 
 function getStatus(status: string) {
   return statusConfig[status] ?? { label: status, color: 'text-gray-400', bg: 'bg-gray-400' }

@@ -20,12 +20,14 @@ const loading = ref(true)
 
 const statusColors: Record<string, string> = {
   running: 'text-green-400',
+  learning: 'text-blue-400',
   deploying: 'text-yellow-400',
   restarting: 'text-amber-400',
   failed: 'text-red-400',
 }
 const statusLabels: Record<string, string> = {
   running: '运行中',
+  learning: '学习中',
   deploying: '部署中',
   creating: '创建中',
   restarting: '重启中',

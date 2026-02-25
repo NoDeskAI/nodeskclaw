@@ -130,7 +130,7 @@ const stats = computed(() => {
                 >
                   <div class="flex items-center gap-2">
                     <StatusDot
-                      :status="inst.status === 'running' ? 'running' : inst.status === 'failed' ? 'failed' : 'pending'"
+                      :status="inst.status === 'running' ? 'running' : inst.status === 'learning' ? 'learning' : inst.status === 'failed' ? 'failed' : 'pending'"
                     />
                     <span class="text-sm font-medium">{{ inst.name }}</span>
                     <span class="text-xs text-muted-foreground">{{ inst.image_version }}</span>

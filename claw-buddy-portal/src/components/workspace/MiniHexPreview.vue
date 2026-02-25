@@ -24,7 +24,7 @@ const hexes = computed(() =>
 )
 
 const statusColors: Record<string, string> = {
-  running: '#4ade80', active: '#4ade80',
+  running: '#4ade80', active: '#4ade80', learning: '#60a5fa',
   thinking: '#fbbf24', pending: '#fbbf24',
   idle: '#6b7280',
   error: '#f87171', failed: '#f87171',

@@ -61,12 +61,14 @@ const filteredInstances = computed(() => {
 
 function statusToGlow(status: string) {
   if (status === 'running') return 'running' as const
+  if (status === 'learning') return 'running' as const
   if (status === 'deploying' || status === 'pending') return 'warning' as const
   return 'error' as const
 }
 
 function statusToDot(status: string) {
   if (status === 'running') return 'running' as const
+  if (status === 'learning') return 'learning' as const
   if (status === 'deploying' || status === 'pending') return 'pending' as const
   if (status === 'failed' || status === 'stopped') return 'failed' as const
   return 'unknown' as const
@@ -74,6 +76,7 @@ function statusToDot(status: string) {
 
 function statusBadgeVariant(status: string) {
   if (status === 'running') return 'default' as const
+  if (status === 'learning') return 'default' as const
   if (status === 'deploying' || status === 'pending') return 'secondary' as const
   return 'destructive' as const
 }

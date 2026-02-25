@@ -13,6 +13,7 @@ class InstanceStatus(str, Enum):
     pending = "pending"
     deploying = "deploying"
     running = "running"
+    learning = "learning"
     restarting = "restarting"
     updating = "updating"
     failed = "failed"

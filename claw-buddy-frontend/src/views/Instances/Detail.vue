@@ -276,8 +276,8 @@ function formatTime(ts: string | null): string {
           <ArrowLeft class="w-4 h-4" />
         </Button>
         <h1 class="text-2xl font-bold">{{ detail?.name || '加载中...' }}</h1>
-        <Badge v-if="detail" :variant="detail.status === 'running' ? 'default' : 'destructive'">
-          {{ detail.status }}
+        <Badge v-if="detail" :variant="detail.status === 'running' || detail.status === 'learning' ? 'default' : 'destructive'">
+          {{ detail.status === 'learning' ? '学习中' : detail.status }}
         </Badge>
       </div>
       <div v-if="detail" class="flex items-center gap-2">
@@ -343,6 +343,7 @@ function formatTime(ts: string | null): string {
                   <span class="text-muted-foreground">状态</span>
                   <StatusDot :status="
                     detail.status === 'running' ? 'running'
+                    : detail.status === 'learning' ? 'learning'
                     : detail.status === 'failed' ? 'failed'
                     : ['pending', 'deploying', 'creating', 'updating'].includes(detail.status) ? 'pending'
                     : 'unknown'

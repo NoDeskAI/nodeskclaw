@@ -26,7 +26,7 @@ from app.models.gene import (
     InstanceGene,
     InstanceGeneStatus,
 )
-from app.models.instance import Instance
+from app.models.instance import Instance, InstanceStatus
 from app.schemas.gene import (
     CoInstallPair,
     GeneCreateRequest,
@@ -458,6 +458,35 @@ async def _has_meta_learning(db: AsyncSession, instance_id: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
+async def _has_pending_learning(db: AsyncSession, instance_id: str, exclude_ig_id: str) -> bool:
+    """Check if the instance still has other InstanceGene records in learning status."""
+    result = await db.execute(
+        select(InstanceGene.id).where(
+            InstanceGene.instance_id == instance_id,
+            InstanceGene.status == InstanceGeneStatus.learning,
+            InstanceGene.id != exclude_ig_id,
+            not_deleted(InstanceGene),
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _finish_learning_if_done(
+    db: AsyncSession, instance_id: str, exclude_ig_id: str
+) -> bool:
+    """If no more genes are learning, restore instance status and return True (should restart)."""
+    from app.services.instance_service import _broadcast_agent_status
+
+    still_learning = await _has_pending_learning(db, instance_id, exclude_ig_id)
+    if still_learning:
+        return False
+
+    instance = await db.get(Instance, instance_id)
+    if instance and instance.status == InstanceStatus.learning:
+        _broadcast_agent_status(instance.workspace_id, instance_id, "restarting")
+    return True
+
+
 async def install_gene(
     db: AsyncSession,
     instance_id: str,
@@ -509,6 +538,10 @@ async def install_gene(
     workspace_id = instance.workspace_id
 
     if has_learning:
+        from app.services.instance_service import _broadcast_agent_status
+        instance.status = InstanceStatus.learning
+        await db.commit()
+        _broadcast_agent_status(workspace_id, instance_id, "learning")
         if workspace_id:
             broadcast_event(workspace_id, "gene:learn_start", {
                 "instance_id": instance_id,
@@ -580,7 +613,9 @@ async def _direct_install(
             )
             await db.commit()
 
-            await restart_instance(instance.id, db)
+            should_restart = await _finish_learning_if_done(db, instance_id, ig_id)
+            if should_restart:
+                await restart_instance(instance.id, db)
 
             if workspace_id:
                 broadcast_event(workspace_id, "gene:installed", {
@@ -814,6 +849,11 @@ async def handle_learning_callback(
                 "reason": payload.reason,
             })
         await db.commit()
+
+        should_restart = await _finish_learning_if_done(db, instance.id, ig_obj.id)
+        if should_restart:
+            await restart_instance(instance.id, db)
+
         return {"status": "learn_failed"}
 
     else:
@@ -825,7 +865,10 @@ async def handle_learning_callback(
         details={"version": gene_obj.version, "learning_type": payload.decision},
     )
     await db.commit()
-    await restart_instance(instance.id, db)
+
+    should_restart = await _finish_learning_if_done(db, instance.id, ig_obj.id)
+    if should_restart:
+        await restart_instance(instance.id, db)
 
     if workspace_id:
         broadcast_event(workspace_id, "gene:installed", {
@@ -1443,7 +1486,10 @@ async def handle_forgetting_callback(
             },
         )
         await db.commit()
-        await restart_instance(instance.id, db)
+
+        should_restart = await _finish_learning_if_done(db, instance.id, ig.id)
+        if should_restart:
+            await restart_instance(instance.id, db)
 
         if workspace_id:
             await broadcast_event(workspace_id, "gene:simplified", {
@@ -1479,7 +1525,10 @@ async def handle_forgetting_callback(
         },
     )
     await db.commit()
-    await restart_instance(instance.id, db)
+
+    should_restart = await _finish_learning_if_done(db, instance.id, ig.id)
+    if should_restart:
+        await restart_instance(instance.id, db)
 
     if workspace_id:
         await broadcast_event(workspace_id, "gene:forgotten", {

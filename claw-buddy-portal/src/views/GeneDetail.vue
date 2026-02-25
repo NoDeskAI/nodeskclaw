@@ -47,6 +47,7 @@ const installedInstanceIds = ref<Set<string>>(new Set())
 
 const statusConfig: Record<string, { label: string; dot: string; text: string; bg: string }> = {
   running: { label: '运行中', dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  learning: { label: '学习中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
   creating: { label: '创建中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
   pending: { label: '等待中', dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/40' },
   deploying: { label: '部署中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
@@ -479,14 +480,14 @@ async function confirmForgetFromDetail() {
                   <button
                     v-for="inst in availableInstances"
                     :key="inst.id"
-                    :disabled="inst.status !== 'running'"
+                    :disabled="inst.status !== 'running' && inst.status !== 'learning'"
                     :class="[
                       'w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition text-left',
-                      inst.status === 'running'
+                      inst.status === 'running' || inst.status === 'learning'
                         ? 'border-border bg-background hover:border-emerald-300 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 cursor-pointer'
                         : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60',
                     ]"
-                    @click="inst.status === 'running' && selectInstance(inst.id)"
+                    @click="(inst.status === 'running' || inst.status === 'learning') && selectInstance(inst.id)"
                   >
                     <span
                       :class="['w-2 h-2 rounded-full shrink-0', getStatusConfig(inst.status).dot]"

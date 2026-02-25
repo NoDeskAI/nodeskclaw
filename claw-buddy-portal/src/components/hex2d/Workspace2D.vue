@@ -46,6 +46,7 @@ const agentPositions = computed(() =>
 
 const statusColors: Record<string, string> = {
   running: '#4ade80',
+  learning: '#60a5fa',
   active: '#4ade80',
   thinking: '#fbbf24',
   pending: '#fbbf24',
@@ -229,7 +230,7 @@ const emptyHexes = computed(() => {
           :opacity="agent.sse_connected ? 1 : 0.6"
           :class="{
             'animate-pulse': agent.sse_connected && (agent.status === 'running' || agent.status === 'active'),
-            'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending'),
+            'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending' || agent.status === 'learning'),
           }"
         />
         <!-- Status text along upper-left edge (inside hex) -->
