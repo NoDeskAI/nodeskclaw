@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getCurrentLocale } from '@/i18n'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -10,6 +11,7 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  config.headers['Accept-Language'] = getCurrentLocale()
   return config
 })
 

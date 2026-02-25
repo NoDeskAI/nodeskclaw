@@ -49,7 +49,11 @@ def decode_token(token: str) -> dict:
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token 无效或已过期",
+            detail={
+                "error_code": 40101,
+                "message_key": "errors.auth.token_invalid_or_expired",
+                "message": "Token 无效或已过期",
+            },
         )
 
 
@@ -71,15 +75,36 @@ async def _get_user_by_token(
     payload = decode_token(token)
 
     if payload.get("type") not in _ALLOWED_TOKEN_TYPES:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 类型错误")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40102,
+                "message_key": "errors.auth.token_type_invalid",
+                "message": "Token 类型错误",
+            },
+        )
 
     scope = payload.get("scope")
     if allowed_scopes and scope and scope not in allowed_scopes:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token scope 不允许")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40103,
+                "message_key": "errors.auth.token_scope_forbidden",
+                "message": "Token scope 不允许",
+            },
+        )
 
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 无效")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40104,
+                "message_key": "errors.auth.token_subject_missing",
+                "message": "Token 无效",
+            },
+        )
 
     result = await db.execute(
         select(User).where(User.id == user_id, User.deleted_at.is_(None))
@@ -87,7 +112,14 @@ async def _get_user_by_token(
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40105,
+                "message_key": "errors.auth.user_not_found_or_disabled",
+                "message": "用户不存在或已禁用",
+            },
+        )
 
     return user
 
@@ -98,7 +130,14 @@ async def get_current_user(
 ) -> User:
     """Extract and validate JWT from Authorization header, return User."""
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未提供认证信息")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40100,
+                "message_key": "errors.auth.credentials_missing",
+                "message": "未提供认证信息",
+            },
+        )
     return await _get_user_by_token(credentials.credentials, db)
 
 

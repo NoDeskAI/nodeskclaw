@@ -69,8 +69,14 @@ async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenRespo
     payload = decode_token(refresh_token_str)
 
     if payload.get("type") != "refresh":
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 类型错误")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40102,
+                "message_key": "errors.auth.token_type_invalid",
+                "message": "Token 类型错误",
+            },
+        )
 
     user_id = payload.get("sub")
     result = await db.execute(
@@ -79,7 +85,14 @@ async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenRespo
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error_code": 40105,
+                "message_key": "errors.auth.user_not_found_or_disabled",
+                "message": "用户不存在或已禁用",
+            },
+        )
 
     return TokenResponse(
         access_token=create_access_token(user.id),
@@ -120,13 +133,27 @@ async def register_with_email(
 ) -> LoginResponse:
     """邮箱密码注册，自动登录。"""
     if len(password) < 6:
-        raise HTTPException(status_code=400, detail="密码至少 6 位")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40020,
+                "message_key": "errors.auth.password_too_short",
+                "message": "密码至少 6 位",
+            },
+        )
 
     exists = await db.execute(
         select(User).where(User.email == email, User.deleted_at.is_(None))
     )
     if exists.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="该邮箱已注册")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": 40920,
+                "message_key": "errors.auth.email_already_registered",
+                "message": "该邮箱已注册",
+            },
+        )
 
     user = User(
         name=name or email.split("@")[0],
@@ -163,11 +190,32 @@ async def login_with_email(email: str, password: str, db: AsyncSession) -> Login
     )
     user = result.scalar_one_or_none()
     if user is None or not user.password_hash:
-        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error_code": 40120,
+                "message_key": "errors.auth.invalid_email_or_password",
+                "message": "邮箱或密码错误",
+            },
+        )
     if not _verify_password(password, user.password_hash):
-        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error_code": 40120,
+                "message_key": "errors.auth.invalid_email_or_password",
+                "message": "邮箱或密码错误",
+            },
+        )
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="账户已被禁用")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40320,
+                "message_key": "errors.auth.account_disabled",
+                "message": "账户已被禁用",
+            },
+        )
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
@@ -185,7 +233,14 @@ async def send_sms_code(phone: str) -> dict:
         _, expire_ts = _sms_codes[phone]
         remaining = expire_ts - time.time()
         if remaining > 240:  # 300 - 60 = 240
-            raise HTTPException(status_code=429, detail="发送过于频繁，请稍后再试")
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_code": 42920,
+                    "message_key": "errors.auth.sms_send_too_frequent",
+                    "message": "发送过于频繁，请稍后再试",
+                },
+            )
 
     code = f"{secrets.randbelow(900000) + 100000}"
     _sms_codes[phone] = (code, time.time() + 300)  # 5 分钟过期
@@ -202,14 +257,35 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
 
     stored = _sms_codes.get(phone)
     if stored is None:
-        raise HTTPException(status_code=400, detail="请先获取验证码")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40021,
+                "message_key": "errors.auth.sms_code_not_requested",
+                "message": "请先获取验证码",
+            },
+        )
 
     stored_code, expire_ts = stored
     if time.time() > expire_ts:
         _sms_codes.pop(phone, None)
-        raise HTTPException(status_code=400, detail="验证码已过期")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40022,
+                "message_key": "errors.auth.sms_code_expired",
+                "message": "验证码已过期",
+            },
+        )
     if stored_code != code:
-        raise HTTPException(status_code=400, detail="验证码错误")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40023,
+                "message_key": "errors.auth.sms_code_invalid",
+                "message": "验证码错误",
+            },
+        )
 
     # 验证通过，清除
     _sms_codes.pop(phone, None)
@@ -242,7 +318,14 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
             user.current_org_id = default_org.id
 
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="账户已被禁用")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40320,
+                "message_key": "errors.auth.account_disabled",
+                "message": "账户已被禁用",
+            },
+        )
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()

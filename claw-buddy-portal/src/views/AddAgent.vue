@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check } from 
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,7 +96,7 @@ async function addToWorkspace(instanceId: string) {
     })
   } catch (e: any) {
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
-    alert(e?.response?.data?.detail || '添加失败')
+    alert(resolveApiErrorMessage(e, '添加失败'))
     adding.value = null
   }
 }

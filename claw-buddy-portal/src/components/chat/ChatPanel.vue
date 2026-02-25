@@ -7,9 +7,10 @@ import { Extension } from '@tiptap/core'
 import { PluginKey } from '@tiptap/pm/state'
 import { useWorkspaceStore, type GroupChatMessage, type AgentBrief } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
-import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Terminal, Copy, ThumbsUp, ThumbsDown } from 'lucide-vue-next'
+import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XCircle, Copy, ThumbsUp, ThumbsDown } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 import { marked } from 'marked'
 import { AgentMention } from './extensions/agentMention'
 import { SlashCommand } from './extensions/slashCommand'
@@ -47,7 +48,8 @@ const AGENT_COLORS = [
 const agentColorMap = new Map<string, string>()
 function getAgentColor(senderId: string): string {
   if (!agentColorMap.has(senderId)) {
-    agentColorMap.set(senderId, AGENT_COLORS[agentColorMap.size % AGENT_COLORS.length])
+    const color = AGENT_COLORS[agentColorMap.size % AGENT_COLORS.length] ?? '#8b5cf6'
+    agentColorMap.set(senderId, color)
   }
   return agentColorMap.get(senderId)!
 }
@@ -130,7 +132,8 @@ function createSuggestionRenderer(stateRef: Ref<SuggestionState | null>) {
           return true
         }
         if (event.key === 'Enter' || event.key === 'Tab') {
-          stateRef.value.command(stateRef.value.items[idx])
+          const selected = stateRef.value.items[idx]
+          if (selected) stateRef.value.command(selected)
           return true
         }
         if (event.key === 'Escape') {
@@ -196,7 +199,7 @@ async function doRestartAgent(name: string) {
     await api.post(`/instances/${agent.instance_id}/restart`)
     insertSystemMessage(`${name} 已触发重启`)
   } catch (e: any) {
-    insertSystemMessage(`重启失败: ${e?.response?.data?.detail || e.message}`)
+    insertSystemMessage(`重启失败: ${resolveApiErrorMessage(e, e?.message || '重启失败')}`)
   }
 }
 
@@ -208,7 +211,7 @@ async function doRemoveAgent(name: string) {
     await store.removeAgent(props.workspaceId, agent.instance_id)
     insertSystemMessage(`${name} 已从工作区移除`)
   } catch (e: any) {
-    insertSystemMessage(`移除失败: ${e?.response?.data?.detail || e.message}`)
+    insertSystemMessage(`移除失败: ${resolveApiErrorMessage(e, e?.message || '移除失败')}`)
   }
 }
 
@@ -222,7 +225,7 @@ function getEditorContent(): { text: string; mentions: string[]; commands: strin
 
   for (const block of json.content) {
     if (!block.content) { parts.push('\n'); continue }
-    for (const node of block.content) {
+    for (const node of block.content as any[]) {
       if (node.type === 'text') {
         parts.push(node.text || '')
       } else if (node.type === 'agentMention') {

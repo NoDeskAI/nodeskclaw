@@ -402,6 +402,46 @@ docker build -t my-image:latest .
 - 在组件中写 `scrollbar-width` / `scrollbar-color`
 - 使用 Tailwind 的 `scrollbar-thin` 等第三方插件类
 
+## i18n 文案与错误码规则
+
+**新增或修改任何用户可见文案时，必须同步接入 i18n（国际化）词条，不允许新增硬编码中文 UI 文案（专有名词除外）。**
+
+### 前端必须做
+
+- 新文案必须使用 `t('...')` 或等价 i18n 调用，不允许在模板/脚本中直接写中文提示词
+- Toast（通知）、弹窗、表单校验、空状态、按钮文案必须统一走词条
+- 错误展示优先 `message_key`（文案键）翻译，词条缺失时回退 `message`（文案）
+- 请求必须带 `Accept-Language`（语言请求头）
+
+### message_key 命名规范
+
+- 统一使用小写点分层级：`<domain>.<module>.<action_or_reason>`
+- 推荐前缀：
+  - 错误：`errors.auth.token_invalid`
+  - 提示：`notices.instance.restart_submitted`
+  - 校验：`validation.instance.name_required`
+- 严禁使用中文、空格、驼峰、下划线混搭（如 `Error.TokenInvalid`、`errors_token_invalid`）
+
+### 插值规范
+
+- 一律使用命名参数，不使用位置参数
+- 示例：
+  - 词条：`errors.instance.not_found = "实例 {name} 不存在"`
+  - 调用：`t('errors.instance.not_found', { name })`
+- 计数文案统一使用 `count` 作为参数名（如 `{ count }`）
+
+### 后端错误契约约束
+
+- 失败响应必须包含 `error_code`（错误码）+ `message_key`（文案键）+ `message`（文案）
+- 只要出现 `error_code` 就视为失败
+- 禁止再新增 `detail`（错误详情字段）作为前端展示主路径
+
+### 严禁
+
+- 禁止新增硬编码中文 UI 文案（专有名词和注释除外）
+- 禁止新增无语义 `message_key`（如 `msg1`、`error_x`）
+- 禁止前端直接拼接未经 i18n 管理的长句错误提示
+
 ## 变更规模判断规则
 
 **当需要改动的内容涉及 ≥1 个独立功能点时，必须提示用户进入 Plan 模式。**

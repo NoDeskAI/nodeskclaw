@@ -14,6 +14,7 @@ import { User, ShieldCheck, Search, Plus, Loader2, ShieldOff, Ban, CheckCircle, 
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
 import { useNotify } from '@/components/ui/notify'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const notify = useNotify()
 const authStore = useAuthStore()
@@ -82,7 +83,7 @@ async function toggleActive(user: StaffItem) {
     if (idx >= 0) staff.value[idx] = res.data.data
     notify.success(`已${label}`)
   } catch (e: any) {
-    notify.error(e?.response?.data?.detail || `${label}失败`)
+    notify.error(resolveApiErrorMessage(e, `${label}失败`))
   } finally {
     actionLoading.value = null
   }
@@ -97,7 +98,7 @@ async function removeAdmin(user: StaffItem) {
     staff.value = staff.value.filter(s => s.id !== user.id)
     notify.success('已取消超管权限')
   } catch (e: any) {
-    notify.error(e?.response?.data?.detail || '操作失败')
+    notify.error(resolveApiErrorMessage(e, '操作失败'))
   } finally {
     actionLoading.value = null
   }
@@ -141,7 +142,7 @@ async function handleAddStaff() {
     addSearchQuery.value = ''
     await fetchStaff()
   } catch (e: any) {
-    notify.error(e?.response?.data?.detail || '操作失败')
+    notify.error(resolveApiErrorMessage(e, '操作失败'))
   } finally {
     actionLoading.value = null
   }

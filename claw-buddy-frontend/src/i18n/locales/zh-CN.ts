@@ -1,0 +1,70 @@
+const zhCN = {
+  nav: {
+    dashboard: "总览",
+    instances: "实例",
+    events: "事件",
+    clusters: "集群",
+    geneOps: "基因运营",
+    settings: "设置",
+    platform: "平台管理",
+    organizations: "组织管理",
+    users: "运维人员",
+    plans: "套餐管理",
+    adminConsole: "管理后台",
+  },
+  common: {
+    loading: "加载中",
+    save: "保存",
+    cancel: "取消",
+    confirm: "确认",
+    delete: "删除",
+    failed: "失败",
+  },
+  errors: {
+    common: {
+      not_found: "资源不存在",
+      forbidden: "无权限",
+      bad_request: "请求参数错误",
+      conflict: "资源冲突",
+    },
+    system: {
+      internal_error: "服务器内部错误",
+    },
+    auth: {
+      credentials_missing: "未提供认证信息",
+      token_invalid_or_expired: "Token 无效或已过期",
+      token_type_invalid: "Token 类型错误",
+      token_scope_forbidden: "Token scope 不允许",
+      token_subject_missing: "Token 无效",
+      user_not_found_or_disabled: "用户不存在或已禁用",
+    },
+    org: {
+      user_has_no_org: "用户未加入任何组织",
+      current_org_not_found: "当前组织不存在或已删除",
+      super_admin_required: "仅限平台管理员操作",
+      super_admin_org_required: "超管需先选择要操作的组织",
+      org_admin_required: "仅限组织管理员操作",
+      org_member_required: "您不是该组织的成员",
+    },
+    workspace: {
+      not_found: "工作区不存在",
+      agent_not_found: "Agent 不存在",
+      agent_not_in_workspace: "Agent 不在该工作区中",
+      blackboard_not_found: "黑板不存在",
+      member_not_found: "成员不存在",
+    },
+    http: {
+      status_400: "请求参数错误",
+      status_401: "未认证或登录已失效",
+      status_403: "无权限访问",
+      status_404: "请求资源不存在",
+      status_409: "资源冲突",
+      status_422: "请求校验失败",
+      status_500: "服务器内部错误",
+      status_502: "上游服务异常",
+      status_503: "服务暂时不可用",
+    },
+  },
+} as const
+
+export default zhCN

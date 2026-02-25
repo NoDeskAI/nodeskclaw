@@ -36,6 +36,17 @@ def _ok(data=None, message: str = "success"):
     return {"code": 0, "message": message, "data": data}
 
 
+def _error(status_code: int, error_code: int, message_key: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "error_code": error_code,
+            "message_key": message_key,
+            "message": message,
+        },
+    )
+
+
 # ── helpers ──────────────────────────────────────────
 
 def _get_current_user_dep():
@@ -79,7 +90,7 @@ async def get_workspace(
 ):
     ws = await workspace_service.get_workspace(db, workspace_id)
     if ws is None:
-        raise HTTPException(status_code=404, detail="工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -92,7 +103,7 @@ async def update_workspace(
 ):
     ws = await workspace_service.update_workspace(db, workspace_id, data)
     if ws is None:
-        raise HTTPException(status_code=404, detail="工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -105,9 +116,9 @@ async def delete_workspace(
     try:
         ok = await workspace_service.delete_workspace(db, workspace_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _error(400, 40030, "errors.workspace.delete_invalid", str(e))
     if not ok:
-        raise HTTPException(status_code=404, detail="工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
     return _ok(message="已删除")
 
 
@@ -123,7 +134,7 @@ async def add_agent(
     try:
         agent = await workspace_service.add_agent(db, workspace_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _error(400, 40031, "errors.workspace.add_agent_invalid", str(e))
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -137,7 +148,7 @@ async def update_agent(
 ):
     agent = await workspace_service.update_agent(db, workspace_id, instance_id, data)
     if agent is None:
-        raise HTTPException(status_code=404, detail="Agent 不存在")
+        raise _error(404, 40431, "errors.workspace.agent_not_found", "Agent 不存在")
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -150,7 +161,7 @@ async def remove_agent(
 ):
     ok = await workspace_service.remove_agent(db, workspace_id, instance_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Agent 不在该工作区中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该工作区中")
     return _ok(message="已移除")
 
 
@@ -164,7 +175,7 @@ async def get_blackboard(
 ):
     bb = await workspace_service.get_blackboard(db, workspace_id)
     if bb is None:
-        raise HTTPException(status_code=404, detail="黑板不存在")
+        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
     return _ok(bb.model_dump(mode="json"))
 
 
@@ -177,7 +188,7 @@ async def update_blackboard(
 ):
     bb = await workspace_service.update_blackboard(db, workspace_id, data)
     if bb is None:
-        raise HTTPException(status_code=404, detail="黑板不存在")
+        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
     return _ok(bb.model_dump(mode="json"))
 
 
@@ -205,7 +216,7 @@ async def add_member(
             db, workspace_id, data.user_id, data.role,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _error(400, 40032, "errors.workspace.add_member_invalid", str(e))
     return _ok(member.model_dump(mode="json"))
 
 
@@ -219,7 +230,7 @@ async def update_member(
 ):
     ok = await workspace_service.update_workspace_member_role(db, workspace_id, user_id, data.role)
     if not ok:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
     return _ok(message="已更新")
 
 
@@ -232,7 +243,7 @@ async def remove_member(
 ):
     ok = await workspace_service.remove_workspace_member(db, workspace_id, user_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
     return _ok(message="已移除")
 
 
@@ -248,7 +259,7 @@ async def workspace_chat(
     """Workspace-level group chat: broadcast user message to all agents."""
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     if ws_info is None:
-        raise HTTPException(status_code=404, detail="工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
 
     await msg_service.record_message(
         db,
@@ -361,7 +372,7 @@ async def agent_chat(
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise HTTPException(status_code=404, detail="Agent 不在该工作区中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该工作区中")
 
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)
@@ -383,7 +394,7 @@ async def agent_chat(
 
     base_url, token = _get_instance_connection(inst)
     if not base_url or not token:
-        raise HTTPException(status_code=400, detail="Agent 实例缺少访问地址或 Token")
+        raise _error(400, 40033, "errors.workspace.agent_connection_missing", "Agent 实例缺少访问地址或 Token")
 
     async def stream():
         full_response = ""

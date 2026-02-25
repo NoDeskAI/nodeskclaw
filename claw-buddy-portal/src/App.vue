@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, User } from 'lucide-vue-next'
+import { getCurrentLocale, setCurrentLocale } from '@/i18n'
+import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, User, Languages, ChevronDown } from 'lucide-vue-next'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const isLoginPage = computed(() => route.path === '/login')
 const hideNav = computed(() => route.meta.hideNav === true)
 const showUserMenu = ref(false)
 const userMenuRef = ref<HTMLElement>()
+const locale = ref(getCurrentLocale())
 
 function onDocumentClick(e: MouseEvent) {
   if (showUserMenu.value && userMenuRef.value && !userMenuRef.value.contains(e.target as Node)) {
@@ -40,6 +44,11 @@ function handleLogout() {
 function navigateFromMenu(path: string) {
   showUserMenu.value = false
   router.push(path)
+}
+
+function onLocaleChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  locale.value = setCurrentLocale(value)
 }
 </script>
 
@@ -71,7 +80,7 @@ function navigateFromMenu(path: string) {
               @click="router.push('/')"
             >
               <Boxes class="w-4 h-4 inline mr-1.5" />
-              工作区
+              {{ t('common.workspace') }}
             </button>
             <button
               :class="[
@@ -81,7 +90,7 @@ function navigateFromMenu(path: string) {
               @click="router.push('/instances')"
             >
               <Server class="w-4 h-4 inline mr-1.5" />
-              实例
+              {{ t('common.instance') }}
             </button>
             <button
               :class="[
@@ -91,7 +100,7 @@ function navigateFromMenu(path: string) {
               @click="router.push('/members')"
             >
               <Users class="w-4 h-4 inline mr-1.5" />
-              成员
+              {{ t('common.members') }}
             </button>
             <button
               :class="[
@@ -101,7 +110,7 @@ function navigateFromMenu(path: string) {
               @click="router.push('/usage')"
             >
               <BarChart3 class="w-4 h-4 inline mr-1.5" />
-              用量
+              {{ t('common.usage') }}
             </button>
             <button
               :class="[
@@ -111,11 +120,24 @@ function navigateFromMenu(path: string) {
               @click="router.push('/gene-market')"
             >
               <FlaskConical class="w-4 h-4 inline mr-1.5" />
-              基因市场
+              {{ t('common.geneMarket') }}
             </button>
           </nav>
         </div>
-        <div class="relative" ref="userMenuRef">
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <Languages class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              class="h-8 w-[116px] appearance-none rounded-md border border-border bg-card pl-7 pr-6 text-xs font-medium text-foreground"
+              :value="locale"
+              @change="onLocaleChange"
+            >
+              <option value="zh-CN">🇨🇳 ZH-CN</option>
+              <option value="en-US">🇺🇸 EN-US</option>
+            </select>
+            <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          </div>
+          <div class="relative" ref="userMenuRef">
           <button
             class="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-primary/10 hover:ring-2 hover:ring-primary/30 transition-all"
             @click="showUserMenu = !showUserMenu"
@@ -162,17 +184,18 @@ function navigateFromMenu(path: string) {
                 @click="navigateFromMenu('/settings')"
               >
                 <Settings class="w-4 h-4 text-muted-foreground" />
-                设置
+                {{ t('common.settings') }}
               </button>
               <button
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-muted/50 transition-colors"
                 @click="handleLogout"
               >
                 <LogOut class="w-4 h-4" />
-                退出登录
+                {{ t('common.logout') }}
               </button>
             </div>
           </Transition>
+        </div>
         </div>
       </header>
 

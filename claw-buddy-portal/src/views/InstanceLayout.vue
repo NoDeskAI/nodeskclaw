@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings, Dna, History } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const instanceId = computed(() => route.params.id as string)
 
 interface InstanceBasic {
@@ -25,15 +27,10 @@ const statusColors: Record<string, string> = {
   restarting: 'text-amber-400',
   failed: 'text-red-400',
 }
-const statusLabels: Record<string, string> = {
-  running: '运行中',
-  learning: '学习中',
-  deploying: '部署中',
-  creating: '创建中',
-  restarting: '重启中',
-  updating: '更新中',
-  failed: '异常',
-  pending: '等待中',
+
+function getStatusLabel(status: string): string {
+  const key = `status.${status}`
+  return t(key) === key ? status : t(key)
 }
 
 async function fetchBasic() {
@@ -57,12 +54,12 @@ provide('refreshInstanceBasic', fetchBasic)
 
 onMounted(fetchBasic)
 
-const navItems = [
-  { name: 'InstanceDetail', label: '概览', icon: LayoutDashboard },
-  { name: 'InstanceGenes', label: '基因', icon: Dna },
-  { name: 'EvolutionLog', label: '进化日志', icon: History },
-  { name: 'InstanceSettings', label: '设置', icon: Settings },
-]
+const navItems = computed(() => [
+  { name: 'InstanceDetail', label: t('common.overview'), icon: LayoutDashboard },
+  { name: 'InstanceGenes', label: t('common.genes'), icon: Dna },
+  { name: 'EvolutionLog', label: t('common.evolutionLog'), icon: History },
+  { name: 'InstanceSettings', label: t('common.settings'), icon: Settings },
+])
 </script>
 
 <template>
@@ -79,7 +76,7 @@ const navItems = [
         <h1 class="text-xl font-bold">{{ instance.name }}</h1>
         <span class="flex items-center gap-1 text-xs" :class="statusColors[instance.status] || 'text-zinc-400'">
           <Circle class="w-2 h-2 fill-current" />
-          {{ statusLabels[instance.status] || instance.status }}
+          {{ getStatusLabel(instance.status) }}
         </span>
       </template>
     </div>

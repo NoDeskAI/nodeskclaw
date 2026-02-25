@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Save, Trash2, Loader2, Users, Palette } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,7 +54,7 @@ async function handleDelete() {
     await store.deleteWorkspace(workspaceId.value)
     router.push('/')
   } catch (e: any) {
-    alert(e?.response?.data?.detail || '删除失败')
+    alert(resolveApiErrorMessage(e, '删除失败'))
   } finally {
     deleting.value = false
   }

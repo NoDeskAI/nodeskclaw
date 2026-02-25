@@ -6,6 +6,7 @@ import ModelSelect from '@/components/shared/ModelSelect.vue'
 import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -81,8 +82,8 @@ async function handleFetchModels(provider: string, callback: (models: ModelItem[
   if (cfg?.keySource === 'personal' && cfg.personalKey) {
     params.api_key = cfg.personalKey
   }
-  if (authStore.user?.org_id) {
-    params.org_id = authStore.user.org_id
+  if (authStore.user?.current_org_id) {
+    params.org_id = authStore.user.current_org_id
   }
   try {
     const res = await api.get(`/llm/providers/${provider}/models`, { params })
@@ -295,7 +296,7 @@ async function handleDeploy() {
       router.push('/instances')
     }
   } catch (e: any) {
-    error.value = e?.response?.data?.message || e?.response?.data?.detail || '部署失败'
+    error.value = resolveApiErrorMessage(e, '部署失败')
   } finally {
     deploying.value = false
   }

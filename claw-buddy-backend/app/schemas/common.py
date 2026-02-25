@@ -11,6 +11,8 @@ class ApiResponse(BaseModel, Generic[T]):
     """Unified API response wrapper."""
 
     code: int = 0
+    error_code: int | None = None
+    message_key: str | None = None
     message: str = "success"
     data: T | None = None
 
@@ -27,6 +29,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
     """Paginated API response."""
 
     code: int = 0
+    error_code: int | None = None
+    message_key: str | None = None
     message: str = "success"
     data: list[Any] = []
     pagination: Pagination = Pagination()

@@ -4,7 +4,7 @@ import * as THREE from 'three'
 export interface ThreeSceneState {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
-  renderer: THREE.WebGLRenderer | null
+  renderer: Ref<THREE.WebGLRenderer | null>
   addToLoop: (fn: (delta: number) => void) => void
   removeFromLoop: (fn: (delta: number) => void) => void
   dispose: () => void

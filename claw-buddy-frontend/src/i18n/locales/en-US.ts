@@ -1,0 +1,70 @@
+const enUS = {
+  nav: {
+    dashboard: "Dashboard",
+    instances: "Instances",
+    events: "Events",
+    clusters: "Clusters",
+    geneOps: "Gene Operations",
+    settings: "Settings",
+    platform: "Platform",
+    organizations: "Organizations",
+    users: "Operators",
+    plans: "Plans",
+    adminConsole: "Admin Console",
+  },
+  common: {
+    loading: "Loading",
+    save: "Save",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    delete: "Delete",
+    failed: "Failed",
+  },
+  errors: {
+    common: {
+      not_found: "Resource not found",
+      forbidden: "Permission denied",
+      bad_request: "Invalid request parameters",
+      conflict: "Resource conflict",
+    },
+    system: {
+      internal_error: "Internal server error",
+    },
+    auth: {
+      credentials_missing: "Authentication credentials are missing",
+      token_invalid_or_expired: "Token is invalid or expired",
+      token_type_invalid: "Invalid token type",
+      token_scope_forbidden: "Token scope is not allowed",
+      token_subject_missing: "Token subject is missing",
+      user_not_found_or_disabled: "User not found or disabled",
+    },
+    org: {
+      user_has_no_org: "User has not joined any organization",
+      current_org_not_found: "Current organization does not exist or is deleted",
+      super_admin_required: "Super admin permission is required",
+      super_admin_org_required: "Super admin must choose an organization first",
+      org_admin_required: "Organization admin permission is required",
+      org_member_required: "You are not a member of this organization",
+    },
+    workspace: {
+      not_found: "Workspace does not exist",
+      agent_not_found: "Agent does not exist",
+      agent_not_in_workspace: "Agent is not in this workspace",
+      blackboard_not_found: "Blackboard does not exist",
+      member_not_found: "Member does not exist",
+    },
+    http: {
+      status_400: "Bad request",
+      status_401: "Unauthorized",
+      status_403: "Forbidden",
+      status_404: "Not found",
+      status_409: "Conflict",
+      status_422: "Validation failed",
+      status_500: "Internal server error",
+      status_502: "Bad gateway",
+      status_503: "Service unavailable",
+    },
+  },
+} as const
+
+export default enUS

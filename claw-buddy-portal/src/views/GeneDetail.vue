@@ -19,8 +19,8 @@ import {
   Sparkles,
   Layers,
   Download,
+  ExternalLink,
   X,
-  Trash2,
   AlertTriangle,
   FileText,
   Copy,
@@ -179,6 +179,13 @@ function closeInstallDialog() {
   installDialogOpen.value = false
 }
 
+function goToInstanceGenes(instanceId: string) {
+  router.push({
+    path: `/instances/${instanceId}/genes`,
+    query: { focus_gene_id: geneId.value },
+  })
+}
+
 const copiedSlug = ref<string | null>(null)
 async function copySlug(slug: string) {
   try {
@@ -193,35 +200,8 @@ function selectInstance(instanceId: string) {
   if (!slug) return
   store.installGene(instanceId, slug).then(() => {
     closeInstallDialog()
-    router.push(`/instances/${instanceId}/genes`)
+    goToInstanceGenes(instanceId)
   })
-}
-
-const forgetTargetInstanceId = ref<string | null>(null)
-const forgetConfirmInput = ref('')
-const forgetSubmitting = ref(false)
-const isForgetConfirmed = computed(() => {
-  if (!gene.value?.name) return false
-  return forgetConfirmInput.value === gene.value.name
-})
-
-function openForgetFromDetail(instId: string) {
-  forgetTargetInstanceId.value = instId
-  forgetConfirmInput.value = ''
-}
-
-async function confirmForgetFromDetail() {
-  if (!forgetTargetInstanceId.value || !isForgetConfirmed.value) return
-  forgetSubmitting.value = true
-  try {
-    await store.uninstallGene(forgetTargetInstanceId.value, geneId.value)
-    forgetTargetInstanceId.value = null
-    openInstallDialog()
-  } catch {
-    // handled by store
-  } finally {
-    forgetSubmitting.value = false
-  }
 }
 </script>
 
@@ -533,7 +513,17 @@ async function confirmForgetFromDetail() {
                       :class="['w-2 h-2 rounded-full shrink-0', getStatusConfig(inst.status).dot]"
                     />
                     <div class="flex items-center gap-2 min-w-0 flex-1">
-                      <span class="font-medium text-sm truncate">{{ inst.name }}</span>
+                      <div class="flex items-center gap-1 min-w-0">
+                        <span class="font-medium text-sm truncate">{{ inst.name }}</span>
+                        <button
+                          class="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+                          title="查看实例基因"
+                          aria-label="查看实例基因"
+                          @click.stop="goToInstanceGenes(inst.id)"
+                        >
+                          <ExternalLink class="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
                         <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
                         <button
@@ -551,85 +541,10 @@ async function confirmForgetFromDetail() {
                     <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
                       已学习
                     </span>
-                    <button
-                      class="text-xs text-destructive hover:text-destructive/80 shrink-0"
-                      @click="openForgetFromDetail(inst.id)"
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
               </div>
             </template>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Forgetting Ceremony Dialog (from GeneDetail) -->
-    <Teleport to="body">
-      <div
-        v-if="forgetTargetInstanceId"
-        class="fixed inset-0 z-60 flex items-center justify-center bg-black/50"
-        @click.self="forgetTargetInstanceId = null"
-      >
-        <div class="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4 p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold">遗忘确认</h3>
-            <button class="text-muted-foreground hover:text-foreground" @click="forgetTargetInstanceId = null">
-              <X class="w-5 h-5" />
-            </button>
-          </div>
-
-          <div class="rounded-lg border border-border bg-muted/30 p-3 mb-4">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="font-medium text-sm">{{ gene?.name }}</span>
-              <span class="text-xs text-muted-foreground">{{ gene?.slug }}</span>
-            </div>
-            <p v-if="gene?.short_description || gene?.description" class="text-xs text-muted-foreground line-clamp-2">
-              {{ gene?.short_description || gene?.description }}
-            </p>
-          </div>
-
-          <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 mb-4">
-            <div class="flex items-start gap-2">
-              <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <div class="text-xs text-muted-foreground space-y-1">
-                <p>Agent 将进入深度遗忘，回顾使用经验并产出遗忘总结。Agent 可能选择完全遗忘或简化保留核心认知。</p>
-                <p>遗忘完成后实例将自动重启。</p>
-                <p>此操作不可撤销，但可以重新学习。</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm text-muted-foreground mb-2">
-              请输入基因名称
-              <span class="font-medium text-foreground">{{ gene?.name }}</span>
-              以确认遗忘
-            </label>
-            <input
-              v-model="forgetConfirmInput"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-destructive/50"
-              :placeholder="gene?.name"
-            />
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <button
-              class="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50"
-              @click="forgetTargetInstanceId = null"
-            >
-              取消
-            </button>
-            <button
-              class="px-4 py-2 rounded-lg text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-              :disabled="!isForgetConfirmed || forgetSubmitting"
-              @click="confirmForgetFromDetail"
-            >
-              <Loader2 v-if="forgetSubmitting" class="w-4 h-4 animate-spin inline mr-1" />
-              确认遗忘
-            </button>
           </div>
         </div>
       </div>

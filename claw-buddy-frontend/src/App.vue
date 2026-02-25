@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 import { Toaster } from '@/components/ui/sonner'
 import { Notify } from '@/components/ui/notify'
 import { useAuthStore } from '@/stores/auth'
@@ -23,15 +25,19 @@ import {
   CreditCard,
   Users,
   Dna,
+  Languages,
+  ChevronDown,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const orgStore = useOrgStore()
 const { sseConnected, clusterConnected, startGlobalSSE } = useGlobalSSE()
 const { tokenWarning, startTokenAlert, stopTokenAlert } = useTokenAlert()
+const locale = ref(getCurrentLocale())
 
 const isLoginPage = computed(() => route.path === '/login')
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin === true)
@@ -66,21 +72,21 @@ interface NavItem {
   path: string
 }
 
-const mainNavItems: NavItem[] = [
-  { label: '总览', icon: LayoutGrid, path: '/' },
-  { label: '实例', icon: Box, path: '/instances' },
-  { label: '事件', icon: Activity, path: '/events' },
-  { label: '集群', icon: Server, path: '/cluster' },
-  { label: '基因运营', icon: Dna, path: '/gene' },
-  { label: '设置', icon: Settings, path: '/settings' },
-]
+const mainNavItems = computed<NavItem[]>(() => [
+  { label: t('nav.dashboard'), icon: LayoutGrid, path: '/' },
+  { label: t('nav.instances'), icon: Box, path: '/instances' },
+  { label: t('nav.events'), icon: Activity, path: '/events' },
+  { label: t('nav.clusters'), icon: Server, path: '/cluster' },
+  { label: t('nav.geneOps'), icon: Dna, path: '/gene' },
+  { label: t('nav.settings'), icon: Settings, path: '/settings' },
+])
 
 const platformNavItems = computed<NavItem[]>(() => {
   if (!isSuperAdmin.value) return []
   return [
-    { label: '组织管理', icon: Building2, path: '/platform/orgs' },
-    { label: '运维人员', icon: Users, path: '/platform/users' },
-    { label: '套餐管理', icon: CreditCard, path: '/platform/plans' },
+    { label: t('nav.organizations'), icon: Building2, path: '/platform/orgs' },
+    { label: t('nav.users'), icon: Users, path: '/platform/users' },
+    { label: t('nav.plans'), icon: CreditCard, path: '/platform/plans' },
   ]
 })
 
@@ -93,6 +99,11 @@ const sidebarCollapsed = ref(false)
 
 function navigateTo(path: string) {
   router.push(path)
+}
+
+function onLocaleChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  locale.value = setCurrentLocale(value)
 }
 </script>
 
@@ -158,7 +169,7 @@ function navigateTo(path: string) {
           <!-- 平台管理（超管可见） -->
           <template v-if="platformNavItems.length > 0">
             <div class="pt-4 pb-1" :class="sidebarCollapsed ? 'px-0' : 'px-3'">
-              <span v-if="!sidebarCollapsed" class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">平台管理</span>
+              <span v-if="!sidebarCollapsed" class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">{{ t('nav.platform') }}</span>
               <div v-else class="border-t border-border mx-2" />
             </div>
             <button
@@ -194,9 +205,21 @@ function navigateTo(path: string) {
               <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" />
               <PanelLeftClose v-else class="w-4 h-4" />
             </button>
-            <span class="text-sm font-medium text-muted-foreground">管理后台</span>
+            <span class="text-sm font-medium text-muted-foreground">{{ t('nav.adminConsole') }}</span>
           </div>
           <div class="flex items-center gap-4">
+            <div class="relative">
+              <Languages class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <select
+                class="h-8 w-[116px] appearance-none rounded-md border border-border bg-card pl-7 pr-6 text-xs font-medium text-foreground"
+                :value="locale"
+                @change="onLocaleChange"
+              >
+                <option value="zh-CN">🇨🇳 ZH-CN</option>
+                <option value="en-US">🇺🇸 EN-US</option>
+              </select>
+              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            </div>
             <!-- 通知 -->
             <button class="relative text-muted-foreground hover:text-foreground transition-colors" @click="router.push('/events')">
               <Bell class="w-4 h-4" />

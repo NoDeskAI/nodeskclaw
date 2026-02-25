@@ -11,6 +11,7 @@ import GlowCard from '@/components/GlowCard.vue'
 import StatusDot from '@/components/StatusDot.vue'
 import { Plus, Trash2, Plug, Server, Pencil } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const router = useRouter()
 const clusterStore = useClusterStore()
@@ -129,7 +130,7 @@ async function handleRename() {
     toast.success('集群已重命名')
     renameDialogOpen.value = false
   } catch (e: any) {
-    toast.error(e?.response?.data?.detail || '重命名失败')
+    toast.error(resolveApiErrorMessage(e, '重命名失败'))
   } finally {
     renaming.value = false
   }

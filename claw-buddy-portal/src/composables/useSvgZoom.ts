@@ -39,25 +39,25 @@ export function useSvgZoom(
   function zoomIn(factor = 1.3) {
     const svg = svgRef.value
     if (!svg || !zoomBehavior) return
-    select(svg).transition().duration(200).call(zoomBehavior.scaleBy, factor)
+  select(svg).call(zoomBehavior.scaleBy, factor)
   }
 
   function zoomOut(factor = 1.3) {
     const svg = svgRef.value
     if (!svg || !zoomBehavior) return
-    select(svg).transition().duration(200).call(zoomBehavior.scaleBy, 1 / factor)
+  select(svg).call(zoomBehavior.scaleBy, 1 / factor)
   }
 
   function resetView() {
     const svg = svgRef.value
     if (!svg || !zoomBehavior) return
-    select(svg).transition().duration(300).call(zoomBehavior.transform, zoomIdentity)
+  select(svg).call(zoomBehavior.transform, zoomIdentity)
   }
 
   function panBy(dx: number, dy: number) {
     const svg = svgRef.value
     if (!svg || !zoomBehavior) return
-    select(svg).transition().duration(150).call(zoomBehavior.translateBy, -dx * 80, -dy * 80)
+  select(svg).call(zoomBehavior.translateBy, -dx * 80, -dy * 80)
   }
 
   onMounted(init)

@@ -92,6 +92,26 @@ claw-buddy-backend/
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 
+## 错误响应契约（i18n 对齐）
+
+失败响应统一结构：
+
+```json
+{
+  "code": 40101,
+  "error_code": 40101,
+  "message_key": "errors.auth.token_invalid",
+  "message": "Token 无效或已过期",
+  "data": null
+}
+```
+
+- `error_code`（错误码）出现即表示失败
+- `message_key`（文案键）供前端 i18n（国际化）翻译
+- `message`（文案）为后端可读提示（当前语言）
+- 不再返回 `detail`（错误详情字段）
+- HTTP `status_code`（状态码）保持语义化，不统一改为 200
+
 ## 本地开发
 
 ### 前置条件

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, type ComputedRef } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { InstanceGeneItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
 
+const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -13,6 +14,19 @@ const store = useGeneStore()
 
 const loading = computed(() => store.loading)
 const instanceGenes = computed(() => store.instanceGenes)
+const focusGeneId = computed(() => {
+  const value = route.query.focus_gene_id
+  return typeof value === 'string' ? value : ''
+})
+const displayedInstanceGenes = computed(() => {
+  const list = instanceGenes.value
+  const targetGeneId = focusGeneId.value
+  if (!targetGeneId) return list
+  const targetItem = list.find(item => item.gene_id === targetGeneId)
+  if (!targetItem) return list
+  if (list[0]?.id === targetItem.id) return list
+  return [targetItem, ...list.filter(item => item.id !== targetItem.id)]
+})
 const createDialogOpen = ref(false)
 const createPrompt = ref('')
 const creating = ref(false)
@@ -174,7 +188,7 @@ onMounted(() => {
 
     <div v-else class="space-y-3">
       <div
-        v-for="item in instanceGenes"
+        v-for="item in displayedInstanceGenes"
         :key="item.id"
         class="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors"
       >

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff } from 'lucide-vue-next'
+import { getCurrentLocale, setCurrentLocale } from '@/i18n'
+import { resolveApiErrorMessage } from '@/i18n/error'
+import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff, Languages, ChevronDown } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // 状态
 const loading = ref(false)
@@ -22,6 +26,7 @@ const phoneForm = ref({ phone: '', code: '' })
 const smsSending = ref(false)
 const smsCountdown = ref(0)
 let smsTimer: ReturnType<typeof setInterval> | null = null
+const locale = ref(getCurrentLocale())
 
 // 特性
 const features = [
@@ -60,7 +65,10 @@ async function handleEmailSubmit() {
     error.value = ''
     router.replace('/')
   } catch (e: any) {
-    error.value = e?.response?.data?.detail || e?.response?.data?.message || (isRegister.value ? '注册失败' : '登录失败')
+    error.value = resolveApiErrorMessage(
+      e,
+      isRegister.value ? t('auth.registerFailed') : t('auth.loginFailed'),
+    )
   } finally {
     loading.value = false
   }
@@ -80,7 +88,7 @@ async function handleSendSms() {
       }
     }, 1000)
   } catch (e: any) {
-    error.value = e?.response?.data?.detail || '发送失败'
+    error.value = resolveApiErrorMessage(e, t('auth.sendFailed'))
   } finally {
     smsSending.value = false
   }
@@ -94,10 +102,15 @@ async function handlePhoneSubmit() {
     error.value = ''
     router.replace('/')
   } catch (e: any) {
-    error.value = e?.response?.data?.detail || e?.response?.data?.message || '登录失败'
+    error.value = resolveApiErrorMessage(e, t('auth.loginFailed'))
   } finally {
     loading.value = false
   }
+}
+
+function onLocaleChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  locale.value = setCurrentLocale(value)
 }
 
 // 切换 tab 或模式时清空错误
@@ -154,6 +167,20 @@ watch(isRegister, () => { error.value = '' })
     <!-- 右侧登录区 -->
     <div class="flex-1 flex items-center justify-center px-6">
       <div class="w-full max-w-sm space-y-6">
+        <div class="flex justify-end">
+          <div class="relative">
+            <Languages class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              class="h-8 w-[116px] appearance-none rounded-md border border-border bg-card pl-7 pr-6 text-xs font-medium text-foreground"
+              :value="locale"
+              @change="onLocaleChange"
+            >
+              <option value="zh-CN">🇨🇳 ZH-CN</option>
+              <option value="en-US">🇺🇸 EN-US</option>
+            </select>
+            <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          </div>
+        </div>
         <!-- 移动端 Logo -->
         <div class="flex flex-col items-center gap-3 lg:hidden">
           <div class="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
@@ -164,9 +191,9 @@ watch(isRegister, () => { error.value = '' })
 
         <!-- 标题 -->
         <div class="space-y-1 text-center lg:text-left">
-          <h2 class="text-2xl font-bold">{{ isRegister ? '创建账户' : '欢迎回来' }}</h2>
+          <h2 class="text-2xl font-bold">{{ isRegister ? t('auth.createAccount') : t('auth.welcomeBack') }}</h2>
           <p class="text-sm text-muted-foreground">
-            {{ isRegister ? '注册以开始使用 AI 助手' : '登录以管理你的 AI 助手实例' }}
+            {{ isRegister ? t('auth.registerSubtitle') : t('auth.loginSubtitle') }}
           </p>
         </div>
 
@@ -178,7 +205,7 @@ watch(isRegister, () => { error.value = '' })
               @click="activeTab = 'email'"
             >
               <Mail class="w-4 h-4" />
-              邮箱{{ isRegister ? '注册' : '登录' }}
+              {{ isRegister ? t('auth.emailRegister') : t('auth.emailLogin') }}
             </button>
             <button
               class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all"
@@ -186,7 +213,7 @@ watch(isRegister, () => { error.value = '' })
               @click="activeTab = 'phone'; isRegister = false"
             >
               <Phone class="w-4 h-4" />
-              手机登录
+              {{ t('auth.phoneLogin') }}
             </button>
           </div>
 
@@ -250,17 +277,17 @@ watch(isRegister, () => { error.value = '' })
               class="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
-              {{ isRegister ? '注册' : '登录' }}
+              {{ isRegister ? t('auth.register') : t('auth.login') }}
             </button>
 
             <p class="text-sm text-center text-muted-foreground">
-              {{ isRegister ? '已有账户？' : '还没有账户？' }}
+              {{ isRegister ? t('auth.hasAccount') : t('auth.noAccount') }}
               <button
                 type="button"
                 class="text-primary hover:text-primary/80 font-medium transition-colors"
                 @click="isRegister = !isRegister"
               >
-                {{ isRegister ? '立即登录' : '立即注册' }}
+                {{ isRegister ? t('auth.signInNow') : t('auth.signUpNow') }}
               </button>
             </p>
           </form>
@@ -298,7 +325,7 @@ watch(isRegister, () => { error.value = '' })
                 >
                   <Loader2 v-if="smsSending" class="w-4 h-4 animate-spin" />
                   <template v-else-if="smsCountdown > 0">{{ smsCountdown }}s</template>
-                  <template v-else>获取验证码</template>
+                  <template v-else>{{ t('auth.sendCode') }}</template>
                 </button>
               </div>
             </div>
@@ -309,7 +336,7 @@ watch(isRegister, () => { error.value = '' })
               class="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
-              登录 / 注册
+              {{ t('auth.loginOrRegister') }}
             </button>
 
             <p class="text-xs text-center text-muted-foreground">

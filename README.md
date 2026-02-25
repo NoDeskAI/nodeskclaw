@@ -18,6 +18,13 @@ ClawBuddy/
 └── vibecraft/                # VibeCraft 源码（独立仓库，不纳入 Git）
 ```
 
+## 全局 i18n（国际化）
+
+- 覆盖范围：`claw-buddy-portal`（用户门户前端）、`claw-buddy-frontend`（管理前端）、`claw-buddy-backend`（后端错误契约）
+- 语言选择：浏览器语言 `zh*` -> `zh-CN`，`en*` -> `en-US`，其他默认 `en-US`
+- 前端错误展示：优先使用后端 `message_key`（文案键）本地翻译；词条缺失时回退后端 `message`（文案）
+- 后端失败响应：`code` + `error_code`（错误码） + `message_key`（文案键） + `message`（文案） + `data`
+
 ## 本地启动
 
 ### 前置条件

@@ -27,11 +27,21 @@ def event_loop():
 
 @pytest.fixture(autouse=True)
 async def setup_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        # CI / local 环境未提供测试库时，跳过数据库初始化，允许无 DB 的基础测试继续执行
+        yield
+        return
+
     yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+    except Exception:
+        pass
 
 
 async def override_get_db() -> AsyncGenerator[AsyncSession, None]:

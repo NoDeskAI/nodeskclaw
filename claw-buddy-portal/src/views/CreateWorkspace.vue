@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Plus, Loader2, Palette, Bot } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -35,7 +36,7 @@ async function handleCreate() {
     })
     router.push(`/workspace/${ws.id}`)
   } catch (e: any) {
-    error.value = e?.response?.data?.detail || '创建失败'
+    error.value = resolveApiErrorMessage(e, '创建失败')
   } finally {
     creating.value = false
   }

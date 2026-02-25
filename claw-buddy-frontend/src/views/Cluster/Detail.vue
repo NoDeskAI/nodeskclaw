@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ArrowLeft, Server, Cpu, MemoryStick, Box, KeyRound, Plug, Pencil, Check, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,7 +121,7 @@ async function handleSaveName() {
     editingName.value = false
     toast.success('集群名称已更新')
   } catch (e: any) {
-    toast.error(e?.response?.data?.detail || '重命名失败')
+    toast.error(resolveApiErrorMessage(e, '重命名失败'))
   } finally {
     savingName.value = false
   }

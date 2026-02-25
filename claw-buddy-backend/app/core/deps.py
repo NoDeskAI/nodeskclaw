@@ -41,7 +41,11 @@ async def get_current_org(
     if user.current_org_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户未加入任何组织",
+            detail={
+                "error_code": 40010,
+                "message_key": "errors.org.user_has_no_org",
+                "message": "用户未加入任何组织",
+            },
         )
 
     result = await db.execute(
@@ -54,7 +58,11 @@ async def get_current_org(
     if org is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="当前组织不存在或已删除",
+            detail={
+                "error_code": 40410,
+                "message_key": "errors.org.current_org_not_found",
+                "message": "当前组织不存在或已删除",
+            },
         )
     return user, org
 
@@ -66,7 +74,11 @@ async def require_super_admin_dep(
     if not user.is_super_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="仅限平台管理员操作",
+            detail={
+                "error_code": 40310,
+                "message_key": "errors.org.super_admin_required",
+                "message": "仅限平台管理员操作",
+            },
         )
     return user
 
@@ -96,10 +108,24 @@ async def require_org_admin(
             org = result.scalar_one_or_none()
             if org:
                 return user, org
-        raise HTTPException(status_code=400, detail="超管需先选择要操作的组织")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40011,
+                "message_key": "errors.org.super_admin_org_required",
+                "message": "超管需先选择要操作的组织",
+            },
+        )
 
     if target_org_id is None:
-        raise HTTPException(status_code=400, detail="用户未加入任何组织")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40010,
+                "message_key": "errors.org.user_has_no_org",
+                "message": "用户未加入任何组织",
+            },
+        )
 
     result = await db.execute(
         select(OrgMembership).where(
@@ -110,7 +136,14 @@ async def require_org_admin(
     )
     membership = result.scalar_one_or_none()
     if membership is None or membership.role != OrgRole.admin:
-        raise HTTPException(status_code=403, detail="仅限组织管理员操作")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40311,
+                "message_key": "errors.org.org_admin_required",
+                "message": "仅限组织管理员操作",
+            },
+        )
 
     result = await db.execute(
         select(Organization).where(
@@ -146,7 +179,14 @@ async def require_org_member(
             return user, org
 
     if target_org_id is None:
-        raise HTTPException(status_code=400, detail="用户未加入任何组织")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40010,
+                "message_key": "errors.org.user_has_no_org",
+                "message": "用户未加入任何组织",
+            },
+        )
 
     result = await db.execute(
         select(OrgMembership).where(
@@ -157,7 +197,14 @@ async def require_org_member(
     )
     membership = result.scalar_one_or_none()
     if membership is None:
-        raise HTTPException(status_code=403, detail="您不是该组织的成员")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40312,
+                "message_key": "errors.org.org_member_required",
+                "message": "您不是该组织的成员",
+            },
+        )
 
     result = await db.execute(
         select(Organization).where(
