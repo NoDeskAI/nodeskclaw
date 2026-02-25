@@ -109,6 +109,30 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 
 **用户提到的任何 OpenClaw 或 K8s 相关问题，必须先通过 kubectl 实际查看集群状态，再做判断。** 不允许凭代码逻辑或经验猜测。
 
+### OpenClaw 行为判断必须有源码依据
+
+**对 OpenClaw 内部行为（skill 加载、session 管理、system prompt 构建、配置生效机制等）的任何判断，必须通过读取 Pod 上的实际源码来验证。** 不允许凭"可能是这样"、"一般框架都这么做"等推测下结论。
+
+- **必须做**：通过 `kubectl exec` 读取 OpenClaw 的 dist JS 文件，找到具体函数和行号作为依据
+- **必须做**：涉及多个模块的交互时，追踪完整调用链（如 gateway → skills → pi-coding-agent → system-prompt），不能只看一层就下结论
+- **必须做**：结论中明确引用源码位置（如 "extensionAPI.js 第 21179 行 `buildSkillsSection` 函数"）
+- **严禁**：没读过 OpenClaw 源码就断言"这属于 OpenClaw 自身的行为"、"不是我们的 bug"
+- **严禁**：基于 UI 表现推测内部机制（如看到 Skills 页面显示 enabled 就断言 agent 一定能用）
+- **严禁**：只查了一层就下结论（如只看 `loadSkillsFromDir` 返回了 skill 就说"skill 已加载"，必须追到 system prompt 层确认 skill 是否真的在 prompt 中）
+
+### 常用 OpenClaw 源码路径
+
+| 模块 | 路径 |
+|---|---|
+| Skill 加载与过滤 | `/usr/local/lib/node_modules/openclaw/dist/skills-*.js` |
+| System Prompt 构建 | `/usr/local/lib/node_modules/openclaw/dist/extensionAPI.js` 中 `buildAgentSystemPrompt`、`buildSkillsSection` |
+| Agent Session 创建 | `extensionAPI.js` 中 `createAgentSession`、`runEmbeddedPiAgent`、`runEmbeddedAttempt` |
+| Session 消息处理 | `/usr/local/lib/node_modules/openclaw/dist/reply-*.js` |
+| Resource Loader | `/usr/local/lib/node_modules/openclaw/node_modules/@mariozechner/pi-coding-agent/dist/core/resource-loader.js` |
+| Package Manager（Skill 发现） | `.../pi-coding-agent/dist/core/package-manager.js` |
+| 配置加载 | `/usr/local/lib/node_modules/openclaw/dist/config-*.js` |
+| Session Store | `/root/.openclaw/agents/main/sessions/sessions.json` |
+
 ### 必查项
 
 用户反馈 OpenClaw 实例问题时，按以下顺序执行：
