@@ -776,6 +776,10 @@ def _inject_evolution_notification(
                     },
                 }, ensure_ascii=False)
 
+                # pi-coding-agent reads usage.totalTokens from the last
+                # assistant message; omitting it causes a TypeError crash.
+                model_provider = entry.get("modelProvider", "system")
+                model_name = entry.get("model", "system")
                 assistant_msg = json.dumps({
                     "type": "message",
                     "id": assistant_id,
@@ -784,6 +788,22 @@ def _inject_evolution_notification(
                     "message": {
                         "role": "assistant",
                         "content": [{"type": "text", "text": assistant_text}],
+                        "api": "openai-completions",
+                        "provider": model_provider,
+                        "model": model_name,
+                        "usage": {
+                            "input": 0,
+                            "output": 0,
+                            "cacheRead": 0,
+                            "cacheWrite": 0,
+                            "totalTokens": 0,
+                            "cost": {
+                                "input": 0, "output": 0,
+                                "cacheRead": 0, "cacheWrite": 0,
+                                "total": 0,
+                            },
+                        },
+                        "stopReason": "stop",
                         "timestamp": ts_ms,
                     },
                 }, ensure_ascii=False)
