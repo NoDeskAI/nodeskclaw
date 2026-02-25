@@ -486,7 +486,7 @@ async def _direct_install(
             async with nfs_mount(instance, db) as mount_path:
                 skill_name = skill.get("name", gene.slug)
                 skill_content = skill.get("content", "")
-                _write_skill_file(mount_path, skill_name, skill_content)
+                _write_skill_file(mount_path, skill_name, skill_content, gene.short_description or gene.description or "")
                 _ensure_skills_discovery(mount_path)
 
                 openclaw_config = manifest.get("openclaw_config")
@@ -578,7 +578,22 @@ def _get_learning_plugin_url(instance: Instance) -> str | None:
     return f"{base}/extensions/learning"
 
 
-def _write_skill_file(mount_path: Path, skill_name: str, content: str) -> None:
+def _write_skill_file(
+    mount_path: Path,
+    skill_name: str,
+    content: str,
+    description: str = "",
+) -> None:
+    """Write SKILL.md with YAML front matter required by OpenClaw.
+
+    OpenClaw requires `name` and `description` in YAML front matter to discover
+    a skill. If the content doesn't already have front matter, we prepend it.
+    """
+    if not content.lstrip().startswith("---"):
+        desc = description or f"Skill: {skill_name}"
+        front_matter = f"---\nname: {skill_name}\ndescription: {desc}\n---\n\n"
+        content = front_matter + content
+
     skill_dir = mount_path / SKILLS_DIR_REL / skill_name
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_file = skill_dir / "SKILL.md"
@@ -676,8 +691,9 @@ async def handle_learning_callback(
     if payload.decision == "direct_install":
         manifest = _json_loads(gene_obj.manifest) or {}
         skill = manifest.get("skill", {})
+        gene_desc = gene_obj.short_description or gene_obj.description or ""
         async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, skill.get("name", gene_obj.slug), skill.get("content", ""))
+            _write_skill_file(mount_path, skill.get("name", gene_obj.slug), skill.get("content", ""), gene_desc)
             openclaw_config = manifest.get("openclaw_config")
             if openclaw_config:
                 _merge_openclaw_config(mount_path, openclaw_config)
@@ -687,8 +703,9 @@ async def handle_learning_callback(
 
     elif payload.decision == "learned":
         content = payload.content or ""
+        gene_desc = gene_obj.short_description or gene_obj.description or ""
         async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, gene_obj.slug, content)
+            _write_skill_file(mount_path, gene_obj.slug, content, gene_desc)
             manifest = _json_loads(gene_obj.manifest) or {}
             openclaw_config = manifest.get("openclaw_config")
             if openclaw_config:
