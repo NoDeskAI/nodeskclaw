@@ -118,7 +118,7 @@ function selectInstance(instanceId: string) {
   if (!slug) return
   store.installGene(instanceId, slug).then(() => {
     closeInstallDialog()
-    router.push(`/instances/${instanceId}`)
+    router.push(`/instances/${instanceId}/genes`)
   })
 }
 </script>
