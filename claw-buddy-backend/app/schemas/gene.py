@@ -63,7 +63,10 @@ class GeneCreateRequest(BaseModel):
     name: str = Field(..., max_length=128)
     slug: str = Field(..., max_length=128)
     description: str | None = None
-    short_description: str | None = Field(None, max_length=256)
+    short_description: str | None = Field(
+        None, max_length=256,
+        description="当 manifest 包含 skill 时必填，用于 OpenClaw SKILL.md YAML front matter",
+    )
     category: str | None = Field(None, max_length=32)
     tags: list[str] = []
     source: str = "official"

@@ -57,6 +57,31 @@ def _json_dumps(obj) -> str | None:
     return json.dumps(obj, ensure_ascii=False)
 
 
+def _validate_skill_metadata(
+    manifest: dict | None,
+    short_description: str | None,
+    description: str | None,
+) -> None:
+    """Reject gene creation when skill metadata is insufficient for OpenClaw discovery.
+
+    OpenClaw requires YAML front matter (name + description) in SKILL.md.
+    Either the skill content must already include front matter, or the gene
+    must provide a description that _write_skill_file can use to generate it.
+    """
+    if not manifest or "skill" not in manifest:
+        return
+    skill = manifest["skill"]
+    content = skill.get("content", "")
+    if content.lstrip().startswith("---"):
+        return
+    if not (short_description or description):
+        raise AppException(
+            400,
+            "带 skill 的基因必须提供 short_description 或 description"
+            "（OpenClaw 需要 YAML front matter 中的 description 字段来发现 skill）",
+        )
+
+
 def _gene_to_dict(gene: Gene) -> dict:
     return {
         "id": gene.id,
@@ -175,6 +200,8 @@ async def create_gene(
     existing = await get_gene_by_slug(db, req.slug)
     if existing:
         raise AppException(409, f"基因 slug '{req.slug}' 已存在")
+
+    _validate_skill_metadata(req.manifest, req.short_description, req.description)
 
     gene = Gene(
         name=req.name,
@@ -993,10 +1020,13 @@ async def publish_variant(
     manifest = _json_loads(parent.manifest) or {}
     manifest["skill"] = {"name": slug, "content": ig.learning_output}
 
+    variant_desc = f"Agent {agent_display} 基于 {parent.name} 的进化版本"
+    _validate_skill_metadata(manifest, parent.short_description, variant_desc)
+
     variant = Gene(
         name=name,
         slug=slug,
-        description=f"Agent {agent_display} 基于 {parent.name} 的进化版本",
+        description=variant_desc,
         short_description=parent.short_description,
         category=parent.category,
         tags=parent.tags,
@@ -1085,19 +1115,25 @@ async def handle_creation_callback(
     )
     instance = instance_result.scalar_one_or_none()
 
+    gene_desc = meta.get("gene_description", "")
+    gene_short_desc = gene_desc[:256] if gene_desc else None
+    gene_manifest = {
+        "skill": {"name": meta.get("gene_slug", f"agent-gene-{payload.task_id[:8]}"), "content": payload.content or ""}
+    }
+
+    _validate_skill_metadata(gene_manifest, gene_short_desc, gene_desc or None)
+
     gene = Gene(
         name=meta.get("gene_name", f"agent-gene-{payload.task_id[:8]}"),
         slug=meta.get("gene_slug", f"agent-gene-{payload.task_id[:8]}"),
-        description=meta.get("gene_description", ""),
-        short_description=meta.get("gene_description", "")[:256] if meta.get("gene_description") else None,
+        description=gene_desc,
+        short_description=gene_short_desc,
         category=meta.get("suggested_category", ""),
         tags=_json_dumps(meta.get("suggested_tags", [])),
         source=GeneSource.agent,
         icon=meta.get("icon"),
         version="1.0.0",
-        manifest=_json_dumps({
-            "skill": {"name": meta.get("gene_slug", f"agent-gene-{payload.task_id[:8]}"), "content": payload.content or ""}
-        }),
+        manifest=_json_dumps(gene_manifest),
         created_by_instance_id=payload.instance_id,
         is_published=False,
         review_status=GeneReviewStatus.pending_owner,
