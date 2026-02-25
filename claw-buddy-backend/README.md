@@ -163,6 +163,12 @@ logs/
 
 使用火山云 RDS PostgreSQL，首次启动时通过 `Base.metadata.create_all` 自动建表，无需手动迁移。
 
+### 默认基因/基因组初始化
+
+- 启动流程不再自动 seed（初始化写入）默认 `Gene`（基因）/`Genome`（基因组）数据。
+- 默认数据需通过一次性 SQL（结构化查询语言）显式回填到数据库。
+- 回填建议使用 `ON CONFLICT ... DO NOTHING`（冲突跳过）策略，按 `slug`（唯一标识）去重，避免覆盖现有记录。
+
 ### 软删除
 
 所有数据模型（User、Cluster、Instance、DeployRecord、SystemConfig）均采用逻辑删除，通过 `deleted_at` 字段标记：
