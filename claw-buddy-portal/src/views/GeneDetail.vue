@@ -22,6 +22,7 @@ import {
   X,
   Trash2,
   AlertTriangle,
+  FileText,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
@@ -77,11 +78,16 @@ const descriptionHtml = computed(() => {
   return marked(d) as string
 })
 
-const skillContentHtml = computed(() => {
-  const content = (gene.value?.manifest as Record<string, any>)?.skill?.content
-  if (!content) return ''
-  return marked(content) as string
+const skillContentRaw = computed(() => {
+  return (gene.value?.manifest as Record<string, any>)?.skill?.content ?? ''
 })
+
+const skillContentHtml = computed(() => {
+  if (!skillContentRaw.value) return ''
+  return marked(skillContentRaw.value) as string
+})
+
+const contentViewMode = ref<'rendered' | 'source'>('rendered')
 
 async function onMount() {
   await store.fetchGene(geneId.value)
@@ -234,12 +240,41 @@ async function confirmForgetFromDetail() {
             />
           </section>
 
-          <section v-if="skillContentHtml" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">基因内容</h2>
+          <section v-if="skillContentRaw" class="mb-8">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-semibold">基因内容</h2>
+              <div class="flex items-center gap-1 rounded-lg border border-border p-0.5">
+                <button
+                  :class="[
+                    'p-1.5 rounded-md transition-colors',
+                    contentViewMode === 'rendered' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  ]"
+                  title="渲染文档"
+                  @click="contentViewMode = 'rendered'"
+                >
+                  <FileText class="w-4 h-4" />
+                </button>
+                <button
+                  :class="[
+                    'p-1.5 rounded-md transition-colors',
+                    contentViewMode === 'source' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  ]"
+                  title="查看源码"
+                  @click="contentViewMode = 'source'"
+                >
+                  <Code class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <div
-              class="rounded-xl border border-border bg-card p-6 prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary prose-strong:text-foreground prose-code:text-primary prose-li:text-foreground"
+              v-if="contentViewMode === 'rendered'"
+              class="rounded-xl border border-border bg-card p-6 prose prose-sm prose-invert max-w-none prose-a:text-primary"
               v-html="skillContentHtml"
             />
+            <pre
+              v-else
+              class="rounded-xl border border-border bg-card p-6 text-sm font-mono leading-relaxed text-foreground overflow-x-auto whitespace-pre-wrap wrap-break-word"
+            >{{ skillContentRaw }}</pre>
           </section>
 
           <section v-if="parentGenomes.length" class="mb-8">

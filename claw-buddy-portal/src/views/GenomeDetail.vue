@@ -19,6 +19,7 @@ import {
   Sparkles,
   Layers,
   Check,
+  FileText,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
@@ -34,16 +35,21 @@ const genome = computed(() => store.currentGenome)
 const geneMap = ref<Record<string, GeneItem>>({})
 const activeGeneTab = ref<string>('')
 
-const activeGeneContentHtml = computed(() => {
+const activeGeneContentRaw = computed(() => {
   const gene = geneMap.value[activeGeneTab.value]
-  const content = (gene?.manifest as Record<string, any>)?.skill?.content
-  if (!content) return ''
-  return marked(content) as string
+  return (gene?.manifest as Record<string, any>)?.skill?.content ?? ''
+})
+
+const activeGeneContentHtml = computed(() => {
+  if (!activeGeneContentRaw.value) return ''
+  return marked(activeGeneContentRaw.value) as string
 })
 
 const activeGeneDescription = computed(() => {
   return geneMap.value[activeGeneTab.value]?.description ?? ''
 })
+
+const contentViewMode = ref<'rendered' | 'source'>('rendered')
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -88,9 +94,10 @@ async function fetchGenesForSlugs(slugs: string[]) {
 
 async function onMount() {
   await store.fetchGenome(genomeId.value)
-  if (genome.value?.gene_slugs?.length) {
-    activeGeneTab.value = genome.value.gene_slugs[0]
-    await fetchGenesForSlugs(genome.value.gene_slugs)
+  const slugs = genome.value?.gene_slugs
+  if (slugs && slugs.length > 0) {
+    activeGeneTab.value = slugs[0]!
+    await fetchGenesForSlugs(slugs)
   }
 }
 
@@ -174,20 +181,48 @@ function goToGene(slug: string) {
               <div v-if="activeGeneDescription" class="text-sm text-muted-foreground mb-4">
                 {{ activeGeneDescription }}
               </div>
-              <div v-if="activeGeneContentHtml" class="flex items-center gap-2 mb-3">
-                <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">SKILL.md</span>
-                <button
-                  class="text-xs text-primary hover:underline"
-                  @click="goToGene(activeGeneTab)"
-                >
-                  查看详情
-                </button>
+              <div v-if="activeGeneContentRaw" class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">SKILL.md</span>
+                  <button
+                    class="text-xs text-primary hover:underline"
+                    @click="goToGene(activeGeneTab)"
+                  >
+                    查看详情
+                  </button>
+                </div>
+                <div class="flex items-center gap-1 rounded-lg border border-border p-0.5">
+                  <button
+                    :class="[
+                      'p-1.5 rounded-md transition-colors',
+                      contentViewMode === 'rendered' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    ]"
+                    title="渲染文档"
+                    @click="contentViewMode = 'rendered'"
+                  >
+                    <FileText class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    :class="[
+                      'p-1.5 rounded-md transition-colors',
+                      contentViewMode === 'source' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    ]"
+                    title="查看源码"
+                    @click="contentViewMode = 'source'"
+                  >
+                    <Code class="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div
-                v-if="activeGeneContentHtml"
-                class="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary prose-strong:text-foreground prose-code:text-primary prose-li:text-foreground"
+                v-if="activeGeneContentRaw && contentViewMode === 'rendered'"
+                class="prose prose-sm prose-invert max-w-none prose-a:text-primary"
                 v-html="activeGeneContentHtml"
               />
+              <pre
+                v-else-if="activeGeneContentRaw && contentViewMode === 'source'"
+                class="text-sm font-mono leading-relaxed text-foreground overflow-x-auto whitespace-pre-wrap wrap-break-word"
+              >{{ activeGeneContentRaw }}</pre>
               <div v-else class="py-8 text-center text-sm text-muted-foreground">
                 暂无基因内容
               </div>
