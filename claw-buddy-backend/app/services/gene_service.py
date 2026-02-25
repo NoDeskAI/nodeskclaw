@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -521,6 +522,7 @@ async def _direct_install(
                     _merge_openclaw_config(mount_path, openclaw_config)
 
                 _invalidate_skill_snapshots(mount_path)
+                _inject_evolution_notification(mount_path, skill_name, "installed")
 
             ig.status = InstanceGeneStatus.installed
             ig.installed_at = datetime.now(timezone.utc)
@@ -685,6 +687,115 @@ def _invalidate_skill_snapshots(mount_path: Path) -> None:
         logger.warning("Failed to invalidate skill snapshots: %s", e)
 
 
+def _inject_evolution_notification(
+    mount_path: Path,
+    gene_name: str,
+    action: str,
+) -> None:
+    """Inject evolution notification messages into all active session JSONL files.
+
+    After a gene install/uninstall, old conversation history may contain stale
+    skill listings from the agent. The LLM tends to repeat its previous answer
+    instead of re-checking the system prompt. By appending a user+assistant
+    message pair about the evolution, we override the stale context and ensure
+    the agent acknowledges the skill change.
+
+    Also resets ``systemSent`` to ``false`` so the next turn forces a full
+    system prompt rebuild with the updated skill list.
+    """
+    sessions_path = mount_path / ".openclaw" / "agents" / "main" / "sessions" / "sessions.json"
+    if not sessions_path.exists():
+        return
+
+    if action == "installed":
+        user_text = (
+            f"[System] 基因系统通知: 你刚刚获取了新的基因「{gene_name}」，"
+            f"完成了一轮进化。你的技能列表已更新，请以 system prompt 中 <available_skills> 为准。"
+        )
+        assistant_text = f"收到，我已获取新基因「{gene_name}」并完成进化。我的技能列表已更新。"
+    else:
+        user_text = (
+            f"[System] 基因系统通知: 基因「{gene_name}」已卸载。"
+            f"你的技能列表已更新，请以 system prompt 中 <available_skills> 为准。"
+        )
+        assistant_text = f"收到，基因「{gene_name}」已卸载。我的技能列表已更新。"
+
+    try:
+        store = json.loads(sessions_path.read_text(encoding="utf-8"))
+        store_changed = False
+
+        for key, entry in store.items():
+            if not isinstance(entry, dict):
+                continue
+            session_file = entry.get("sessionFile")
+            if not session_file:
+                continue
+
+            session_path = Path(session_file)
+            if not session_path.exists():
+                continue
+
+            try:
+                content = session_path.read_text(encoding="utf-8").rstrip("\n")
+                if not content:
+                    continue
+
+                last_line = content.rsplit("\n", 1)[-1]
+                last_entry = json.loads(last_line)
+                parent_id = last_entry.get("id", uuid.uuid4().hex[:8])
+
+                now = datetime.now(timezone.utc)
+                ts_iso = now.isoformat().replace("+00:00", "Z")
+                ts_ms = int(now.timestamp() * 1000)
+
+                user_id = uuid.uuid4().hex[:8]
+                assistant_id = uuid.uuid4().hex[:8]
+
+                user_msg = json.dumps({
+                    "type": "message",
+                    "id": user_id,
+                    "parentId": parent_id,
+                    "timestamp": ts_iso,
+                    "message": {
+                        "role": "user",
+                        "content": [{"type": "text", "text": user_text}],
+                        "timestamp": ts_ms,
+                    },
+                }, ensure_ascii=False)
+
+                assistant_msg = json.dumps({
+                    "type": "message",
+                    "id": assistant_id,
+                    "parentId": user_id,
+                    "timestamp": ts_iso,
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": assistant_text}],
+                        "timestamp": ts_ms,
+                    },
+                }, ensure_ascii=False)
+
+                with session_path.open("a", encoding="utf-8") as f:
+                    f.write(f"\n{user_msg}\n{assistant_msg}")
+
+                logger.info("Injected evolution notification into session %s", key)
+            except Exception as e:
+                logger.warning("Failed to inject notification into %s: %s", session_file, e)
+
+            entry["systemSent"] = False
+            store_changed = True
+
+        if store_changed:
+            sessions_path.write_text(
+                json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info("Reset systemSent for %d session(s)", sum(
+                1 for v in store.values() if isinstance(v, dict) and v.get("systemSent") is False
+            ))
+    except Exception as e:
+        logger.warning("Failed to inject evolution notifications: %s", e)
+
+
 def _ensure_skills_discovery(mount_path: Path) -> None:
     """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir.
 
@@ -748,12 +859,14 @@ async def handle_learning_callback(
         manifest = _json_loads(gene_obj.manifest) or {}
         skill = manifest.get("skill", {})
         gene_desc = gene_obj.short_description or gene_obj.description or ""
+        skill_name = skill.get("name", gene_obj.slug)
         async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, skill.get("name", gene_obj.slug), skill.get("content", ""), gene_desc)
+            _write_skill_file(mount_path, skill_name, skill.get("content", ""), gene_desc)
             openclaw_config = manifest.get("openclaw_config")
             if openclaw_config:
                 _merge_openclaw_config(mount_path, openclaw_config)
             _invalidate_skill_snapshots(mount_path)
+            _inject_evolution_notification(mount_path, skill_name, "installed")
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -768,6 +881,7 @@ async def handle_learning_callback(
             if openclaw_config:
                 _merge_openclaw_config(mount_path, openclaw_config)
             _invalidate_skill_snapshots(mount_path)
+            _inject_evolution_notification(mount_path, gene_obj.slug, "installed")
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -1238,6 +1352,7 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
                 _remove_skill_file(mount_path, skill_name)
                 _ensure_skills_discovery(mount_path)
                 _invalidate_skill_snapshots(mount_path)
+                _inject_evolution_notification(mount_path, skill_name, "uninstalled")
 
         ig.soft_delete()
         if gene:
