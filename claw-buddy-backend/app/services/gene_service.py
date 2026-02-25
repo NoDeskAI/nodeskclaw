@@ -731,12 +731,15 @@ def _inject_evolution_notification(
             if not session_file:
                 continue
 
-            session_path = Path(session_file)
-            if not session_path.exists():
+            # sessionFile stores the container-internal absolute path
+            # (e.g. /root/.openclaw/agents/main/sessions/xxx.jsonl).
+            # Resolve to local NFS mount path via the same parent dir as sessions.json.
+            local_session_path = sessions_path.parent / Path(session_file).name
+            if not local_session_path.exists():
                 continue
 
             try:
-                content = session_path.read_text(encoding="utf-8").rstrip("\n")
+                content = local_session_path.read_text(encoding="utf-8").rstrip("\n")
                 if not content:
                     continue
 
@@ -775,7 +778,7 @@ def _inject_evolution_notification(
                     },
                 }, ensure_ascii=False)
 
-                with session_path.open("a", encoding="utf-8") as f:
+                with local_session_path.open("a", encoding="utf-8") as f:
                     f.write(f"\n{user_msg}\n{assistant_msg}")
 
                 logger.info("Injected evolution notification into session %s", key)
