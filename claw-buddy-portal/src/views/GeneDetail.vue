@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft,
   Loader2,
@@ -34,6 +35,7 @@ import api from '@/services/api'
 const route = useRoute()
 const router = useRouter()
 const store = useGeneStore()
+const { t } = useI18n()
 
 const geneId = computed(() => route.params.id as string)
 const gene = computed(() => store.currentGene)
@@ -45,19 +47,45 @@ const instances = ref<{ id: string; name: string; slug: string; status: string }
 const instancesLoading = ref(false)
 const installedInstanceIds = ref<Set<string>>(new Set())
 
-const statusConfig: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  running: { label: '运行中', dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
-  learning: { label: '学习中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
-  creating: { label: '创建中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
-  pending: { label: '等待中', dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/40' },
-  deploying: { label: '部署中', dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
-  updating: { label: '更新中', dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
-  failed: { label: '失败', dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
-  deleting: { label: '删除中', dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' },
+const statusConfig: Record<string, { dot: string; text: string; bg: string }> = {
+  running: { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  learning: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  creating: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  pending: { dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/40' },
+  deploying: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  updating: { dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+  failed: { dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
+  deleting: { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' },
 }
 
 function getStatusConfig(status: string) {
-  return statusConfig[status] ?? { label: status, dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' }
+  return statusConfig[status] ?? { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' }
+}
+
+function getStatusLabel(status: string) {
+  const key = `status.${status}`
+  const translated = t(key)
+  return translated === key ? status : translated
+}
+
+const geneMetaKeyMap: Record<string, string> = {
+  开发: 'geneMeta.development',
+  数据: 'geneMeta.data',
+  运维: 'geneMeta.ops',
+  网络: 'geneMeta.network',
+  创意: 'geneMeta.creativity',
+  沟通: 'geneMeta.communication',
+  安全: 'geneMeta.security',
+  效率: 'geneMeta.efficiency',
+  性格: 'geneMeta.personality',
+}
+
+function localizeGeneMeta(value?: string) {
+  if (!value) return ''
+  const key = geneMetaKeyMap[value]
+  if (!key) return value
+  const translated = t(key)
+  return translated === key ? value : translated
 }
 
 const availableInstances = computed(() =>
@@ -114,7 +142,7 @@ const skillContentHtml = computed(() => {
   if (!skillContentRaw.value) return ''
   const { fm, body } = parseFrontmatter(skillContentRaw.value)
   const fmHtml = fm
-    ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">YAML Frontmatter</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
+    ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">${t('gene.frontmatterLabel')}</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
     : ''
   return fmHtml + (marked(body) as string)
 })
@@ -215,7 +243,7 @@ function selectInstance(instanceId: string) {
           @click="goBack"
         >
           <ArrowLeft class="w-4 h-4" />
-          返回基因市场
+          {{ t('gene.backToMarket') }}
         </button>
 
         <div v-if="store.loading" class="flex justify-center py-4">
@@ -231,7 +259,7 @@ function selectInstance(instanceId: string) {
             <div class="flex flex-wrap gap-2 mt-1">
               <span class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">v{{ gene.version }}</span>
               <span class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ gene.source }}</span>
-              <span v-if="gene.category" class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ gene.category }}</span>
+              <span v-if="gene.category" class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ localizeGeneMeta(gene.category) }}</span>
             </div>
           </div>
           <button
@@ -239,7 +267,7 @@ function selectInstance(instanceId: string) {
             @click="openInstallDialog"
           >
             <Download class="w-4 h-4" />
-            学习
+            {{ t('gene.learn') }}
           </button>
         </div>
       </div>
@@ -255,12 +283,12 @@ function selectInstance(instanceId: string) {
               :key="tag"
               class="text-xs px-2.5 py-1 rounded-lg bg-primary/10 text-primary"
             >
-              {{ tag }}
+              {{ localizeGeneMeta(tag) }}
             </span>
           </div>
 
           <section v-if="gene.description" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">描述</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.description') }}</h2>
             <div
               class="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary"
               v-html="descriptionHtml"
@@ -269,14 +297,14 @@ function selectInstance(instanceId: string) {
 
           <section v-if="skillContentRaw" class="mb-8">
             <div class="flex items-center justify-between mb-3">
-              <h2 class="text-lg font-semibold">基因内容</h2>
+              <h2 class="text-lg font-semibold">{{ t('gene.content') }}</h2>
               <div class="flex items-center gap-1 rounded-lg border border-border p-0.5">
                 <button
                   :class="[
                     'p-1.5 rounded-md transition-colors',
                     contentViewMode === 'rendered' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  title="渲染文档"
+                  :title="t('gene.renderDocument')"
                   @click="contentViewMode = 'rendered'"
                 >
                   <FileText class="w-4 h-4" />
@@ -286,7 +314,7 @@ function selectInstance(instanceId: string) {
                     'p-1.5 rounded-md transition-colors',
                     contentViewMode === 'source' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  title="查看源码"
+                  :title="t('gene.viewSource')"
                   @click="contentViewMode = 'source'"
                 >
                   <Code class="w-4 h-4" />
@@ -300,7 +328,7 @@ function selectInstance(instanceId: string) {
               <div class="flex items-start gap-2">
                 <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p class="text-xs text-muted-foreground">
-                  此基因内容缺少 YAML frontmatter，安装时将强制深度学习由 Agent 自主生成完整内容，部分元数据（如 always、requires 等）可能需要 Agent 补全
+                  {{ t('gene.frontmatterMissing') }}
                 </p>
               </div>
             </div>
@@ -316,7 +344,7 @@ function selectInstance(instanceId: string) {
           </section>
 
           <section v-if="parentGenomes.length" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">所属基因组</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.parentGenomes') }}</h2>
             <div class="flex gap-4 overflow-x-auto pb-2 -mx-1">
               <div
                 v-for="g in parentGenomes"
@@ -333,7 +361,7 @@ function selectInstance(instanceId: string) {
           </section>
 
           <section v-if="synergies.length" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">推荐搭配</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.recommended') }}</h2>
             <div class="flex gap-4 overflow-x-auto pb-2 -mx-1">
               <div
                 v-for="s in synergies"
@@ -355,7 +383,7 @@ function selectInstance(instanceId: string) {
           </section>
 
           <section v-if="variants.length" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">Agent 进化版本</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.evolutionVariants') }}</h2>
             <div class="space-y-3">
               <div
                 v-for="v in variants"
@@ -387,7 +415,7 @@ function selectInstance(instanceId: string) {
           </section>
 
           <section class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">评分</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.rating') }}</h2>
             <div class="flex items-center gap-6">
               <div class="flex items-center gap-1">
                 <Star
@@ -405,7 +433,7 @@ function selectInstance(instanceId: string) {
                 </span>
               </div>
               <div class="flex-1 min-w-0 max-w-xs">
-                <div class="text-xs text-muted-foreground mb-1">效能评分</div>
+                <div class="text-xs text-muted-foreground mb-1">{{ t('gene.effectivenessScore') }}</div>
                 <div class="h-2 rounded-full bg-muted overflow-hidden">
                   <div
                     class="h-full rounded-full bg-primary/60"
@@ -418,7 +446,7 @@ function selectInstance(instanceId: string) {
         </template>
 
         <div v-else-if="!store.loading" class="py-20 text-center text-muted-foreground">
-          未找到该基因
+          {{ t('gene.notFound') }}
         </div>
       </div>
     </div>
@@ -434,7 +462,7 @@ function selectInstance(instanceId: string) {
           @click.stop
         >
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold">选择实例</h3>
+            <h3 class="text-lg font-semibold">{{ t('gene.selectInstance') }}</h3>
             <button
               class="p-1.5 rounded-lg hover:bg-muted transition-colors"
               @click="closeInstallDialog"
@@ -443,19 +471,19 @@ function selectInstance(instanceId: string) {
             </button>
           </div>
           <p class="text-sm text-muted-foreground mb-4">
-            选择要学习基因 {{ gene?.slug }} 的实例
+            {{ t('gene.selectInstanceHint', { slug: gene?.slug ?? '' }) }}
           </p>
           <div v-if="instancesLoading" class="flex justify-center py-8">
             <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
           <div v-else class="max-h-72 overflow-y-auto space-y-4">
             <div v-if="instances.length === 0" class="text-sm text-muted-foreground py-4 text-center">
-              暂无可用实例
+              {{ t('gene.noAvailableInstances') }}
             </div>
             <template v-else>
               <!-- 可学习 -->
               <div v-if="availableInstances.length > 0">
-                <p class="text-xs text-muted-foreground mb-2 px-1">可学习</p>
+                <p class="text-xs text-muted-foreground mb-2 px-1">{{ t('gene.available') }}</p>
                 <div class="space-y-1.5">
                   <button
                     v-for="inst in availableInstances"
@@ -495,14 +523,14 @@ function selectInstance(instanceId: string) {
                         getStatusConfig(inst.status).bg,
                       ]"
                     >
-                      {{ getStatusConfig(inst.status).label }}
+                      {{ getStatusLabel(inst.status) }}
                     </span>
                   </button>
                 </div>
               </div>
               <!-- 已学习 -->
               <div v-if="installedInstances.length > 0">
-                <p class="text-xs text-muted-foreground mb-2 px-1">已学习</p>
+                <p class="text-xs text-muted-foreground mb-2 px-1">{{ t('gene.installed') }}</p>
                 <div class="space-y-1.5">
                   <div
                     v-for="inst in installedInstances"
@@ -517,8 +545,8 @@ function selectInstance(instanceId: string) {
                         <span class="font-medium text-sm truncate">{{ inst.name }}</span>
                         <button
                           class="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                          title="查看实例基因"
-                          aria-label="查看实例基因"
+                          :title="t('gene.viewInstanceGenes')"
+                          :aria-label="t('gene.viewInstanceGenes')"
                           @click.stop="goToInstanceGenes(inst.id)"
                         >
                           <ExternalLink class="w-3.5 h-3.5" />
@@ -539,7 +567,7 @@ function selectInstance(instanceId: string) {
                       </div>
                     </div>
                     <span class="text-xs shrink-0 px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40">
-                      已学习
+                      {{ t('gene.installed') }}
                     </span>
                   </div>
                 </div>

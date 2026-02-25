@@ -11,6 +11,7 @@ import { useOrgStore } from '@/stores/org'
 import { useGlobalSSE } from '@/composables/useGlobalSSE'
 import { useTokenAlert } from '@/composables/useTokenAlert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import {
   LayoutGrid,
   Box,
@@ -25,8 +26,6 @@ import {
   CreditCard,
   Users,
   Dna,
-  Languages,
-  ChevronDown,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -101,8 +100,7 @@ function navigateTo(path: string) {
   router.push(path)
 }
 
-function onLocaleChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
+function onLocaleChange(value: string) {
   locale.value = setCurrentLocale(value)
 }
 </script>
@@ -208,18 +206,7 @@ function onLocaleChange(event: Event) {
             <span class="text-sm font-medium text-muted-foreground">{{ t('nav.adminConsole') }}</span>
           </div>
           <div class="flex items-center gap-4">
-            <div class="relative">
-              <Languages class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <select
-                class="h-8 w-[116px] appearance-none rounded-md border border-border bg-card pl-7 pr-6 text-xs font-medium text-foreground"
-                :value="locale"
-                @change="onLocaleChange"
-              >
-                <option value="zh-CN">🇨🇳 ZH-CN</option>
-                <option value="en-US">🇺🇸 EN-US</option>
-              </select>
-              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            </div>
+            <LocaleSelect :model-value="locale" @update:model-value="onLocaleChange" />
             <!-- 通知 -->
             <button class="relative text-muted-foreground hover:text-foreground transition-colors" @click="router.push('/events')">
               <Bell class="w-4 h-4" />

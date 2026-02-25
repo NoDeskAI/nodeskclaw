@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft,
   Loader2,
@@ -30,6 +31,7 @@ import api from '@/services/api'
 const route = useRoute()
 const router = useRouter()
 const store = useGeneStore()
+const { t } = useI18n()
 
 const genomeId = computed(() => route.params.id as string)
 const genome = computed(() => store.currentGenome)
@@ -56,7 +58,7 @@ const activeGeneContentHtml = computed(() => {
   if (!activeGeneContentRaw.value) return ''
   const { fm, body } = parseFrontmatter(activeGeneContentRaw.value)
   const fmHtml = fm
-    ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">YAML Frontmatter</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
+    ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">${t('gene.frontmatterLabel')}</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
     : ''
   return fmHtml + (marked(body) as string)
 })
@@ -146,7 +148,7 @@ function goToGene(slug: string) {
           @click="goBack"
         >
           <ArrowLeft class="w-4 h-4" />
-          返回基因市场
+          {{ t('gene.backToMarket') }}
         </button>
 
         <div v-if="store.loading" class="flex justify-center py-4">
@@ -164,7 +166,7 @@ function goToGene(slug: string) {
             class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Check class="w-4 h-4" />
-            应用
+            {{ t('genome.apply') }}
           </button>
         </div>
       </div>
@@ -175,12 +177,12 @@ function goToGene(slug: string) {
       <div class="max-w-4xl mx-auto px-6 pt-6 pb-8">
         <template v-if="!store.loading && genome">
           <section v-if="genome.description" class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">描述</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.description') }}</h2>
             <p class="text-muted-foreground">{{ genome.description }}</p>
           </section>
 
           <section v-if="genome.gene_slugs?.length" class="mb-8">
-            <h2 class="text-lg font-semibold mb-4">包含基因</h2>
+            <h2 class="text-lg font-semibold mb-4">{{ t('genome.genesIncluded') }}</h2>
             <!-- Tab 栏 -->
             <div class="flex gap-0 border-b border-border mb-0 overflow-x-auto scrollbar-none">
               <button
@@ -209,7 +211,7 @@ function goToGene(slug: string) {
                     class="text-xs text-primary hover:underline"
                     @click="goToGene(activeGeneTab)"
                   >
-                    查看详情
+                    {{ t('genome.viewDetail') }}
                   </button>
                 </div>
                 <div class="flex items-center gap-1 rounded-lg border border-border p-0.5">
@@ -218,7 +220,7 @@ function goToGene(slug: string) {
                       'p-1.5 rounded-md transition-colors',
                       contentViewMode === 'rendered' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                     ]"
-                    title="渲染文档"
+                    :title="t('gene.renderDocument')"
                     @click="contentViewMode = 'rendered'"
                   >
                     <FileText class="w-3.5 h-3.5" />
@@ -228,7 +230,7 @@ function goToGene(slug: string) {
                       'p-1.5 rounded-md transition-colors',
                       contentViewMode === 'source' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                     ]"
-                    title="查看源码"
+                    :title="t('gene.viewSource')"
                     @click="contentViewMode = 'source'"
                   >
                     <Code class="w-3.5 h-3.5" />
@@ -242,7 +244,7 @@ function goToGene(slug: string) {
                 <div class="flex items-start gap-2">
                   <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                   <p class="text-xs text-muted-foreground">
-                    此基因内容缺少 YAML frontmatter，安装时将强制深度学习由 Agent 自主生成完整内容，部分元数据（如 always、requires 等）可能需要 Agent 补全
+                    {{ t('gene.frontmatterMissing') }}
                   </p>
                 </div>
               </div>
@@ -256,13 +258,13 @@ function goToGene(slug: string) {
                 class="text-sm font-mono leading-relaxed text-foreground overflow-x-auto whitespace-pre-wrap wrap-break-word"
               >{{ activeGeneContentRaw }}</pre>
               <div v-else class="py-8 text-center text-sm text-muted-foreground">
-                暂无基因内容
+                {{ t('genome.noGeneContent') }}
               </div>
             </div>
           </section>
 
           <section class="mb-8">
-            <h2 class="text-lg font-semibold mb-3">评分</h2>
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.rating') }}</h2>
             <div class="flex items-center gap-6">
               <div class="flex items-center gap-1">
                 <Star
@@ -284,7 +286,7 @@ function goToGene(slug: string) {
         </template>
 
         <div v-else-if="!store.loading" class="py-20 text-center text-muted-foreground">
-          未找到该基因组
+          {{ t('genome.notFound') }}
         </div>
       </div>
     </div>

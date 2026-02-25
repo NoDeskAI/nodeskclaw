@@ -5,7 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 import { resolveApiErrorMessage } from '@/i18n/error'
-import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff, Languages, ChevronDown } from 'lucide-vue-next'
+import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff } from 'lucide-vue-next'
+import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -108,8 +109,7 @@ async function handlePhoneSubmit() {
   }
 }
 
-function onLocaleChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
+function onLocaleChange(value: string) {
   locale.value = setCurrentLocale(value)
 }
 
@@ -168,18 +168,7 @@ watch(isRegister, () => { error.value = '' })
     <div class="flex-1 flex items-center justify-center px-6">
       <div class="w-full max-w-sm space-y-6">
         <div class="flex justify-end">
-          <div class="relative">
-            <Languages class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              class="h-8 w-[116px] appearance-none rounded-md border border-border bg-card pl-7 pr-6 text-xs font-medium text-foreground"
-              :value="locale"
-              @change="onLocaleChange"
-            >
-              <option value="zh-CN">🇨🇳 ZH-CN</option>
-              <option value="en-US">🇺🇸 EN-US</option>
-            </select>
-            <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          </div>
+          <LocaleSelect :model-value="locale" @update:model-value="onLocaleChange" />
         </div>
         <!-- 移动端 Logo -->
         <div class="flex flex-col items-center gap-3 lg:hidden">
