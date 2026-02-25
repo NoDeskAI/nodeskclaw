@@ -20,6 +20,7 @@ import {
   Layers,
   Check,
   FileText,
+  AlertTriangle,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
@@ -50,6 +51,11 @@ const activeGeneDescription = computed(() => {
 })
 
 const contentViewMode = ref<'rendered' | 'source'>('rendered')
+
+const activeGeneHasFrontmatter = computed(() => {
+  const raw = activeGeneContentRaw.value
+  return raw ? raw.trimStart().startsWith('---') : true
+})
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -212,6 +218,17 @@ function goToGene(slug: string) {
                   >
                     <Code class="w-3.5 h-3.5" />
                   </button>
+                </div>
+              </div>
+              <div
+                v-if="activeGeneContentRaw && !activeGeneHasFrontmatter"
+                class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 mb-3"
+              >
+                <div class="flex items-start gap-2">
+                  <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p class="text-xs text-muted-foreground">
+                    此基因内容缺少 YAML frontmatter，安装时将强制深度学习由 Agent 自主生成完整内容，部分元数据（如 always、requires 等）可能需要 Agent 补全
+                  </p>
                 </div>
               </div>
               <div
