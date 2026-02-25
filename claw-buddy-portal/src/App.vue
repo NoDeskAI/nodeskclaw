@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, Dna, FlaskConical, User } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, User } from 'lucide-vue-next'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 const route = useRoute()
@@ -112,17 +112,6 @@ function navigateFromMenu(path: string) {
             >
               <FlaskConical class="w-4 h-4 inline mr-1.5" />
               基因市场
-            </button>
-            <button
-              v-if="authStore.isLoggedIn"
-              :class="[
-                'px-3 py-1.5 rounded-md text-sm transition-colors',
-                route.path === '/admin/genes' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
-              ]"
-              @click="router.push('/admin/genes')"
-            >
-              <Dna class="w-4 h-4 inline mr-1.5" />
-              基因运营
             </button>
           </nav>
         </div>

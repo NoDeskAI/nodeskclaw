@@ -67,6 +67,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: () => import('@/views/Settings/index.vue'),
   },
+  {
+    path: '/gene',
+    name: 'Gene',
+    component: () => import('@/views/Gene/index.vue'),
+  },
   // ── 平台管理（超管） ──
   {
     path: '/platform/orgs',

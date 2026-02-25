@@ -19,14 +19,23 @@ import {
   Network,
   Sparkles,
   Layers,
+  Dna,
+  Download,
+  TrendingUp,
+  AlertCircle,
+  Activity,
+  Check,
+  X,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem } from '@/stores/gene'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const store = useGeneStore()
+const toast = useToast()
 
-const viewMode = ref<'genes' | 'genomes'>('genes')
+const viewMode = ref<'genes' | 'genomes' | 'evolution'>('genes')
 const keyword = ref('')
 const selectedTag = ref<string | null>(null)
 const selectedCategory = ref<string | null>(null)
@@ -72,6 +81,64 @@ function resolveIcon(iconName?: string) {
   if (!iconName) return Package
   const key = iconName.toLowerCase().replace(/[- ]/g, '')
   return iconMap[key] ?? iconMap[iconName] ?? Package
+}
+
+const evoStats = ref(store.geneStats)
+const evoHotGenes = ref<GeneItem[]>([])
+const evoActivity = ref<{ id: string; gene_slug: string; gene_name: string; metric_type: string; value: number; created_at?: string }[]>([])
+const evoPending = ref<GeneItem[]>([])
+const evoLoading = ref(false)
+const evoActivityLoading = ref(false)
+const evoPendingLoading = ref(false)
+const evoReviewingId = ref<string | null>(null)
+
+async function loadEvolution() {
+  evoLoading.value = true
+  try {
+    await store.fetchGeneStats()
+    evoStats.value = store.geneStats
+    await store.fetchGenes({ sort: 'effectiveness', page_size: 10 })
+    evoHotGenes.value = [...store.genes]
+  } finally {
+    evoLoading.value = false
+  }
+  evoActivityLoading.value = true
+  store.fetchGeneActivity(50).then((data) => {
+    evoActivity.value = data as typeof evoActivity.value
+  }).finally(() => { evoActivityLoading.value = false })
+  evoPendingLoading.value = true
+  store.fetchPendingReviewGenes().then((data) => {
+    evoPending.value = (data as GeneItem[]) ?? []
+  }).finally(() => { evoPendingLoading.value = false })
+}
+
+async function handleReview(geneId: string, action: 'approve' | 'reject') {
+  evoReviewingId.value = geneId
+  try {
+    await store.reviewGene(geneId, action)
+    evoPending.value = evoPending.value.filter((g) => g.id !== geneId)
+    toast.success(action === 'approve' ? '已通过' : '已拒绝')
+  } catch {
+    toast.error('操作失败')
+  } finally {
+    evoReviewingId.value = null
+  }
+}
+
+function formatMetricType(t: string): string {
+  const map: Record<string, string> = {
+    user_positive: '用户正向',
+    user_negative: '用户负向',
+    task_success: '任务成功',
+    agent_self_eval: 'Agent 自评',
+  }
+  return map[t] ?? t
+}
+
+function formatDate(s?: string): string {
+  if (!s) return '-'
+  const d = new Date(s)
+  return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 const featuredItems = computed(() =>
@@ -135,8 +202,12 @@ watch(keyword, () => {
 
 watch([viewMode, selectedTag, selectedCategory, sortBy], () => {
   page.value = 1
-  loadFeatured()
-  loadData()
+  if (viewMode.value === 'evolution') {
+    loadEvolution()
+  } else {
+    loadFeatured()
+    loadData()
+  }
 })
 
 watch(page, loadData)
@@ -180,6 +251,17 @@ function goToGenome(id: string) {
           >
             基因组
           </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              viewMode === 'evolution'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            ]"
+            @click="viewMode = 'evolution'"
+          >
+            进化趋势
+          </button>
         </div>
       </div>
     </div>
@@ -187,6 +269,156 @@ function goToGenome(id: string) {
     <div class="flex-1 min-h-0 overflow-y-auto">
       <div class="max-w-6xl mx-auto px-6 pt-6 pb-8">
 
+      <!-- 进化趋势 Tab -->
+      <template v-if="viewMode === 'evolution'">
+        <div v-if="evoLoading" class="flex items-center justify-center py-24">
+          <Loader2 class="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+        <template v-else>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <div class="rounded-xl border border-border bg-card p-4">
+              <div class="flex items-center gap-2 text-muted-foreground mb-1">
+                <Dna class="w-4 h-4" />
+                <span class="text-sm">基因总数</span>
+              </div>
+              <div class="text-2xl font-bold">{{ evoStats?.total_genes ?? 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-border bg-card p-4">
+              <div class="flex items-center gap-2 text-muted-foreground mb-1">
+                <Download class="w-4 h-4" />
+                <span class="text-sm">总学习数</span>
+              </div>
+              <div class="text-2xl font-bold">{{ evoStats?.total_installs ?? 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-border bg-card p-4">
+              <div class="flex items-center gap-2 text-muted-foreground mb-1">
+                <TrendingUp class="w-4 h-4" />
+                <span class="text-sm">学习中</span>
+              </div>
+              <div class="text-2xl font-bold">{{ evoStats?.learning_count ?? 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-border bg-card p-4">
+              <div class="flex items-center gap-2 text-muted-foreground mb-1">
+                <AlertCircle class="w-4 h-4" />
+                <span class="text-sm">失败数</span>
+              </div>
+              <div class="text-2xl font-bold">{{ evoStats?.failed_count ?? 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-border bg-card p-4">
+              <div class="flex items-center gap-2 text-muted-foreground mb-1">
+                <Sparkles class="w-4 h-4" />
+                <span class="text-sm">Agent 创造</span>
+              </div>
+              <div class="text-2xl font-bold">{{ evoStats?.agent_created_count ?? 0 }}</div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <div class="rounded-xl border border-border bg-card overflow-hidden">
+              <div class="px-4 py-3 border-b border-border">
+                <h2 class="font-semibold">热门基因 (按效能)</h2>
+              </div>
+              <div class="divide-y divide-border max-h-[320px] overflow-y-auto">
+                <div
+                  v-for="(g, i) in evoHotGenes"
+                  :key="g.id"
+                  class="px-4 py-3 flex items-center justify-between gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                  @click="goToGene(g.id)"
+                >
+                  <span class="text-muted-foreground w-6">{{ i + 1 }}</span>
+                  <div class="min-w-0 flex-1">
+                    <div class="font-medium truncate">{{ g.name }}</div>
+                    <div class="text-xs text-muted-foreground">{{ g.slug }}</div>
+                  </div>
+                  <div class="shrink-0">
+                    <div class="text-sm font-medium">{{ Math.round((g.effectiveness_score ?? 0) * 100) }}%</div>
+                    <div class="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        class="h-full rounded-full bg-primary"
+                        :style="{ width: `${Math.min(100, (g.effectiveness_score ?? 0) * 100)}%` }"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div v-if="evoHotGenes.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
+                  暂无数据
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-border bg-card overflow-hidden">
+              <div class="px-4 py-3 border-b border-border flex items-center gap-2">
+                <Activity class="w-4 h-4" />
+                <h2 class="font-semibold">活动流</h2>
+              </div>
+              <div class="divide-y divide-border max-h-[320px] overflow-y-auto">
+                <div v-if="evoActivityLoading" class="px-4 py-8 flex justify-center">
+                  <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+                <div
+                  v-else
+                  v-for="a in evoActivity"
+                  :key="a.id"
+                  class="px-4 py-2.5 text-sm"
+                >
+                  <span class="font-medium">{{ a.gene_name }}</span>
+                  <span class="text-muted-foreground mx-1">{{ formatMetricType(a.metric_type) }}</span>
+                  <span class="text-muted-foreground">{{ formatDate(a.created_at) }}</span>
+                </div>
+                <div v-if="!evoActivityLoading && evoActivity.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
+                  暂无活动
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-border bg-card overflow-hidden">
+            <div class="px-4 py-3 border-b border-border">
+              <h2 class="font-semibold">待审核</h2>
+            </div>
+            <div v-if="evoPendingLoading" class="px-4 py-8 flex justify-center">
+              <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+            <div v-else-if="evoPending.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
+              暂无待审核基因
+            </div>
+            <div v-else class="divide-y divide-border">
+              <div
+                v-for="g in evoPending"
+                :key="g.id"
+                class="px-4 py-3 flex items-center justify-between gap-4"
+              >
+                <div class="min-w-0 flex-1">
+                  <div class="font-medium">{{ g.name }}</div>
+                  <div class="text-sm text-muted-foreground">{{ g.slug }} · {{ g.review_status }}</div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-green-500/10 text-green-600 hover:bg-green-500/20 disabled:opacity-50"
+                    :disabled="evoReviewingId === g.id"
+                    @click="handleReview(g.id, 'approve')"
+                  >
+                    <Loader2 v-if="evoReviewingId === g.id" class="w-4 h-4 animate-spin" />
+                    <Check v-else class="w-4 h-4" />
+                    通过
+                  </button>
+                  <button
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-red-500/10 text-red-600 hover:bg-red-500/20 disabled:opacity-50"
+                    :disabled="evoReviewingId === g.id"
+                    @click="handleReview(g.id, 'reject')"
+                  >
+                    <X class="w-4 h-4" />
+                    拒绝
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+
+      <!-- 基因/基因组 Tab -->
+      <template v-else>
       <div class="flex flex-wrap gap-3 mb-6">
         <div class="relative flex-1 min-w-[200px]">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -392,6 +624,7 @@ function goToGenome(id: string) {
             下一页
           </button>
         </div>
+      </template>
       </template>
       </div>
     </div>

@@ -19,6 +19,8 @@ from app.schemas.gene import (
     RatingRequest,
     ReviewRequest,
     UninstallGeneRequest,
+    UpdateGeneRequest,
+    UpdateGenomeRequest,
 )
 from app.services import gene_service
 
@@ -376,6 +378,58 @@ async def admin_co_install(
     return ApiResponse(data=[p.model_dump() for p in pairs])
 
 
+@router.get("/admin/genes")
+async def admin_list_genes(
+    keyword: str | None = None,
+    category: str | None = None,
+    is_published: bool | None = None,
+    sort: str = "newest",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    genes, total = await gene_service.admin_list_genes(
+        db, keyword=keyword, category=category, is_published=is_published,
+        sort=sort, page=page, page_size=page_size,
+    )
+    return PaginatedResponse(
+        data=genes,
+        pagination=Pagination(page=page, page_size=page_size, total=total),
+    )
+
+
+@router.post("/admin/genes")
+async def admin_create_gene(
+    req: GeneCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    gene = await gene_service.create_gene(db, req, user_id=current_user.id, org_id=current_user.org_id)
+    return ApiResponse(data=gene)
+
+
+@router.put("/admin/genes/{gene_id}")
+async def admin_update_gene(
+    gene_id: str,
+    req: UpdateGeneRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    result = await gene_service.update_gene(db, gene_id, req)
+    return ApiResponse(data=result)
+
+
+@router.delete("/admin/genes/{gene_id}")
+async def admin_delete_gene(
+    gene_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    result = await gene_service.soft_delete_gene(db, gene_id)
+    return ApiResponse(data=result)
+
+
 @router.put("/admin/genes/{gene_id}/review")
 async def admin_review_gene(
     gene_id: str,
@@ -384,4 +438,54 @@ async def admin_review_gene(
     _current_user: User = Depends(get_current_user),
 ):
     result = await gene_service.review_gene(db, gene_id, req.action, req.reason)
+    return ApiResponse(data=result)
+
+
+@router.get("/admin/genomes")
+async def admin_list_genomes(
+    keyword: str | None = None,
+    is_published: bool | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    genomes, total = await gene_service.admin_list_genomes(
+        db, keyword=keyword, is_published=is_published,
+        page=page, page_size=page_size,
+    )
+    return PaginatedResponse(
+        data=genomes,
+        pagination=Pagination(page=page, page_size=page_size, total=total),
+    )
+
+
+@router.post("/admin/genomes")
+async def admin_create_genome(
+    req: GenomeCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    genome = await gene_service.create_genome(db, req, user_id=current_user.id, org_id=current_user.org_id)
+    return ApiResponse(data=genome)
+
+
+@router.put("/admin/genomes/{genome_id}")
+async def admin_update_genome(
+    genome_id: str,
+    req: UpdateGenomeRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    result = await gene_service.update_genome(db, genome_id, req)
+    return ApiResponse(data=result)
+
+
+@router.delete("/admin/genomes/{genome_id}")
+async def admin_delete_genome(
+    genome_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    result = await gene_service.soft_delete_genome(db, genome_id)
     return ApiResponse(data=result)

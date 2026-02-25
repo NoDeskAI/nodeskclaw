@@ -77,11 +77,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/OrgUsage.vue'),
   },
   {
-    path: '/admin/genes',
-    name: 'AdminGenes',
-    component: () => import('@/views/AdminGenes.vue'),
-  },
-  {
     path: '/gene-market',
     name: 'GeneMarket',
     component: () => import('@/views/GeneMarket.vue'),

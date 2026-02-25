@@ -34,6 +34,8 @@ from app.schemas.gene import (
     GenomeCreateRequest,
     LearningCallbackPayload,
     TagStats,
+    UpdateGeneRequest,
+    UpdateGenomeRequest,
 )
 from app.services.nfs_mount import nfs_mount
 from app.services.openclaw_session import (
@@ -1528,6 +1530,124 @@ async def get_evolution_log(
 # ═══════════════════════════════════════════════════
 #  Admin
 # ═══════════════════════════════════════════════════
+
+
+async def admin_list_genes(
+    db: AsyncSession,
+    *,
+    keyword: str | None = None,
+    category: str | None = None,
+    is_published: bool | None = None,
+    sort: str = "newest",
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict], int]:
+    """Admin gene list -- includes unpublished, with extra fields."""
+    base = select(Gene).where(not_deleted(Gene))
+
+    if keyword:
+        base = base.where(Gene.name.ilike(f"%{keyword}%") | Gene.slug.ilike(f"%{keyword}%"))
+    if category:
+        base = base.where(Gene.category == category)
+    if is_published is not None:
+        base = base.where(Gene.is_published.is_(is_published))
+
+    count_q = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+
+    sort_map = {
+        "newest": Gene.created_at.desc(),
+        "popularity": Gene.install_count.desc(),
+        "rating": Gene.avg_rating.desc(),
+        "effectiveness": Gene.effectiveness_score.desc(),
+    }
+    base = base.order_by(sort_map.get(sort, Gene.created_at.desc()))
+    base = base.offset((page - 1) * page_size).limit(page_size)
+
+    result = await db.execute(base)
+    return [_gene_to_dict(g) for g in result.scalars().all()], total
+
+
+async def admin_list_genomes(
+    db: AsyncSession,
+    *,
+    keyword: str | None = None,
+    is_published: bool | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict], int]:
+    base = select(Genome).where(not_deleted(Genome))
+    if keyword:
+        base = base.where(Genome.name.ilike(f"%{keyword}%") | Genome.slug.ilike(f"%{keyword}%"))
+    if is_published is not None:
+        base = base.where(Genome.is_published.is_(is_published))
+
+    count_q = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+
+    base = base.order_by(Genome.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(base)
+    return [_genome_to_dict(g) for g in result.scalars().all()], total
+
+
+async def update_gene(db: AsyncSession, gene_id: str, req: UpdateGeneRequest) -> dict:
+    result = await db.execute(select(Gene).where(Gene.id == gene_id, not_deleted(Gene)))
+    gene = result.scalar_one_or_none()
+    if not gene:
+        raise NotFoundError("基因不存在")
+
+    updates = req.model_dump(exclude_unset=True)
+    if "tags" in updates and updates["tags"] is not None:
+        updates["tags"] = _json_dumps(updates["tags"])
+    if "manifest" in updates and updates["manifest"] is not None:
+        updates["manifest"] = _json_dumps(updates["manifest"])
+
+    for field, value in updates.items():
+        setattr(gene, field, value)
+
+    await db.commit()
+    await db.refresh(gene)
+    return _gene_to_dict(gene)
+
+
+async def soft_delete_gene(db: AsyncSession, gene_id: str) -> dict:
+    result = await db.execute(select(Gene).where(Gene.id == gene_id, not_deleted(Gene)))
+    gene = result.scalar_one_or_none()
+    if not gene:
+        raise NotFoundError("基因不存在")
+    gene.soft_delete()
+    await db.commit()
+    return {"deleted": True}
+
+
+async def update_genome(db: AsyncSession, genome_id: str, req: UpdateGenomeRequest) -> dict:
+    result = await db.execute(select(Genome).where(Genome.id == genome_id, not_deleted(Genome)))
+    genome = result.scalar_one_or_none()
+    if not genome:
+        raise NotFoundError("基因组不存在")
+
+    updates = req.model_dump(exclude_unset=True)
+    if "gene_slugs" in updates and updates["gene_slugs"] is not None:
+        updates["gene_slugs"] = _json_dumps(updates["gene_slugs"])
+    if "config_override" in updates and updates["config_override"] is not None:
+        updates["config_override"] = _json_dumps(updates["config_override"])
+
+    for field, value in updates.items():
+        setattr(genome, field, value)
+
+    await db.commit()
+    await db.refresh(genome)
+    return _genome_to_dict(genome)
+
+
+async def soft_delete_genome(db: AsyncSession, genome_id: str) -> dict:
+    result = await db.execute(select(Genome).where(Genome.id == genome_id, not_deleted(Genome)))
+    genome = result.scalar_one_or_none()
+    if not genome:
+        raise NotFoundError("基因组不存在")
+    genome.soft_delete()
+    await db.commit()
+    return {"deleted": True}
 
 
 async def get_gene_stats(db: AsyncSession) -> GeneStatsResponse:

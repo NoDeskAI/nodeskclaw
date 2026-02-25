@@ -129,6 +129,33 @@ class GenomeCreateRequest(BaseModel):
     is_published: bool = True
 
 
+# ── Admin Update Requests ────────────────────────
+
+
+class UpdateGeneRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    short_description: str | None = None
+    category: str | None = None
+    tags: list[str] | None = None
+    icon: str | None = None
+    version: str | None = None
+    manifest: dict | None = None
+    is_featured: bool | None = None
+    is_published: bool | None = None
+
+
+class UpdateGenomeRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    short_description: str | None = None
+    icon: str | None = None
+    gene_slugs: list[str] | None = None
+    config_override: dict | None = None
+    is_featured: bool | None = None
+    is_published: bool | None = None
+
+
 # ── InstanceGene ─────────────────────────────────
 
 

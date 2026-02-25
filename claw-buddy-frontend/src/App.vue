@@ -22,6 +22,7 @@ import {
   Building2,
   CreditCard,
   Users,
+  Dna,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -70,6 +71,7 @@ const mainNavItems: NavItem[] = [
   { label: '实例', icon: Box, path: '/instances' },
   { label: '事件', icon: Activity, path: '/events' },
   { label: '集群', icon: Server, path: '/cluster' },
+  { label: '基因运营', icon: Dna, path: '/gene' },
   { label: '设置', icon: Settings, path: '/settings' },
 ]
 
