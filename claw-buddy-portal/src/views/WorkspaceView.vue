@@ -37,7 +37,7 @@ const bbBlockedCount = computed(() =>
 const bbOnlineCount = computed(() => agents.value.filter(a => a.sse_connected).length)
 const humanCount = computed(() => store.members.length)
 const humanSeatCount = computed(() =>
-  store.members.filter(m => m.hex_q !== null && m.hex_r !== null).length,
+  store.topologyNodes.filter((n: any) => n.node_type === 'human').length,
 )
 
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
@@ -76,8 +76,13 @@ const hexEntityName = computed(() => {
     return node?.display_name || node?.name || ''
   }
   if (selectedHex.value.type === 'human') {
-    const member = store.members.find((m: any) => m.user_id === selectedHex.value!.entityId)
-    return member?.user_name || ''
+    const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value!.entityId)
+    const userId = node?.extra?.user_id as string | undefined
+    if (userId) {
+      const member = store.members.find((m: any) => m.user_id === userId)
+      return member?.user_name || ''
+    }
+    return ''
   }
   return ''
 })
@@ -267,14 +272,14 @@ function onHexAction(action: string) {
       break
     case 'change-color':
       if (selectedHex.value?.entityId) {
-        pendingColorUserId.value = selectedHex.value.entityId
+        pendingColorHexId.value = selectedHex.value.entityId
         showColorPicker.value = true
       }
       hexDrawerOpen.value = false
       break
     case 'remove-human':
       if (selectedHex.value?.entityId) {
-        store.removeHumanHex(workspaceId.value, selectedHex.value.entityId)
+        store.deleteHumanHex(workspaceId.value, selectedHex.value.entityId)
         selectedHex.value = null
         hexDrawerOpen.value = false
       }
@@ -316,31 +321,29 @@ async function handleRenameCorridor() {
 const showMemberPicker = ref(false)
 const pendingHumanHex = ref<{ q: number; r: number } | null>(null)
 
-const availableMembers = computed(() =>
-  store.members.filter(m => m.hex_q == null && m.hex_r == null),
-)
+const availableMembers = computed(() => store.members)
 
 async function pickMember(userId: string) {
   const hex = pendingHumanHex.value
   if (!hex) return
   showMemberPicker.value = false
-  await store.setHumanHex(workspaceId.value, userId, hex.q, hex.r)
+  await store.createHumanHex(workspaceId.value, userId, hex.q, hex.r)
   pendingHumanHex.value = null
 }
 
 const showColorPicker = ref(false)
-const pendingColorUserId = ref('')
+const pendingColorHexId = ref('')
 const COLOR_PRESETS = [
   '#f59e0b', '#ef4444', '#22c55e', '#3b82f6',
   '#a855f7', '#ec4899', '#06b6d4', '#f97316',
 ]
 
 async function pickColor(color: string) {
-  const userId = pendingColorUserId.value
-  if (!userId) return
+  const hexId = pendingColorHexId.value
+  if (!hexId) return
   showColorPicker.value = false
-  await store.setHumanColor(workspaceId.value, userId, color)
-  pendingColorUserId.value = ''
+  await store.updateHumanHexColor(workspaceId.value, hexId, color)
+  pendingColorHexId.value = ''
 }
 
 const showChannelDialog = ref(false)
@@ -351,7 +354,9 @@ const channelAppSecret = ref('')
 const channelSaving = ref(false)
 
 function openChannelConfig() {
-  const member = store.members.find(m => m.user_id === selectedHex.value?.entityId)
+  const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value?.entityId)
+  const userId = node?.extra?.user_id as string | undefined
+  const member = userId ? store.members.find(m => m.user_id === userId) : undefined
   if (member?.channel_config) {
     const cfg = member.channel_config as Record<string, string>
     channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
@@ -368,7 +373,8 @@ function openChannelConfig() {
 }
 
 async function saveChannelConfig() {
-  const userId = selectedHex.value?.entityId
+  const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value?.entityId)
+  const userId = node?.extra?.user_id as string | undefined
   if (!userId) return
   channelSaving.value = true
   try {
@@ -468,7 +474,7 @@ async function moveHexTo(targetQ: number, targetR: number) {
     } else if (src.type === 'corridor') {
       await store.moveCorridorHex(workspaceId.value, src.id, targetQ, targetR)
     } else if (src.type === 'human') {
-      await store.setHumanHex(workspaceId.value, src.id, targetQ, targetR)
+      await store.moveHumanHex(workspaceId.value, src.id, targetQ, targetR)
     }
     toast.success(t('hexAction.moveSuccess', { q: targetQ, r: targetR }))
   } finally {

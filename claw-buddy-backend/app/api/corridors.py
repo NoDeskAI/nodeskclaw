@@ -11,7 +11,7 @@ from app.api.workspaces import broadcast_event
 from app.core.deps import get_current_org, get_db
 from app.models.topology_audit_log import TopologyAuditLog
 from app.models.base import not_deleted
-from app.models.corridor import CorridorHex, HexConnection, is_adjacent, ordered_pair
+from app.models.corridor import CorridorHex, HexConnection, HumanHex, is_adjacent, ordered_pair
 from app.models.instance import Instance
 from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
@@ -23,7 +23,8 @@ from app.schemas.corridor import (
     CorridorHexInfo,
     CorridorHexUpdate,
     HumanChannelUpdate,
-    HumanColorUpdate,
+    HumanHexCreate,
+    HumanHexInfo,
     HumanHexUpdate,
     TopologyEdgeInfo,
     TopologyInfo,
@@ -89,11 +90,11 @@ async def _is_hex_occupied(workspace_id: str, q: int, r: int, db: AsyncSession) 
     if corridor_q.scalar_one_or_none():
         return True
     human_q = await db.execute(
-        select(WorkspaceMember.id).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.hex_q == q,
-            WorkspaceMember.hex_r == r,
-            not_deleted(WorkspaceMember),
+        select(HumanHex.id).where(
+            HumanHex.workspace_id == workspace_id,
+            HumanHex.hex_q == q,
+            HumanHex.hex_r == r,
+            not_deleted(HumanHex),
         ).limit(1)
     )
     if human_q.scalar_one_or_none():
@@ -503,76 +504,133 @@ async def delete_connection(
     return _ok(message="deleted")
 
 
-# ── Human Hex ──────────────────────────────────────────
+# ── Human Hex CRUD ─────────────────────────────────────
 
-@router.put("/{workspace_id}/members/{user_id}/hex")
-async def set_human_hex(
-    workspace_id: str, user_id: str, body: HumanHexUpdate,
+@router.post("/{workspace_id}/human-hexes")
+async def create_human_hex(
+    workspace_id: str, body: HumanHexCreate,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
     _, org = org_ctx
     await _check_workspace(workspace_id, org, db)
-    result = await db.execute(
-        select(WorkspaceMember).where(
+    member_q = await db.execute(
+        select(WorkspaceMember.id).where(
             WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
+            WorkspaceMember.user_id == body.user_id,
             not_deleted(WorkspaceMember),
-        )
+        ).limit(1)
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(404, "member not found")
+    if not member_q.scalar_one_or_none():
+        raise HTTPException(404, "member not found in this workspace")
     if await _is_hex_occupied(workspace_id, body.hex_q, body.hex_r, db):
-        if not (member.hex_q == body.hex_q and member.hex_r == body.hex_r):
-            raise HTTPException(400, "hex position already occupied")
-    member.hex_q = body.hex_q
-    member.hex_r = body.hex_r
-    await db.commit()
+        raise HTTPException(400, "hex position already occupied")
     actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "human:hex_placed", {"user_id": user_id, "hex_q": member.hex_q, "hex_r": member.hex_r})
+    hh = HumanHex(
+        id=str(uuid.uuid4()),
+        workspace_id=workspace_id,
+        user_id=body.user_id,
+        hex_q=body.hex_q,
+        hex_r=body.hex_r,
+        display_color=body.display_color,
+        created_by=actor_id,
+    )
+    db.add(hh)
+    await db.commit()
+    broadcast_event(workspace_id, "human:hex_placed", {"hex_id": hh.id, "user_id": body.user_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r})
     audit = TopologyAuditLog(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
         action="human_hex_placed",
         target_type="human_hex",
-        target_id=user_id,
-        new_value={"hex_q": member.hex_q, "hex_r": member.hex_r},
+        target_id=hh.id,
+        new_value={"user_id": body.user_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r},
         actor_type=actor_type,
         actor_id=actor_id,
     )
     db.add(audit)
     await db.commit()
-    return _ok({"user_id": user_id, "hex_q": member.hex_q, "hex_r": member.hex_r})
+    return _ok(HumanHexInfo(
+        id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        created_at=hh.created_at,
+    ).model_dump(mode="json"))
 
 
-@router.delete("/{workspace_id}/members/{user_id}/hex")
-async def remove_human_hex(
-    workspace_id: str, user_id: str,
+@router.put("/{workspace_id}/human-hexes/{hex_id}")
+async def update_human_hex(
+    workspace_id: str, hex_id: str, body: HumanHexUpdate,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
     _, org = org_ctx
     await _check_workspace(workspace_id, org, db)
     result = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-            not_deleted(WorkspaceMember),
+        select(HumanHex).where(
+            HumanHex.id == hex_id,
+            HumanHex.workspace_id == workspace_id,
+            not_deleted(HumanHex),
         )
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(404, "member not found")
-    member.hex_q = None
-    member.hex_r = None
+    hh = result.scalar_one_or_none()
+    if not hh:
+        raise HTTPException(404, "human hex not found")
+    new_q = body.hex_q if body.hex_q is not None else hh.hex_q
+    new_r = body.hex_r if body.hex_r is not None else hh.hex_r
+    if (new_q, new_r) != (hh.hex_q, hh.hex_r):
+        if await _is_hex_occupied(workspace_id, new_q, new_r, db):
+            raise HTTPException(400, "hex position already occupied")
+        hh.hex_q = new_q
+        hh.hex_r = new_r
+    if body.display_color is not None:
+        hh.display_color = body.display_color
     await db.commit()
     actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "human:hex_removed", {"user_id": user_id})
+    broadcast_event(workspace_id, "human:hex_updated", {"hex_id": hex_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color})
+    audit = TopologyAuditLog(
+        id=str(uuid.uuid4()),
+        workspace_id=workspace_id,
+        action="human_hex_updated",
+        target_type="human_hex",
+        target_id=hex_id,
+        new_value={"hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color},
+        actor_type=actor_type,
+        actor_id=actor_id,
+    )
+    db.add(audit)
+    await db.commit()
+    return _ok(HumanHexInfo(
+        id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        created_at=hh.created_at,
+    ).model_dump(mode="json"))
+
+
+@router.delete("/{workspace_id}/human-hexes/{hex_id}")
+async def delete_human_hex(
+    workspace_id: str, hex_id: str,
+    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
+):
+    _, org = org_ctx
+    await _check_workspace(workspace_id, org, db)
+    result = await db.execute(
+        select(HumanHex).where(
+            HumanHex.id == hex_id,
+            HumanHex.workspace_id == workspace_id,
+            not_deleted(HumanHex),
+        )
+    )
+    hh = result.scalar_one_or_none()
+    if not hh:
+        raise HTTPException(404, "human hex not found")
+    hh.soft_delete()
+    await db.commit()
+    actor_type, actor_id = _actor(org_ctx)
+    broadcast_event(workspace_id, "human:hex_removed", {"hex_id": hex_id})
     audit = TopologyAuditLog(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
         action="human_hex_removed",
         target_type="human_hex",
-        target_id=user_id,
+        target_id=hex_id,
         new_value=None,
         actor_type=actor_type,
         actor_id=actor_id,
@@ -617,42 +675,6 @@ async def set_human_channel(
     db.add(audit)
     await db.commit()
     return _ok({"user_id": user_id, "channel_type": member.channel_type})
-
-
-@router.put("/{workspace_id}/members/{user_id}/color")
-async def set_human_color(
-    workspace_id: str, user_id: str, body: HumanColorUpdate,
-    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
-):
-    _, org = org_ctx
-    await _check_workspace(workspace_id, org, db)
-    result = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-            not_deleted(WorkspaceMember),
-        )
-    )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(404, "member not found")
-    member.display_color = body.display_color
-    await db.commit()
-    actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "human:color_updated", {"user_id": user_id, "display_color": member.display_color})
-    audit = TopologyAuditLog(
-        id=str(uuid.uuid4()),
-        workspace_id=workspace_id,
-        action="human_color_updated",
-        target_type="human_hex",
-        target_id=user_id,
-        new_value={"display_color": member.display_color},
-        actor_type=actor_type,
-        actor_id=actor_id,
-    )
-    db.add(audit)
-    await db.commit()
-    return _ok({"user_id": user_id, "display_color": member.display_color})
 
 
 # ── Topology ───────────────────────────────────────────

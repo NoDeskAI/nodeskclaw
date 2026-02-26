@@ -430,6 +430,36 @@ async def lifespan(app: FastAPI):
                 ))
                 logger.info("自动迁移：已为 workspace_templates 表添加 is_public 列")
 
+        # ── 迁移 16: human_hexes 表（人类工位独立存储，支持多次放置） ──
+        hh_tbl = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'human_hexes'"
+        ))
+        if hh_tbl.first() is None:
+            await conn.execute(text(
+                "CREATE TABLE human_hexes ("
+                "  id VARCHAR(36) PRIMARY KEY,"
+                "  workspace_id VARCHAR(36) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,"
+                "  user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                "  hex_q INTEGER NOT NULL,"
+                "  hex_r INTEGER NOT NULL,"
+                "  display_color VARCHAR(20) NOT NULL DEFAULT '#f59e0b',"
+                "  created_by VARCHAR(36),"
+                "  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                "  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                "  deleted_at TIMESTAMPTZ,"
+                "  CONSTRAINT uq_human_hex_pos UNIQUE (workspace_id, hex_q, hex_r)"
+                ")"
+            ))
+            await conn.execute(text("CREATE INDEX ix_human_hexes_workspace_id ON human_hexes (workspace_id)"))
+            await conn.execute(text("CREATE INDEX ix_human_hexes_user_id ON human_hexes (user_id)"))
+            migrated = await conn.execute(text(
+                "INSERT INTO human_hexes (id, workspace_id, user_id, hex_q, hex_r, display_color, created_at, updated_at)"
+                " SELECT gen_random_uuid()::text, workspace_id, user_id, hex_q, hex_r,"
+                "   COALESCE(display_color, '#f59e0b'), created_at, updated_at"
+                " FROM workspace_members WHERE hex_q IS NOT NULL AND deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：已创建 human_hexes 表并迁移 %d 条数据", migrated.rowcount)
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

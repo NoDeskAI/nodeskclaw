@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import not_deleted
-from app.models.corridor import CorridorHex, HexConnection
+from app.models.corridor import CorridorHex, HexConnection, HumanHex
 from app.models.instance import Instance
 from app.models.workspace_member import WorkspaceMember
 from app.models.workspace_message import WorkspaceMessage
@@ -69,17 +69,16 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
                 display_name=agent.agent_display_name or agent.name,
             )
 
-    members_q = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            not_deleted(WorkspaceMember),
-            WorkspaceMember.hex_q.isnot(None),
+    human_hexes_q = await db.execute(
+        select(HumanHex).where(
+            HumanHex.workspace_id == workspace_id,
+            not_deleted(HumanHex),
         )
     )
-    for member in members_q.scalars().all():
-        hex_map[(member.hex_q, member.hex_r)] = TopologyNode(
-            member.hex_q, member.hex_r, "human", entity_id=member.user_id,
-            extra={"channel_type": member.channel_type, "display_color": member.display_color},
+    for hh in human_hexes_q.scalars().all():
+        hex_map[(hh.hex_q, hh.hex_r)] = TopologyNode(
+            hh.hex_q, hh.hex_r, "human", entity_id=hh.id,
+            extra={"user_id": hh.user_id, "display_color": hh.display_color},
         )
 
     corridors_q = await db.execute(
@@ -338,18 +337,15 @@ async def get_message_flow_stats(
         for row in agents_q.all()
     }
 
-    members_q = await db.execute(
-        select(WorkspaceMember.user_id, WorkspaceMember.hex_q, WorkspaceMember.hex_r).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            not_deleted(WorkspaceMember),
-            WorkspaceMember.hex_q.isnot(None),
-            WorkspaceMember.hex_r.isnot(None),
+    human_hexes_q = await db.execute(
+        select(HumanHex.id, HumanHex.user_id, HumanHex.hex_q, HumanHex.hex_r).where(
+            HumanHex.workspace_id == workspace_id,
+            not_deleted(HumanHex),
         )
     )
-    human_hex: dict[str, tuple[int, int]] = {
-        row.user_id: (row.hex_q, row.hex_r)
-        for row in members_q.all()
-    }
+    human_hex: dict[str, tuple[int, int]] = {}
+    for row in human_hexes_q.all():
+        human_hex[row.user_id] = (row.hex_q, row.hex_r)
 
     msgs_q = await db.execute(
         select(

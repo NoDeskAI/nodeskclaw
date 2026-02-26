@@ -73,18 +73,28 @@ async def feishu_workspace_message(request: Request):
         )
 
         from app.services import corridor_router
+        from app.models.corridor import HumanHex
+        from app.models.base import not_deleted
 
-        if target_member.hex_q is not None and target_member.hex_r is not None:
-            endpoints = await corridor_router.get_reachable_endpoints(
-                workspace_id, target_member.hex_q, target_member.hex_r, db
+        hh_q = await db.execute(
+            select(HumanHex.hex_q, HumanHex.hex_r).where(
+                HumanHex.workspace_id == workspace_id,
+                HumanHex.user_id == target_member.user_id,
+                not_deleted(HumanHex),
             )
-            agent_ids = [ep.entity_id for ep in endpoints if ep.endpoint_type == "agent"]
-            if agent_ids:
-                from app.services.collaboration_service import send_system_message_to_agents
+        )
+        all_agent_ids: set[str] = set()
+        for row in hh_q.all():
+            endpoints = await corridor_router.get_reachable_endpoints(
+                workspace_id, row.hex_q, row.hex_r, db
+            )
+            all_agent_ids.update(ep.entity_id for ep in endpoints if ep.endpoint_type == "agent")
+        if all_agent_ids:
+            from app.services.collaboration_service import send_system_message_to_agents
 
-                await send_system_message_to_agents(
-                    workspace_id, agent_ids, content, db
-                )
+            await send_system_message_to_agents(
+                workspace_id, list(all_agent_ids), content, db
+            )
 
         from app.api.workspaces import broadcast_event
 

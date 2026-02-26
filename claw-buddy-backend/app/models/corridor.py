@@ -1,4 +1,4 @@
-"""Corridor system models — CorridorHex + HexConnection for workspace topology."""
+"""Corridor system models — CorridorHex + HexConnection + HumanHex for workspace topology."""
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,6 +34,27 @@ class CorridorHex(BaseModel):
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     workspace = relationship("Workspace")
+
+
+class HumanHex(BaseModel):
+    __tablename__ = "human_hexes"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "hex_q", "hex_r", name="uq_human_hex_pos"),
+    )
+
+    workspace_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
+    hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
+    display_color: Mapped[str] = mapped_column(String(20), default="#f59e0b", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+    workspace = relationship("Workspace")
+    user = relationship("User")
 
 
 class HexConnection(BaseModel):

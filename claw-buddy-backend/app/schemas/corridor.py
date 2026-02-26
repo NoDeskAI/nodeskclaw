@@ -52,18 +52,32 @@ class ConnectionInfo(BaseModel):
     created_at: datetime
 
 
-class HumanHexUpdate(BaseModel):
+class HumanHexCreate(BaseModel):
+    user_id: str
     hex_q: int
     hex_r: int
+    display_color: str = "#f59e0b"
+
+
+class HumanHexUpdate(BaseModel):
+    hex_q: int | None = None
+    hex_r: int | None = None
+    display_color: str | None = None
+
+
+class HumanHexInfo(BaseModel):
+    id: str
+    workspace_id: str
+    user_id: str
+    hex_q: int
+    hex_r: int
+    display_color: str
+    created_at: datetime
 
 
 class HumanChannelUpdate(BaseModel):
     channel_type: str = Field(max_length=20)
     channel_config: dict = {}
-
-
-class HumanColorUpdate(BaseModel):
-    display_color: str = Field(max_length=20)
 
 
 class TopologyNodeInfo(BaseModel):
