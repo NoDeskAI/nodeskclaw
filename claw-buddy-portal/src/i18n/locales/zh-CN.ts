@@ -9,6 +9,7 @@ const zhCN = {
     genes: "基因",
     evolutionLog: "进化日志",
     settings: "设置",
+    modelConfig: "模型配置",
     tools: "工具",
     logout: "退出登录",
     loading: "加载中",

@@ -9,6 +9,7 @@ const enUS = {
     genes: "Genes",
     evolutionLog: "Evolution Log",
     settings: "Settings",
+    modelConfig: "Model Config",
     tools: "Tools",
     logout: "Log out",
     loading: "Loading",
