@@ -373,6 +373,22 @@ async def lifespan(app: FastAPI):
                 )
             logger.info("自动迁移：已为 instances 表添加 wp_api_key 列并回填")
 
+        # ── 迁移 14: workspace_members 新增 hex / channel / display 列 ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'workspace_members' AND column_name = 'hex_q'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE workspace_members "
+                "ADD COLUMN hex_q INTEGER, "
+                "ADD COLUMN hex_r INTEGER, "
+                "ADD COLUMN channel_type VARCHAR(20), "
+                "ADD COLUMN channel_config JSON, "
+                "ADD COLUMN display_color VARCHAR(20) DEFAULT '#f59e0b'"
+            ))
+            logger.info("自动迁移：已为 workspace_members 表添加 hex_q/hex_r/channel_type/channel_config/display_color 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
