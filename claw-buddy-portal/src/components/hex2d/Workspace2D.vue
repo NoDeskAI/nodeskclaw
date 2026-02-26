@@ -28,8 +28,7 @@ interface TopologyEdge {
 
 const props = defineProps<{
   agents: AgentBrief[]
-  autoSummary: string
-  manualNotes: string
+  blackboardContent: string
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
@@ -266,10 +265,10 @@ const emptyHexes = computed(() => {
           {{ t('workspaceView.bbTitle') }}
         </text>
         <text x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
-          {{ autoSummary?.slice(0, 24) || t('workspaceView.bbNoSummary') }}{{ (autoSummary?.length ?? 0) > 24 ? '...' : '' }}
+          {{ blackboardContent?.slice(0, 24) || t('workspaceView.bbNoSummary') }}{{ (blackboardContent?.length ?? 0) > 24 ? '...' : '' }}
         </text>
         <text x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
-          {{ manualNotes?.slice(0, 30) || t('workspaceView.bbEditNotes') }}{{ (manualNotes?.length ?? 0) > 30 ? '...' : '' }}
+          {{ blackboardContent?.slice(24, 54) || '' }}{{ (blackboardContent?.length ?? 0) > 54 ? '...' : '' }}
         </text>
       </g>
 

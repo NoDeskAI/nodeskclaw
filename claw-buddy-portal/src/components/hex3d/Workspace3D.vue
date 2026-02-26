@@ -16,8 +16,7 @@ type HexType = 'empty' | 'agent' | 'blackboard' | 'human' | 'corridor'
 
 const props = defineProps<{
   agents: AgentBrief[]
-  autoSummary: string
-  manualNotes: string
+  blackboardContent: string
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]

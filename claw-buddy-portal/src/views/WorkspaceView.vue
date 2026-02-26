@@ -29,11 +29,8 @@ const workspaceId = computed(() => route.params.id as string)
 const ws = computed(() => store.currentWorkspace)
 const agents = computed(() => ws.value?.agents || [])
 
-const bbTaskCount = computed(() => (store.blackboard?.tasks as unknown[] | null)?.length ?? 0)
-const bbBlockedCount = computed(() =>
-  ((store.blackboard?.tasks as Record<string, unknown>[] | null) ?? [])
-    .filter(t => t.status === 'blocked').length,
-)
+const bbTaskCount = computed(() => 0)
+const bbBlockedCount = computed(() => 0)
 const bbOnlineCount = computed(() => agents.value.filter(a => a.sse_connected).length)
 const humanCount = computed(() => store.members.length)
 const humanSeatCount = computed(() =>
@@ -223,7 +220,7 @@ function onHexAction(action: string) {
         selectedAgentId.value = null
       }
       break
-    case 'edit-blackboard':
+    case 'view-blackboard':
       bbOpen.value = true
       hexDrawerOpen.value = false
       break
@@ -655,8 +652,7 @@ function handleKeydown(e: KeyboardEvent) {
             ref="workspace3dRef"
             v-if="activeMode === '3d' || isTransitioning"
             :agents="agents"
-            :auto-summary="store.blackboard?.auto_summary || ''"
-            :manual-notes="store.blackboard?.manual_notes || ''"
+            :blackboard-content="store.blackboard?.content || ''"
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topology?.nodes"
@@ -679,8 +675,7 @@ function handleKeydown(e: KeyboardEvent) {
             ref="workspace2dRef"
             v-if="activeMode === '2d' || isTransitioning"
             :agents="agents"
-            :auto-summary="store.blackboard?.auto_summary || ''"
-            :manual-notes="store.blackboard?.manual_notes || ''"
+            :blackboard-content="store.blackboard?.content || ''"
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topologyNodes"

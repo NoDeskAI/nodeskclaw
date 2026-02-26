@@ -1,4 +1,4 @@
-"""Blackboard model — structured task/performance management for a workspace."""
+"""Blackboard model — shared Markdown document for a workspace."""
 
 from datetime import datetime
 
@@ -15,10 +15,12 @@ class Blackboard(BaseModel):
     workspace_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), unique=True, nullable=False
     )
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    # deprecated — kept for data migration safety, no longer used by app logic
     auto_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
     manual_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
     objectives: Mapped[list | None] = mapped_column(JSON, nullable=True)
     tasks: Mapped[list | None] = mapped_column(JSON, nullable=True)
     member_status: Mapped[list | None] = mapped_column(JSON, nullable=True)

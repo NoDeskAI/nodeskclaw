@@ -42,13 +42,7 @@ export interface WorkspaceInfo {
 export interface BlackboardInfo {
   id: string
   workspace_id: string
-  auto_summary: string
-  manual_notes: string
-  summary_updated_at: string | null
-  objectives: unknown[] | null
-  tasks: unknown[] | null
-  member_status: unknown[] | null
-  performance: unknown[] | null
+  content: string
   updated_at: string
 }
 
@@ -229,18 +223,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function updateBlackboard(workspaceId: string, notes: string) {
-    const res = await api.put(`/workspaces/${workspaceId}/blackboard`, { manual_notes: notes })
+  async function updateBlackboard(workspaceId: string, content: string) {
+    const res = await api.put(`/workspaces/${workspaceId}/blackboard`, { content })
     blackboard.value = res.data.data
-  }
-
-  async function collectPerformance(workspaceId: string) {
-    await api.post(`/workspaces/${workspaceId}/blackboard/performance/collect`)
-  }
-
-  async function updateBlackboardTask(workspaceId: string, taskId: string, data: Record<string, unknown>) {
-    await api.put(`/workspaces/${workspaceId}/blackboard/tasks/${taskId}`, data)
-    await fetchBlackboard(workspaceId)
   }
 
   // ── Members ───────────────────────────────────────
@@ -816,8 +801,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     updateAgent,
     fetchBlackboard,
     updateBlackboard,
-    collectPerformance,
-    updateBlackboardTask,
     fetchMembers,
     fetchChatHistory,
     sendWorkspaceMessage,

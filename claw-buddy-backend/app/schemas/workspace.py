@@ -62,21 +62,17 @@ class WorkspaceListItem(BaseModel):
 class BlackboardInfo(BaseModel):
     id: str
     workspace_id: str
-    auto_summary: str
-    manual_notes: str
-    summary_updated_at: datetime | None
-    objectives: list | None = None
-    tasks: list | None = None
-    member_status: list | None = None
-    performance: list | None = None
+    content: str
     updated_at: datetime
 
 
 class BlackboardUpdate(BaseModel):
-    manual_notes: str | None = None
-    objectives: list | None = None
-    tasks: list | None = None
-    performance: list | None = None
+    content: str
+
+
+class BlackboardSectionPatch(BaseModel):
+    section: str = Field(min_length=1, max_length=128)
+    content: str
 
 
 # ── Agent Management ─────────────────────────────────

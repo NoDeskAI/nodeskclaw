@@ -145,7 +145,7 @@ const enUS = {
     openChat: "Open Chat",
     viewDetail: "View Details",
     remove: "Remove",
-    editBlackboard: "Edit Blackboard",
+    viewBlackboard: "View Blackboard",
     renameCorridor: "Rename Corridor",
     renameCorridorTitle: "Rename Corridor",
     corridorNamePlaceholder: "Enter corridor name",

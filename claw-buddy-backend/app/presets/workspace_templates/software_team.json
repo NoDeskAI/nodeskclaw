@@ -21,13 +21,7 @@
     ]
   },
   "blackboard_snapshot": {
-    "objectives": [
-      "需求澄清与评审",
-      "迭代开发与交付",
-      "质量保障与回归"
-    ],
-    "tasks": [],
-    "manual_notes": ""
+    "content": "## 目标\n\n- 需求澄清与评审\n- 迭代开发与交付\n- 质量保障与回归\n"
   },
   "gene_assignments": []
 }

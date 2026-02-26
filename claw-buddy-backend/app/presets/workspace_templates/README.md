@@ -9,7 +9,7 @@
 - `name`: 模板名称
 - `description`: 模板描述
 - `topology_snapshot`: 拓扑快照（nodes + edges）
-- `blackboard_snapshot`: 黑板快照（objectives、tasks、manual_notes）
+- `blackboard_snapshot`: 黑板快照（`content` Markdown 正文）
 - `gene_assignments`: 基因分配列表（可选）
 
 ## 预设模板

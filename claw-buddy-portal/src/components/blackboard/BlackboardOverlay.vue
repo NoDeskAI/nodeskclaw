@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { X, Save, Loader2, Target, ListTodo, Users, BarChart3, FileText, Network, RefreshCw } from 'lucide-vue-next'
+import { X, Save, Loader2, Pencil, Eye } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
-import api from '@/services/api'
-import draggable from 'vuedraggable'
+import { marked } from 'marked'
 
 const props = defineProps<{
   open: boolean
@@ -13,145 +12,39 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const store = useWorkspaceStore()
-const activeTab = ref('tasks')
-const notes = ref('')
+const editing = ref(false)
+const draft = ref('')
 const saving = ref(false)
 
-const tabs = [
-  { key: 'objectives', label: '目标', icon: Target },
-  { key: 'tasks', label: '任务', icon: ListTodo },
-  { key: 'status', label: '状态', icon: Users },
-  { key: 'performance', label: '绩效', icon: BarChart3 },
-  { key: 'notes', label: '笔记', icon: FileText },
-  { key: 'topology', label: '拓扑', icon: Network },
-]
-
-const objectives = computed(() => store.blackboard?.objectives || [])
-const tasks = computed(() => store.blackboard?.tasks || [])
-const memberStatus = computed(() => store.blackboard?.member_status || [])
-const performance = computed(() => store.blackboard?.performance || [])
-
-const taskColumns = ['todo', 'doing', 'done', 'blocked'] as const
-
-const tasksByStatus = computed(() => {
-  const groups: Record<string, unknown[]> = { todo: [], doing: [], done: [], blocked: [] }
-  for (const t of tasks.value) {
-    const s = (t as Record<string, unknown>).status as string || 'todo'
-    if (groups[s]) groups[s].push(t)
-    else groups.todo.push(t)
-  }
-  return groups
+const renderedHtml = computed(() => {
+  const raw = store.blackboard?.content || ''
+  if (!raw.trim()) return '<p class="text-muted-foreground text-sm">暂无内容</p>'
+  return marked.parse(raw) as string
 })
-
-function onTaskDragEnd(status: string, evt: any) {
-  if (!evt?.item) return
-  const taskId = evt.item.dataset?.taskId
-  if (!taskId) return
-  store.updateBlackboardTask(props.workspaceId, taskId, { status })
-}
 
 watch(() => props.open, (isOpen) => {
-  if (isOpen && store.blackboard) {
-    notes.value = store.blackboard.manual_notes
+  if (isOpen) {
+    editing.value = false
+    draft.value = store.blackboard?.content || ''
   }
 })
+
+function enterEdit() {
+  draft.value = store.blackboard?.content || ''
+  editing.value = true
+}
 
 async function save() {
   saving.value = true
   try {
-    await store.updateBlackboard(props.workspaceId, notes.value)
+    await store.updateBlackboard(props.workspaceId, draft.value)
+    editing.value = false
   } catch (e) {
     console.error('save blackboard error:', e)
   } finally {
     saving.value = false
   }
 }
-
-const statusColors: Record<string, string> = {
-  running: 'bg-green-500',
-  active: 'bg-green-500',
-  online: 'bg-green-500',
-  idle: 'bg-gray-400',
-  error: 'bg-red-500',
-  failed: 'bg-red-500',
-  deploying: 'bg-yellow-500',
-}
-
-const priorityColors: Record<string, string> = {
-  high: 'bg-red-500/20 text-red-400',
-  medium: 'bg-yellow-500/20 text-yellow-400',
-  low: 'bg-blue-500/20 text-blue-400',
-}
-
-const collecting = ref(false)
-async function collectPerformance() {
-  collecting.value = true
-  try {
-    await store.collectPerformance(props.workspaceId)
-    await store.fetchBlackboard(props.workspaceId)
-  } catch (e) {
-    console.error('collect performance error:', e)
-  } finally {
-    collecting.value = false
-  }
-}
-
-const metricLabels: Record<string, string> = {
-  task_completion_rate: '任务完成率',
-  message_activity: '消息活跃度',
-  avg_gene_rating: '平均基因评分',
-  avg_effectiveness: '平均效能指数',
-  collaboration_efficiency: '协作效率',
-}
-
-function metricPercent(metric: Record<string, unknown>): number {
-  const val = metric.value as number || 0
-  const target = metric.target as number || 1
-  return Math.min(100, (val / target) * 100)
-}
-
-function metricColor(percent: number): string {
-  if (percent >= 80) return 'bg-green-500'
-  if (percent >= 50) return 'bg-yellow-500'
-  return 'bg-red-500'
-}
-
-function computeScore(perf: unknown): number {
-  const metrics = (perf as Record<string, unknown>).metrics as Array<Record<string, unknown>> || []
-  let total = 0
-  for (const m of metrics) total += metricPercent(m)
-  return metrics.length > 0 ? total / metrics.length : 0
-}
-
-const rankedPerformance = computed(() =>
-  [...performance.value].sort((a, b) => computeScore(b) - computeScore(a))
-)
-
-const perfTrend = ref<Record<string, number[]>>({})
-
-async function loadTrend() {
-  try {
-    const res = await api.get(`/workspaces/${props.workspaceId}/blackboard/performance/trend`)
-    const data = res.data.data || []
-    const map: Record<string, number[]> = {}
-    for (const s of data) {
-      if (!map[s.instance_id]) map[s.instance_id] = []
-      const metrics = s.metrics || []
-      let total = 0
-      for (const m of metrics as Record<string, unknown>[]) total += metricPercent(m)
-      map[s.instance_id].push(metrics.length > 0 ? total / metrics.length : 0)
-    }
-    for (const k of Object.keys(map)) map[k].reverse()
-    perfTrend.value = map
-  } catch { /* silent */ }
-}
-
-function trendPoints(memberId: string): string {
-  const data = perfTrend.value[memberId] || []
-  return data.map((v, i) => `${i * 10},${32 - (v / 100) * 30}`).join(' ')
-}
-
-watch(() => props.open, (v) => { if (v) loadTrend() })
 </script>
 
 <template>
@@ -164,219 +57,49 @@ watch(() => props.open, (v) => { if (v) loadTrend() })
       <div class="w-full max-w-3xl mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col max-h-[85vh]">
         <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <h2 class="text-lg font-semibold">中央黑板</h2>
-          <button class="p-1 rounded hover:bg-muted" @click="emit('close')">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <div class="flex border-b border-border px-2 shrink-0">
-          <button
-            v-for="tab in tabs"
-            :key="tab.key"
-            class="flex items-center gap-1.5 px-3 py-2 text-sm transition-colors border-b-2"
-            :class="activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="activeTab = tab.key"
-          >
-            <component :is="tab.icon" class="w-4 h-4" />
-            {{ tab.label }}
-          </button>
+          <div class="flex items-center gap-1">
+            <button
+              v-if="!editing"
+              class="p-1.5 rounded hover:bg-muted transition-colors"
+              title="编辑"
+              @click="enterEdit"
+            >
+              <Pencil class="w-4 h-4" />
+            </button>
+            <button
+              v-else
+              class="p-1.5 rounded hover:bg-muted transition-colors"
+              title="预览"
+              @click="editing = false"
+            >
+              <Eye class="w-4 h-4" />
+            </button>
+            <button class="p-1.5 rounded hover:bg-muted transition-colors" @click="emit('close')">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div class="flex-1 overflow-y-auto px-5 py-4 min-h-[350px]">
-          <!-- Objectives Tab -->
-          <div v-if="activeTab === 'objectives'" class="space-y-3">
-            <div v-if="!objectives.length" class="text-sm text-muted-foreground">暂无目标</div>
-            <div
-              v-for="obj in objectives"
-              :key="(obj as Record<string, unknown>).id as string"
-              class="bg-muted rounded-lg p-4"
-            >
-              <h4 class="font-medium text-sm">{{ (obj as Record<string, unknown>).title }}</h4>
-              <div v-if="(obj as Record<string, unknown>).key_results" class="mt-2 space-y-1.5">
-                <div
-                  v-for="(kr, i) in (obj as Record<string, unknown>).key_results as unknown[]"
-                  :key="i"
-                  class="flex items-center gap-2"
-                >
-                  <div class="flex-1 text-xs text-muted-foreground">{{ (kr as Record<string, unknown>).desc }}</div>
-                  <div class="w-24 bg-background rounded-full h-1.5">
-                    <div
-                      class="bg-primary h-1.5 rounded-full"
-                      :style="{
-                        width: `${Math.min(100, ((kr as Record<string, unknown>).current as number || 0) / ((kr as Record<string, unknown>).target as number || 1) * 100)}%`
-                      }"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div v-if="editing">
+            <textarea
+              v-model="draft"
+              rows="18"
+              class="w-full bg-muted rounded-lg p-4 text-sm font-mono resize-none outline-none focus:ring-1 focus:ring-primary/50 min-h-[300px]"
+              placeholder="使用 Markdown 编写黑板内容..."
+            />
           </div>
-
-          <!-- Tasks Tab (Kanban with drag-and-drop) -->
-          <div v-if="activeTab === 'tasks'" class="grid grid-cols-4 gap-3 min-h-[300px]">
-            <div v-for="status in taskColumns" :key="status" class="flex flex-col">
-              <div class="text-xs font-medium text-muted-foreground uppercase mb-2">{{ status }} ({{ (tasksByStatus[status] || []).length }})</div>
-              <draggable
-                :list="tasksByStatus[status] || []"
-                group="tasks"
-                item-key="id"
-                class="flex-1 space-y-2 min-h-[60px] rounded-lg p-1"
-                ghost-class="opacity-40"
-                @end="(e: any) => onTaskDragEnd(status, e)"
-              >
-                <template #item="{ element: task }">
-                  <div
-                    :data-task-id="(task as Record<string, unknown>).id"
-                    class="bg-muted rounded-lg p-2.5 text-xs"
-                  >
-                    <div class="font-medium mb-1">{{ (task as Record<string, unknown>).title }}</div>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                      <span
-                        v-if="(task as Record<string, unknown>).priority"
-                        class="px-1.5 py-0.5 rounded text-[10px]"
-                        :class="priorityColors[(task as Record<string, unknown>).priority as string] || ''"
-                      >
-                        {{ (task as Record<string, unknown>).priority }}
-                      </span>
-                      <span
-                        v-if="(task as Record<string, unknown>).output_version"
-                        class="px-1.5 py-0.5 rounded text-[10px] bg-muted-foreground/20 text-muted-foreground"
-                      >
-                        v{{ (task as Record<string, unknown>).output_version }}
-                      </span>
-                    </div>
-                  </div>
-                </template>
-              </draggable>
-            </div>
-          </div>
-
-          <!-- Status Tab -->
-          <div v-if="activeTab === 'status'" class="space-y-2">
-            <div v-if="!memberStatus.length" class="text-sm text-muted-foreground">暂无成员状态</div>
-            <div
-              v-for="member in memberStatus"
-              :key="(member as Record<string, unknown>).id as string"
-              class="flex items-center gap-3 bg-muted rounded-lg p-3"
-            >
-              <div
-                class="w-2 h-2 rounded-full"
-                :class="statusColors[(member as Record<string, unknown>).status as string] || 'bg-gray-400'"
-              />
-              <div class="flex-1">
-                <div class="text-sm font-medium">{{ (member as Record<string, unknown>).name || (member as Record<string, unknown>).id }}</div>
-                <div class="text-xs text-muted-foreground">{{ (member as Record<string, unknown>).type }} - {{ (member as Record<string, unknown>).status }}</div>
-              </div>
-              <div class="text-xs text-muted-foreground">
-                {{ (member as Record<string, unknown>).last_activity ? '活跃' : '' }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Performance Tab -->
-          <div v-if="activeTab === 'performance'" class="space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="text-xs text-muted-foreground">
-                绩效数据每小时自动采集，也可手动触发
-              </div>
-              <button
-                class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
-                :disabled="collecting"
-                @click="collectPerformance"
-              >
-                <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': collecting }" />
-                {{ collecting ? '采集中...' : '立即采集' }}
-              </button>
-            </div>
-            <div v-if="!performance.length" class="text-sm text-muted-foreground">暂无绩效数据</div>
-            <div
-              v-for="(perf, rank) in rankedPerformance"
-              :key="(perf as Record<string, unknown>).member_id as string"
-              class="bg-muted rounded-lg p-4"
-              :class="{ 'ring-1 ring-primary/30': rank === 0 }"
-            >
-              <div class="flex items-center justify-between mb-3">
-                <div class="text-sm font-medium">
-                  <span v-if="rank === 0" class="text-primary mr-1">TOP</span>
-                  {{ (perf as Record<string, unknown>).member_name || (perf as Record<string, unknown>).member_id }}
-                </div>
-                <span class="text-xs text-muted-foreground">
-                  #{{ rank + 1 }} | {{ computeScore(perf).toFixed(0) }}
-                </span>
-              </div>
-              <div class="space-y-2.5">
-                <div
-                  v-for="(metric, i) in ((perf as Record<string, unknown>).metrics as unknown[] || [])"
-                  :key="i"
-                >
-                  <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="text-muted-foreground">{{ metricLabels[(metric as Record<string, unknown>).name as string] || (metric as Record<string, unknown>).name }}</span>
-                    <span>{{ (metric as Record<string, unknown>).value }} / {{ (metric as Record<string, unknown>).target }}</span>
-                  </div>
-                  <div class="w-full bg-background rounded-full h-1.5">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="metricColor(metricPercent(metric as Record<string, unknown>))"
-                      :style="{ width: `${metricPercent(metric as Record<string, unknown>)}%` }"
-                    />
-                  </div>
-                </div>
-              </div>
-              <!-- Inline SVG trend sparkline -->
-              <div v-if="perfTrend[(perf as Record<string, unknown>).member_id as string]?.length > 1" class="mt-3">
-                <svg class="w-full h-8" :viewBox="`0 0 ${(perfTrend[(perf as Record<string, unknown>).member_id as string]?.length || 2) * 10} 32`" preserveAspectRatio="none">
-                  <polyline
-                    :points="trendPoints((perf as Record<string, unknown>).member_id as string)"
-                    fill="none"
-                    stroke="#a78bfa"
-                    stroke-width="1.5"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <!-- Notes Tab -->
-          <div v-if="activeTab === 'notes'" class="space-y-4">
-            <div>
-              <h3 class="text-sm font-medium text-muted-foreground mb-2">自动摘要</h3>
-              <div class="bg-muted rounded-lg p-3 text-sm whitespace-pre-wrap min-h-[60px]">
-                {{ store.blackboard?.auto_summary || '暂无自动摘要...' }}
-              </div>
-            </div>
-            <div>
-              <h3 class="text-sm font-medium text-muted-foreground mb-2">手动备注</h3>
-              <textarea
-                v-model="notes"
-                rows="8"
-                class="w-full bg-muted rounded-lg p-3 text-sm resize-none outline-none focus:ring-1 focus:ring-primary/50"
-                placeholder="在此添加备注..."
-              />
-            </div>
-          </div>
-
-          <!-- Topology Tab -->
-          <div v-if="activeTab === 'topology'" class="space-y-3">
-            <div class="text-sm text-muted-foreground">
-              拓扑监控数据将在消息流量积累后显示。
-            </div>
-            <div v-if="store.topology" class="bg-muted rounded-lg p-3 text-xs">
-              <div>节点: {{ store.topology.nodes.length }}</div>
-              <div>连接: {{ store.topology.edges.length }}</div>
-            </div>
-          </div>
+          <div v-else class="prose prose-sm prose-invert max-w-none" v-html="renderedHtml" />
         </div>
 
-        <div class="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
+        <div v-if="editing" class="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
           <button
             class="px-4 py-2 text-sm rounded-lg bg-muted hover:bg-muted/80 transition-colors"
-            @click="emit('close')"
+            @click="editing = false"
           >
-            关闭
+            取消
           </button>
           <button
-            v-if="activeTab === 'notes'"
             class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
             :disabled="saving"
             @click="save"
@@ -397,5 +120,72 @@ watch(() => props.open, (v) => { if (v) loadTrend() })
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+:deep(.prose) {
+  color: hsl(var(--foreground));
+}
+:deep(.prose h1),
+:deep(.prose h2),
+:deep(.prose h3) {
+  color: hsl(var(--foreground));
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+:deep(.prose h1) { font-size: 1.5em; }
+:deep(.prose h2) { font-size: 1.25em; }
+:deep(.prose h3) { font-size: 1.1em; }
+:deep(.prose p) { margin: 0.5em 0; }
+:deep(.prose ul),
+:deep(.prose ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+:deep(.prose li) { margin: 0.25em 0; }
+:deep(.prose code) {
+  background: hsl(var(--muted));
+  padding: 0.15em 0.35em;
+  border-radius: 0.25em;
+  font-size: 0.875em;
+}
+:deep(.prose pre) {
+  background: hsl(var(--muted));
+  padding: 0.75em 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+:deep(.prose pre code) {
+  background: none;
+  padding: 0;
+}
+:deep(.prose blockquote) {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 1em;
+  color: hsl(var(--muted-foreground));
+  margin: 0.75em 0;
+}
+:deep(.prose hr) {
+  border-color: hsl(var(--border));
+  margin: 1em 0;
+}
+:deep(.prose a) {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+:deep(.prose table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+}
+:deep(.prose th),
+:deep(.prose td) {
+  border: 1px solid hsl(var(--border));
+  padding: 0.4em 0.75em;
+  text-align: left;
+}
+:deep(.prose th) {
+  background: hsl(var(--muted));
+  font-weight: 600;
 }
 </style>

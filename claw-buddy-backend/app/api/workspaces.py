@@ -18,6 +18,7 @@ from app.core.deps import async_session_factory, get_current_org, get_db
 from app.models.instance import Instance
 from app.schemas.workspace import (
     AddAgentRequest,
+    BlackboardSectionPatch,
     BlackboardUpdate,
     ChatMessageRequest,
     UpdateAgentRequest,
@@ -203,188 +204,17 @@ async def update_blackboard(
     return _ok(bb.model_dump(mode="json"))
 
 
-@router.put("/{workspace_id}/blackboard/objectives")
-async def update_objectives(
+@router.patch("/{workspace_id}/blackboard/sections")
+async def patch_blackboard_section(
     workspace_id: str,
-    data: dict,
+    data: BlackboardSectionPatch,
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
-    from app.schemas.workspace import BlackboardUpdate
-    bb = await workspace_service.update_blackboard(
-        db, workspace_id, BlackboardUpdate(objectives=data.get("objectives", []))
-    )
+    bb = await workspace_service.patch_blackboard_section(db, workspace_id, data)
     if bb is None:
         raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
-    return _ok({"objectives": bb.objectives})
-
-
-class TaskCreate(BaseModel):
-    title: str
-    description: str = ""
-    assignee_type: str | None = None
-    assignee_id: str | None = None
-    priority: str = "medium"
-    deadline: str | None = None
-    output_version: str | None = None
-
-
-@router.post("/{workspace_id}/blackboard/tasks")
-async def create_task(
-    workspace_id: str,
-    data: TaskCreate,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    import uuid
-    from datetime import datetime
-    from app.models.blackboard import Blackboard
-    result = await db.execute(
-        sa_select(Blackboard).where(Blackboard.workspace_id == workspace_id)
-    )
-    bb = result.scalar_one_or_none()
-    if bb is None:
-        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
-    tasks = list(bb.tasks or [])
-    new_task = {
-        "id": str(uuid.uuid4()),
-        "title": data.title,
-        "description": data.description,
-        "status": "todo",
-        "assignee_type": data.assignee_type,
-        "assignee_id": data.assignee_id,
-        "priority": data.priority,
-        "blockers": [],
-        "deadline": data.deadline,
-        "output_version": data.output_version,
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-    }
-    tasks.append(new_task)
-    bb.tasks = tasks
-    await db.commit()
-    return _ok(new_task)
-
-
-class TaskUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    status: str | None = None
-    assignee_type: str | None = None
-    assignee_id: str | None = None
-    priority: str | None = None
-    blockers: list | None = None
-    deadline: str | None = None
-    output_version: str | None = None
-
-
-@router.put("/{workspace_id}/blackboard/tasks/{task_id}")
-async def update_task(
-    workspace_id: str,
-    task_id: str,
-    data: TaskUpdate,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    from datetime import datetime
-    from app.models.blackboard import Blackboard
-    result = await db.execute(
-        sa_select(Blackboard).where(Blackboard.workspace_id == workspace_id)
-    )
-    bb = result.scalar_one_or_none()
-    if bb is None:
-        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
-    tasks = list(bb.tasks or [])
-    for task in tasks:
-        if task.get("id") == task_id:
-            for field in ("title", "description", "status", "assignee_type", "assignee_id", "priority", "blockers", "deadline", "output_version"):
-                val = getattr(data, field, None)
-                if val is not None:
-                    task[field] = val
-            task["updated_at"] = datetime.utcnow().isoformat()
-            bb.tasks = tasks
-            await db.commit()
-            return _ok(task)
-    raise _error(404, 40434, "errors.workspace.task_not_found", "任务不存在")
-
-
-@router.delete("/{workspace_id}/blackboard/tasks/{task_id}")
-async def delete_task(
-    workspace_id: str,
-    task_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    from app.models.blackboard import Blackboard
-    result = await db.execute(
-        sa_select(Blackboard).where(Blackboard.workspace_id == workspace_id)
-    )
-    bb = result.scalar_one_or_none()
-    if bb is None:
-        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
-    tasks = [t for t in (bb.tasks or []) if t.get("id") != task_id]
-    bb.tasks = tasks
-    await db.commit()
-    return _ok(message="task deleted")
-
-
-@router.put("/{workspace_id}/blackboard/performance")
-async def update_performance(
-    workspace_id: str,
-    data: dict,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    from app.schemas.workspace import BlackboardUpdate
-    bb = await workspace_service.update_blackboard(
-        db, workspace_id, BlackboardUpdate(performance=data.get("performance", []))
-    )
-    if bb is None:
-        raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
-    return _ok({"performance": bb.performance})
-
-
-@router.post("/{workspace_id}/blackboard/performance/collect")
-async def collect_performance(
-    workspace_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    """Trigger performance data collection for all agents in the workspace."""
-    from app.services.performance_service import collect_workspace_performance, update_blackboard_performance
-    await update_blackboard_performance(db, workspace_id)
-    perf = await collect_workspace_performance(db, workspace_id)
-    return _ok(perf)
-
-
-@router.get("/{workspace_id}/blackboard/performance/trend")
-async def performance_trend(
-    workspace_id: str,
-    instance_id: str | None = None,
-    limit: int = 30,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    """Get historical performance snapshots for trend analysis."""
-    from app.models.performance_snapshot import PerformanceSnapshot
-    q = sa_select(PerformanceSnapshot).where(
-        PerformanceSnapshot.workspace_id == workspace_id,
-        PerformanceSnapshot.deleted_at.is_(None),
-    )
-    if instance_id:
-        q = q.where(PerformanceSnapshot.instance_id == instance_id)
-    q = q.order_by(PerformanceSnapshot.collected_at.desc()).limit(limit)
-    result = await db.execute(q)
-    snapshots = [
-        {
-            "instance_id": s.instance_id,
-            "agent_name": s.agent_name,
-            "metrics": s.metrics,
-            "collected_at": s.collected_at.isoformat() if s.collected_at else None,
-        }
-        for s in result.scalars().all()
-    ]
-    return _ok(snapshots)
+    return _ok(bb.model_dump(mode="json"))
 
 
 # ── Workspace Schedules ──────────────────────────────

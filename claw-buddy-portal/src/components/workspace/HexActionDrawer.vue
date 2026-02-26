@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, PenSquare, Route, User, Palette, Settings, Link, Move } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Settings, Link, Move } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -24,7 +24,7 @@ const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   agent: { c: 'open-chat', d: 'view-detail', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
   corridor: { r: 'rename-corridor', l: 'manage-connections', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
   human: { s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
-  blackboard: { e: 'edit-blackboard' },
+  blackboard: { e: 'view-blackboard' },
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -229,10 +229,10 @@ onUnmounted(() => {
         <template v-else>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
-            @click="emit('action', 'edit-blackboard')"
+            @click="emit('action', 'view-blackboard')"
           >
-            <PenSquare class="w-4 h-4 text-primary" />
-            <span>{{ t('hexAction.editBlackboard') }}</span>
+            <Eye class="w-4 h-4 text-primary" />
+            <span>{{ t('hexAction.viewBlackboard') }}</span>
             <kbd class="kbd-hint">E</kbd>
           </button>
         </template>

@@ -479,6 +479,17 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：human_hexes 新增 channel 列并迁移 %d 条数据", migrated_ch.rowcount)
 
+        # ── 迁移 18: blackboards 新增 content 列（Markdown 化重构） ──
+        bb_content_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'blackboards' AND column_name = 'content'"
+        ))
+        if bb_content_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE blackboards ADD COLUMN content TEXT NOT NULL DEFAULT ''"
+            ))
+            logger.info("自动迁移：已为 blackboards 表添加 content 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

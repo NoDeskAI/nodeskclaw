@@ -145,7 +145,7 @@ const zhCN = {
     openChat: "打开对话",
     viewDetail: "查看详情",
     remove: "移除",
-    editBlackboard: "编辑黑板",
+    viewBlackboard: "查看黑板",
     renameCorridor: "重命名过道",
     renameCorridorTitle: "重命名过道",
     corridorNamePlaceholder: "输入过道名称",

@@ -116,11 +116,7 @@ async def create_template(
             ],
         }
         blackboard_snapshot = (
-            {
-                "objectives": bb_info.objectives,
-                "tasks": bb_info.tasks,
-                "manual_notes": bb_info.manual_notes,
-            }
+            {"content": bb_info.content}
             if bb_info
             else {}
         )
@@ -339,13 +335,8 @@ async def apply_template(
         select(Blackboard).where(Blackboard.workspace_id == ws_id)
     )
     bb_row = bb_result.scalar_one_or_none()
-    if bb_row:
-        if "objectives" in bb:
-            bb_row.objectives = bb["objectives"]
-        if "tasks" in bb:
-            bb_row.tasks = bb["tasks"]
-        if "manual_notes" in bb:
-            bb_row.manual_notes = bb["manual_notes"]
+    if bb_row and "content" in bb:
+        bb_row.content = bb["content"]
 
     await db.commit()
 

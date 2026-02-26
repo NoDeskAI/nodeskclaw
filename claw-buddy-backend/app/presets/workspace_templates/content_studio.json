@@ -18,14 +18,7 @@
     ]
   },
   "blackboard_snapshot": {
-    "objectives": [
-      "选题策划与大纲",
-      "初稿撰写",
-      "编辑审校",
-      "视觉设计"
-    ],
-    "tasks": [],
-    "manual_notes": ""
+    "content": "## 目标\n\n- 选题策划与大纲\n- 初稿撰写\n- 编辑审校\n- 视觉设计\n"
   },
   "gene_assignments": []
 }

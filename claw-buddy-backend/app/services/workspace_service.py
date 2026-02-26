@@ -15,6 +15,7 @@ from app.schemas.workspace import (
     AddAgentRequest,
     AgentBrief,
     BlackboardInfo,
+    BlackboardSectionPatch,
     BlackboardUpdate,
     UpdateAgentRequest,
     WorkspaceCreate,
@@ -440,11 +441,8 @@ async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
 
 def _bb_to_info(bb: Blackboard) -> BlackboardInfo:
     return BlackboardInfo(
-        id=bb.id, workspace_id=bb.workspace_id, auto_summary=bb.auto_summary,
-        manual_notes=bb.manual_notes, summary_updated_at=bb.summary_updated_at,
-        objectives=bb.objectives, tasks=bb.tasks,
-        member_status=bb.member_status, performance=bb.performance,
-        updated_at=bb.updated_at,
+        id=bb.id, workspace_id=bb.workspace_id,
+        content=bb.content, updated_at=bb.updated_at,
     )
 
 
@@ -465,14 +463,42 @@ async def update_blackboard(db: AsyncSession, workspace_id: str, data: Blackboar
     bb = result.scalar_one_or_none()
     if bb is None:
         return None
-    if data.manual_notes is not None:
-        bb.manual_notes = data.manual_notes
-    if data.objectives is not None:
-        bb.objectives = data.objectives
-    if data.tasks is not None:
-        bb.tasks = data.tasks
-    if data.performance is not None:
-        bb.performance = data.performance
+    bb.content = data.content
+    await db.commit()
+    await db.refresh(bb)
+    return _bb_to_info(bb)
+
+
+def _patch_section(markdown: str, section: str, new_content: str) -> str:
+    """Replace content under ``## {section}``, or append if not found."""
+    lines = markdown.split("\n")
+    heading = f"## {section}"
+    start = end = -1
+    for i, line in enumerate(lines):
+        if line.strip() == heading:
+            start = i + 1
+        elif start >= 0 and line.startswith("## "):
+            end = i
+            break
+    if start >= 0:
+        if end < 0:
+            end = len(lines)
+        lines[start:end] = ["", new_content, ""]
+    else:
+        lines.extend(["", heading, "", new_content])
+    return "\n".join(lines)
+
+
+async def patch_blackboard_section(
+    db: AsyncSession, workspace_id: str, data: BlackboardSectionPatch,
+) -> BlackboardInfo | None:
+    result = await db.execute(
+        select(Blackboard).where(Blackboard.workspace_id == workspace_id)
+    )
+    bb = result.scalar_one_or_none()
+    if bb is None:
+        return None
+    bb.content = _patch_section(bb.content, data.section, data.content)
     await db.commit()
     await db.refresh(bb)
     return _bb_to_info(bb)
