@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -28,6 +28,13 @@ function onLocaleChange(value: string) {
 const workspaceId = computed(() => route.params.id as string)
 const ws = computed(() => store.currentWorkspace)
 const agents = computed(() => ws.value?.agents || [])
+
+const bbTaskCount = computed(() => (store.blackboard?.tasks as unknown[] | null)?.length ?? 0)
+const bbBlockedCount = computed(() =>
+  ((store.blackboard?.tasks as Record<string, unknown>[] | null) ?? [])
+    .filter(t => t.status === 'blocked').length,
+)
+const bbOnlineCount = computed(() => agents.value.filter(a => a.sse_connected).length)
 
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
@@ -455,6 +462,23 @@ function handleKeydown(e: KeyboardEvent) {
           <Plus class="w-3.5 h-3.5" />
           {{ t('workspaceView.addAgent') }}
         </button>
+
+        <div class="w-px h-5 bg-border" />
+
+        <div class="flex items-center gap-3 text-xs text-muted-foreground">
+          <span class="flex items-center gap-1">
+            <ListChecks class="w-3.5 h-3.5" />
+            {{ t('workspaceView.bbTasks') }} {{ bbTaskCount }}
+          </span>
+          <span class="flex items-center gap-1" :class="bbBlockedCount > 0 ? 'text-amber-500' : ''">
+            <AlertTriangle class="w-3.5 h-3.5" />
+            {{ t('workspaceView.bbBlocked') }} {{ bbBlockedCount }}
+          </span>
+          <span class="flex items-center gap-1" :class="bbOnlineCount > 0 ? 'text-green-500' : ''">
+            <Wifi class="w-3.5 h-3.5" />
+            {{ t('workspaceView.bbOnline') }} {{ bbOnlineCount }}
+          </span>
+        </div>
       </div>
 
       <div class="flex items-center gap-2">

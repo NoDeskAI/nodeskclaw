@@ -115,6 +115,12 @@ const enUS = {
     openActionPanel: "Open action panel",
     doubleClick: "Double-click",
     quickOpenChat: "Quick open chat",
+    bbTitle: "Blackboard",
+    bbNoSummary: "No summary",
+    bbEditNotes: "Click to edit notes",
+    bbTasks: "Tasks",
+    bbBlocked: "Blocked",
+    bbOnline: "Online",
   },
   workspaceSettings: {
     title: "Workspace Settings",

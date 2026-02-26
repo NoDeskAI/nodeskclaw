@@ -115,6 +115,12 @@ const zhCN = {
     openActionPanel: "打开操作面板",
     doubleClick: "双击",
     quickOpenChat: "快速打开对话",
+    bbTitle: "中央黑板",
+    bbNoSummary: "暂无摘要",
+    bbEditNotes: "点击编辑备注",
+    bbTasks: "任务",
+    bbBlocked: "卡点",
+    bbOnline: "在线",
   },
   workspaceSettings: {
     title: "工作区设置",

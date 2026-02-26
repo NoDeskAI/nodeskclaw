@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSvgZoom } from '@/composables/useSvgZoom'
 import { axialToWorld, hexPolygonPoints, HEX_SIZE } from '@/composables/useHexLayout'
 import type { AgentBrief } from '@/stores/workspace'
+
+const { t } = useI18n()
 
 interface TopologyNode {
   id: string
@@ -260,13 +263,13 @@ const emptyHexes = computed(() => {
           class="animate-bb-ring"
         />
         <text x="0" y="-20" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">
-          中央黑板
+          {{ t('workspaceView.bbTitle') }}
         </text>
         <text x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
-          {{ autoSummary?.slice(0, 24) || '暂无摘要' }}{{ (autoSummary?.length ?? 0) > 24 ? '...' : '' }}
+          {{ autoSummary?.slice(0, 24) || t('workspaceView.bbNoSummary') }}{{ (autoSummary?.length ?? 0) > 24 ? '...' : '' }}
         </text>
         <text x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
-          {{ manualNotes?.slice(0, 30) || '点击编辑备注' }}{{ (manualNotes?.length ?? 0) > 30 ? '...' : '' }}
+          {{ manualNotes?.slice(0, 30) || t('workspaceView.bbEditNotes') }}{{ (manualNotes?.length ?? 0) > 30 ? '...' : '' }}
         </text>
       </g>
 

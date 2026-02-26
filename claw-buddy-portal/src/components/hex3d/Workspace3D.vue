@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as THREE from 'three'
 import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
@@ -8,6 +9,8 @@ import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import AgentHex3D from './AgentHex3D.vue'
 import Blackboard3D from './Blackboard3D.vue'
 import type { AgentBrief, TopologyNode, TopologyEdge } from '@/stores/workspace'
+
+const { t } = useI18n()
 
 type HexType = 'empty' | 'agent' | 'blackboard' | 'human' | 'corridor'
 
@@ -200,40 +203,19 @@ function createBlackboardMesh(): THREE.Group {
 function createBBLabelSprite(): THREE.Sprite {
   const canvas = document.createElement('canvas')
   canvas.width = 256
-  canvas.height = 64
+  canvas.height = 40
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = 'transparent'
-  ctx.fillRect(0, 0, 256, 64)
+  ctx.fillRect(0, 0, 256, 40)
   ctx.font = 'bold 20px sans-serif'
   ctx.fillStyle = '#a78bfa'
   ctx.textAlign = 'center'
-  ctx.fillText('Blackboard', 128, 28)
-  ctx.font = '14px sans-serif'
-  ctx.fillStyle = '#9ca3af'
-  ctx.fillText('T:0 B:0 O:0', 128, 50)
+  ctx.fillText(t('workspaceView.bbTitle'), 128, 28)
   const texture = new THREE.CanvasTexture(canvas)
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
   const sprite = new THREE.Sprite(mat)
-  sprite.scale.set(1.2, 0.3, 1)
+  sprite.scale.set(1.2, 0.2, 1)
   return sprite
-}
-
-function updateBBLabel(taskCount: number, blockedCount: number, onlineCount: number) {
-  const bbMesh = hexMeshes.get('__blackboard__')
-  if (!bbMesh) return
-  const sprite = bbMesh.getObjectByName('bb-stats-label') as THREE.Sprite | undefined
-  if (!sprite?.material?.map) return
-  const canvas = (sprite.material as THREE.SpriteMaterial).map!.image as HTMLCanvasElement
-  const ctx = canvas.getContext('2d')!
-  ctx.clearRect(0, 0, 256, 64)
-  ctx.font = 'bold 20px sans-serif'
-  ctx.fillStyle = '#a78bfa'
-  ctx.textAlign = 'center'
-  ctx.fillText('Blackboard', 128, 28)
-  ctx.font = '14px sans-serif'
-  ctx.fillStyle = '#9ca3af'
-  ctx.fillText(`T:${taskCount} B:${blockedCount} O:${onlineCount}`, 128, 50);
-  (sprite.material as THREE.SpriteMaterial).map!.needsUpdate = true
 }
 
 const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.88, HEX_SIZE * 0.88, 0.03, 6)
@@ -543,7 +525,6 @@ defineExpose({
   panBy: (dx: number, dy: number) => orbitControls.panBy(dx, dy),
   focusOnPosition: (x: number, z: number) => orbitControls.focusOnPosition(x, z),
   getCameraXZDirections: () => orbitControls.getCameraXZDirections(),
-  updateBBLabel,
 })
 </script>
 
