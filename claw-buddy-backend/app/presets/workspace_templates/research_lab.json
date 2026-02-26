@@ -1,0 +1,27 @@
+{
+  "name": "研究实验室",
+  "description": "研究员与分析师协作，聚焦黑板共享研究目标",
+  "topology_snapshot": {
+    "nodes": [
+      {"hex_q": 0, "hex_r": 0, "node_type": "blackboard", "entity_id": null, "display_name": "黑板", "extra": {}},
+      {"hex_q": 1, "hex_r": 0, "node_type": "agent", "entity_id": null, "display_name": "Researcher", "extra": {}},
+      {"hex_q": -1, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "Analyst", "extra": {}}
+    ],
+    "edges": [
+      {"a_q": 0, "a_r": 0, "b_q": 1, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 1, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false}
+    ]
+  },
+  "blackboard_snapshot": {
+    "objectives": [
+      "研究问题定义",
+      "文献调研与综述",
+      "数据分析与假设验证",
+      "结论与报告撰写"
+    ],
+    "tasks": [],
+    "manual_notes": "研究目标与进展共享于黑板，便于双角色协作"
+  },
+  "gene_assignments": []
+}

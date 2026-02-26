@@ -26,7 +26,8 @@ claw-buddy-backend/
 │   │   ├── instances.py      # 实例管理
 │   │   ├── registry.py       # 镜像仓库
 │   │   ├── settings.py       # 系统配置
-│   │   └── workspaces.py     # 工作区 CRUD、群聊、SSE
+│   │   ├── workspaces.py     # 工作区 CRUD、群聊、SSE
+│   │   └── templates.py      # 工作区模板 CRUD、应用
 │   ├── core/                 # 核心模块
 │   │   ├── config.py         # pydantic-settings 配置
 │   │   ├── deps.py           # 依赖注入（DB session、当前用户等）
@@ -42,6 +43,7 @@ claw-buddy-backend/
 │   │   ├── workspace_message.py  # 工作区群聊消息
 │   │   ├── workspace_member.py   # 工作区成员
 │   │   ├── blackboard.py     # 工作区黑板
+│   │   ├── workspace_template.py  # 工作区模板
 │   │   └── system_config.py  # 系统配置（键值对）
 │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   ├── services/             # 业务逻辑层
@@ -89,6 +91,7 @@ claw-buddy-backend/
 | `/api/v1/workspaces/{ws}/messages` | 消息 | 工作区消息历史 |
 | `/api/v1/workspaces/{ws}/events?token=` | SSE | 实时事件流（query param JWT 认证） |
 | `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
+| `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 

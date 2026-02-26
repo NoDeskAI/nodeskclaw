@@ -1,0 +1,31 @@
+{
+  "name": "内容工作室",
+  "description": "撰稿、编辑、设计三位一体内容生产流水线",
+  "topology_snapshot": {
+    "nodes": [
+      {"hex_q": 0, "hex_r": 0, "node_type": "blackboard", "entity_id": null, "display_name": "黑板", "extra": {}},
+      {"hex_q": 1, "hex_r": 0, "node_type": "agent", "entity_id": null, "display_name": "Writer", "extra": {}},
+      {"hex_q": 0, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "Editor", "extra": {}},
+      {"hex_q": -1, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "Designer", "extra": {}}
+    ],
+    "edges": [
+      {"a_q": 0, "a_r": 0, "b_q": 1, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": 0, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 1, "a_r": 0, "b_q": 0, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 1, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 1, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false}
+    ]
+  },
+  "blackboard_snapshot": {
+    "objectives": [
+      "选题策划与大纲",
+      "初稿撰写",
+      "编辑审校",
+      "视觉设计"
+    ],
+    "tasks": [],
+    "manual_notes": ""
+  },
+  "gene_assignments": []
+}

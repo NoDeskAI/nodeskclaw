@@ -19,6 +19,7 @@ from app.api.mcp import router as mcp_router
 from app.api.trust import router as trust_router
 from app.api.webhooks import router as webhook_router
 from app.api.workspaces import router as workspace_router
+from app.api.templates import router as template_router
 
 api_router = APIRouter()
 
@@ -44,4 +45,5 @@ api_router.include_router(storage_router, prefix="/storage-classes", tags=["存�
 api_router.include_router(workspace_router, prefix="/workspaces", tags=["工作区"])
 api_router.include_router(corridor_router, prefix="/workspaces", tags=["过道系统"])
 api_router.include_router(trust_router, prefix="/workspaces", tags=["渐进式信任"])
+api_router.include_router(template_router, prefix="/workspaces", tags=["工作区模板"])
 api_router.include_router(gene_router, tags=["基因进化"])

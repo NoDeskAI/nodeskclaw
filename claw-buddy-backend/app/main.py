@@ -389,6 +389,38 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 workspace_members 表添加 hex_q/hex_r/channel_type/channel_config/display_color 列")
 
+        # ── 迁移 15: workspace_templates 表 schema 统一 ──
+        tbl = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'workspace_templates'"
+        ))
+        if tbl.first() is not None:
+            is_preset_col = await conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'workspace_templates' AND column_name = 'is_preset'"
+            ))
+            if is_preset_col.first() is None:
+                await conn.execute(text(
+                    "ALTER TABLE workspace_templates ADD COLUMN is_preset BOOLEAN NOT NULL DEFAULT false"
+                ))
+                logger.info("自动迁移：已为 workspace_templates 表添加 is_preset 列")
+            bb_snap_col = await conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'workspace_templates' AND column_name = 'blackboard_snapshot'"
+            ))
+            if bb_snap_col.first() is None:
+                await conn.execute(text(
+                    "ALTER TABLE workspace_templates ADD COLUMN blackboard_snapshot JSONB DEFAULT '{}'"
+                ))
+                bb_tmpl_col = await conn.execute(text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'workspace_templates' AND column_name = 'blackboard_template'"
+                ))
+                if bb_tmpl_col.first() is not None:
+                    await conn.execute(text(
+                        "UPDATE workspace_templates SET blackboard_snapshot = COALESCE(blackboard_template, '{}')"
+                    ))
+                logger.info("自动迁移：已为 workspace_templates 表添加 blackboard_snapshot 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
@@ -474,6 +506,39 @@ async def lifespan(app: FastAPI):
             db.add_all(seed_plans)
             await db.commit()
             logger.info("自动迁移：已种子化 3 个套餐")
+
+        # 种子预设工作区模板（幂等）
+        from app.models.workspace_template import WorkspaceTemplate
+        import json as _json
+        preset_names = ["软件研发团队", "内容工作室", "研究实验室"]
+        preset_files = ["software_team.json", "content_studio.json", "research_lab.json"]
+        for pname, pfile in zip(preset_names, preset_files):
+            exists = await db.execute(
+                select(WorkspaceTemplate).where(
+                    WorkspaceTemplate.name == pname,
+                    WorkspaceTemplate.is_preset.is_(True),
+                    WorkspaceTemplate.deleted_at.is_(None),
+                ).limit(1)
+            )
+            if exists.scalar_one_or_none():
+                continue
+            path = os.path.join(os.path.dirname(__file__), "presets", "workspace_templates", pfile)
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    data = _json.load(f)
+                t = WorkspaceTemplate(
+                    id=str(__import__("uuid").uuid4()),
+                    name=data.get("name", pname),
+                    description=data.get("description", ""),
+                    is_preset=True,
+                    topology_snapshot=data.get("topology_snapshot", {}),
+                    blackboard_snapshot=data.get("blackboard_snapshot", {}),
+                    gene_assignments=data.get("gene_assignments", []),
+                    created_by=None,
+                )
+                db.add(t)
+        await db.commit()
+        logger.info("自动迁移：已种子化预设工作区模板")
 
         # 默认基因/基因组改为一次性 SQL 回填；启动流程不再自动写入
 

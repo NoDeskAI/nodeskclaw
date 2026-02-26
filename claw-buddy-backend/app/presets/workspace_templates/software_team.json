@@ -1,0 +1,33 @@
+{
+  "name": "软件研发团队",
+  "description": "PM、开发、测试三角协作，过道连接黑板与各角色",
+  "topology_snapshot": {
+    "nodes": [
+      {"hex_q": 0, "hex_r": 0, "node_type": "blackboard", "entity_id": null, "display_name": "黑板", "extra": {}},
+      {"hex_q": 1, "hex_r": 0, "node_type": "corridor", "entity_id": null, "display_name": "过道", "extra": {}},
+      {"hex_q": 2, "hex_r": 0, "node_type": "agent", "entity_id": null, "display_name": "PM", "extra": {}},
+      {"hex_q": 0, "hex_r": 1, "node_type": "corridor", "entity_id": null, "display_name": "过道", "extra": {}},
+      {"hex_q": 0, "hex_r": 2, "node_type": "agent", "entity_id": null, "display_name": "Dev", "extra": {}},
+      {"hex_q": -1, "hex_r": 1, "node_type": "corridor", "entity_id": null, "display_name": "过道", "extra": {}},
+      {"hex_q": -2, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "QA", "extra": {}}
+    ],
+    "edges": [
+      {"a_q": 0, "a_r": 0, "b_q": 1, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 1, "a_r": 0, "b_q": 2, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": 0, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 1, "b_q": 0, "b_r": 2, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": -1, "a_r": 1, "b_q": -2, "b_r": 1, "direction": "both", "auto_created": false}
+    ]
+  },
+  "blackboard_snapshot": {
+    "objectives": [
+      "需求澄清与评审",
+      "迭代开发与交付",
+      "质量保障与回归"
+    ],
+    "tasks": [],
+    "manual_notes": ""
+  },
+  "gene_assignments": []
+}
