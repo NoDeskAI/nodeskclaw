@@ -44,6 +44,8 @@ async def events_stream(
 
     async def generate():
         k8s = K8sClient(api_client)
+        yield ": connected\n\n"
+
         event_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def watch_loop():

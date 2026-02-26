@@ -16,6 +16,7 @@ const clusterConnected = ref<boolean | null>(null)
 let abortController: AbortController | null = null
 let eventCounter = 0
 let retryCount = 0
+let currentClusterId: string | null = null
 
 const SSE_BASE_RETRY_MS = 2000
 const SSE_MAX_RETRY_MS = 60000
@@ -23,20 +24,24 @@ const SSE_MAX_RETRY_MS = 60000
 class FatalSSEError extends Error {}
 
 function startGlobalSSE(clusterId: string) {
-  stopGlobalSSE()
-
-  if (!clusterId) {
-    sseConnected.value = false
-    sseConnecting.value = false
+  if (currentClusterId === clusterId && (sseConnected.value || sseConnecting.value)) {
     return
   }
 
+  stopGlobalSSE()
+
+  if (!clusterId) {
+    return
+  }
+
+  currentClusterId = clusterId
   abortController = new AbortController()
   retryCount = 0
   sseConnecting.value = true
 
   fetchEventSource(`${API_BASE}/events/stream?cluster_id=${clusterId}`, {
     signal: abortController.signal,
+    openWhenHidden: true,
     headers: {
       get Authorization() {
         const token = localStorage.getItem('token')
@@ -107,6 +112,7 @@ function startGlobalSSE(clusterId: string) {
 function stopGlobalSSE() {
   abortController?.abort()
   abortController = null
+  currentClusterId = null
   retryCount = 0
   sseConnected.value = false
   sseConnecting.value = false

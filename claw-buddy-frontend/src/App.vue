@@ -67,14 +67,14 @@ watch(
   { immediate: true },
 )
 
-// SSE 断连恢复：401 等致命错误导致 SSE 彻底停止后，定期检测并自动重连
+// SSE 断连恢复：仅在 FatalSSEError 导致 SSE 彻底停止（非连接中）时才重试
 const SSE_RECOVERY_INTERVAL_MS = 30_000
 let sseRecoveryTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   sseRecoveryTimer = setInterval(() => {
     const clusterId = activeClusterId.value
-    if (clusterId && authStore.isLoggedIn && !sseConnected.value) {
+    if (clusterId && authStore.isLoggedIn && !sseConnected.value && !sseConnecting.value) {
       startGlobalSSE(clusterId)
     }
   }, SSE_RECOVERY_INTERVAL_MS)
