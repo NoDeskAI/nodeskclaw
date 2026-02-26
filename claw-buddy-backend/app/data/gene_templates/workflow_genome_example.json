@@ -1,0 +1,22 @@
+{
+  "name": "content-creation-pipeline",
+  "slug": "content-creation-pipeline",
+  "description": "Content creation workflow: Planning -> Writing -> Review -> Publishing. Linear corridor topology.",
+  "gene_slugs": ["content-planner-step", "content-writer-step", "content-reviewer-step", "content-publisher-step"],
+  "config_override": {
+    "topology_recommendation": {
+      "description": "Linear pipeline — each agent connects to the next via corridor hexes",
+      "suggested_layout": [
+        {"role": "Planner", "hex_q": -2, "hex_r": 0, "genes": ["content-planner-step"]},
+        {"role": "Writer", "hex_q": -1, "hex_r": 0, "genes": ["content-writer-step"]},
+        {"role": "Reviewer", "hex_q": 1, "hex_r": 0, "genes": ["content-reviewer-step"]},
+        {"role": "Publisher", "hex_q": 2, "hex_r": 0, "genes": ["content-publisher-step"]}
+      ],
+      "suggested_corridors": [
+        {"hex_q": -1, "hex_r": 1, "name": "Draft Channel"},
+        {"hex_q": 0, "hex_r": 0, "name": "Review Channel"},
+        {"hex_q": 1, "hex_r": 1, "name": "Publish Channel"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "workflow-step-template",
+  "slug": "workflow-step-template",
+  "description": "Template for creating workflow step genes. Each step gene defines upstream/downstream connections, completion criteria, and blockers handling.",
+  "category": "workflow",
+  "manifest": {
+    "skill": {
+      "name": "workflow-step",
+      "content": "---\nname: {step_name}\ndescription: {step_description}\nalways: true\n---\n\nYou are the owner of the {step_name} stage.\n\n## Workflow Rules\n- Upstream: Receive work from {upstream_agent}\n- Task: {task_description}\n- Completion criteria: {completion_criteria}\n- Downstream: When done, send output to {downstream_agent} via corridor\n- Blackboard sync: Update task status to \"done\" and attach summary\n\n## Blockers Handling\n- If requirements are unclear, ask {upstream_agent} via corridor\n- If unresolved after 2 rounds, mark as \"blocked\" on blackboard"
+    }
+  }
+}
