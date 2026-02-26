@@ -236,6 +236,7 @@ watch(isRegister, () => { error.value = '' })
                 <button
                   v-if="!isRegister"
                   type="button"
+                  tabindex="-1"
                   class="text-xs text-primary hover:text-primary/80 transition-colors"
                 >
                   忘记密码？
@@ -251,6 +252,7 @@ watch(isRegister, () => { error.value = '' })
                 />
                 <button
                   type="button"
+                  tabindex="-1"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   @click="showPassword = !showPassword"
                 >
