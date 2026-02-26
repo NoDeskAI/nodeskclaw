@@ -62,6 +62,10 @@ class HumanChannelUpdate(BaseModel):
     channel_config: dict = {}
 
 
+class HumanColorUpdate(BaseModel):
+    display_color: str = Field(max_length=20)
+
+
 class TopologyNodeInfo(BaseModel):
     hex_q: int
     hex_r: int

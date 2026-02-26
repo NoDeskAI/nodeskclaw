@@ -126,7 +126,7 @@ const humanNodes = computed(() =>
     .filter(n => n.node_type === 'human')
     .map(n => {
       const { x, y } = axialToWorld(n.hex_q, n.hex_r)
-      return { ...n, px: x * SCALE, py: y * SCALE }
+      return { ...n, px: x * SCALE, py: y * SCALE, color: (n.extra?.display_color as string) || '#f59e0b' }
     })
 )
 

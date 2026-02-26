@@ -738,6 +738,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await fetchMembers(workspaceId)
   }
 
+  async function setHumanColor(workspaceId: string, userId: string, color: string) {
+    await api.put(`/workspaces/${workspaceId}/members/${userId}/color`, { display_color: color })
+    await fetchMembers(workspaceId)
+    await fetchTopology(workspaceId)
+  }
+
   function resetCurrentState() {
     currentWorkspace.value = null
     blackboard.value = null
@@ -799,5 +805,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setHumanHex,
     removeHumanHex,
     setHumanChannel,
+    setHumanColor,
   }
 })

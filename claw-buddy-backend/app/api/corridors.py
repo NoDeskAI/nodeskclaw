@@ -23,6 +23,7 @@ from app.schemas.corridor import (
     CorridorHexInfo,
     CorridorHexUpdate,
     HumanChannelUpdate,
+    HumanColorUpdate,
     HumanHexUpdate,
     TopologyEdgeInfo,
     TopologyInfo,
@@ -616,6 +617,42 @@ async def set_human_channel(
     db.add(audit)
     await db.commit()
     return _ok({"user_id": user_id, "channel_type": member.channel_type})
+
+
+@router.put("/{workspace_id}/members/{user_id}/color")
+async def set_human_color(
+    workspace_id: str, user_id: str, body: HumanColorUpdate,
+    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
+):
+    _, org = org_ctx
+    await _check_workspace(workspace_id, org, db)
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user_id,
+            not_deleted(WorkspaceMember),
+        )
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(404, "member not found")
+    member.display_color = body.display_color
+    await db.commit()
+    actor_type, actor_id = _actor(org_ctx)
+    broadcast_event(workspace_id, "human:color_updated", {"user_id": user_id, "display_color": member.display_color})
+    audit = TopologyAuditLog(
+        id=str(uuid.uuid4()),
+        workspace_id=workspace_id,
+        action="human_color_updated",
+        target_type="human_hex",
+        target_id=user_id,
+        new_value={"display_color": member.display_color},
+        actor_type=actor_type,
+        actor_id=actor_id,
+    )
+    db.add(audit)
+    await db.commit()
+    return _ok({"user_id": user_id, "display_color": member.display_color})
 
 
 # ── Topology ───────────────────────────────────────────

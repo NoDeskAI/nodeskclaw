@@ -286,10 +286,11 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   const hexId = `human:${node.entity_id}`
   group.userData = { hexId, isHex: true }
 
-  const color = 0xf59e0b
+  const colorHex = (node.extra?.display_color as string) || '#f59e0b'
+  const color = new THREE.Color(colorHex)
   const mat = new THREE.MeshStandardMaterial({
     color,
-    emissive: new THREE.Color(color),
+    emissive: color.clone(),
     emissiveIntensity: 0.3,
     metalness: 0.2,
     roughness: 0.5,
@@ -300,8 +301,9 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   mesh.userData = { hexId, isHex: true }
   group.add(mesh)
 
+  const edgeColor = color.clone().offsetHSL(0, 0.1, 0.1)
   const edgeGeo = new THREE.EdgesGeometry(HUMAN_HEX_GEO)
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.7 })
+  const edgeMat = new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.7 })
   group.add(new THREE.LineSegments(edgeGeo, edgeMat))
 
   return group

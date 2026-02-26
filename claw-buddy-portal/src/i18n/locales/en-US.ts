@@ -158,6 +158,7 @@ const enUS = {
     selectMember: "Select Member",
     noAvailableMembers: "No available members. Please add members in settings first.",
     goToSettings: "Go to Settings",
+    selectColor: "Select Color",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",

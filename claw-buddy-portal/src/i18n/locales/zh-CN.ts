@@ -158,6 +158,7 @@ const zhCN = {
     selectMember: "选择成员",
     noAvailableMembers: "没有可放置的成员，请先在设置页添加成员",
     goToSettings: "前往设置",
+    selectColor: "选择颜色",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",
