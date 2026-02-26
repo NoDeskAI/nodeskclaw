@@ -15,6 +15,7 @@ from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
 from app.api.storage import router as storage_router
 from app.api.corridors import router as corridor_router
+from app.api.mcp import router as mcp_router
 from app.api.workspaces import router as workspace_router
 
 api_router = APIRouter()
@@ -33,6 +34,7 @@ api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
 api_router.include_router(deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
 api_router.include_router(instance_router, prefix="/instances", tags=["实例"])
+api_router.include_router(mcp_router, prefix="/instances", tags=["MCP"])
 api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])
