@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { X, Save, Loader2, Pencil, Eye } from 'lucide-vue-next'
+import { X, Save, Loader2, Pencil, Eye, Wifi, WifiOff, Circle } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 
 const props = defineProps<{
@@ -11,39 +12,112 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
+const { t } = useI18n()
 const store = useWorkspaceStore()
+
+type TabKey = 'objectives-tasks' | 'status' | 'notes-perf' | 'topology'
+const activeTab = ref<TabKey>('objectives-tasks')
+
+const tabs: { key: TabKey; labelKey: string }[] = [
+  { key: 'objectives-tasks', labelKey: 'blackboard.tabObjectivesTasks' },
+  { key: 'status', labelKey: 'blackboard.tabStatus' },
+  { key: 'notes-perf', labelKey: 'blackboard.tabNotesPerf' },
+  { key: 'topology', labelKey: 'blackboard.tabTopology' },
+]
+
 const editing = ref(false)
 const draft = ref('')
 const saving = ref(false)
 
-const renderedHtml = computed(() => {
-  const raw = store.blackboard?.content || ''
-  if (!raw.trim()) return '<p class="text-muted-foreground text-sm">暂无内容</p>'
+const TAB1_HEADINGS = ['目标', '任务']
+
+function extractSections(content: string, headings: string[]): string {
+  const lines = content.split('\n')
+  const result: string[] = []
+  let capturing = false
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      const heading = line.replace(/^##\s+/, '').trim()
+      capturing = headings.includes(heading)
+    }
+    if (capturing) result.push(line)
+  }
+  return result.join('\n').trim()
+}
+
+function excludeSections(content: string, headings: string[]): string {
+  const lines = content.split('\n')
+  const result: string[] = []
+  let excluding = false
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      const heading = line.replace(/^##\s+/, '').trim()
+      excluding = headings.includes(heading)
+    }
+    if (!excluding) result.push(line)
+  }
+  return result.join('\n').trim()
+}
+
+const fullContent = computed(() => store.blackboard?.content || '')
+
+const tab1Content = computed(() => extractSections(fullContent.value, TAB1_HEADINGS))
+const tab3Content = computed(() => excludeSections(fullContent.value, TAB1_HEADINGS))
+
+function renderMd(raw: string): string {
+  if (!raw.trim()) return `<p class="text-muted-foreground text-sm">${t('blackboard.noContent')}</p>`
   return marked.parse(raw) as string
-})
+}
+
+const tab1Html = computed(() => renderMd(tab1Content.value))
+const tab3Html = computed(() => renderMd(tab3Content.value))
+
+const agents = computed(() => store.currentWorkspace?.agents || [])
+const members = computed(() => store.members)
+const topoNodes = computed(() => store.topology?.nodes || [])
+const topoEdges = computed(() => store.topology?.edges || [])
 
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     editing.value = false
-    draft.value = store.blackboard?.content || ''
+    activeTab.value = 'objectives-tasks'
   }
 })
 
 function enterEdit() {
-  draft.value = store.blackboard?.content || ''
+  if (activeTab.value === 'objectives-tasks') {
+    draft.value = tab1Content.value
+  } else if (activeTab.value === 'notes-perf') {
+    draft.value = tab3Content.value
+  }
   editing.value = true
 }
 
 async function save() {
   saving.value = true
   try {
-    await store.updateBlackboard(props.workspaceId, draft.value)
+    if (activeTab.value === 'objectives-tasks') {
+      const newFull = draft.value.trim() + '\n\n' + tab3Content.value.trim()
+      await store.updateBlackboard(props.workspaceId, newFull.trim())
+    } else if (activeTab.value === 'notes-perf') {
+      const newFull = tab1Content.value.trim() + '\n\n' + draft.value.trim()
+      await store.updateBlackboard(props.workspaceId, newFull.trim())
+    }
     editing.value = false
   } catch (e) {
     console.error('save blackboard error:', e)
   } finally {
     saving.value = false
   }
+}
+
+const canEdit = computed(() => activeTab.value === 'objectives-tasks' || activeTab.value === 'notes-perf')
+
+function nodeTypeLabel(type: string): string {
+  const map: Record<string, string> = { agent: 'Agent', corridor: t('blackboard.topoCorridorNode'), human: t('blackboard.topoHumanNode'), blackboard: t('blackboard.topoBlackboardNode') }
+  return map[type] || type
 }
 </script>
 
@@ -56,20 +130,20 @@ async function save() {
     >
       <div class="w-full max-w-3xl mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col max-h-[85vh]">
         <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-          <h2 class="text-lg font-semibold">中央黑板</h2>
+          <h2 class="text-lg font-semibold">{{ t('hexAction.centralBlackboard') }}</h2>
           <div class="flex items-center gap-1">
             <button
-              v-if="!editing"
+              v-if="canEdit && !editing"
               class="p-1.5 rounded hover:bg-muted transition-colors"
-              title="编辑"
+              :title="t('blackboard.edit')"
               @click="enterEdit"
             >
               <Pencil class="w-4 h-4" />
             </button>
             <button
-              v-else
+              v-if="editing"
               class="p-1.5 rounded hover:bg-muted transition-colors"
-              title="预览"
+              :title="t('blackboard.preview')"
               @click="editing = false"
             >
               <Eye class="w-4 h-4" />
@@ -80,16 +154,124 @@ async function save() {
           </div>
         </div>
 
+        <div class="flex border-b border-border px-2 shrink-0">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="flex items-center gap-1.5 px-3 py-2 text-sm transition-colors border-b-2"
+            :class="activeTab === tab.key
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'"
+            @click="activeTab = tab.key; editing = false"
+          >
+            {{ t(tab.labelKey) }}
+          </button>
+        </div>
+
         <div class="flex-1 overflow-y-auto px-5 py-4 min-h-[350px]">
-          <div v-if="editing">
-            <textarea
-              v-model="draft"
-              rows="18"
-              class="w-full bg-muted rounded-lg p-4 text-sm font-mono resize-none outline-none focus:ring-1 focus:ring-primary/50 min-h-[300px]"
-              placeholder="使用 Markdown 编写黑板内容..."
-            />
-          </div>
-          <div v-else class="prose prose-sm prose-invert max-w-none" v-html="renderedHtml" />
+
+          <template v-if="activeTab === 'objectives-tasks'">
+            <div v-if="editing">
+              <textarea
+                v-model="draft"
+                rows="18"
+                class="w-full bg-muted rounded-lg p-4 text-sm font-mono resize-none outline-none focus:ring-1 focus:ring-primary/50 min-h-[300px]"
+                :placeholder="t('blackboard.editPlaceholder')"
+              />
+            </div>
+            <div v-else class="prose prose-sm prose-invert max-w-none" v-html="tab1Html" />
+          </template>
+
+          <template v-if="activeTab === 'status'">
+            <div v-if="agents.length === 0 && members.length === 0" class="text-muted-foreground text-sm">
+              {{ t('blackboard.noMembers') }}
+            </div>
+            <div v-else class="space-y-4">
+              <div v-if="agents.length > 0">
+                <h3 class="text-sm font-medium mb-2 text-muted-foreground">Agent</h3>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="agent in agents"
+                    :key="agent.instance_id"
+                    class="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50"
+                  >
+                    <div class="flex items-center gap-2">
+                      <Circle class="w-2.5 h-2.5" :class="agent.status === 'running' ? 'text-green-500 fill-green-500' : 'text-muted-foreground fill-muted-foreground'" />
+                      <span class="text-sm">{{ agent.display_name || agent.name }}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{{ agent.status }}</span>
+                      <Wifi v-if="agent.sse_connected" class="w-3.5 h-3.5 text-green-500" />
+                      <WifiOff v-else class="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="members.length > 0">
+                <h3 class="text-sm font-medium mb-2 text-muted-foreground">{{ t('blackboard.humanMembers') }}</h3>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="m in members"
+                    :key="m.user_id"
+                    class="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50"
+                  >
+                    <span class="text-sm">{{ m.user_name }}</span>
+                    <span class="text-xs text-muted-foreground">{{ m.role }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="activeTab === 'notes-perf'">
+            <div v-if="editing">
+              <textarea
+                v-model="draft"
+                rows="18"
+                class="w-full bg-muted rounded-lg p-4 text-sm font-mono resize-none outline-none focus:ring-1 focus:ring-primary/50 min-h-[300px]"
+                :placeholder="t('blackboard.editPlaceholder')"
+              />
+            </div>
+            <div v-else class="prose prose-sm prose-invert max-w-none" v-html="tab3Html" />
+          </template>
+
+          <template v-if="activeTab === 'topology'">
+            <div v-if="topoNodes.length === 0" class="text-muted-foreground text-sm">
+              {{ t('blackboard.noTopology') }}
+            </div>
+            <div v-else class="space-y-4">
+              <div>
+                <h3 class="text-sm font-medium mb-2 text-muted-foreground">{{ t('blackboard.topoNodes') }} ({{ topoNodes.length }})</h3>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="(node, i) in topoNodes"
+                    :key="i"
+                    class="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{{ nodeTypeLabel(node.node_type) }}</span>
+                      <span class="text-sm">{{ node.display_name || node.entity_id || '-' }}</span>
+                    </div>
+                    <span class="text-xs text-muted-foreground font-mono">({{ node.hex_q }}, {{ node.hex_r }})</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="topoEdges.length > 0">
+                <h3 class="text-sm font-medium mb-2 text-muted-foreground">{{ t('blackboard.topoEdges') }} ({{ topoEdges.length }})</h3>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="(edge, i) in topoEdges"
+                    :key="i"
+                    class="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-sm"
+                  >
+                    <span class="font-mono text-xs">({{ edge.a_q }},{{ edge.a_r }}) &mdash; ({{ edge.b_q }},{{ edge.b_r }})</span>
+                    <span class="text-xs text-muted-foreground">{{ edge.direction }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
         </div>
 
         <div v-if="editing" class="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
@@ -97,7 +279,7 @@ async function save() {
             class="px-4 py-2 text-sm rounded-lg bg-muted hover:bg-muted/80 transition-colors"
             @click="editing = false"
           >
-            取消
+            {{ t('blackboard.cancel') }}
           </button>
           <button
             class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
@@ -106,7 +288,7 @@ async function save() {
           >
             <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
             <Save v-else class="w-4 h-4" />
-            保存
+            {{ t('blackboard.save') }}
           </button>
         </div>
       </div>
