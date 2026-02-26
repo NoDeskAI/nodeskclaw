@@ -34,10 +34,10 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const orgStore = useOrgStore()
-const { sseConnected, clusterConnected, startGlobalSSE, stopGlobalSSE } = useGlobalSSE()
+const { sseConnected, sseConnecting, clusterConnected, startGlobalSSE, stopGlobalSSE } = useGlobalSSE()
 const { tokenWarning, startTokenAlert, stopTokenAlert } = useTokenAlert()
 const locale = ref(getCurrentLocale())
-const activeClusterId = computed(() => clusterStore.currentCluster?.id ?? null)
+const activeClusterId = computed(() => clusterStore.currentCluster?.id ?? clusterStore.currentClusterId)
 
 const isLoginPage = computed(() => route.path === '/login')
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin === true)
@@ -149,9 +149,15 @@ const clusterStatusText = computed(() => {
 })
 
 const sseStatusText = computed(() => {
-  return t('adminApp.footerSse', {
-    status: sseConnected.value ? t('adminApp.footerSseNormal') : t('adminApp.footerSseStopped'),
-  })
+  let status: string
+  if (sseConnected.value) {
+    status = t('adminApp.footerSseNormal')
+  } else if (sseConnecting.value) {
+    status = t('adminApp.footerSseConnecting')
+  } else {
+    status = t('adminApp.footerSseStopped')
+  }
+  return t('adminApp.footerSse', { status })
 })
 </script>
 
@@ -316,7 +322,7 @@ const sseStatusText = computed(() => {
             <span v-if="clusterStore.clusters.length > 0" class="flex items-center gap-1.5">
               <span
                 class="w-2 h-2 rounded-full inline-block"
-                :class="sseConnected ? 'bg-green-400' : 'bg-zinc-500'"
+                :class="sseConnected ? 'bg-green-400' : sseConnecting ? 'bg-amber-400 animate-pulse' : 'bg-zinc-500'"
               />
               {{ sseStatusText }}
             </span>

@@ -11,6 +11,7 @@ import type { FeedEvent } from '@/types/activity'
 
 const feedEvents = ref<FeedEvent[]>([])
 const sseConnected = ref(false)
+const sseConnecting = ref(false)
 const clusterConnected = ref<boolean | null>(null)
 let abortController: AbortController | null = null
 let eventCounter = 0
@@ -26,11 +27,13 @@ function startGlobalSSE(clusterId: string) {
 
   if (!clusterId) {
     sseConnected.value = false
+    sseConnecting.value = false
     return
   }
 
   abortController = new AbortController()
   retryCount = 0
+  sseConnecting.value = true
 
   fetchEventSource(`${API_BASE}/events/stream?cluster_id=${clusterId}`, {
     signal: abortController.signal,
@@ -45,6 +48,7 @@ function startGlobalSSE(clusterId: string) {
       if (response.ok && response.headers.get('content-type')?.startsWith(EventStreamContentType)) {
         retryCount = 0
         sseConnected.value = true
+        sseConnecting.value = false
         clusterConnected.value = true
         return
       }
@@ -81,8 +85,10 @@ function startGlobalSSE(clusterId: string) {
     onerror(err) {
       sseConnected.value = false
       clusterConnected.value = false
+      sseConnecting.value = true
 
       if (err instanceof FatalSSEError) {
+        sseConnecting.value = false
         throw err
       }
 
@@ -93,6 +99,7 @@ function startGlobalSSE(clusterId: string) {
     onclose() {
       sseConnected.value = false
       clusterConnected.value = false
+      sseConnecting.value = true
     },
   })
 }
@@ -102,6 +109,7 @@ function stopGlobalSSE() {
   abortController = null
   retryCount = 0
   sseConnected.value = false
+  sseConnecting.value = false
   clusterConnected.value = null
 }
 
@@ -109,6 +117,7 @@ export function useGlobalSSE() {
   return {
     feedEvents: computed(() => feedEvents.value),
     sseConnected: computed(() => sseConnected.value),
+    sseConnecting: computed(() => sseConnecting.value),
     clusterConnected: computed(() => clusterConnected.value),
     startGlobalSSE,
     stopGlobalSSE,

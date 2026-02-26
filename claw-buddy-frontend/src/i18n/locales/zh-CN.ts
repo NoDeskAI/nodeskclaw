@@ -55,6 +55,7 @@ const zhCN = {
     footerConnecting: "连接中...",
     footerSse: "SSE: {status}",
     footerSseNormal: "正常",
+    footerSseConnecting: "连接中...",
     footerSseStopped: "未启动",
   },
   instancesPage: {

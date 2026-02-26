@@ -55,6 +55,7 @@ const enUS = {
     footerConnecting: "Connecting...",
     footerSse: "SSE: {status}",
     footerSseNormal: "Healthy",
+    footerSseConnecting: "Connecting...",
     footerSseStopped: "Not Started",
   },
   instancesPage: {
