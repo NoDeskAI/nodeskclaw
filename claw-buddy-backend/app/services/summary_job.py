@@ -87,6 +87,9 @@ class SummaryJob:
                 summary_text = "\n".join(summary_lines)
                 if task_stats:
                     summary_text = f"{task_stats}\n\n{summary_text}"
+                objectives_text = self._build_objectives_progress_text(bb.objectives)
+                if objectives_text:
+                    summary_text = f"{summary_text}{objectives_text}"
                 bb.auto_summary = summary_text
                 bb.summary_updated_at = datetime.now(timezone.utc)
 
@@ -96,6 +99,44 @@ class SummaryJob:
 
         await db.commit()
         return count
+
+    @staticmethod
+    def _build_objectives_progress_text(objectives: list | None) -> str:
+        if not objectives:
+            return ""
+        lines = ["\n\n--- 目标进度 ---"]
+        for obj in objectives:
+            if not isinstance(obj, dict):
+                continue
+            title = obj.get("title") or ""
+            period = obj.get("period")
+            key_results = obj.get("key_results") or []
+            if not key_results:
+                progress_pct = 0
+            else:
+                pcts = []
+                for kr in key_results:
+                    if not isinstance(kr, dict):
+                        continue
+                    target = kr.get("target") or 1
+                    if target <= 0:
+                        target = 1
+                    current = kr.get("current") or 0
+                    pcts.append(min(100, int((current / target) * 100)))
+                progress_pct = int(sum(pcts) / len(pcts)) if pcts else 0
+            obj_label = f"{period} 目标: {title}" if period else title
+            lines.append(f"{obj_label} [进度: {progress_pct}%]")
+            for i, kr in enumerate(key_results):
+                if not isinstance(kr, dict):
+                    continue
+                desc = kr.get("desc") or ""
+                target = kr.get("target") or 1
+                if target <= 0:
+                    target = 1
+                current = kr.get("current") or 0
+                kr_pct = min(100, int((current / target) * 100))
+                lines.append(f"  - KR{i + 1}: {desc} [{kr_pct}%]")
+        return "\n".join(lines)
 
     @staticmethod
     def _compute_task_stats(tasks: list | None) -> str:
