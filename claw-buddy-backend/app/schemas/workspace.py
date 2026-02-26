@@ -65,11 +65,18 @@ class BlackboardInfo(BaseModel):
     auto_summary: str
     manual_notes: str
     summary_updated_at: datetime | None
+    objectives: list | None = None
+    tasks: list | None = None
+    member_status: list | None = None
+    performance: list | None = None
     updated_at: datetime
 
 
 class BlackboardUpdate(BaseModel):
-    manual_notes: str
+    manual_notes: str | None = None
+    objectives: list | None = None
+    tasks: list | None = None
+    performance: list | None = None
 
 
 # ── Agent Management ─────────────────────────────────
@@ -95,6 +102,10 @@ class WorkspaceMemberInfo(BaseModel):
     user_email: str | None = None
     user_avatar_url: str | None = None
     role: str
+    hex_q: int | None = None
+    hex_r: int | None = None
+    channel_type: str | None = None
+    display_color: str | None = None
     created_at: datetime
 
 
