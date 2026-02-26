@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useOrgStore, type MemberInfo } from '@/stores/org'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -17,6 +18,7 @@ import api from '@/services/api'
 
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const loading = ref(true)
 const showAddDialog = ref(false)
@@ -90,7 +92,7 @@ async function handleAddMember() {
     selectedUser.value = null
     addRole.value = 'member'
   } catch (e: any) {
-    alert(e?.response?.data?.message || '添加失败')
+    alert(e?.response?.data?.message || t('orgMembers.addFailed'))
   } finally {
     addLoading.value = false
   }
@@ -102,19 +104,19 @@ async function handleRoleChange(member: MemberInfo, newRole: string) {
   try {
     await orgStore.updateMemberRole(member.id, newRole)
   } catch (e: any) {
-    alert(e?.response?.data?.message || '修改角色失败')
+    alert(e?.response?.data?.message || t('orgMembers.updateRoleFailed'))
   } finally {
     actionLoading.value = null
   }
 }
 
 async function handleRemove(member: MemberInfo) {
-  if (!confirm(`确定移除成员 ${member.user_name || member.user_email}？`)) return
+  if (!confirm(t('orgMembers.removeConfirm', { name: member.user_name || member.user_email }))) return
   actionLoading.value = member.id
   try {
     await orgStore.removeMember(member.id)
   } catch (e: any) {
-    alert(e?.response?.data?.message || '移除失败')
+    alert(e?.response?.data?.message || t('orgMembers.removeFailed'))
   } finally {
     actionLoading.value = null
   }
@@ -125,9 +127,9 @@ async function handleRemove(member: MemberInfo) {
   <div class="max-w-4xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold">成员管理</h1>
+        <h1 class="text-xl font-bold">{{ t('orgMembers.title') }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
-          管理 <span class="font-medium text-foreground">{{ orgStore.currentOrg?.name || '组织' }}</span> 的成员与权限
+          {{ t('orgMembers.subtitle', { orgName: orgStore.currentOrg?.name || t('orgMembers.orgFallback') }) }}
         </p>
       </div>
       <button
@@ -136,7 +138,7 @@ async function handleRemove(member: MemberInfo) {
         @click="showAddDialog = true"
       >
         <UserPlus class="w-4 h-4" />
-        添加成员
+        {{ t('orgMembers.addMember') }}
       </button>
     </div>
 
@@ -148,7 +150,7 @@ async function handleRemove(member: MemberInfo) {
     <!-- No Org -->
     <div v-else-if="!orgStore.currentOrg" class="text-center py-20 space-y-3">
       <Users class="w-12 h-12 mx-auto text-muted-foreground/40" />
-      <p class="text-muted-foreground">你当前还没有加入任何组织</p>
+      <p class="text-muted-foreground">{{ t('orgMembers.noOrg') }}</p>
     </div>
 
     <!-- Members List -->
@@ -159,13 +161,13 @@ async function handleRemove(member: MemberInfo) {
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="搜索成员..."
+          :placeholder="t('orgMembers.searchPlaceholder')"
           class="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
 
       <!-- Member Count -->
-      <p class="text-xs text-muted-foreground mb-3">共 {{ filteredMembers.length }} 位成员</p>
+      <p class="text-xs text-muted-foreground mb-3">{{ t('orgMembers.memberCount', { count: filteredMembers.length }) }}</p>
 
       <div class="space-y-2">
         <div
@@ -180,20 +182,20 @@ async function handleRemove(member: MemberInfo) {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="font-medium text-sm">{{ member.user_name || '未知用户' }}</span>
+                <span class="font-medium text-sm">{{ member.user_name || t('orgMembers.unknownUser') }}</span>
                 <span
                   v-if="member.role === 'admin'"
                   class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400"
                 >
                   <Crown class="w-3 h-3" />
-                  管理员
+                  {{ t('orgMembers.roleAdmin') }}
                 </span>
                 <span
                   v-else
                   class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400"
                 >
                   <Shield class="w-3 h-3" />
-                  成员
+                  {{ t('orgMembers.roleMember') }}
                 </span>
               </div>
               <p class="text-xs text-muted-foreground mt-0.5">{{ member.user_email || '-' }}</p>
@@ -209,8 +211,8 @@ async function handleRemove(member: MemberInfo) {
                 :disabled="actionLoading === member.id"
                 @change="(e) => handleRoleChange(member, (e.target as HTMLSelectElement).value)"
               >
-                <option value="admin">管理员</option>
-                <option value="member">成员</option>
+                <option value="admin">{{ t('orgMembers.roleAdmin') }}</option>
+                <option value="member">{{ t('orgMembers.roleMember') }}</option>
               </select>
               <ChevronDown class="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
             </div>
@@ -227,7 +229,7 @@ async function handleRemove(member: MemberInfo) {
       </div>
 
       <div v-if="filteredMembers.length === 0 && !loading" class="text-center py-12 text-muted-foreground text-sm">
-        没有找到匹配的成员
+        {{ t('orgMembers.noMatch') }}
       </div>
     </template>
 
@@ -240,7 +242,7 @@ async function handleRemove(member: MemberInfo) {
       >
         <div class="bg-card rounded-2xl border border-border shadow-xl w-full max-w-md p-6 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-base">添加成员</h3>
+            <h3 class="font-semibold text-base">{{ t('orgMembers.dialogTitle') }}</h3>
             <button class="text-muted-foreground hover:text-foreground" @click="showAddDialog = false">
               <X class="w-4 h-4" />
             </button>
@@ -248,7 +250,7 @@ async function handleRemove(member: MemberInfo) {
 
           <!-- User Search -->
           <div class="space-y-2">
-            <label class="text-sm text-muted-foreground">搜索用户</label>
+            <label class="text-sm text-muted-foreground">{{ t('orgMembers.searchUserLabel') }}</label>
             <div v-if="selectedUser" class="flex items-center gap-2 p-2.5 rounded-lg border border-primary/30 bg-primary/5">
               <div class="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-medium text-primary">
                 {{ selectedUser.name.charAt(0) }}
@@ -265,7 +267,7 @@ async function handleRemove(member: MemberInfo) {
               <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="输入用户名或邮箱搜索..."
+                :placeholder="t('orgMembers.searchUserPlaceholder')"
                 class="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 @input="(e) => debounceSearchUsers((e.target as HTMLInputElement).value)"
               />
@@ -297,14 +299,14 @@ async function handleRemove(member: MemberInfo) {
 
           <!-- Role Select -->
           <div class="space-y-2">
-            <label class="text-sm text-muted-foreground">角色</label>
+            <label class="text-sm text-muted-foreground">{{ t('orgMembers.roleLabel') }}</label>
             <div class="relative">
               <select
                 v-model="addRole"
                 class="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="member">成员</option>
-                <option value="admin">管理员</option>
+                <option value="member">{{ t('orgMembers.roleMember') }}</option>
+                <option value="admin">{{ t('orgMembers.roleAdmin') }}</option>
               </select>
               <ChevronDown class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
             </div>
@@ -316,7 +318,7 @@ async function handleRemove(member: MemberInfo) {
               class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
               @click="showAddDialog = false"
             >
-              取消
+              {{ t('common.cancel') }}
             </button>
             <button
               class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -324,7 +326,7 @@ async function handleRemove(member: MemberInfo) {
               @click="handleAddMember"
             >
               <Loader2 v-if="addLoading" class="w-4 h-4 animate-spin" />
-              确认添加
+              {{ t('orgMembers.confirmAdd') }}
             </button>
           </div>
         </div>

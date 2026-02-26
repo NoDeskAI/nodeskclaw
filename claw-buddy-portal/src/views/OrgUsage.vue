@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '@/stores/org'
 import { BarChart3, Loader2, Box, Cpu, HardDrive, Database, Sparkles } from 'lucide-vue-next'
 
 const orgStore = useOrgStore()
+const { t } = useI18n()
 const loading = ref(true)
 
 onMounted(async () => {
@@ -71,14 +73,14 @@ function barColor(percent: number): string {
   return 'bg-primary'
 }
 
-function formatCpu(val: string | undefined | null): string {
-  if (!val) return '0 核'
+function formatCpuValue(val: string | undefined | null): string {
+  if (!val) return '0'
   const s = String(val)
   if (s.endsWith('m')) {
     const cores = parseInt(s.slice(0, -1), 10) / 1000
-    return Number.isInteger(cores) ? `${cores} 核` : `${cores.toFixed(2)} 核`
+    return Number.isInteger(cores) ? `${cores}` : `${cores.toFixed(2)}`
   }
-  return `${s} 核`
+  return s
 }
 
 function formatMemory(val: string | undefined | null): string {
@@ -101,9 +103,9 @@ function formatMemory(val: string | undefined | null): string {
 <template>
   <div class="max-w-4xl mx-auto px-6 py-8">
     <div class="mb-6">
-      <h1 class="text-xl font-bold">资源用量</h1>
+      <h1 class="text-xl font-bold">{{ t('orgUsage.title') }}</h1>
       <p class="text-sm text-muted-foreground mt-0.5">
-        <span class="font-medium text-foreground">{{ orgStore.currentOrg?.name || '组织' }}</span> 的资源使用概览
+        {{ t('orgUsage.subtitle', { orgName: orgStore.currentOrg?.name || t('orgUsage.orgFallback') }) }}
       </p>
     </div>
 
@@ -115,7 +117,7 @@ function formatMemory(val: string | undefined | null): string {
     <!-- No Org -->
     <div v-else-if="!orgStore.currentOrg" class="text-center py-20 space-y-3">
       <BarChart3 class="w-12 h-12 mx-auto text-muted-foreground/40" />
-      <p class="text-muted-foreground">你当前还没有加入任何组织</p>
+      <p class="text-muted-foreground">{{ t('orgUsage.noOrg') }}</p>
     </div>
 
     <template v-else>
@@ -125,9 +127,9 @@ function formatMemory(val: string | undefined | null): string {
           <Sparkles class="w-5 h-5 text-primary" />
         </div>
         <div>
-          <p class="text-sm font-medium">当前套餐：<span class="text-primary">{{ orgStore.currentOrg.plan || 'free' }}</span></p>
+          <p class="text-sm font-medium">{{ t('orgUsage.currentPlan', { plan: orgStore.currentOrg.plan || 'free' }) }}</p>
           <p class="text-xs text-muted-foreground mt-0.5">
-            {{ orgStore.currentOrg.member_count }} 位成员
+            {{ t('orgUsage.memberCount', { count: orgStore.currentOrg.member_count }) }}
           </p>
         </div>
       </div>
@@ -138,7 +140,7 @@ function formatMemory(val: string | undefined | null): string {
         <div class="p-5 rounded-xl border border-border bg-card space-y-3">
           <div class="flex items-center gap-2 text-sm font-medium">
             <Box class="w-4 h-4 text-blue-400" />
-            实例数
+            {{ t('orgUsage.instances') }}
           </div>
           <div class="flex items-baseline gap-1">
             <span class="text-2xl font-bold">{{ orgStore.usage?.instance_count ?? 0 }}</span>
@@ -151,18 +153,18 @@ function formatMemory(val: string | undefined | null): string {
               :style="{ width: instancePercent + '%' }"
             />
           </div>
-          <p class="text-xs text-muted-foreground">{{ instancePercent }}% 已使用</p>
+          <p class="text-xs text-muted-foreground">{{ t('orgUsage.usedPercent', { percent: instancePercent }) }}</p>
         </div>
 
         <!-- CPU -->
         <div class="p-5 rounded-xl border border-border bg-card space-y-3">
           <div class="flex items-center gap-2 text-sm font-medium">
             <Cpu class="w-4 h-4 text-green-400" />
-            CPU
+            {{ t('orgUsage.cpu') }}
           </div>
-          <div class="flex items-baseline gap-1">
-            <span class="text-2xl font-bold">{{ formatCpu(orgStore.usage?.cpu_used) }}</span>
-            <span class="text-sm text-muted-foreground">/ {{ formatCpu(orgStore.usage?.cpu_limit) }}</span>
+          <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <span class="text-2xl font-bold">{{ formatCpuValue(orgStore.usage?.cpu_used) }}</span>
+            <span class="text-sm text-muted-foreground">/ {{ formatCpuValue(orgStore.usage?.cpu_limit) }} {{ t('orgUsage.cpuUnit') }}</span>
           </div>
           <div class="w-full h-2 rounded-full bg-muted overflow-hidden">
             <div
@@ -171,14 +173,14 @@ function formatMemory(val: string | undefined | null): string {
               :style="{ width: cpuPercent + '%' }"
             />
           </div>
-          <p class="text-xs text-muted-foreground">{{ cpuPercent }}% 已使用</p>
+          <p class="text-xs text-muted-foreground">{{ t('orgUsage.usedPercent', { percent: cpuPercent }) }}</p>
         </div>
 
         <!-- Memory -->
         <div class="p-5 rounded-xl border border-border bg-card space-y-3">
           <div class="flex items-center gap-2 text-sm font-medium">
             <HardDrive class="w-4 h-4 text-purple-400" />
-            内存
+            {{ t('orgUsage.memory') }}
           </div>
           <div class="flex items-baseline gap-1">
             <span class="text-2xl font-bold">{{ formatMemory(orgStore.usage?.mem_used) }}</span>
@@ -191,14 +193,14 @@ function formatMemory(val: string | undefined | null): string {
               :style="{ width: memPercent + '%' }"
             />
           </div>
-          <p class="text-xs text-muted-foreground">{{ memPercent }}% 已使用</p>
+          <p class="text-xs text-muted-foreground">{{ t('orgUsage.usedPercent', { percent: memPercent }) }}</p>
         </div>
 
         <!-- Storage -->
         <div class="p-5 rounded-xl border border-border bg-card space-y-3">
           <div class="flex items-center gap-2 text-sm font-medium">
             <Database class="w-4 h-4 text-orange-400" />
-            存储
+            {{ t('orgUsage.storage') }}
           </div>
           <div class="flex items-baseline gap-1">
             <span class="text-2xl font-bold">{{ orgStore.usage?.storage_used ?? '0' }}</span>
@@ -211,7 +213,7 @@ function formatMemory(val: string | undefined | null): string {
               :style="{ width: storagePercent + '%' }"
             />
           </div>
-          <p class="text-xs text-muted-foreground">{{ storagePercent }}% 已使用</p>
+          <p class="text-xs text-muted-foreground">{{ t('orgUsage.usedPercent', { percent: storagePercent }) }}</p>
         </div>
       </div>
     </template>

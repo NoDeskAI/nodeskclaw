@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Plus, Loader2, Server, RefreshCw } from 'lucide-vue-next'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 interface InstanceInfo {
   id: string
@@ -21,25 +23,32 @@ interface InstanceInfo {
 }
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const loading = ref(true)
 const instances = ref<InstanceInfo[]>([])
 const error = ref('')
 
-const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  running: { label: '运行中', color: 'text-emerald-400', bg: 'bg-emerald-400' },
-  learning: { label: '学习中', color: 'text-blue-400', bg: 'bg-blue-400' },
-  creating: { label: '创建中', color: 'text-blue-400', bg: 'bg-blue-400' },
-  pending: { label: '等待中', color: 'text-yellow-400', bg: 'bg-yellow-400' },
-  deploying: { label: '部署中', color: 'text-blue-400', bg: 'bg-blue-400' },
-  updating: { label: '更新中', color: 'text-amber-400', bg: 'bg-amber-400' },
-  failed: { label: '失败', color: 'text-red-400', bg: 'bg-red-400' },
-  deleting: { label: '删除中', color: 'text-gray-400', bg: 'bg-gray-400' },
+const statusConfig: Record<string, { color: string; bg: string }> = {
+  running: { color: 'text-emerald-400', bg: 'bg-emerald-400' },
+  learning: { color: 'text-blue-400', bg: 'bg-blue-400' },
+  creating: { color: 'text-blue-400', bg: 'bg-blue-400' },
+  pending: { color: 'text-yellow-400', bg: 'bg-yellow-400' },
+  deploying: { color: 'text-blue-400', bg: 'bg-blue-400' },
+  updating: { color: 'text-amber-400', bg: 'bg-amber-400' },
+  failed: { color: 'text-red-400', bg: 'bg-red-400' },
+  deleting: { color: 'text-gray-400', bg: 'bg-gray-400' },
 }
 
 const animatingStatuses = new Set(['creating', 'pending', 'deploying', 'updating', 'deleting', 'learning'])
 
 function getStatus(status: string) {
-  return statusConfig[status] ?? { label: status, color: 'text-gray-400', bg: 'bg-gray-400' }
+  return statusConfig[status] ?? { color: 'text-gray-400', bg: 'bg-gray-400' }
+}
+
+function getStatusLabel(status: string) {
+  const key = `status.${status}`
+  const translated = t(key)
+  return translated === key ? status : translated
 }
 
 const sortedInstances = computed(() =>
@@ -54,8 +63,8 @@ async function fetchInstances() {
   try {
     const { data } = await api.get('/instances')
     instances.value = data.data ?? []
-  } catch (e: any) {
-    error.value = e.response?.data?.message ?? '加载实例列表失败'
+  } catch (e: unknown) {
+    error.value = resolveApiErrorMessage(e, t('instanceList.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -63,7 +72,8 @@ async function fetchInstances() {
 
 function formatTime(iso: string) {
   const d = new Date(iso)
-  return d.toLocaleDateString('zh-CN', {
+  const currentLocale = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+  return d.toLocaleDateString(currentLocale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -80,8 +90,8 @@ onMounted(fetchInstances)
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold">实例管理</h1>
-        <p class="text-sm text-muted-foreground mt-1">管理已部署的 OpenClaw 实例</p>
+        <h1 class="text-2xl font-bold">{{ t('instanceList.title') }}</h1>
+        <p class="text-sm text-muted-foreground mt-1">{{ t('instanceList.subtitle') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button
@@ -89,14 +99,14 @@ onMounted(fetchInstances)
           @click="fetchInstances"
         >
           <RefreshCw class="w-4 h-4" />
-          刷新
+          {{ t('instanceList.refresh') }}
         </button>
         <button
           class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
           @click="router.push('/instances/create')"
         >
           <Plus class="w-4 h-4" />
-          创建实例
+          {{ t('instanceList.createInstance') }}
         </button>
       </div>
     </div>
@@ -116,7 +126,7 @@ onMounted(fetchInstances)
         class="mt-2 px-4 py-2 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
         @click="fetchInstances"
       >
-        重试
+        {{ t('instanceList.retry') }}
       </button>
     </div>
 
@@ -128,15 +138,15 @@ onMounted(fetchInstances)
       <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
         <Server class="w-8 h-8 text-primary" />
       </div>
-      <h3 class="text-lg font-semibold">还没有实例</h3>
+      <h3 class="text-lg font-semibold">{{ t('instanceList.emptyTitle') }}</h3>
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
-        创建一个 OpenClaw 实例，部署到 Kubernetes 集群
+        {{ t('instanceList.emptyDescription') }}
       </p>
       <button
         class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="router.push('/instances/create')"
       >
-        创建第一个实例
+        {{ t('instanceList.createFirst') }}
       </button>
     </div>
 
@@ -145,11 +155,11 @@ onMounted(fetchInstances)
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-border bg-card/60">
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">名称</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">状态</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">镜像版本</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">命名空间</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">创建时间</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableName') }}</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableStatus') }}</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableImageVersion') }}</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableNamespace') }}</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableCreatedAt') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -170,7 +180,7 @@ onMounted(fetchInstances)
                   ]"
                 />
                 <span :class="getStatus(inst.status).color">
-                  {{ getStatus(inst.status).label }}
+                  {{ getStatusLabel(inst.status) }}
                 </span>
               </span>
             </td>

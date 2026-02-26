@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Loader2 } from 'lucide-vue-next'
+import { Plus, Loader2, Bot } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import WorkspaceCard from '@/components/workspace/WorkspaceCard.vue'
 
 const router = useRouter()
 const store = useWorkspaceStore()
+const { t } = useI18n()
 
 onMounted(() => {
   store.fetchWorkspaces()
@@ -26,15 +28,15 @@ function createNew() {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold">我的工作区</h1>
-        <p class="text-sm text-muted-foreground mt-1">管理你的 Agent 协作空间</p>
+        <h1 class="text-2xl font-bold">{{ t('workspaceList.title') }}</h1>
+        <p class="text-sm text-muted-foreground mt-1">{{ t('workspaceList.subtitle') }}</p>
       </div>
       <button
         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="createNew"
       >
         <Plus class="w-4 h-4" />
-        新建工作区
+        {{ t('workspaceList.createNew') }}
       </button>
     </div>
 
@@ -49,17 +51,17 @@ function createNew() {
       class="text-center py-20 space-y-4"
     >
       <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto text-2xl">
-        🤖
+        <Bot class="w-8 h-8 text-primary" />
       </div>
-      <h3 class="text-lg font-semibold">还没有工作区</h3>
+      <h3 class="text-lg font-semibold">{{ t('workspaceList.emptyTitle') }}</h3>
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
-        创建一个工作区，添加 Agent，让它们互相协作，共同完成任务
+        {{ t('workspaceList.emptyDescription') }}
       </p>
       <button
         class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="createNew"
       >
-        创建第一个工作区
+        {{ t('workspaceList.createFirst') }}
       </button>
     </div>
 
