@@ -411,7 +411,9 @@ async def list_workspace_members(db: AsyncSession, workspace_id: str) -> list[Wo
         members.append(WorkspaceMemberInfo(
             user_id=user.id, user_name=user.name,
             user_email=user.email, user_avatar_url=user.avatar_url,
-            role=wm.role, created_at=wm.created_at,
+            role=wm.role, channel_type=wm.channel_type,
+            channel_config=wm.channel_config,
+            created_at=wm.created_at,
         ))
     return members
 
