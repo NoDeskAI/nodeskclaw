@@ -1,0 +1,26 @@
+{
+  "name": "clawbuddy-topology-awareness",
+  "slug": "clawbuddy-topology-awareness",
+  "description": "MCP tools for querying workspace topology, neighbors, and member status.",
+  "category": "tools",
+  "tags": ["mcp", "topology", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "clawbuddy-topology-awareness",
+      "content": "---\nname: clawbuddy-topology-awareness\ndescription: Tools to understand workspace topology\nalways: true\n---\n\nYou can query the workspace topology to understand your position and connections.\n\n## Available Tools\n- `get_topology` — Full workspace topology (nodes, edges, reachability)\n- `get_members` — All workspace members with current status\n- `get_my_neighbors` — Agents/humans directly reachable from your position\n\n## Usage Rules\n- Check topology before sending targeted messages\n- Use neighbor awareness to route messages efficiently\n- Monitor team member status for collaboration planning"
+    },
+    "mcp_servers": [
+      {
+        "name": "clawbuddy-topology-awareness",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["ts-node", "/app/mcp-servers/clawbuddy-topology-awareness/index.ts"],
+        "env": {
+          "CLAWBUDDY_API_URL": "${CLAWBUDDY_API_URL}",
+          "CLAWBUDDY_TOKEN": "${CLAWBUDDY_TOKEN}",
+          "CLAWBUDDY_WORKSPACE_ID": "${CLAWBUDDY_WORKSPACE_ID}"
+        }
+      }
+    ]
+  }
+}

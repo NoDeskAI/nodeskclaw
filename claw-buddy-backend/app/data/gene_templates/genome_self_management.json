@@ -1,0 +1,17 @@
+{
+  "name": "clawbuddy-self-management",
+  "slug": "clawbuddy-self-management",
+  "description": "Complete self-management genome: bundles all 5 ClawBuddy MCP tool genes for full workspace autonomy.",
+  "category": "genome",
+  "tags": ["genome", "mcp", "self-management", "autonomy"],
+  "gene_slugs": [
+    "clawbuddy-blackboard-tools",
+    "clawbuddy-topology-awareness",
+    "clawbuddy-performance-reader",
+    "clawbuddy-proposals",
+    "clawbuddy-gene-discovery"
+  ],
+  "config_override": {
+    "description": "Installing this genome gives the agent full self-management capabilities: read/write blackboard, understand topology, monitor performance, submit proposals, and discover new genes."
+  }
+}

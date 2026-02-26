@@ -1,0 +1,26 @@
+{
+  "name": "clawbuddy-proposals",
+  "slug": "clawbuddy-proposals",
+  "description": "MCP tools for submitting structured proposals (HC, reorg, innovation) and checking trust policies.",
+  "category": "tools",
+  "tags": ["mcp", "proposals", "trust", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "clawbuddy-proposals",
+      "content": "---\nname: clawbuddy-proposals\ndescription: Tools for submitting proposals and managing trust\nalways: true\n---\n\nYou can submit structured proposals that route to human reviewers for approval.\n\n## Available Tools\n- `submit_approval_request` — Submit HC hire / reorg / innovation proposal\n- `check_trust_policy` — Check if an action type is already trusted\n- `list_my_decisions` — View your past decision records\n\n## Usage Rules\n- Always check trust policy before submitting a new request\n- If already trusted (allow_always), proceed without approval\n- Provide clear context_summary explaining why you need this action\n- Include structured proposal data (role, skills, position for HC; topology changes for reorg)"
+    },
+    "mcp_servers": [
+      {
+        "name": "clawbuddy-proposals",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["ts-node", "/app/mcp-servers/clawbuddy-proposals/index.ts"],
+        "env": {
+          "CLAWBUDDY_API_URL": "${CLAWBUDDY_API_URL}",
+          "CLAWBUDDY_TOKEN": "${CLAWBUDDY_TOKEN}",
+          "CLAWBUDDY_WORKSPACE_ID": "${CLAWBUDDY_WORKSPACE_ID}"
+        }
+      }
+    ]
+  }
+}
