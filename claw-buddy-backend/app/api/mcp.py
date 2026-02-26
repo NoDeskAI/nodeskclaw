@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -15,6 +16,50 @@ from app.schemas.mcp import McpServerCreate, McpServerInfo, McpServerUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def sync_mcp_to_openclaw(instance_id: str, db: AsyncSession) -> None:
+    """Sync all active MCP server configs to the instance's openclaw.json via NFS."""
+    from app.services.nfs_mount import nfs_mount
+    from app.services.llm_config_service import _read_config_file, _write_config_file
+
+    result = await db.execute(
+        select(InstanceMcpServer).where(
+            InstanceMcpServer.instance_id == instance_id,
+            InstanceMcpServer.is_active == True,
+            not_deleted(InstanceMcpServer),
+        )
+    )
+    mcp_config: dict = {}
+    for s in result.scalars().all():
+        entry: dict = {}
+        if s.transport == "stdio":
+            entry["command"] = s.command
+            if s.args:
+                entry["args"] = s.args
+        else:
+            entry["url"] = s.url
+        if s.env:
+            entry["env"] = s.env
+        mcp_config[s.name] = entry
+
+    instance = await db.get(Instance, instance_id)
+    if not instance:
+        return
+    try:
+        async with nfs_mount(instance, db) as mount_path:
+            try:
+                existing = _read_config_file(mount_path)
+            except ValueError as e:
+                logger.warning("sync_mcp_to_openclaw: openclaw.json parse error: %s", e)
+                return
+            if existing is None:
+                existing = {}
+            existing["mcpServers"] = mcp_config
+            _write_config_file(mount_path, existing)
+        logger.info("Synced %d MCP servers to openclaw.json: instance=%s", len(mcp_config), instance.name)
+    except Exception as e:
+        logger.warning("sync_mcp_to_openclaw failed for %s: %s", instance_id, e)
 
 
 def _ok(data=None, message: str = "success"):
@@ -70,6 +115,7 @@ async def create_mcp_server(
     db.add(mcp)
     await db.commit()
     await db.refresh(mcp)
+    await sync_mcp_to_openclaw(instance_id, db)
     return _ok(_mcp_to_info(mcp))
 
 
@@ -93,6 +139,7 @@ async def update_mcp_server(
         if val is not None:
             setattr(mcp, field, val)
     await db.commit()
+    await sync_mcp_to_openclaw(instance_id, db)
     return _ok(_mcp_to_info(mcp))
 
 
@@ -113,4 +160,5 @@ async def delete_mcp_server(
         raise HTTPException(404, "mcp server not found")
     mcp.soft_delete()
     await db.commit()
+    await sync_mcp_to_openclaw(instance_id, db)
     return _ok(message="deleted")

@@ -601,6 +601,7 @@ async def _inject_mcp_servers(
             source_gene_id=gene_id,
         )
         db.add(mcp)
+    await db.flush()
 
 
 async def _direct_install(
@@ -638,6 +639,8 @@ async def _direct_install(
                 mcp_servers = manifest.get("mcp_servers")
                 if mcp_servers and isinstance(mcp_servers, list):
                     await _inject_mcp_servers(db, instance_id, gene_id, mcp_servers)
+                    from app.api.mcp import sync_mcp_to_openclaw
+                    await sync_mcp_to_openclaw(instance_id, db)
 
                 invalidate_skill_snapshots(mount_path)
                 inject_evolution_notification(mount_path, skill_name, "installed")
