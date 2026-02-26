@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -732,6 +732,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     corridorHexes,
     connections,
     topology,
+    topologyNodes: computed(() => topology.value?.nodes || []),
+    topologyEdges: computed(() => topology.value?.edges || []),
     setChatVisible,
     fetchWorkspaces,
     fetchWorkspace,

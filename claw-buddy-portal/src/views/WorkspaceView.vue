@@ -487,6 +487,8 @@ function handleKeydown(e: KeyboardEvent) {
             :manual-notes="store.blackboard?.manual_notes || ''"
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
+            :topology-nodes="store.topologyNodes"
+            :topology-edges="store.topologyEdges"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />

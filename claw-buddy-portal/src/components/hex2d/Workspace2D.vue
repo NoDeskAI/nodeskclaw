@@ -4,16 +4,37 @@ import { useSvgZoom } from '@/composables/useSvgZoom'
 import { axialToWorld, hexPolygonPoints, HEX_SIZE } from '@/composables/useHexLayout'
 import type { AgentBrief } from '@/stores/workspace'
 
+interface TopologyNode {
+  id: string
+  hex_q: number
+  hex_r: number
+  node_type: 'agent' | 'blackboard' | 'corridor_hex' | 'human'
+  display_name?: string
+  entity_id?: string
+  color?: string
+}
+
+interface TopologyEdge {
+  id: string
+  from_q: number
+  from_r: number
+  to_q: number
+  to_r: number
+  direction: string
+}
+
 const props = defineProps<{
   agents: AgentBrief[]
   autoSummary: string
   manualNotes: string
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
+  topologyNodes?: TopologyNode[]
+  topologyEdges?: TopologyEdge[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard', agentId?: string }): void
+  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }): void
   (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
 }>()
@@ -86,10 +107,56 @@ function bbHexPoints(): string {
   return hexPolygonPoints(0, 0, BB_RADIUS)
 }
 
+const corridorNodes = computed(() =>
+  (props.topologyNodes || [])
+    .filter(n => n.node_type === 'corridor_hex')
+    .map(n => {
+      const { x, y } = axialToWorld(n.hex_q, n.hex_r)
+      return { ...n, px: x * SCALE, py: y * SCALE }
+    })
+)
+
+const humanNodes = computed(() =>
+  (props.topologyNodes || [])
+    .filter(n => n.node_type === 'human')
+    .map(n => {
+      const { x, y } = axialToWorld(n.hex_q, n.hex_r)
+      return { ...n, px: x * SCALE, py: y * SCALE }
+    })
+)
+
+const connectionLines = computed(() =>
+  (props.topologyEdges || []).map(e => {
+    const from = axialToWorld(e.from_q, e.from_r)
+    const to = axialToWorld(e.to_q, e.to_r)
+    return {
+      id: e.id,
+      x1: from.x * SCALE,
+      y1: from.y * SCALE,
+      x2: to.x * SCALE,
+      y2: to.y * SCALE,
+      direction: e.direction,
+    }
+  })
+)
+
+const CORRIDOR_RADIUS = HEX_RADIUS * 0.65
+const HUMAN_RADIUS = HEX_RADIUS * 0.75
+
+function corridorHexPoints(cx: number, cy: number): string {
+  return hexPolygonPoints(cx, cy, CORRIDOR_RADIUS)
+}
+
+function humanHexPoints(cx: number, cy: number): string {
+  return hexPolygonPoints(cx, cy, HUMAN_RADIUS)
+}
+
 const emptyHexes = computed(() => {
   const occupied = new Set<string>()
   occupied.add('0:0')
   for (const a of props.agents) occupied.add(`${a.hex_q}:${a.hex_r}`)
+  for (const n of corridorNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
+  for (const n of humanNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
   const hexes: { q: number, r: number, px: number, py: number }[] = []
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
     for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
@@ -253,6 +320,65 @@ const emptyHexes = computed(() => {
           font-weight="500"
         >
           {{ agent.display_name || agent.name }}
+        </text>
+      </g>
+
+      <!-- Connection lines -->
+      <g v-for="conn in connectionLines" :key="'conn-' + conn.id">
+        <defs>
+          <marker :id="'arrow-' + conn.id" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#06b6d4" opacity="0.6" />
+          </marker>
+        </defs>
+        <line
+          :x1="conn.x1" :y1="conn.y1" :x2="conn.x2" :y2="conn.y2"
+          stroke="#06b6d4" stroke-width="2" opacity="0.4"
+          :marker-end="conn.direction === 'a_to_b' || conn.direction === 'both' ? `url(#arrow-${conn.id})` : undefined"
+          :marker-start="conn.direction === 'b_to_a' || conn.direction === 'both' ? `url(#arrow-${conn.id})` : undefined"
+        />
+      </g>
+
+      <!-- Corridor hexes -->
+      <g
+        v-for="ch in corridorNodes"
+        :key="'corridor-' + ch.id"
+        class="cursor-pointer"
+        :transform="`translate(${ch.px}, ${ch.py})`"
+        @click.stop="emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.id })"
+      >
+        <polygon
+          :points="corridorHexPoints(0, 0)"
+          fill="#06b6d411"
+          stroke="#06b6d4"
+          stroke-width="1.5"
+          stroke-dasharray="6,3"
+          opacity="0.8"
+        />
+        <text y="4" text-anchor="middle" fill="#06b6d4" font-size="8" font-weight="500">
+          {{ ch.display_name || 'Corridor' }}
+        </text>
+      </g>
+
+      <!-- Human hexes -->
+      <g
+        v-for="hh in humanNodes"
+        :key="'human-' + hh.id"
+        class="cursor-pointer"
+        :transform="`translate(${hh.px}, ${hh.py})`"
+        @click.stop="emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', entityId: hh.entity_id })"
+      >
+        <polygon
+          :points="humanHexPoints(0, 0)"
+          :fill="(hh.color || '#f59e0b') + '22'"
+          :stroke="hh.color || '#f59e0b'"
+          stroke-width="2"
+          opacity="0.9"
+        />
+        <text y="-4" text-anchor="middle" :fill="hh.color || '#f59e0b'" font-size="14">
+          &#9775;
+        </text>
+        <text y="12" text-anchor="middle" fill="#d4d4d8" font-size="8" font-weight="500">
+          {{ hh.display_name || 'Human' }}
         </text>
       </g>
 
