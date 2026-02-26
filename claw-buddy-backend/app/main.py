@@ -420,6 +420,15 @@ async def lifespan(app: FastAPI):
                         "UPDATE workspace_templates SET blackboard_snapshot = COALESCE(blackboard_template, '{}')"
                     ))
                 logger.info("自动迁移：已为 workspace_templates 表添加 blackboard_snapshot 列")
+            is_public_col = await conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'workspace_templates' AND column_name = 'is_public'"
+            ))
+            if is_public_col.first() is None:
+                await conn.execute(text(
+                    "ALTER TABLE workspace_templates ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT false"
+                ))
+                logger.info("自动迁移：已为 workspace_templates 表添加 is_public 列")
 
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
@@ -708,6 +717,41 @@ async def lifespan(app: FastAPI):
     schedule_runner = ScheduleRunner(async_session_factory)
     schedule_runner.start()
 
+    # ── 启动飞书 WebSocket 长链接 ──
+    from app.services.channel_adapters.feishu_ws_client import FeishuWSClient
+    feishu_ws_clients: list[FeishuWSClient] = []
+
+    async with async_session_factory() as db:
+        from app.models.workspace_member import WorkspaceMember
+
+        ws_members = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.channel_type == "feishu",
+                WorkspaceMember.deleted_at.is_(None),
+            )
+        )
+        seen_apps: dict[str, FeishuWSClient] = {}
+        for member in ws_members.scalars().all():
+            cfg = member.channel_config or {}
+            if cfg.get("mode") != "websocket":
+                continue
+            app_id = cfg.get("app_id", "")
+            app_secret = cfg.get("app_secret", "")
+            if not app_id or not app_secret or app_id in seen_apps:
+                continue
+            client = FeishuWSClient(
+                app_id=app_id,
+                app_secret=app_secret,
+                encrypt_key=cfg.get("encrypt_key", ""),
+                verification_token=cfg.get("verification_token", ""),
+            )
+            client.start()
+            seen_apps[app_id] = client
+            feishu_ws_clients.append(client)
+
+    if feishu_ws_clients:
+        logger.info("已启动 %d 个飞书 WebSocket 长链接", len(feishu_ws_clients))
+
     # ── 恢复工作区 SSE 连接 ──
     from app.services.sse_listener import sse_listener_manager
 
@@ -744,6 +788,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ─────────────────────────────────────
+    for ws_client in feishu_ws_clients:
+        ws_client.stop()
     await sse_listener_manager.disconnect_all()
     logger.info("已关闭所有 SSE 连接")
     await summary_job.stop()

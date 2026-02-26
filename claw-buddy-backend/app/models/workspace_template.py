@@ -16,4 +16,5 @@ class WorkspaceTemplate(BaseModel):
     topology_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     blackboard_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     gene_assignments: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
