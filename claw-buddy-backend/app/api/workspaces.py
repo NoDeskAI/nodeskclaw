@@ -578,11 +578,30 @@ async def workspace_chat(
         target_agents = [a for a in running_agents if a.id in reachable_ids]
         excluded = [a for a in running_agents if a.id not in reachable_ids]
         if excluded:
-            excluded_names = [a.agent_display_name or a.name for a in excluded]
-            logger.warning(
-                "workspace_chat: workspace=%s 拓扑过滤排除了 %d 个 Agent: %s",
-                workspace_id, len(excluded), excluded_names,
-            )
+            repaired = False
+            for agent in excluded:
+                if agent.hex_position_q is not None:
+                    connected = await corridor_router.auto_connect_hex(
+                        workspace_id, agent.hex_position_q, agent.hex_position_r or 0, None, db,
+                    )
+                    if connected:
+                        logger.info(
+                            "workspace_chat: 自动补连 Agent %s 到 %d 个邻居",
+                            agent.agent_display_name or agent.name, len(connected),
+                        )
+                        repaired = True
+            if repaired:
+                await db.commit()
+                audience = await corridor_router.get_blackboard_audience(workspace_id, db)
+                reachable_ids = {ep.entity_id for ep in audience if ep.endpoint_type == "agent"}
+                target_agents = [a for a in running_agents if a.id in reachable_ids]
+                excluded = [a for a in running_agents if a.id not in reachable_ids]
+            if excluded:
+                excluded_names = [a.agent_display_name or a.name for a in excluded]
+                logger.warning(
+                    "workspace_chat: workspace=%s 拓扑过滤排除了 %d 个 Agent: %s",
+                    workspace_id, len(excluded), excluded_names,
+                )
     else:
         target_agents = running_agents
 
