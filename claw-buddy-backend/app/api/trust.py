@@ -145,6 +145,49 @@ async def submit_approval_request(
     db.add(record)
     await db.commit()
 
+    from app.core.config import settings
+    from app.models.workspace import Workspace
+
+    ws_q = await db.execute(
+        select(Workspace).where(
+            Workspace.id == body.workspace_id,
+            Workspace.deleted_at.is_(None),
+        )
+    )
+    ws = ws_q.scalar_one_or_none()
+    workspace_name = ws.name if ws else body.workspace_id
+
+    callback_base = getattr(settings, "CLAWBUDDY_WEBHOOK_BASE_URL", "") or getattr(settings, "CLAWBUDDY_HOST", "") or ""
+    callback_url = f"{callback_base}/api/v1/workspaces/approval-requests/{record.id}/resolve"
+
+    for ep in human_endpoints:
+        member_q = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == body.workspace_id,
+                WorkspaceMember.user_id == ep.entity_id,
+                not_deleted(WorkspaceMember),
+            )
+        )
+        member = member_q.scalar_one_or_none()
+        if member and member.channel_type == "feishu" and member.channel_config:
+            try:
+                from app.services.channel_adapters.feishu import FeishuChannelAdapter
+
+                adapter = FeishuChannelAdapter(
+                    app_id=settings.FEISHU_APP_ID,
+                    app_secret=settings.FEISHU_APP_SECRET,
+                )
+                await adapter.send_approval_request(
+                    channel_config=member.channel_config,
+                    agent_name=body.agent_instance_id,
+                    action_type=body.action_type,
+                    proposal=body.proposal or {},
+                    workspace_name=workspace_name,
+                    callback_url=callback_url,
+                )
+            except Exception as e:
+                logger.warning("Failed to send approval to human %s: %s", ep.entity_id, e)
+
     return _ok({
         "status": "routed",
         "human_targets": len(human_endpoints),
