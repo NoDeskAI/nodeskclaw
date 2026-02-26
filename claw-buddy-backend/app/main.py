@@ -490,57 +490,56 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 blackboards 表添加 content 列")
 
-        # ── 迁移 18b: 将旧黑板字段数据搬迁到 content（幂等，旧列不存在则跳过） ──
-        _has_old_cols = await conn.execute(text(
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = 'blackboards' AND column_name = 'objectives'"
-        ))
-        if _has_old_cols.first() is not None:
-            import json as _json
+        # ── 迁移 18b: 将旧黑板字段数据搬迁到 content（幂等，动态检测现存列） ──
+        import json as _json
 
-            def _convert_bb_to_md(objectives, tasks, manual_notes, auto_summary):
-                sections: list[str] = []
-                if objectives:
-                    items = objectives if isinstance(objectives, list) else []
-                    if items:
-                        lines = ["## 目标", ""]
-                        for obj in items:
-                            if isinstance(obj, dict):
-                                title = obj.get("title") or ""
-                                lines.append(f"- {title}")
-                                for kr in (obj.get("key_results") or []):
-                                    if isinstance(kr, dict):
-                                        lines.append(f"  - {kr.get('desc', '')}")
-                            elif isinstance(obj, str):
-                                lines.append(f"- {obj}")
-                        sections.append("\n".join(lines))
-                if tasks:
-                    items = tasks if isinstance(tasks, list) else []
-                    if items:
-                        lines = ["## 任务", ""]
-                        for t in items:
-                            if not isinstance(t, dict):
-                                continue
-                            title = t.get("title", "")
-                            status = t.get("status", "todo")
-                            check = "x" if status == "done" else " "
-                            lines.append(f"- [{check}] {title} ({status})")
-                        sections.append("\n".join(lines))
-                if manual_notes and str(manual_notes).strip():
-                    sections.append(f"## 笔记\n\n{manual_notes.strip()}")
-                if auto_summary and str(auto_summary).strip():
-                    sections.append(f"## 自动摘要\n\n{auto_summary.strip()}")
-                return "\n\n".join(sections)
+        _old_col_names = ("objectives", "tasks", "manual_notes", "auto_summary")
+        _existing_old = await conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'blackboards' AND column_name = ANY(:cols)"
+        ), {"cols": list(_old_col_names)})
+        _found_cols = {r[0] for r in _existing_old.fetchall()}
 
+        if _found_cols:
+            _select_cols = ", ".join(
+                f"{c}" if c in _found_cols else f"NULL AS {c}"
+                for c in _old_col_names
+            )
             rows = await conn.execute(text(
-                "SELECT id, objectives, tasks, manual_notes, auto_summary FROM blackboards WHERE content = ''"
+                f"SELECT id, {_select_cols} FROM blackboards WHERE content = ''"
             ))
             migrated_count = 0
             for row in rows.fetchall():
                 bb_id, obj_raw, tasks_raw, notes, summary = row
-                obj = _json.loads(obj_raw) if isinstance(obj_raw, str) else obj_raw
-                tsk = _json.loads(tasks_raw) if isinstance(tasks_raw, str) else tasks_raw
-                md = _convert_bb_to_md(obj, tsk, notes or "", summary or "")
+                sections: list[str] = []
+                if obj_raw:
+                    obj = _json.loads(obj_raw) if isinstance(obj_raw, str) else obj_raw
+                    if isinstance(obj, list) and obj:
+                        lines = ["## 目标", ""]
+                        for o in obj:
+                            if isinstance(o, dict):
+                                lines.append(f"- {o.get('title', '')}")
+                                for kr in (o.get("key_results") or []):
+                                    if isinstance(kr, dict):
+                                        lines.append(f"  - {kr.get('desc', '')}")
+                            elif isinstance(o, str):
+                                lines.append(f"- {o}")
+                        sections.append("\n".join(lines))
+                if tasks_raw:
+                    tsk = _json.loads(tasks_raw) if isinstance(tasks_raw, str) else tasks_raw
+                    if isinstance(tsk, list) and tsk:
+                        lines = ["## 任务", ""]
+                        for t in tsk:
+                            if not isinstance(t, dict):
+                                continue
+                            check = "x" if t.get("status") == "done" else " "
+                            lines.append(f"- [{check}] {t.get('title', '')} ({t.get('status', 'todo')})")
+                        sections.append("\n".join(lines))
+                if notes and str(notes).strip():
+                    sections.append(f"## 笔记\n\n{notes.strip()}")
+                if summary and str(summary).strip():
+                    sections.append(f"## 自动摘要\n\n{summary.strip()}")
+                md = "\n\n".join(sections)
                 if md:
                     await conn.execute(
                         text("UPDATE blackboards SET content = :c WHERE id = :id"),
