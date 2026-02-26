@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, PenSquare, Route, User, Palette, Settings, Link } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, PenSquare, Route, User, Palette, Settings, Link, Move } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -95,6 +95,13 @@ const emit = defineEmits<{
             <span>{{ t('hexAction.viewDetail') }}</span>
           </button>
           <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'move-hex')"
+          >
+            <Move class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.move') }}</span>
+          </button>
+          <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
             @click="emit('action', 'remove-agent')"
           >
@@ -120,6 +127,13 @@ const emit = defineEmits<{
             <span>{{ t('hexAction.manageConnections') }}</span>
           </button>
           <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'move-hex')"
+          >
+            <Move class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.move') }}</span>
+          </button>
+          <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
             @click="emit('action', 'remove-corridor')"
           >
@@ -143,6 +157,13 @@ const emit = defineEmits<{
           >
             <Palette class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.changeColor') }}</span>
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'move-hex')"
+          >
+            <Move class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.move') }}</span>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"

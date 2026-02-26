@@ -12,7 +12,9 @@ class CorridorHexCreate(BaseModel):
 
 
 class CorridorHexUpdate(BaseModel):
-    display_name: str
+    display_name: str | None = None
+    hex_q: int | None = None
+    hex_r: int | None = None
 
 
 class CorridorHexInfo(BaseModel):

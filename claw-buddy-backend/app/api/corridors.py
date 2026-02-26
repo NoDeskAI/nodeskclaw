@@ -177,6 +177,24 @@ async def _auto_connect_corridor(
             db.add(conn)
 
 
+async def _cascade_update_connections(
+    workspace_id: str, old_q: int, old_r: int, new_q: int, new_r: int, db: AsyncSession,
+):
+    """Soft-delete all connections referencing the old position."""
+    conns = await db.execute(
+        select(HexConnection).where(
+            HexConnection.workspace_id == workspace_id,
+            not_deleted(HexConnection),
+            (
+                ((HexConnection.hex_a_q == old_q) & (HexConnection.hex_a_r == old_r))
+                | ((HexConnection.hex_b_q == old_q) & (HexConnection.hex_b_r == old_r))
+            ),
+        )
+    )
+    for conn in conns.scalars().all():
+        conn.soft_delete()
+
+
 @router.get("/{workspace_id}/corridor-hexes")
 async def list_corridor_hexes(
     workspace_id: str,
@@ -219,23 +237,51 @@ async def update_corridor_hex(
     ch = result.scalar_one_or_none()
     if not ch:
         raise HTTPException(404, "corridor hex not found")
-    ch.display_name = body.display_name
+
+    if body.display_name is not None:
+        ch.display_name = body.display_name
+
+    position_changed = False
+    old_q, old_r = ch.hex_q, ch.hex_r
+    if body.hex_q is not None and body.hex_r is not None:
+        new_q, new_r = body.hex_q, body.hex_r
+        if (new_q, new_r) != (old_q, old_r):
+            if await _is_hex_occupied(workspace_id, new_q, new_r, db):
+                raise HTTPException(400, "hex position already occupied")
+            ch.hex_q = new_q
+            ch.hex_r = new_r
+            position_changed = True
+
     await db.commit()
+
+    if position_changed:
+        await _cascade_update_connections(workspace_id, old_q, old_r, ch.hex_q, ch.hex_r, db)
+        await _auto_connect_corridor(workspace_id, ch.hex_q, ch.hex_r, ch.created_by, db)
+        await db.commit()
+
     actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "corridor:hex_updated", {"hex_id": ch.id, "display_name": ch.display_name})
+    event_data: dict = {"hex_id": ch.id, "display_name": ch.display_name}
+    if position_changed:
+        event_data.update({"hex_q": ch.hex_q, "hex_r": ch.hex_r})
+    broadcast_event(workspace_id, "corridor:hex_updated", event_data)
     audit = TopologyAuditLog(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
         action="corridor_hex_updated",
         target_type="corridor_hex",
         target_id=ch.id,
-        new_value={"display_name": ch.display_name},
+        new_value={"display_name": ch.display_name, "hex_q": ch.hex_q, "hex_r": ch.hex_r},
         actor_type=actor_type,
         actor_id=actor_id,
     )
     db.add(audit)
     await db.commit()
-    return _ok({"id": ch.id, "display_name": ch.display_name})
+    return _ok(CorridorHexInfo(
+        id=ch.id, workspace_id=ch.workspace_id,
+        hex_q=ch.hex_q, hex_r=ch.hex_r,
+        display_name=ch.display_name,
+        created_by=ch.created_by, created_at=ch.created_at,
+    ).model_dump())
 
 
 @router.delete("/{workspace_id}/corridor-hexes/{hex_id}")

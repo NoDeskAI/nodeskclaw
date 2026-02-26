@@ -19,6 +19,8 @@ const props = defineProps<{
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
   topologyEdges?: TopologyEdge[]
+  isMovingHex?: boolean
+  movingHexSource?: { q: number, r: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -456,9 +458,15 @@ addToLoop(() => {
       const isHovered = hoveredId.value === id
       const [, qs, rs] = id.split(':')
       const isSelectedHex = props.selectedHex?.q === Number(qs) && props.selectedHex?.r === Number(rs)
-      mat.opacity = isSelectedHex ? 0.35 : isHovered ? 0.15 : 0.0
-      mat.emissive = isSelectedHex ? new THREE.Color(0x60a5fa) : new THREE.Color(0x4ac8e8)
-      mat.emissiveIntensity = isSelectedHex ? 0.6 + Math.sin(t * 3) * 0.15 : isHovered ? 0.3 : 0
+      if (props.isMovingHex) {
+        mat.opacity = isHovered ? 0.45 : 0.15
+        mat.emissive = new THREE.Color(0x4ade80)
+        mat.emissiveIntensity = isHovered ? 0.6 : 0.15 + Math.sin(t * 2) * 0.05
+      } else {
+        mat.opacity = isSelectedHex ? 0.35 : isHovered ? 0.15 : 0.0
+        mat.emissive = isSelectedHex ? new THREE.Color(0x60a5fa) : new THREE.Color(0x4ac8e8)
+        mat.emissiveIntensity = isSelectedHex ? 0.6 + Math.sin(t * 3) * 0.15 : isHovered ? 0.3 : 0
+      }
       continue
     }
 
@@ -479,14 +487,40 @@ addToLoop(() => {
     const isSelected = props.selectedAgentId === id
     const isSelectedHex = props.selectedHex?.q !== undefined &&
       props.agents.some((a) => a.instance_id === id && a.hex_q === props.selectedHex!.q && a.hex_r === props.selectedHex!.r)
-    const targetY = isHovered ? 0.4 : (isSelected || isSelectedHex) ? 0.3 : 0.15
+
+    const isMoveSource = props.isMovingHex && props.movingHexSource &&
+      props.agents.some((a) => a.instance_id === id && a.hex_q === props.movingHexSource!.q && a.hex_r === props.movingHexSource!.r)
+
+    const targetY = isHovered ? 0.4 : (isSelected || isSelectedHex || isMoveSource) ? 0.3 : 0.15
     group.position.y += (targetY - group.position.y) * 0.1
 
     const mesh = group.children[0] as THREE.Mesh
     if (mesh?.material && 'emissiveIntensity' in mesh.material) {
       const mat = mesh.material as THREE.MeshStandardMaterial
       const pulse = Math.sin(t * 2) * 0.1 + 0.15
-      mat.emissiveIntensity = (isSelected || isSelectedHex) ? 0.5 + Math.sin(t * 3) * 0.15 : isHovered ? 0.4 : pulse
+      if (isMoveSource) {
+        mat.emissive = new THREE.Color(0xf59e0b)
+        mat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.25
+      } else {
+        mat.emissiveIntensity = (isSelected || isSelectedHex) ? 0.5 + Math.sin(t * 3) * 0.15 : isHovered ? 0.4 : pulse
+      }
+    }
+  }
+
+  if (props.isMovingHex && props.movingHexSource) {
+    const src = props.movingHexSource
+    for (const [id, group] of hexMeshes) {
+      if (!id.startsWith('corridor:') && !id.startsWith('human:')) continue
+      const hq = group.userData.hexQ ?? (group.userData as Record<string, unknown>).hexQ
+      const hr = group.userData.hexR ?? (group.userData as Record<string, unknown>).hexR
+      if (hq === src.q && hr === src.r) {
+        const mesh = group.children[0] as THREE.Mesh
+        if (mesh?.material && 'emissiveIntensity' in mesh.material) {
+          const mat = mesh.material as THREE.MeshStandardMaterial
+          mat.emissive = new THREE.Color(0xf59e0b)
+          mat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.25
+        }
+      }
     }
   }
 })

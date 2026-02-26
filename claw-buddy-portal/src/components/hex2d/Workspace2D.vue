@@ -31,6 +31,8 @@ const props = defineProps<{
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
   topologyEdges?: TopologyEdge[]
+  isMovingHex?: boolean
+  movingHexSource?: { q: number, r: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -216,10 +218,11 @@ const emptyHexes = computed(() => {
       >
         <polygon
           :points="hexPoints(0, 0)"
-          :fill="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa11' : 'transparent'"
-          :stroke="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa' : 'transparent'"
-          :stroke-width="selectedHex?.q === hex.q && selectedHex?.r === hex.r ? 2 : 0"
-          class="hover-empty-hex"
+          :fill="isMovingHex ? '#4ade8018' : selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa11' : 'transparent'"
+          :stroke="isMovingHex ? '#4ade80' : selectedHex?.q === hex.q && selectedHex?.r === hex.r ? '#60a5fa' : 'transparent'"
+          :stroke-width="isMovingHex ? 1.5 : selectedHex?.q === hex.q && selectedHex?.r === hex.r ? 2 : 0"
+          :stroke-dasharray="isMovingHex ? '4,3' : 'none'"
+          :class="isMovingHex ? 'move-target-hex' : 'hover-empty-hex'"
         />
       </g>
 
@@ -384,7 +387,7 @@ const emptyHexes = computed(() => {
 
       <!-- Selected hex highlight for agents -->
       <g
-        v-if="selectedHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
+        v-if="selectedHex && !isMovingHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
         :transform="`translate(${axialToWorld(selectedHex!.q, selectedHex!.r).x * SCALE}, ${axialToWorld(selectedHex!.q, selectedHex!.r).y * SCALE})`"
       >
         <polygon
@@ -394,6 +397,20 @@ const emptyHexes = computed(() => {
           stroke-width="3"
           opacity="0.8"
           class="animate-selected-ring"
+        />
+      </g>
+
+      <!-- Move mode: source hex pulsing highlight -->
+      <g
+        v-if="isMovingHex && movingHexSource"
+        :transform="`translate(${axialToWorld(movingHexSource.q, movingHexSource.r).x * SCALE}, ${axialToWorld(movingHexSource.q, movingHexSource.r).y * SCALE})`"
+      >
+        <polygon
+          :points="hexPoints(0, 0)"
+          fill="none"
+          stroke="#f59e0b"
+          stroke-width="3"
+          class="animate-move-source"
         />
       </g>
     </g>
@@ -440,5 +457,23 @@ const emptyHexes = computed(() => {
   fill: #4ac8e808;
   stroke: #4ac8e8;
   stroke-width: 1;
+}
+
+@keyframes move-source-pulse {
+  0%, 100% { opacity: 0.9; stroke-width: 3.5; }
+  50% { opacity: 0.4; stroke-width: 2; }
+}
+.animate-move-source {
+  animation: move-source-pulse 1s ease-in-out infinite;
+}
+
+.move-target-hex {
+  transition: fill 0.15s ease, stroke 0.15s ease;
+}
+.move-target-hex:hover {
+  fill: #4ade8030;
+  stroke: #4ade80;
+  stroke-width: 2.5;
+  stroke-dasharray: none;
 }
 </style>

@@ -12,7 +12,7 @@ import ChatPanel from '@/components/chat/ChatPanel.vue'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
-import { axialToWorld } from '@/composables/useHexLayout'
+import { useToast } from '@/composables/useToast'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 
 const { t } = useI18n()
@@ -132,8 +132,15 @@ function toggleMode() {
 
 let clickHandled = false
 
-function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard', agentId?: string }) {
+function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }) {
   clickHandled = true
+
+  if (isMovingHex.value) {
+    if (payload.type === 'empty') {
+      moveHexTo(payload.q, payload.r)
+    }
+    return
+  }
 
   if (selectedHex.value &&
     selectedHex.value.q === payload.q &&
@@ -209,6 +216,9 @@ function onHexAction(action: string) {
       hexDrawerOpen.value = false
       break
     }
+    case 'move-hex':
+      enterMoveMode()
+      break
     case 'rename-corridor':
     case 'manage-connections':
       hexDrawerOpen.value = false
@@ -312,68 +322,67 @@ function goBack() {
   router.push('/')
 }
 
-const HEX_DELTAS: Record<string, [number, number]> = {
-  ArrowRight: [1, 0],
-  ArrowLeft: [-1, 0],
-  ArrowUp: [0, -1],
-  ArrowDown: [0, 1],
-}
-
-const ALL_HEX_DIRS: [number, number][] = [
-  [1, 0], [-1, 0], [0, -1], [0, 1], [1, -1], [-1, 1],
-]
-
-function resolveHexDelta(key: string): [number, number] | null {
-  if (activeMode.value === '2d') return HEX_DELTAS[key] || null
-
-  const dirs = workspace3dRef.value?.getCameraXZDirections()
-  if (!dirs) return HEX_DELTAS[key] || null
-
-  let sx = 0, sz = 0
-  if (key === 'ArrowRight') { sx = dirs.right.x; sz = dirs.right.z }
-  else if (key === 'ArrowLeft') { sx = -dirs.right.x; sz = -dirs.right.z }
-  else if (key === 'ArrowUp') { sx = dirs.forward.x; sz = dirs.forward.z }
-  else if (key === 'ArrowDown') { sx = -dirs.forward.x; sz = -dirs.forward.z }
-  else return null
-
-  let bestDot = -Infinity
-  let best: [number, number] = [1, 0]
-  for (const [dq, dr] of ALL_HEX_DIRS) {
-    const w = axialToWorld(dq, dr)
-    const dot = sx * w.x + sz * w.y
-    if (dot > bestDot) { bestDot = dot; best = [dq, dr] }
-  }
-  return best
-}
-
-async function moveSelectedAgent(dq: number, dr: number) {
-  if (!selectedAgentId.value) return
-  const agent = agents.value.find((a) => a.instance_id === selectedAgentId.value)
-  if (!agent) return
-
-  const targetQ = agent.hex_q + dq
-  const targetR = agent.hex_r + dr
-
-  if (targetQ === 0 && targetR === 0) return
-
-  const occupied = agents.value.some(
-    (a) => a.instance_id !== selectedAgentId.value && a.hex_q === targetQ && a.hex_r === targetR,
-  )
-  if (occupied) return
-
-  await store.updateAgent(workspaceId.value, selectedAgentId.value, {
-    hex_q: targetQ,
-    hex_r: targetR,
-  })
-}
+const PAN_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'W', 'a', 'A', 's', 'S', 'd', 'D'])
 
 function panCanvas(key: string) {
-  const dx = key === 'ArrowRight' ? 1 : key === 'ArrowLeft' ? -1 : 0
-  const dy = key === 'ArrowDown' ? 1 : key === 'ArrowUp' ? -1 : 0
+  const k = key.toLowerCase()
+  const dx = (k === 'arrowright' || k === 'd') ? 1 : (k === 'arrowleft' || k === 'a') ? -1 : 0
+  const dy = (k === 'arrowdown' || k === 's') ? 1 : (k === 'arrowup' || k === 'w') ? -1 : 0
   if (activeMode.value === '3d') {
     workspace3dRef.value?.panBy(dx, dy)
   } else {
     workspace2dRef.value?.panBy(dx, dy)
+  }
+}
+
+// ── Move Mode ────────────────────────────────────────
+const { toast } = useToast()
+
+type MovingHexSource = {
+  type: 'agent' | 'corridor' | 'human'
+  id: string
+  q: number
+  r: number
+}
+const isMovingHex = ref(false)
+const movingHexSource = ref<MovingHexSource | null>(null)
+
+function enterMoveMode() {
+  if (!selectedHex.value) return
+  const hex = selectedHex.value
+  let source: MovingHexSource | null = null
+  if (hex.type === 'agent' && hex.agentId) {
+    source = { type: 'agent', id: hex.agentId, q: hex.q, r: hex.r }
+  } else if (hex.type === 'corridor' && hex.entityId) {
+    source = { type: 'corridor', id: hex.entityId, q: hex.q, r: hex.r }
+  } else if (hex.type === 'human' && hex.entityId) {
+    source = { type: 'human', id: hex.entityId, q: hex.q, r: hex.r }
+  }
+  if (!source) return
+  movingHexSource.value = source
+  isMovingHex.value = true
+  hexDrawerOpen.value = false
+}
+
+function cancelMoveMode() {
+  isMovingHex.value = false
+  movingHexSource.value = null
+}
+
+async function moveHexTo(targetQ: number, targetR: number) {
+  const src = movingHexSource.value
+  if (!src) return
+  try {
+    if (src.type === 'agent') {
+      await store.updateAgent(workspaceId.value, src.id, { hex_q: targetQ, hex_r: targetR })
+    } else if (src.type === 'corridor') {
+      await store.moveCorridorHex(workspaceId.value, src.id, targetQ, targetR)
+    } else if (src.type === 'human') {
+      await store.setHumanHex(workspaceId.value, src.id, targetQ, targetR)
+    }
+    toast(t('hexAction.moveSuccess', { q: targetQ, r: targetR }), 'success')
+  } finally {
+    cancelMoveMode()
   }
 }
 
@@ -382,21 +391,20 @@ function handleKeydown(e: KeyboardEvent) {
   if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
 
   if (e.key === 'Escape') {
-    selectedAgentId.value = null
-    selectedHex.value = null
-    hexDrawerOpen.value = false
+    if (isMovingHex.value) {
+      cancelMoveMode()
+    } else {
+      selectedAgentId.value = null
+      selectedHex.value = null
+      hexDrawerOpen.value = false
+    }
     e.preventDefault()
     return
   }
 
-  if (HEX_DELTAS[e.key]) {
+  if (PAN_KEYS.has(e.key)) {
     e.preventDefault()
-    if (selectedAgentId.value) {
-      const hexDelta = resolveHexDelta(e.key)
-      if (hexDelta) moveSelectedAgent(hexDelta[0], hexDelta[1])
-    } else {
-      panCanvas(e.key)
-    }
+    panCanvas(e.key)
     return
   }
 
@@ -493,6 +501,23 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
     </div>
 
+    <!-- Move mode hint bar -->
+    <Transition name="slide-down">
+      <div
+        v-if="isMovingHex"
+        class="flex items-center justify-center gap-3 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/30 shrink-0 z-10"
+      >
+        <span class="text-sm text-amber-400">{{ t('hexAction.moveModeHint') }}</span>
+        <button
+          class="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 transition-colors"
+          @click="cancelMoveMode"
+        >
+          <X class="w-3 h-3" />
+          {{ t('hexAction.cancel') }}
+        </button>
+      </div>
+    </Transition>
+
     <!-- Main: Hex Grid + Chat Sidebar -->
     <div class="flex-1 flex min-h-0">
       <!-- Hex Grid -->
@@ -514,6 +539,8 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topology?.nodes"
             :topology-edges="store.topology?.edges"
+            :is-moving-hex="isMovingHex"
+            :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />
@@ -536,6 +563,8 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topologyNodes"
             :topology-edges="store.topologyEdges"
+            :is-moving-hex="isMovingHex"
+            :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />
@@ -566,7 +595,7 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="border-t border-border/50 px-3 py-2 space-y-1 text-muted-foreground">
               <div class="flex justify-between gap-4">
                 <span>{{ t('workspaceView.arrowKeys') }}</span>
-                <span class="text-foreground/70">{{ selectedAgentId ? t('workspaceView.moveAgent') : t('workspaceView.panCanvas') }}</span>
+                <span class="text-foreground/70">{{ t('workspaceView.panCanvas') }}</span>
               </div>
               <div class="flex justify-between gap-4">
                 <span>+ / -</span>
@@ -742,6 +771,15 @@ function handleKeydown(e: KeyboardEvent) {
 }
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+}
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.slide-down-enter-from,
+.slide-down-leave-to {
+  transform: translateY(-100%);
   opacity: 0;
 }
 </style>
