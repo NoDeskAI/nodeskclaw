@@ -1,25 +1,14 @@
 {
   "name": "clawbuddy-gene-discovery",
   "slug": "clawbuddy-gene-discovery",
-  "description": "MCP tools for searching the gene market, inspecting genes, and requesting learning.",
+  "description": "Native agent tools for searching the gene market, inspecting genes, and requesting learning.",
   "category": "tools",
-  "tags": ["mcp", "gene-market", "learning", "self-management"],
+  "tags": ["tools", "gene-market", "learning", "self-management"],
   "manifest": {
     "skill": {
       "name": "clawbuddy-gene-discovery",
-      "content": "---\nname: clawbuddy-gene-discovery\ndescription: Tools for gene market discovery and learning\nalways: true\n---\n\nYou can explore the gene market and request to learn new capabilities.\n\n## Available Tools\n- `search_genes` — Search by keyword or category\n- `get_gene_detail` — Detailed info about a specific gene\n- `request_gene_learning` — Request to install a gene on your instance\n\n## Usage Rules\n- Search for genes that match your identified skill gaps\n- Review gene details before requesting installation\n- Provide a reason when requesting learning\n- Gene installation may require human approval via trust mechanism"
+      "content": "---\nname: clawbuddy-gene-discovery\ndescription: Tools for gene market discovery and learning\nalways: true\n---\n\nYou can explore the gene market via the `clawbuddy_gene_discovery` tool.\n\n## Actions\n- `search_genes` — Search by keyword or category\n- `get_gene_detail` — Detailed info about a specific gene (provide gene_id)\n- `request_gene_learning` — Request to install a gene on your instance (provide gene_slug)\n\n## Usage Rules\n- Search for genes that match your identified skill gaps\n- Review gene details before requesting installation\n- Provide a reason when requesting learning\n- Gene installation may require human approval via trust mechanism"
     },
-    "mcp_servers": [
-      {
-        "name": "clawbuddy-gene-discovery",
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["ts-node", "/app/mcp-servers/clawbuddy-gene-discovery/index.ts"],
-        "env": {
-          "CLAWBUDDY_API_URL": "${CLAWBUDDY_API_URL}",
-          "CLAWBUDDY_TOKEN": "${CLAWBUDDY_TOKEN}"
-        }
-      }
-    ]
+    "tool_allow": ["clawbuddy_gene_discovery"]
   }
 }

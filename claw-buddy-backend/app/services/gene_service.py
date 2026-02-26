@@ -632,15 +632,7 @@ async def _direct_install(
                 _write_skill_file(mount_path, skill_name, skill_content, gene.short_description or gene.description or "")
                 ensure_skills_discovery(mount_path)
 
-                openclaw_config = manifest.get("openclaw_config")
-                if openclaw_config:
-                    _merge_openclaw_config(mount_path, openclaw_config)
-
-                mcp_servers = manifest.get("mcp_servers")
-                if mcp_servers and isinstance(mcp_servers, list):
-                    await _inject_mcp_servers(db, instance_id, gene_id, mcp_servers)
-                    from app.api.mcp import sync_mcp_to_openclaw
-                    await sync_mcp_to_openclaw(instance_id, db)
+                _apply_engineering_actions(mount_path, manifest)
 
                 invalidate_skill_snapshots(mount_path)
                 inject_evolution_notification(mount_path, skill_name, "installed")
@@ -794,6 +786,45 @@ def _merge_openclaw_config(mount_path: Path, patch: dict) -> None:
     )
 
 
+def _append_tool_allow(mount_path: Path, tool_names: list[str]) -> None:
+    """Deduplicate-append tool names to openclaw.json tools.allow array."""
+    config_path = mount_path / OPENCLAW_CONFIG_REL
+    existing: dict = {}
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = {}
+
+    tools = existing.setdefault("tools", {})
+    allow = tools.get("allow", [])
+    if not isinstance(allow, list):
+        allow = []
+    existing_set = set(allow)
+    for name in tool_names:
+        if name not in existing_set:
+            allow.append(name)
+            existing_set.add(name)
+    tools["allow"] = allow
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _apply_engineering_actions(mount_path: Path, manifest: dict) -> None:
+    """Execute all engineering actions from a gene manifest atomically.
+
+    Called from _direct_install and both branches of handle_learning_callback.
+    """
+    openclaw_config = manifest.get("openclaw_config")
+    if openclaw_config:
+        _merge_openclaw_config(mount_path, openclaw_config)
+
+    tool_allow = manifest.get("tool_allow")
+    if tool_allow and isinstance(tool_allow, list):
+        _append_tool_allow(mount_path, tool_allow)
+
+
 def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
     import shutil
 
@@ -851,9 +882,7 @@ async def handle_learning_callback(
         skill_name = skill.get("name", gene_obj.slug)
         async with nfs_mount(instance, db) as mount_path:
             _write_skill_file(mount_path, skill_name, skill.get("content", ""), gene_desc)
-            openclaw_config = manifest.get("openclaw_config")
-            if openclaw_config:
-                _merge_openclaw_config(mount_path, openclaw_config)
+            _apply_engineering_actions(mount_path, manifest)
             invalidate_skill_snapshots(mount_path)
             inject_evolution_notification(mount_path, skill_name, "installed")
 
@@ -866,9 +895,7 @@ async def handle_learning_callback(
         async with nfs_mount(instance, db) as mount_path:
             _write_skill_file(mount_path, gene_obj.slug, content, gene_desc)
             manifest = _json_loads(gene_obj.manifest) or {}
-            openclaw_config = manifest.get("openclaw_config")
-            if openclaw_config:
-                _merge_openclaw_config(mount_path, openclaw_config)
+            _apply_engineering_actions(mount_path, manifest)
             invalidate_skill_snapshots(mount_path)
             inject_evolution_notification(mount_path, gene_obj.slug, "installed")
 

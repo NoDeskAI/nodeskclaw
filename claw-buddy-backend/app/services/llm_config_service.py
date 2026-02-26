@@ -393,6 +393,7 @@ PLUGIN_FILES = [
     "src/runtime.ts",
     "src/types.ts",
     "src/sse-server.ts",
+    "src/tools.ts",
 ]
 
 

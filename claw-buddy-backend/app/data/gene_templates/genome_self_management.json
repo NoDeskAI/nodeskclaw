@@ -1,9 +1,9 @@
 {
   "name": "clawbuddy-self-management",
   "slug": "clawbuddy-self-management",
-  "description": "Complete self-management genome: bundles all 5 ClawBuddy MCP tool genes for full workspace autonomy.",
+  "description": "Complete self-management genome: bundles all 5 ClawBuddy native tool genes for full workspace autonomy.",
   "category": "genome",
-  "tags": ["genome", "mcp", "self-management", "autonomy"],
+  "tags": ["genome", "tools", "self-management", "autonomy"],
   "gene_slugs": [
     "clawbuddy-blackboard-tools",
     "clawbuddy-topology-awareness",

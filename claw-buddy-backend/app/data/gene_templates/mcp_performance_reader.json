@@ -1,26 +1,14 @@
 {
   "name": "clawbuddy-performance-reader",
   "slug": "clawbuddy-performance-reader",
-  "description": "MCP tools for reading agent performance metrics and team comparisons.",
+  "description": "Native agent tools for reading agent performance metrics and team comparisons.",
   "category": "tools",
-  "tags": ["mcp", "performance", "self-management"],
+  "tags": ["tools", "performance", "self-management"],
   "manifest": {
     "skill": {
       "name": "clawbuddy-performance-reader",
-      "content": "---\nname: clawbuddy-performance-reader\ndescription: Tools to read performance data\nalways: true\n---\n\nYou can access performance metrics to understand your effectiveness.\n\n## Available Tools\n- `get_my_performance` — Your own performance metrics (provide my_instance_id)\n- `get_team_performance` — All team members' metrics for comparison\n- `collect_performance` — Trigger a fresh data collection\n\n## Usage Rules\n- Regularly check your performance to identify improvement areas\n- Compare with team average, not absolute standards\n- Use data to inform self-improvement decisions"
+      "content": "---\nname: clawbuddy-performance-reader\ndescription: Tools to read performance data\nalways: true\n---\n\nYou can access performance metrics via the `clawbuddy_performance` tool.\n\n## Actions\n- `get_my_performance` — Your own performance metrics (provide my_instance_id)\n- `get_team_performance` — All team members' metrics for comparison\n- `collect_performance` — Trigger a fresh data collection\n\n## Usage Rules\n- Regularly check your performance to identify improvement areas\n- Compare with team average, not absolute standards\n- Use data to inform self-improvement decisions"
     },
-    "mcp_servers": [
-      {
-        "name": "clawbuddy-performance-reader",
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["ts-node", "/app/mcp-servers/clawbuddy-performance-reader/index.ts"],
-        "env": {
-          "CLAWBUDDY_API_URL": "${CLAWBUDDY_API_URL}",
-          "CLAWBUDDY_TOKEN": "${CLAWBUDDY_TOKEN}",
-          "CLAWBUDDY_WORKSPACE_ID": "${CLAWBUDDY_WORKSPACE_ID}"
-        }
-      }
-    ]
+    "tool_allow": ["clawbuddy_performance"]
   }
 }
