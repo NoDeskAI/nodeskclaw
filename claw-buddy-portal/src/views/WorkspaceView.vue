@@ -41,8 +41,9 @@ const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !
 interface SelectedHex {
   q: number
   r: number
-  type: 'empty' | 'agent' | 'blackboard'
+  type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human'
   agentId?: string
+  entityId?: string
 }
 const selectedHex = ref<SelectedHex | null>(null)
 const hexDrawerOpen = ref(false)
@@ -55,6 +56,19 @@ const hexAgentInfo = computed(() => {
   if (selectedHex.value?.type !== 'agent' || !selectedHex.value.agentId) return undefined
   const agent = agents.value.find((a) => a.instance_id === selectedHex.value!.agentId)
   return agent ? { id: agent.instance_id, name: agent.display_name || agent.name } : undefined
+})
+
+const hexEntityName = computed(() => {
+  if (!selectedHex.value?.entityId) return ''
+  if (selectedHex.value.type === 'corridor') {
+    const node = store.topologyNodes.find((n: any) => n.id === selectedHex.value!.entityId)
+    return node?.display_name || node?.name || ''
+  }
+  if (selectedHex.value.type === 'human') {
+    const member = store.members.find((m: any) => m.user_id === selectedHex.value!.entityId)
+    return member?.user_name || ''
+  }
+  return ''
 })
 
 function toggleShortcutHints() {
@@ -176,6 +190,46 @@ function onHexAction(action: string) {
     case 'edit-blackboard':
       bbOpen.value = true
       hexDrawerOpen.value = false
+      break
+    case 'place-corridor': {
+      const q = selectedHex.value?.q
+      const r = selectedHex.value?.r
+      if (q !== undefined && r !== undefined) {
+        store.createCorridorHex(workspaceId.value, q, r, `Corridor ${q},${r}`)
+      }
+      hexDrawerOpen.value = false
+      break
+    }
+    case 'place-human': {
+      const q = selectedHex.value?.q
+      const r = selectedHex.value?.r
+      if (q !== undefined && r !== undefined) {
+        store.setHumanHex(workspaceId.value, '', q, r)
+      }
+      hexDrawerOpen.value = false
+      break
+    }
+    case 'rename-corridor':
+    case 'manage-connections':
+      hexDrawerOpen.value = false
+      break
+    case 'remove-corridor':
+      if (selectedHex.value?.entityId) {
+        store.deleteCorridorHex(workspaceId.value, selectedHex.value.entityId)
+        selectedHex.value = null
+        hexDrawerOpen.value = false
+      }
+      break
+    case 'view-channel':
+    case 'change-color':
+      hexDrawerOpen.value = false
+      break
+    case 'remove-human':
+      if (selectedHex.value?.entityId) {
+        store.removeHumanHex(workspaceId.value, selectedHex.value.entityId)
+        selectedHex.value = null
+        hexDrawerOpen.value = false
+      }
       break
   }
 }
@@ -532,6 +586,7 @@ function handleKeydown(e: KeyboardEvent) {
       :hex-type="selectedHex?.type || 'empty'"
       :hex-position="selectedHex ? { q: selectedHex.q, r: selectedHex.r } : { q: 0, r: 0 }"
       :agent-info="hexAgentInfo"
+      :entity-info="selectedHex?.entityId ? { id: selectedHex.entityId, name: hexEntityName } : undefined"
       :chat-sidebar-open="chatOpen"
       @close="closeHexDrawer"
       @action="onHexAction"
