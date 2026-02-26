@@ -230,6 +230,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await api.post(`/workspaces/${workspaceId}/blackboard/performance/collect`)
   }
 
+  async function updateBlackboardTask(workspaceId: string, taskId: string, data: Record<string, unknown>) {
+    await api.put(`/workspaces/${workspaceId}/blackboard/tasks/${taskId}`, data)
+    await fetchBlackboard(workspaceId)
+  }
+
   // ── Members ───────────────────────────────────────
 
   async function fetchMembers(workspaceId: string) {
@@ -746,6 +751,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     fetchBlackboard,
     updateBlackboard,
     collectPerformance,
+    updateBlackboardTask,
     fetchMembers,
     fetchChatHistory,
     sendWorkspaceMessage,

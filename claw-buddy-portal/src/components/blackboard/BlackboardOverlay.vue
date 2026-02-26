@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { X, Save, Loader2, Target, ListTodo, Users, BarChart3, FileText, Network, RefreshCw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import draggable from 'vuedraggable'
 
 const props = defineProps<{
   open: boolean
@@ -29,6 +30,8 @@ const tasks = computed(() => store.blackboard?.tasks || [])
 const memberStatus = computed(() => store.blackboard?.member_status || [])
 const performance = computed(() => store.blackboard?.performance || [])
 
+const taskColumns = ['todo', 'doing', 'done', 'blocked'] as const
+
 const tasksByStatus = computed(() => {
   const groups: Record<string, unknown[]> = { todo: [], doing: [], done: [], blocked: [] }
   for (const t of tasks.value) {
@@ -38,6 +41,13 @@ const tasksByStatus = computed(() => {
   }
   return groups
 })
+
+function onTaskDragEnd(status: string, evt: any) {
+  if (!evt?.item) return
+  const taskId = evt.item.dataset?.taskId
+  if (!taskId) return
+  store.updateBlackboardTask(props.workspaceId, taskId, { status })
+}
 
 watch(() => props.open, (isOpen) => {
   if (isOpen && store.blackboard) {
@@ -163,28 +173,36 @@ function metricColor(percent: number): string {
             </div>
           </div>
 
-          <!-- Tasks Tab (Kanban) -->
+          <!-- Tasks Tab (Kanban with drag-and-drop) -->
           <div v-if="activeTab === 'tasks'" class="grid grid-cols-4 gap-3 min-h-[300px]">
-            <div v-for="(col, status) in tasksByStatus" :key="status" class="flex flex-col">
-              <div class="text-xs font-medium text-muted-foreground uppercase mb-2">{{ status }} ({{ col.length }})</div>
-              <div class="flex-1 space-y-2">
-                <div
-                  v-for="task in col"
-                  :key="(task as Record<string, unknown>).id as string"
-                  class="bg-muted rounded-lg p-2.5 text-xs"
-                >
-                  <div class="font-medium mb-1">{{ (task as Record<string, unknown>).title }}</div>
-                  <div class="flex items-center gap-1.5">
-                    <span
-                      v-if="(task as Record<string, unknown>).priority"
-                      class="px-1.5 py-0.5 rounded text-[10px]"
-                      :class="priorityColors[(task as Record<string, unknown>).priority as string] || ''"
-                    >
-                      {{ (task as Record<string, unknown>).priority }}
-                    </span>
+            <div v-for="status in taskColumns" :key="status" class="flex flex-col">
+              <div class="text-xs font-medium text-muted-foreground uppercase mb-2">{{ status }} ({{ (tasksByStatus[status] || []).length }})</div>
+              <draggable
+                :list="tasksByStatus[status] || []"
+                group="tasks"
+                item-key="id"
+                class="flex-1 space-y-2 min-h-[60px] rounded-lg p-1"
+                ghost-class="opacity-40"
+                @end="(e: any) => onTaskDragEnd(status, e)"
+              >
+                <template #item="{ element: task }">
+                  <div
+                    :data-task-id="(task as Record<string, unknown>).id"
+                    class="bg-muted rounded-lg p-2.5 text-xs"
+                  >
+                    <div class="font-medium mb-1">{{ (task as Record<string, unknown>).title }}</div>
+                    <div class="flex items-center gap-1.5">
+                      <span
+                        v-if="(task as Record<string, unknown>).priority"
+                        class="px-1.5 py-0.5 rounded text-[10px]"
+                        :class="priorityColors[(task as Record<string, unknown>).priority as string] || ''"
+                      >
+                        {{ (task as Record<string, unknown>).priority }}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </template>
+              </draggable>
             </div>
           </div>
 
