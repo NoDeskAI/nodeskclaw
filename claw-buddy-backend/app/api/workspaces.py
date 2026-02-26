@@ -582,7 +582,7 @@ async def workspace_chat(
             for agent in excluded:
                 if agent.hex_position_q is not None:
                     connected = await corridor_router.auto_connect_hex(
-                        workspace_id, agent.hex_position_q, agent.hex_position_r or 0, None, db,
+                        workspace_id, agent.hex_position_q, agent.hex_position_r or 0, user.id, db,
                     )
                     if connected:
                         logger.info(
