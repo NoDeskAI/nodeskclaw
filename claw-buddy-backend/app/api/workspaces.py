@@ -270,27 +270,29 @@ async def workspace_chat(
         content=data.message,
     )
 
-    from app.services import corridor_router as cr
-    use_topology = await cr.has_any_connections(db, workspace_id)
-
-    if use_topology:
-        endpoints = await cr.get_blackboard_audience(db, workspace_id)
-        agent_endpoints = [ep for ep in endpoints if ep.endpoint_type == "agent"]
-        agent_ids = {ep.entity_id for ep in agent_endpoints}
-        running_agents = [
-            a for a in await _get_running_agents(db, workspace_id) if a.id in agent_ids
-        ]
-    else:
-        running_agents = await _get_running_agents(db, workspace_id)
-
+    running_agents = await _get_running_agents(db, workspace_id)
     if not running_agents:
         broadcast_event(workspace_id, "system:info", {"message": "工作区内没有运行中的 Agent"})
         return _ok({"status": "no_agents"})
 
+    from app.services import corridor_router
+    has_topo = await corridor_router.has_any_connections(workspace_id, db)
+
+    if has_topo:
+        audience = await corridor_router.get_blackboard_audience(workspace_id, db)
+        reachable_ids = {ep.entity_id for ep in audience if ep.endpoint_type == "agent"}
+        target_agents = [a for a in running_agents if a.id in reachable_ids]
+    else:
+        target_agents = running_agents
+
+    if not target_agents:
+        broadcast_event(workspace_id, "system:info", {"message": "没有可达的运行中 Agent"})
+        return _ok({"status": "no_reachable_agents"})
+
     members = _build_members_list(ws_info, user)
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)
 
-    for inst in running_agents:
+    for inst in target_agents:
         asyncio.create_task(
             _stream_agent_response(
                 workspace_id=workspace_id,
@@ -304,7 +306,7 @@ async def workspace_chat(
             )
         )
 
-    return _ok({"status": "broadcasting", "agent_count": len(running_agents)})
+    return _ok({"status": "broadcasting", "agent_count": len(target_agents)})
 
 
 class SystemMessageRequest(BaseModel):
