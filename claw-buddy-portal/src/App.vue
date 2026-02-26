@@ -36,9 +36,9 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
 })
 
-function handleLogout() {
+async function handleLogout() {
   showUserMenu.value = false
-  authStore.logout()
+  await authStore.logout()
   router.push('/login')
 }
 

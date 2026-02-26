@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { User, LogOut, Building2 } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const { t } = useI18n()
 
-function handleLogout() {
-  authStore.logout()
+async function handleLogout() {
+  await authStore.logout()
   router.push('/login')
 }
 </script>
 
 <template>
   <div class="max-w-2xl mx-auto px-6 py-8">
-    <h1 class="text-xl font-bold mb-6">设置</h1>
+    <h1 class="text-xl font-bold mb-6">{{ t('common.settings') }}</h1>
 
     <!-- 用户信息 -->
     <div class="p-4 rounded-xl border border-border bg-card space-y-4">
@@ -43,7 +45,7 @@ function handleLogout() {
         @click="handleLogout"
       >
         <LogOut class="w-4 h-4" />
-        退出登录
+        {{ t('common.logout') }}
       </button>
     </div>
   </div>
