@@ -45,6 +45,10 @@ export interface BlackboardInfo {
   auto_summary: string
   manual_notes: string
   summary_updated_at: string | null
+  objectives: unknown[] | null
+  tasks: unknown[] | null
+  member_status: unknown[] | null
+  performance: unknown[] | null
   updated_at: string
 }
 
@@ -54,40 +58,46 @@ export interface WorkspaceMemberInfo {
   user_email: string | null
   user_avatar_url: string | null
   role: string
+  hex_q: number | null
+  hex_r: number | null
+  channel_type: string | null
+  display_color: string | null
   created_at: string
-  hex_q?: number | null
-  hex_r?: number | null
-  channel_type?: string | null
-  display_color?: string | null
 }
 
 export interface CorridorHexInfo {
   id: string
+  workspace_id: string
   hex_q: number
   hex_r: number
   display_name: string
+  created_by: string | null
+  created_at: string
 }
 
-export interface HexConnectionInfo {
+export interface ConnectionInfo {
   id: string
+  workspace_id: string
   hex_a_q: number
   hex_a_r: number
   hex_b_q: number
   hex_b_r: number
-  direction: 'both' | 'a_to_b' | 'b_to_a'
+  direction: string
   auto_created: boolean
+  created_by: string | null
+  created_at: string
 }
 
 export interface TopologyNode {
-  q: number
-  r: number
-  type: 'blackboard' | 'agent' | 'human' | 'corridor'
+  hex_q: number
+  hex_r: number
+  node_type: string
   entity_id: string | null
   display_name: string | null
+  extra: Record<string, unknown>
 }
 
 export interface TopologyEdge {
-  id: string
   a_q: number
   a_r: number
   b_q: number
@@ -96,7 +106,10 @@ export interface TopologyEdge {
   auto_created: boolean
 }
 
-export type HexType = 'empty' | 'agent' | 'blackboard' | 'human' | 'corridor'
+export interface TopologyInfo {
+  nodes: TopologyNode[]
+  edges: TopologyEdge[]
+}
 
 export interface GroupChatMessage {
   id: string
@@ -119,9 +132,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const loading = ref(false)
 
   const corridorHexes = ref<CorridorHexInfo[]>([])
-  const connections = ref<HexConnectionInfo[]>([])
-  const topologyNodes = ref<TopologyNode[]>([])
-  const topologyEdges = ref<TopologyEdge[]>([])
+  const connections = ref<ConnectionInfo[]>([])
+  const topology = ref<TopologyInfo | null>(null)
 
   // ── Workspace CRUD ────────────────────────────────
 
@@ -528,20 +540,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       } catch { /* ignore */ }
     })
 
-    const corridorEvents = [
-      'corridor:hex_placed', 'corridor:hex_removed',
-      'human:hex_placed', 'human:hex_removed', 'human:channel_updated',
-      'connection:created', 'connection:updated', 'connection:removed',
-    ]
-    for (const eventName of corridorEvents) {
-      eventSource.addEventListener(eventName, (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data)
-          externalCallback?.(eventName, data)
-        } catch { /* ignore */ }
-      })
-    }
-
     const geneEvents = [
       'gene:install_start', 'gene:learn_start', 'gene:learn_decided',
       'gene:installed', 'gene:learn_failed', 'gene:variant_published',
@@ -616,14 +614,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  // ── Topology / Corridor ─────────────────────────────
+  // ── Corridor & Topology ──────────────────────────────
 
   async function fetchTopology(workspaceId: string) {
     try {
       const res = await api.get(`/workspaces/${workspaceId}/topology`)
-      const data = res.data.data
-      topologyNodes.value = data.nodes || []
-      topologyEdges.value = data.edges || []
+      topology.value = res.data.data
     } catch (e) {
       console.error('fetchTopology error:', e)
     }
@@ -638,6 +634,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  async function createCorridorHex(workspaceId: string, hexQ: number, hexR: number, displayName = '') {
+    const res = await api.post(`/workspaces/${workspaceId}/corridor-hexes`, {
+      hex_q: hexQ, hex_r: hexR, display_name: displayName,
+    })
+    const ch = res.data.data
+    corridorHexes.value.push(ch)
+    await fetchTopology(workspaceId)
+    return ch as CorridorHexInfo
+  }
+
+  async function deleteCorridorHex(workspaceId: string, hexId: string) {
+    await api.delete(`/workspaces/${workspaceId}/corridor-hexes/${hexId}`)
+    corridorHexes.value = corridorHexes.value.filter(c => c.id !== hexId)
+    await fetchTopology(workspaceId)
+  }
+
   async function fetchConnections(workspaceId: string) {
     try {
       const res = await api.get(`/workspaces/${workspaceId}/connections`)
@@ -647,56 +659,45 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function createCorridorHex(workspaceId: string, hexQ: number, hexR: number, displayName?: string) {
-    const res = await api.post(`/workspaces/${workspaceId}/corridor-hexes`, {
-      hex_q: hexQ, hex_r: hexR, display_name: displayName || '',
-    })
-    const ch = res.data.data
-    corridorHexes.value.push(ch)
-    return ch
-  }
-
-  async function deleteCorridorHex(workspaceId: string, hexId: string) {
-    await api.delete(`/workspaces/${workspaceId}/corridor-hexes/${hexId}`)
-    corridorHexes.value = corridorHexes.value.filter(c => c.id !== hexId)
-  }
-
   async function createConnection(workspaceId: string, aQ: number, aR: number, bQ: number, bR: number, direction = 'both') {
     const res = await api.post(`/workspaces/${workspaceId}/connections`, {
       hex_a_q: aQ, hex_a_r: aR, hex_b_q: bQ, hex_b_r: bR, direction,
     })
     const conn = res.data.data
     connections.value.push(conn)
-    return conn
+    await fetchTopology(workspaceId)
+    return conn as ConnectionInfo
   }
 
   async function updateConnection(workspaceId: string, connId: string, direction: string) {
     await api.put(`/workspaces/${workspaceId}/connections/${connId}`, { direction })
     const idx = connections.value.findIndex(c => c.id === connId)
-    if (idx >= 0) connections.value[idx].direction = direction as HexConnectionInfo['direction']
+    if (idx >= 0) connections.value[idx].direction = direction
   }
 
   async function deleteConnection(workspaceId: string, connId: string) {
     await api.delete(`/workspaces/${workspaceId}/connections/${connId}`)
     connections.value = connections.value.filter(c => c.id !== connId)
+    await fetchTopology(workspaceId)
   }
 
-  async function placeHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number) {
+  async function setHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number) {
     await api.put(`/workspaces/${workspaceId}/members/${userId}/hex`, { hex_q: hexQ, hex_r: hexR })
-    const member = members.value.find(m => m.user_id === userId)
-    if (member) { member.hex_q = hexQ; member.hex_r = hexR }
+    await fetchMembers(workspaceId)
+    await fetchTopology(workspaceId)
   }
 
   async function removeHumanHex(workspaceId: string, userId: string) {
     await api.delete(`/workspaces/${workspaceId}/members/${userId}/hex`)
-    const member = members.value.find(m => m.user_id === userId)
-    if (member) { member.hex_q = null; member.hex_r = null }
+    await fetchMembers(workspaceId)
+    await fetchTopology(workspaceId)
   }
 
-  async function updateHumanChannel(workspaceId: string, userId: string, channelType: string, channelConfig: Record<string, unknown>) {
-    await api.put(`/workspaces/${workspaceId}/members/${userId}/channel`, { channel_type: channelType, channel_config: channelConfig })
-    const member = members.value.find(m => m.user_id === userId)
-    if (member) member.channel_type = channelType
+  async function setHumanChannel(workspaceId: string, userId: string, channelType: string, channelConfig: Record<string, unknown>) {
+    await api.put(`/workspaces/${workspaceId}/members/${userId}/channel`, {
+      channel_type: channelType, channel_config: channelConfig,
+    })
+    await fetchMembers(workspaceId)
   }
 
   return {
@@ -711,8 +712,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     unreadCount,
     corridorHexes,
     connections,
-    topologyNodes,
-    topologyEdges,
+    topology,
     setChatVisible,
     fetchWorkspaces,
     fetchWorkspace,
@@ -733,14 +733,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     sendMessage,
     fetchTopology,
     fetchCorridorHexes,
-    fetchConnections,
     createCorridorHex,
     deleteCorridorHex,
+    fetchConnections,
     createConnection,
     updateConnection,
     deleteConnection,
-    placeHumanHex,
+    setHumanHex,
     removeHumanHex,
-    updateHumanChannel,
+    setHumanChannel,
   }
 })

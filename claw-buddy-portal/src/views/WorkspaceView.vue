@@ -76,6 +76,7 @@ function handleResetView() {
 onMounted(async () => {
   await store.fetchWorkspace(workspaceId.value)
   await store.fetchBlackboard(workspaceId.value)
+  await store.fetchTopology(workspaceId.value)
 
   store.connectSSE(workspaceId.value)
   window.addEventListener('keydown', handleKeydown)
@@ -399,6 +400,8 @@ function handleKeydown(e: KeyboardEvent) {
             :manual-notes="store.blackboard?.manual_notes || ''"
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
+            :topology-nodes="store.topology?.nodes"
+            :topology-edges="store.topology?.edges"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />
