@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, type Component } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
@@ -66,6 +66,26 @@ watch(
   },
   { immediate: true },
 )
+
+// SSE 断连恢复：401 等致命错误导致 SSE 彻底停止后，定期检测并自动重连
+const SSE_RECOVERY_INTERVAL_MS = 30_000
+let sseRecoveryTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  sseRecoveryTimer = setInterval(() => {
+    const clusterId = activeClusterId.value
+    if (clusterId && authStore.isLoggedIn && !sseConnected.value) {
+      startGlobalSSE(clusterId)
+    }
+  }, SSE_RECOVERY_INTERVAL_MS)
+})
+
+onUnmounted(() => {
+  if (sseRecoveryTimer) {
+    clearInterval(sseRecoveryTimer)
+    sseRecoveryTimer = null
+  }
+})
 
 interface NavItem {
   label: string

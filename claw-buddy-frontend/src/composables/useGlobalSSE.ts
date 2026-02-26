@@ -1,8 +1,11 @@
 /**
  * 全局 SSE 连接管理：订阅集群事件、健康状态等，供 Dashboard ActivityFeed 和底栏使用。
+ *
+ * 重连策略：指数退避 + 无限重试，确保 SSE 在后端重启、网络抖动后自动恢复。
+ * 每次重连时重新读取 localStorage token，避免 token 刷新后 SSE 仍用旧凭证。
  */
 import { ref, computed } from 'vue'
-import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { fetchEventSource, EventStreamContentType } from '@microsoft/fetch-event-source'
 import { API_BASE } from '@/services/api'
 import type { FeedEvent } from '@/types/activity'
 
@@ -13,9 +16,10 @@ let abortController: AbortController | null = null
 let eventCounter = 0
 let retryCount = 0
 
-const SSE_BASE_RETRY_MS = 1000
-const SSE_MAX_RETRY_MS = 30000
-const SSE_MAX_RETRY_COUNT = 8
+const SSE_BASE_RETRY_MS = 2000
+const SSE_MAX_RETRY_MS = 60000
+
+class FatalSSEError extends Error {}
 
 function startGlobalSSE(clusterId: string) {
   stopGlobalSSE()
@@ -27,17 +31,30 @@ function startGlobalSSE(clusterId: string) {
 
   abortController = new AbortController()
   retryCount = 0
-  const token = localStorage.getItem('token')
 
   fetchEventSource(`${API_BASE}/events/stream?cluster_id=${clusterId}`, {
-    headers: { Authorization: `Bearer ${token}` },
     signal: abortController.signal,
-    onopen: async () => {
-      retryCount = 0
-      sseConnected.value = true
-      clusterConnected.value = true
+    headers: {
+      get Authorization() {
+        const token = localStorage.getItem('token')
+        return token ? `Bearer ${token}` : ''
+      },
+    } as Record<string, string>,
+
+    async onopen(response) {
+      if (response.ok && response.headers.get('content-type')?.startsWith(EventStreamContentType)) {
+        retryCount = 0
+        sseConnected.value = true
+        clusterConnected.value = true
+        return
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new FatalSSEError(`SSE auth failed: ${response.status}`)
+      }
+      throw new Error(`SSE open failed: ${response.status}`)
     },
-    onmessage: (ev) => {
+
+    onmessage(ev) {
       if (ev.event === 'k8s_event') {
         try {
           const data = JSON.parse(ev.data)
@@ -56,20 +73,24 @@ function startGlobalSSE(clusterId: string) {
             feedEvents.value = feedEvents.value.slice(0, 50)
           }
         } catch {
-          // ignore
+          // ignore malformed event
         }
       }
     },
-    onerror: () => {
+
+    onerror(err) {
       sseConnected.value = false
       clusterConnected.value = false
-      retryCount += 1
-      if (retryCount > SSE_MAX_RETRY_COUNT) {
-        throw new Error('global_sse_retry_exhausted')
+
+      if (err instanceof FatalSSEError) {
+        throw err
       }
+
+      retryCount += 1
       return Math.min(SSE_BASE_RETRY_MS * (2 ** (retryCount - 1)), SSE_MAX_RETRY_MS)
     },
-    onclose: () => {
+
+    onclose() {
       sseConnected.value = false
       clusterConnected.value = false
     },
