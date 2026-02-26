@@ -7,7 +7,7 @@ import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import AgentHex3D from './AgentHex3D.vue'
 import Blackboard3D from './Blackboard3D.vue'
-import type { AgentBrief } from '@/stores/workspace'
+import type { AgentBrief, CorridorHexInfo, HexConnectionInfo, HexType } from '@/stores/workspace'
 
 const props = defineProps<{
   agents: AgentBrief[]
@@ -15,10 +15,13 @@ const props = defineProps<{
   manualNotes: string
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
+  corridorHexes?: CorridorHexInfo[]
+  connections?: HexConnectionInfo[]
+  humanHexes?: Array<{ user_id: string; hex_q: number; hex_r: number; display_name: string; display_color?: string | null }>
 }>()
 
 const emit = defineEmits<{
-  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard', agentId?: string }): void
+  (e: 'hex-click', payload: { q: number, r: number, type: HexType, agentId?: string; humanUserId?: string; corridorHexId?: string }): void
   (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
 }>()
@@ -45,13 +48,20 @@ watch(selectedId, (id) => {
   } else if (id.startsWith('empty:')) {
     const [, qs, rs] = id.split(':')
     emit('hex-click', { q: Number(qs), r: Number(rs), type: 'empty' })
+  } else if (id.startsWith('corridor:')) {
+    const ch = props.corridorHexes?.find(c => `corridor:${c.id}` === id)
+    if (ch) emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', corridorHexId: ch.id })
+  } else if (id.startsWith('human:')) {
+    const userId = id.slice(6)
+    const hh = props.humanHexes?.find(h => h.user_id === userId)
+    if (hh) emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', humanUserId: userId })
   } else {
     const agent = props.agents.find((a) => a.instance_id === id)
     if (agent) emit('hex-click', { q: agent.hex_q, r: agent.hex_r, type: 'agent', agentId: id })
   }
 })
 watch(dblclickId, (id) => {
-  if (id && !id.startsWith('__') && !id.startsWith('empty:')) emit('agent-dblclick', id)
+  if (id && !id.startsWith('__') && !id.startsWith('empty:') && !id.startsWith('corridor:') && !id.startsWith('human:')) emit('agent-dblclick', id)
 })
 
 // Environment setup
@@ -180,6 +190,90 @@ function createBlackboardMesh(): THREE.Group {
   return group
 }
 
+const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.85, HEX_SIZE * 0.85, 0.2, 6)
+const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
+const HUMAN_DEFAULT_COLOR = 0xf59e0b
+
+function createCorridorHexMesh(ch: CorridorHexInfo): THREE.Group {
+  const group = new THREE.Group()
+  const { x, y } = axialToWorld(ch.hex_q, ch.hex_r)
+  group.position.set(x, 0.1, y)
+  const hexId = `corridor:${ch.id}`
+  group.userData = { hexId, isHex: true }
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: new THREE.Color(0x38bdf8),
+    emissiveIntensity: 0.1,
+    metalness: 0.1,
+    roughness: 0.7,
+    transparent: true,
+    opacity: 0.4,
+  })
+  const mesh = new THREE.Mesh(CORRIDOR_HEX_GEO, mat)
+  mesh.userData = { hexId, isHex: true }
+  group.add(mesh)
+
+  return group
+}
+
+function createHumanHexMesh(hh: { user_id: string; hex_q: number; hex_r: number; display_color?: string | null }): THREE.Group {
+  const group = new THREE.Group()
+  const { x, y } = axialToWorld(hh.hex_q, hh.hex_r)
+  group.position.set(x, 0.25, y)
+  const hexId = `human:${hh.user_id}`
+  group.userData = { hexId, isHex: true }
+
+  const color = hh.display_color ? parseInt(hh.display_color.replace('#', ''), 16) : HUMAN_DEFAULT_COLOR
+
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    emissive: new THREE.Color(color),
+    emissiveIntensity: 0.2,
+    metalness: 0.2,
+    roughness: 0.5,
+    transparent: true,
+    opacity: 0.9,
+  })
+  const mesh = new THREE.Mesh(HUMAN_HEX_GEO, mat)
+  mesh.userData = { hexId, isHex: true }
+  group.add(mesh)
+
+  return group
+}
+
+const connectionLines = new THREE.Group()
+scene.add(connectionLines)
+
+function syncConnectionLines() {
+  while (connectionLines.children.length > 0) {
+    const child = connectionLines.children[0]
+    connectionLines.remove(child)
+    if (child instanceof THREE.Line) {
+      child.geometry.dispose()
+      if (child.material instanceof THREE.Material) child.material.dispose()
+    }
+  }
+
+  for (const conn of (props.connections || [])) {
+    const from = axialToWorld(conn.hex_a_q, conn.hex_a_r)
+    const to = axialToWorld(conn.hex_b_q, conn.hex_b_r)
+
+    const points = [
+      new THREE.Vector3(from.x, 0.3, from.y),
+      new THREE.Vector3(to.x, 0.3, to.y),
+    ]
+    const geo = new THREE.BufferGeometry().setFromPoints(points)
+    const mat = new THREE.LineBasicMaterial({
+      color: conn.direction === 'both' ? 0x60a5fa : 0xfbbf24,
+      transparent: true,
+      opacity: 0.6,
+    })
+    const line = new THREE.Line(geo, mat)
+    connectionLines.add(line)
+  }
+}
+
 const GRID_RANGE = 8
 const EMPTY_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.05, 6)
 
@@ -202,30 +296,45 @@ function createEmptyHexMesh(q: number, r: number): THREE.Group {
 }
 
 function syncScene() {
-  // Clear existing hex meshes
-  for (const [id, group] of hexMeshes) {
+  for (const [, group] of hexMeshes) {
     scene.remove(group)
   }
   hexMeshes.clear()
 
-  // Add agent hexes
   for (const agent of props.agents) {
     const group = createHexMesh(agent)
     scene.add(group)
     hexMeshes.set(agent.instance_id, group)
   }
 
-  // Add blackboard at center
   const bbGroup = createBlackboardMesh()
   scene.add(bbGroup)
   hexMeshes.set('__blackboard__', bbGroup)
 
-  // Add clickable empty hex meshes for all unoccupied grid positions
+  for (const ch of (props.corridorHexes || [])) {
+    const group = createCorridorHexMesh(ch)
+    scene.add(group)
+    hexMeshes.set(`corridor:${ch.id}`, group)
+  }
+
+  for (const hh of (props.humanHexes || [])) {
+    const group = createHumanHexMesh(hh)
+    scene.add(group)
+    hexMeshes.set(`human:${hh.user_id}`, group)
+  }
+
   const occupied = new Set<string>()
-  occupied.add('0:0') // blackboard
+  occupied.add('0:0')
   for (const agent of props.agents) {
     occupied.add(`${agent.hex_q}:${agent.hex_r}`)
   }
+  for (const ch of (props.corridorHexes || [])) {
+    occupied.add(`${ch.hex_q}:${ch.hex_r}`)
+  }
+  for (const hh of (props.humanHexes || [])) {
+    occupied.add(`${hh.hex_q}:${hh.hex_r}`)
+  }
+
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
     for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
       if (Math.abs(q) + Math.abs(r) + Math.abs(-q - r) > GRID_RANGE * 2) continue
@@ -235,9 +344,15 @@ function syncScene() {
       hexMeshes.set(`empty:${q}:${r}`, group)
     }
   }
+
+  syncConnectionLines()
 }
 
-watch(() => props.agents, syncScene, { deep: true, immediate: true })
+watch(
+  () => [props.agents, props.corridorHexes, props.humanHexes, props.connections],
+  syncScene,
+  { deep: true, immediate: true },
+)
 
 // Hover + selection animation
 const clock = new THREE.Clock()
@@ -271,6 +386,19 @@ addToLoop(() => {
       continue
     }
 
+    if (id.startsWith('corridor:') || id.startsWith('human:')) {
+      const isHovered = hoveredId.value === id
+      const targetY = id.startsWith('corridor:') ? (isHovered ? 0.25 : 0.1) : (isHovered ? 0.45 : 0.25)
+      group.position.y += (targetY - group.position.y) * 0.1
+
+      const mesh = group.children[0] as THREE.Mesh
+      if (mesh?.material && 'emissiveIntensity' in mesh.material) {
+        const mat = mesh.material as THREE.MeshStandardMaterial
+        mat.emissiveIntensity = isHovered ? 0.4 : 0.2
+      }
+      continue
+    }
+
     const isHovered = hoveredId.value === id
     const isSelected = props.selectedAgentId === id
     const isSelectedHex = props.selectedHex?.q !== undefined &&
@@ -290,6 +418,8 @@ addToLoop(() => {
 onUnmounted(() => {
   HEX_GEO.dispose()
   EMPTY_HEX_GEO.dispose()
+  CORRIDOR_HEX_GEO.dispose()
+  HUMAN_HEX_GEO.dispose()
 })
 
 defineExpose({
