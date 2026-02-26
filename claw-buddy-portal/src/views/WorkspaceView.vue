@@ -209,7 +209,7 @@ function onHexAction(action: string) {
       const q = selectedHex.value?.q
       const r = selectedHex.value?.r
       if (q !== undefined && r !== undefined) {
-        store.createCorridorHex(workspaceId.value, q, r, `Corridor ${q},${r}`)
+        store.createCorridorHex(workspaceId.value, q, r)
       }
       hexDrawerOpen.value = false
       break

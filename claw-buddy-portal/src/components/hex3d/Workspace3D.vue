@@ -221,6 +221,24 @@ function createBBLabelSprite(): THREE.Sprite {
 const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.88, HEX_SIZE * 0.88, 0.03, 6)
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
 
+function createCorridorLabelSprite(name: string): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 40
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = 'transparent'
+  ctx.fillRect(0, 0, 256, 40)
+  ctx.font = 'bold 18px sans-serif'
+  ctx.fillStyle = '#38bdf8'
+  ctx.textAlign = 'center'
+  ctx.fillText(name.slice(0, 16), 128, 28)
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(mat)
+  sprite.scale.set(1.2, 0.2, 1)
+  return sprite
+}
+
 function createCorridorHexMesh(node: TopologyNode): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(node.hex_q, node.hex_r)
@@ -244,6 +262,12 @@ function createCorridorHexMesh(node: TopologyNode): THREE.Group {
   const edgeGeo = new THREE.EdgesGeometry(CORRIDOR_HEX_GEO)
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 })
   group.add(new THREE.LineSegments(edgeGeo, edgeMat))
+
+  if (node.display_name) {
+    const label = createCorridorLabelSprite(node.display_name)
+    label.position.set(0, 0.2, 0)
+    group.add(label)
+  }
 
   return group
 }

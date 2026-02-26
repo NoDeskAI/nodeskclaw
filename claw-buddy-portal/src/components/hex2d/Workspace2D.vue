@@ -360,8 +360,15 @@ const emptyHexes = computed(() => {
           stroke-dasharray="6,3"
           opacity="0.8"
         />
-        <text y="4" text-anchor="middle" fill="#06b6d4" font-size="8" font-weight="500">
-          {{ ch.display_name || 'Corridor' }}
+        <text
+          v-if="ch.display_name"
+          :y="-CORRIDOR_RADIUS - 6"
+          text-anchor="middle"
+          fill="#06b6d4"
+          font-size="9"
+          font-weight="600"
+        >
+          {{ ch.display_name }}
         </text>
       </g>
 
