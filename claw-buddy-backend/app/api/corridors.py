@@ -598,3 +598,39 @@ async def get_topology(
             for e in topo.edges
         ],
     ).model_dump())
+
+
+@router.get("/{workspace_id}/topology/health")
+async def get_topology_health(
+    workspace_id: str,
+    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
+):
+    """Return topology health: islands, single points of failure, message flow stats."""
+    _, org = org_ctx
+    await _check_workspace(workspace_id, org, db)
+    islands = await corridor_router.detect_islands(workspace_id, db)
+    spof = await corridor_router.detect_single_points_of_failure(workspace_id, db)
+    flow = await corridor_router.get_message_flow_stats(workspace_id, db)
+    return _ok({
+        "islands": islands,
+        "single_points_of_failure": spof,
+        "message_flow_stats": [
+            {"sender_hex_key": p.sender_hex_key, "receiver_hex_key": p.receiver_hex_key, "count": p.count}
+            for p in flow
+        ],
+    })
+
+
+@router.get("/{workspace_id}/topology/message-flow")
+async def get_topology_message_flow(
+    workspace_id: str,
+    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
+):
+    """Return message count per sender-receiver hex pair from workspace_messages."""
+    _, org = org_ctx
+    await _check_workspace(workspace_id, org, db)
+    flow = await corridor_router.get_message_flow_stats(workspace_id, db)
+    return _ok([
+        {"sender_hex_key": p.sender_hex_key, "receiver_hex_key": p.receiver_hex_key, "count": p.count}
+        for p in flow
+    ])

@@ -230,13 +230,19 @@ watch(() => props.open, (v) => { if (v) loadTrend() })
                     class="bg-muted rounded-lg p-2.5 text-xs"
                   >
                     <div class="font-medium mb-1">{{ (task as Record<string, unknown>).title }}</div>
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                       <span
                         v-if="(task as Record<string, unknown>).priority"
                         class="px-1.5 py-0.5 rounded text-[10px]"
                         :class="priorityColors[(task as Record<string, unknown>).priority as string] || ''"
                       >
                         {{ (task as Record<string, unknown>).priority }}
+                      </span>
+                      <span
+                        v-if="(task as Record<string, unknown>).output_version"
+                        class="px-1.5 py-0.5 rounded text-[10px] bg-muted-foreground/20 text-muted-foreground"
+                      >
+                        v{{ (task as Record<string, unknown>).output_version }}
                       </span>
                     </div>
                   </div>

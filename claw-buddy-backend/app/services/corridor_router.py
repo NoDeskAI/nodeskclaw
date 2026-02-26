@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import not_deleted
 from app.models.corridor import CorridorHex, HexConnection
 from app.models.instance import Instance
 from app.models.workspace_member import WorkspaceMember
+from app.models.workspace_message import WorkspaceMessage
 
 
 @dataclass
@@ -218,3 +219,178 @@ async def has_any_connections(workspace_id: str, db: AsyncSession) -> bool:
         ).limit(1)
     )
     return result.scalar_one_or_none() is not None
+
+
+def _build_undirected_adjacency(
+    adj: dict[tuple[int, int], list[tuple[tuple[int, int], str]]],
+) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """Build undirected adjacency for connected component / articulation point detection."""
+    undirected: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for node, neighbors in adj.items():
+        for neighbor, _ in neighbors:
+            undirected.setdefault(node, []).append(neighbor)
+            undirected.setdefault(neighbor, []).append(node)
+    for key in undirected:
+        undirected[key] = list(dict.fromkeys(undirected[key]))
+    return undirected
+
+
+async def detect_islands(
+    workspace_id: str, db: AsyncSession
+) -> list[list[str]]:
+    """Detect topology islands — return list of mutually disconnected node groups.
+
+    Each group is a list of hex keys as "q,r" strings. Uses BFS from each unvisited node.
+    """
+    hex_map = await _build_hex_map(workspace_id, db)
+    adj = await _get_adjacency(workspace_id, db)
+    undirected = _build_undirected_adjacency(adj)
+
+    all_nodes = set(hex_map.keys())
+    visited: set[tuple[int, int]] = set()
+    islands: list[list[str]] = []
+
+    for start in all_nodes:
+        if start in visited:
+            continue
+        component: list[str] = []
+        queue: deque[tuple[int, int]] = deque([start])
+        visited.add(start)
+        while queue:
+            current = queue.popleft()
+            component.append(f"{current[0]},{current[1]}")
+            for neighbor in undirected.get(current, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+        islands.append(component)
+
+    return islands
+
+
+async def detect_single_points_of_failure(
+    workspace_id: str, db: AsyncSession
+) -> list[str]:
+    """Detect single points of failure — nodes whose removal would split the topology.
+
+    Returns list of hex keys as "q,r" strings (articulation points).
+    """
+    hex_map = await _build_hex_map(workspace_id, db)
+    adj = await _get_adjacency(workspace_id, db)
+    undirected = _build_undirected_adjacency(adj)
+    all_nodes = set(hex_map.keys())
+
+    if len(all_nodes) <= 1:
+        return []
+
+    spof: list[str] = []
+
+    for node in all_nodes:
+        if node not in undirected:
+            continue
+        removed = undirected.copy()
+        removed = {k: [n for n in v if n != node] for k, v in removed.items() if k != node}
+        removed.pop(node, None)
+
+        remaining = set(removed.keys())
+        if not remaining:
+            continue
+
+        start = next(iter(remaining))
+        visited: set[tuple[int, int]] = {start}
+        queue: deque[tuple[int, int]] = deque([start])
+        while queue:
+            current = queue.popleft()
+            for neighbor in removed.get(current, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+
+        if len(visited) < len(remaining):
+            spof.append(f"{node[0]},{node[1]}")
+
+    return spof
+
+
+@dataclass
+class MessageFlowPair:
+    sender_hex_key: str
+    receiver_hex_key: str
+    count: int
+
+
+async def get_message_flow_stats(
+    workspace_id: str, db: AsyncSession
+) -> list[MessageFlowPair]:
+    """Count messages per sender-receiver hex pair from workspace_messages.
+
+    Maps sender_id/sender_type and target_instance_id to hex positions.
+    Only includes pairs where both sender and receiver have hex positions in this workspace.
+    """
+    agents_q = await db.execute(
+        select(Instance.id, Instance.hex_position_q, Instance.hex_position_r).where(
+            Instance.workspace_id == workspace_id,
+            not_deleted(Instance),
+        )
+    )
+    agent_hex: dict[str, tuple[int, int]] = {
+        row.id: (row.hex_position_q, row.hex_position_r)
+        for row in agents_q.all()
+    }
+
+    members_q = await db.execute(
+        select(WorkspaceMember.user_id, WorkspaceMember.hex_q, WorkspaceMember.hex_r).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            not_deleted(WorkspaceMember),
+            WorkspaceMember.hex_q.isnot(None),
+            WorkspaceMember.hex_r.isnot(None),
+        )
+    )
+    human_hex: dict[str, tuple[int, int]] = {
+        row.user_id: (row.hex_q, row.hex_r)
+        for row in members_q.all()
+    }
+
+    msgs_q = await db.execute(
+        select(
+            WorkspaceMessage.sender_id,
+            WorkspaceMessage.sender_type,
+            WorkspaceMessage.target_instance_id,
+            func.count(WorkspaceMessage.id).label("cnt"),
+        )
+        .where(
+            WorkspaceMessage.workspace_id == workspace_id,
+            not_deleted(WorkspaceMessage),
+        )
+        .group_by(
+            WorkspaceMessage.sender_id,
+            WorkspaceMessage.sender_type,
+            WorkspaceMessage.target_instance_id,
+        )
+    )
+
+    pair_counts: dict[tuple[str, str], int] = {}
+    for row in msgs_q.all():
+        if row.sender_type == "agent":
+            sender_hex = agent_hex.get(row.sender_id)
+        else:
+            sender_hex = human_hex.get(row.sender_id)
+        if sender_hex is None:
+            continue
+        sender_key = f"{sender_hex[0]},{sender_hex[1]}"
+
+        if row.target_instance_id:
+            receiver_hex = agent_hex.get(row.target_instance_id)
+            if receiver_hex is None:
+                continue
+            receiver_key = f"{receiver_hex[0]},{receiver_hex[1]}"
+        else:
+            continue
+
+        key = (sender_key, receiver_key)
+        pair_counts[key] = pair_counts.get(key, 0) + row.cnt
+
+    return [
+        MessageFlowPair(sender_hex_key=k[0], receiver_hex_key=k[1], count=v)
+        for k, v in pair_counts.items()
+    ]

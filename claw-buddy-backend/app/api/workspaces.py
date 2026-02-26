@@ -215,6 +215,7 @@ class TaskCreate(BaseModel):
     assignee_id: str | None = None
     priority: str = "medium"
     deadline: str | None = None
+    output_version: str | None = None
 
 
 @router.post("/{workspace_id}/blackboard/tasks")
@@ -244,6 +245,7 @@ async def create_task(
         "priority": data.priority,
         "blockers": [],
         "deadline": data.deadline,
+        "output_version": data.output_version,
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -262,6 +264,7 @@ class TaskUpdate(BaseModel):
     priority: str | None = None
     blockers: list | None = None
     deadline: str | None = None
+    output_version: str | None = None
 
 
 @router.put("/{workspace_id}/blackboard/tasks/{task_id}")
@@ -283,7 +286,7 @@ async def update_task(
     tasks = list(bb.tasks or [])
     for task in tasks:
         if task.get("id") == task_id:
-            for field in ("title", "description", "status", "assignee_type", "assignee_id", "priority", "blockers", "deadline"):
+            for field in ("title", "description", "status", "assignee_type", "assignee_id", "priority", "blockers", "deadline", "output_version"):
                 val = getattr(data, field, None)
                 if val is not None:
                     task[field] = val
