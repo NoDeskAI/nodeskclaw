@@ -356,7 +356,7 @@ async def performance_trend(
 ):
     """Get historical performance snapshots for trend analysis."""
     from app.models.performance_snapshot import PerformanceSnapshot
-    q = select(PerformanceSnapshot).where(
+    q = sa_select(PerformanceSnapshot).where(
         PerformanceSnapshot.workspace_id == workspace_id,
         PerformanceSnapshot.deleted_at.is_(None),
     )
@@ -387,7 +387,7 @@ async def list_schedules(
     from app.models.workspace_schedule import WorkspaceSchedule
     from app.services.schedule_runner import PRESET_TEMPLATES
     result = await db.execute(
-        select(WorkspaceSchedule).where(
+        sa_select(WorkspaceSchedule).where(
             WorkspaceSchedule.workspace_id == workspace_id,
             WorkspaceSchedule.deleted_at.is_(None),
         )
@@ -436,7 +436,7 @@ async def update_schedule(
 ):
     from app.models.workspace_schedule import WorkspaceSchedule
     result = await db.execute(
-        select(WorkspaceSchedule).where(
+        sa_select(WorkspaceSchedule).where(
             WorkspaceSchedule.id == schedule_id,
             WorkspaceSchedule.workspace_id == workspace_id,
             WorkspaceSchedule.deleted_at.is_(None),
@@ -460,7 +460,7 @@ async def delete_schedule(
 ):
     from app.models.workspace_schedule import WorkspaceSchedule
     result = await db.execute(
-        select(WorkspaceSchedule).where(
+        sa_select(WorkspaceSchedule).where(
             WorkspaceSchedule.id == schedule_id,
             WorkspaceSchedule.workspace_id == workspace_id,
             WorkspaceSchedule.deleted_at.is_(None),
