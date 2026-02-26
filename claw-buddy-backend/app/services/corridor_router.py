@@ -1,10 +1,11 @@
-"""Corridor router — BFS-based directed graph traversal for workspace topology."""
+"""Corridor routing engine — BFS-based directed graph traversal for workspace topology."""
 
-import logging
+from __future__ import annotations
+
 from collections import deque
 from dataclasses import dataclass, field
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import not_deleted
@@ -12,16 +13,23 @@ from app.models.corridor import CorridorHex, HexConnection
 from app.models.instance import Instance
 from app.models.workspace_member import WorkspaceMember
 
-logger = logging.getLogger(__name__)
+
+@dataclass
+class ReachableEndpoint:
+    hex_q: int
+    hex_r: int
+    endpoint_type: str  # "agent" | "human"
+    entity_id: str  # instance_id or user_id
 
 
 @dataclass
 class TopologyNode:
-    q: int
-    r: int
+    hex_q: int
+    hex_r: int
     node_type: str  # "blackboard" | "agent" | "human" | "corridor"
     entity_id: str | None = None
     display_name: str | None = None
+    extra: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -32,176 +40,181 @@ class TopologyEdge:
     b_r: int
     direction: str
     auto_created: bool
-    connection_id: str
-
-
-@dataclass
-class ReachableEndpoint:
-    q: int
-    r: int
-    endpoint_type: str  # "agent" | "human"
-    entity_id: str
-    display_name: str | None = None
 
 
 @dataclass
 class Topology:
-    nodes: list[TopologyNode] = field(default_factory=list)
-    edges: list[TopologyEdge] = field(default_factory=list)
+    nodes: list[TopologyNode]
+    edges: list[TopologyEdge]
 
 
-async def _load_occupied_map(db: AsyncSession, workspace_id: str) -> dict[tuple[int, int], TopologyNode]:
-    """Build a map of all occupied hex positions in the workspace."""
-    occupied: dict[tuple[int, int], TopologyNode] = {}
+async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int, int], TopologyNode]:
+    """Build a mapping from (q, r) -> node info for all occupied hexes."""
+    hex_map: dict[tuple[int, int], TopologyNode] = {}
 
-    occupied[(0, 0)] = TopologyNode(q=0, r=0, node_type="blackboard")
+    hex_map[(0, 0)] = TopologyNode(0, 0, "blackboard")
 
     agents_q = await db.execute(
         select(Instance).where(
-            and_(Instance.workspace_id == workspace_id, not_deleted(Instance))
+            Instance.workspace_id == workspace_id,
+            not_deleted(Instance),
         )
     )
-    for inst in agents_q.scalars().all():
-        pos = (inst.hex_position_q, inst.hex_position_r)
-        if pos == (0, 0):
-            continue
-        occupied[pos] = TopologyNode(
-            q=pos[0], r=pos[1], node_type="agent",
-            entity_id=inst.id, display_name=inst.agent_display_name or inst.name,
+    for agent in agents_q.scalars().all():
+        q, r = agent.hex_position_q, agent.hex_position_r
+        if q is not None and r is not None:
+            hex_map[(q, r)] = TopologyNode(
+                q, r, "agent", entity_id=agent.id,
+                display_name=agent.agent_display_name or agent.name,
+            )
+
+    members_q = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            not_deleted(WorkspaceMember),
+            WorkspaceMember.hex_q.isnot(None),
+        )
+    )
+    for member in members_q.scalars().all():
+        hex_map[(member.hex_q, member.hex_r)] = TopologyNode(
+            member.hex_q, member.hex_r, "human", entity_id=member.user_id,
+            extra={"channel_type": member.channel_type},
         )
 
     corridors_q = await db.execute(
         select(CorridorHex).where(
-            and_(CorridorHex.workspace_id == workspace_id, not_deleted(CorridorHex))
+            CorridorHex.workspace_id == workspace_id,
+            not_deleted(CorridorHex),
         )
     )
     for ch in corridors_q.scalars().all():
-        pos = (ch.hex_q, ch.hex_r)
-        occupied[pos] = TopologyNode(
-            q=pos[0], r=pos[1], node_type="corridor",
-            entity_id=ch.id, display_name=ch.display_name,
+        hex_map[(ch.hex_q, ch.hex_r)] = TopologyNode(
+            ch.hex_q, ch.hex_r, "corridor", entity_id=ch.id,
+            display_name=ch.display_name,
         )
 
-    humans_q = await db.execute(
-        select(WorkspaceMember).where(
-            and_(
-                WorkspaceMember.workspace_id == workspace_id,
-                not_deleted(WorkspaceMember),
-                WorkspaceMember.hex_q.isnot(None),
-            )
-        )
-    )
-    for hm in humans_q.scalars().all():
-        pos = (hm.hex_q, hm.hex_r)
-        occupied[pos] = TopologyNode(
-            q=pos[0], r=pos[1], node_type="human",
-            entity_id=hm.user_id, display_name=None,
-        )
-
-    return occupied
+    return hex_map
 
 
-async def _load_adjacency(
-    db: AsyncSession, workspace_id: str,
-) -> dict[tuple[int, int], list[tuple[tuple[int, int], str, str]]]:
-    """Build adjacency list from hex_connections. Returns {pos: [(neighbor_pos, direction, conn_id)]}."""
-    adj: dict[tuple[int, int], list[tuple[tuple[int, int], str, str]]] = {}
+async def _get_adjacency(workspace_id: str, db: AsyncSession) -> dict[tuple[int, int], list[tuple[tuple[int, int], str]]]:
+    """Build directed adjacency list from hex_connections.
 
+    Returns {(q, r): [((neighbor_q, neighbor_r), direction), ...]}
+    where direction indicates the traversal direction relative to the edge.
+    """
     conns_q = await db.execute(
         select(HexConnection).where(
-            and_(HexConnection.workspace_id == workspace_id, not_deleted(HexConnection))
+            HexConnection.workspace_id == workspace_id,
+            not_deleted(HexConnection),
         )
     )
+    adj: dict[tuple[int, int], list[tuple[tuple[int, int], str]]] = {}
     for conn in conns_q.scalars().all():
         a = (conn.hex_a_q, conn.hex_a_r)
         b = (conn.hex_b_q, conn.hex_b_r)
+        d = conn.direction
 
-        if conn.direction in ("both", "a_to_b"):
-            adj.setdefault(a, []).append((b, conn.direction, conn.id))
-        if conn.direction in ("both", "b_to_a"):
-            adj.setdefault(b, []).append((a, conn.direction, conn.id))
+        if d == "both" or d == "a_to_b":
+            adj.setdefault(a, []).append((b, d))
+        if d == "both" or d == "b_to_a":
+            adj.setdefault(b, []).append((a, d))
 
     return adj
 
 
 async def get_reachable_endpoints(
-    db: AsyncSession, workspace_id: str, from_q: int, from_r: int,
+    workspace_id: str, from_q: int, from_r: int, db: AsyncSession
 ) -> list[ReachableEndpoint]:
-    """BFS from (from_q, from_r), return all reachable agent/human endpoints."""
-    occupied = await _load_occupied_map(db, workspace_id)
-    adj = await _load_adjacency(db, workspace_id)
+    """BFS from (from_q, from_r), corridor hexes relay, agent/human hexes terminate."""
+    hex_map = await _build_hex_map(workspace_id, db)
+    adj = await _get_adjacency(workspace_id, db)
 
     endpoints: list[ReachableEndpoint] = []
     visited: set[tuple[int, int]] = {(from_q, from_r)}
-    queue: deque[tuple[int, int]] = deque()
-
-    for neighbor_pos, _, _ in adj.get((from_q, from_r), []):
-        if neighbor_pos not in visited:
-            visited.add(neighbor_pos)
-            queue.append(neighbor_pos)
+    queue: deque[tuple[int, int]] = deque([(from_q, from_r)])
 
     while queue:
-        pos = queue.popleft()
-        node = occupied.get(pos)
-        if node is None:
-            continue
-
-        if node.node_type in ("agent", "human"):
-            endpoints.append(ReachableEndpoint(
-                q=pos[0], r=pos[1], endpoint_type=node.node_type,
-                entity_id=node.entity_id or "", display_name=node.display_name,
-            ))
-        elif node.node_type == "corridor":
-            for neighbor_pos, _, _ in adj.get(pos, []):
-                if neighbor_pos not in visited:
-                    visited.add(neighbor_pos)
-                    queue.append(neighbor_pos)
+        current = queue.popleft()
+        for neighbor, _ in adj.get(current, []):
+            if neighbor in visited:
+                continue
+            visited.add(neighbor)
+            node = hex_map.get(neighbor)
+            if node is None:
+                continue
+            if node.node_type == "agent":
+                endpoints.append(ReachableEndpoint(
+                    node.hex_q, node.hex_r, "agent", node.entity_id or "",
+                ))
+            elif node.node_type == "human":
+                endpoints.append(ReachableEndpoint(
+                    node.hex_q, node.hex_r, "human", node.entity_id or "",
+                ))
+            elif node.node_type == "corridor":
+                queue.append(neighbor)
+            elif node.node_type == "blackboard":
+                pass
 
     return endpoints
 
 
 async def get_blackboard_audience(
-    db: AsyncSession, workspace_id: str,
+    workspace_id: str, db: AsyncSession
 ) -> list[ReachableEndpoint]:
     """Get all endpoints reachable from the blackboard at (0, 0)."""
-    return await get_reachable_endpoints(db, workspace_id, 0, 0)
+    return await get_reachable_endpoints(workspace_id, 0, 0, db)
 
 
 async def can_reach(
-    db: AsyncSession, workspace_id: str,
-    from_q: int, from_r: int, to_q: int, to_r: int,
+    workspace_id: str, from_q: int, from_r: int, to_q: int, to_r: int, db: AsyncSession
 ) -> bool:
-    """Check if (from_q, from_r) can reach (to_q, to_r) through the corridor graph."""
-    endpoints = await get_reachable_endpoints(db, workspace_id, from_q, from_r)
-    return any(ep.q == to_q and ep.r == to_r for ep in endpoints)
+    """Check if there is a directed path from source to target."""
+    hex_map = await _build_hex_map(workspace_id, db)
+    adj = await _get_adjacency(workspace_id, db)
+
+    target = (to_q, to_r)
+    visited: set[tuple[int, int]] = {(from_q, from_r)}
+    queue: deque[tuple[int, int]] = deque([(from_q, from_r)])
+
+    while queue:
+        current = queue.popleft()
+        for neighbor, _ in adj.get(current, []):
+            if neighbor == target:
+                return True
+            if neighbor in visited:
+                continue
+            visited.add(neighbor)
+            node = hex_map.get(neighbor)
+            if node and node.node_type == "corridor":
+                queue.append(neighbor)
+
+    return False
 
 
-async def get_topology(db: AsyncSession, workspace_id: str) -> Topology:
-    """Return the full topology (nodes + edges) for visualization."""
-    occupied = await _load_occupied_map(db, workspace_id)
-    nodes = list(occupied.values())
+async def get_topology(workspace_id: str, db: AsyncSession) -> Topology:
+    """Return the full topology graph for visualization."""
+    hex_map = await _build_hex_map(workspace_id, db)
 
     conns_q = await db.execute(
         select(HexConnection).where(
-            and_(HexConnection.workspace_id == workspace_id, not_deleted(HexConnection))
+            HexConnection.workspace_id == workspace_id,
+            not_deleted(HexConnection),
         )
     )
     edges = [
-        TopologyEdge(
-            a_q=c.hex_a_q, a_r=c.hex_a_r, b_q=c.hex_b_q, b_r=c.hex_b_r,
-            direction=c.direction, auto_created=c.auto_created, connection_id=c.id,
-        )
+        TopologyEdge(c.hex_a_q, c.hex_a_r, c.hex_b_q, c.hex_b_r, c.direction, c.auto_created)
         for c in conns_q.scalars().all()
     ]
 
-    return Topology(nodes=nodes, edges=edges)
+    return Topology(nodes=list(hex_map.values()), edges=edges)
 
 
-async def has_any_connections(db: AsyncSession, workspace_id: str) -> bool:
-    """Check if the workspace has any corridor connections (for backward compat)."""
+async def has_any_connections(workspace_id: str, db: AsyncSession) -> bool:
+    """Check if the workspace has any connections configured (for backward compat)."""
     result = await db.execute(
         select(HexConnection.id).where(
-            and_(HexConnection.workspace_id == workspace_id, not_deleted(HexConnection))
+            HexConnection.workspace_id == workspace_id,
+            not_deleted(HexConnection),
         ).limit(1)
     )
     return result.scalar_one_or_none() is not None
