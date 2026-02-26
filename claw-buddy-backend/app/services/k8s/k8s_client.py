@@ -278,17 +278,17 @@ class K8sClient:
 
     # ── Watch ────────────────────────────────────────
 
-    async def watch_pods(self, ns: str, label_selector: str = "") -> AsyncIterator[dict]:
+    async def watch_pods(self, ns: str, label_selector: str = "", timeout_seconds: int = 1800) -> AsyncIterator[dict]:
         w = watch.Watch()
         async for event in w.stream(
-            self.core.list_namespaced_pod, ns, label_selector=label_selector, timeout_seconds=0
+            self.core.list_namespaced_pod, ns, label_selector=label_selector, timeout_seconds=timeout_seconds
         ):
             yield {"type": event["type"], "pod": event["object"].metadata.name, "phase": event["object"].status.phase}
 
-    async def watch_events(self, ns: str) -> AsyncIterator[dict]:
+    async def watch_events(self, ns: str, timeout_seconds: int = 1800) -> AsyncIterator[dict]:
         w = watch.Watch()
         async for event in w.stream(
-            self.core.list_namespaced_event, ns, timeout_seconds=0
+            self.core.list_namespaced_event, ns, timeout_seconds=timeout_seconds
         ):
             obj = event["object"]
             yield {

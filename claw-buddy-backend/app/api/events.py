@@ -1,5 +1,6 @@
 """K8s events SSE streaming endpoints."""
 
+import asyncio
 import json
 import logging
 
@@ -19,6 +20,9 @@ from app.services.k8s.k8s_client import K8sClient
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+WATCH_TIMEOUT_SECONDS = 1800
+HEARTBEAT_INTERVAL_SECONDS = 15
 
 
 @router.get("/stream")
@@ -40,20 +44,59 @@ async def events_stream(
 
     async def generate():
         k8s = K8sClient(api_client)
+        event_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def watch_loop():
+            try:
+                while True:
+                    try:
+                        if namespace:
+                            event_gen = k8s.watch_events(namespace)
+                        else:
+                            event_gen = _watch_all_events(k8s)
+
+                        async for event in event_gen:
+                            data = json.dumps(event, default=str)
+                            await event_queue.put(f"event: k8s_event\ndata: {data}\n\n")
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        logger.warning("K8s watch 断开, 5 秒后重连: %s", e)
+                        await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                await event_queue.put(None)
+
+        watch_task = asyncio.create_task(watch_loop())
         try:
-            if namespace:
-                event_gen = k8s.watch_events(namespace)
-            else:
-                event_gen = _watch_all_events(k8s)
+            while True:
+                try:
+                    msg = await asyncio.wait_for(
+                        event_queue.get(), timeout=HEARTBEAT_INTERVAL_SECONDS
+                    )
+                    if msg is None:
+                        break
+                    yield msg
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            watch_task.cancel()
+            try:
+                await watch_task
+            except asyncio.CancelledError:
+                pass
 
-            async for event in event_gen:
-                data = json.dumps(event, default=str)
-                yield f"event: k8s_event\ndata: {data}\n\n"
-        except Exception as e:
-            logger.warning("事件流中断: %s", e)
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 async def _watch_all_events(k8s: K8sClient):
@@ -62,7 +105,8 @@ async def _watch_all_events(k8s: K8sClient):
 
     w = watch.Watch()
     async for event in w.stream(
-        k8s.core.list_event_for_all_namespaces, timeout_seconds=0
+        k8s.core.list_event_for_all_namespaces,
+        timeout_seconds=WATCH_TIMEOUT_SECONDS,
     ):
         obj = event["object"]
         yield {
