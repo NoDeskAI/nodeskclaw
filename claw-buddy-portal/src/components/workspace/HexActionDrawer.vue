@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, Plus, MessageSquare, ExternalLink, Trash2, PenSquare, Route, User, Palette, Settings, Link, Move } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   hexType: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human'
   hexPosition: { q: number, r: number }
@@ -17,6 +18,41 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'action', name: string): void
 }>()
+
+const SHORTCUT_MAP: Record<string, Record<string, string>> = {
+  empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
+  agent: { c: 'open-chat', d: 'view-detail', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
+  corridor: { r: 'rename-corridor', l: 'manage-connections', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
+  human: { s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
+  blackboard: { e: 'edit-blackboard' },
+}
+
+function onKeydown(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
+
+  const map = SHORTCUT_MAP[props.hexType]
+  if (!map) return
+
+  const action = map[e.key] || map[e.key.toLowerCase()]
+  if (action) {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('action', action)
+  }
+}
+
+watch(() => props.open, (open) => {
+  if (open) {
+    window.addEventListener('keydown', onKeydown)
+  } else {
+    window.removeEventListener('keydown', onKeydown)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
@@ -61,6 +97,7 @@ const emit = defineEmits<{
           >
             <Plus class="w-4 h-4 text-primary" />
             <span>{{ t('hexAction.addAgentHere') }}</span>
+            <kbd class="kbd-hint">A</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -68,6 +105,7 @@ const emit = defineEmits<{
           >
             <Route class="w-4 h-4 text-cyan-400" />
             <span>{{ t('hexAction.placeCorridor') }}</span>
+            <kbd class="kbd-hint">C</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -75,6 +113,7 @@ const emit = defineEmits<{
           >
             <User class="w-4 h-4 text-amber-400" />
             <span>{{ t('hexAction.placeHuman') }}</span>
+            <kbd class="kbd-hint">H</kbd>
           </button>
         </template>
 
@@ -86,6 +125,7 @@ const emit = defineEmits<{
           >
             <MessageSquare class="w-4 h-4 text-primary" />
             <span>{{ t('hexAction.openChat') }}</span>
+            <kbd class="kbd-hint">C</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -93,6 +133,7 @@ const emit = defineEmits<{
           >
             <ExternalLink class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.viewDetail') }}</span>
+            <kbd class="kbd-hint">D</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -100,6 +141,7 @@ const emit = defineEmits<{
           >
             <Move class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.move') }}</span>
+            <kbd class="kbd-hint">M</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
@@ -107,6 +149,7 @@ const emit = defineEmits<{
           >
             <Trash2 class="w-4 h-4" />
             <span>{{ t('hexAction.remove') }}</span>
+            <kbd class="kbd-hint">Del</kbd>
           </button>
         </template>
 
@@ -118,6 +161,7 @@ const emit = defineEmits<{
           >
             <PenSquare class="w-4 h-4 text-cyan-400" />
             <span>{{ t('hexAction.renameCorridor') }}</span>
+            <kbd class="kbd-hint">R</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -125,6 +169,7 @@ const emit = defineEmits<{
           >
             <Link class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.manageConnections') }}</span>
+            <kbd class="kbd-hint">L</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -132,6 +177,7 @@ const emit = defineEmits<{
           >
             <Move class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.move') }}</span>
+            <kbd class="kbd-hint">M</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
@@ -139,6 +185,7 @@ const emit = defineEmits<{
           >
             <Trash2 class="w-4 h-4" />
             <span>{{ t('hexAction.remove') }}</span>
+            <kbd class="kbd-hint">Del</kbd>
           </button>
         </template>
 
@@ -150,6 +197,7 @@ const emit = defineEmits<{
           >
             <Settings class="w-4 h-4 text-amber-400" />
             <span>{{ t('hexAction.viewChannel') }}</span>
+            <kbd class="kbd-hint">S</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -157,6 +205,7 @@ const emit = defineEmits<{
           >
             <Palette class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.changeColor') }}</span>
+            <kbd class="kbd-hint">P</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
@@ -164,6 +213,7 @@ const emit = defineEmits<{
           >
             <Move class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.move') }}</span>
+            <kbd class="kbd-hint">M</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
@@ -171,6 +221,7 @@ const emit = defineEmits<{
           >
             <Trash2 class="w-4 h-4" />
             <span>{{ t('hexAction.remove') }}</span>
+            <kbd class="kbd-hint">Del</kbd>
           </button>
         </template>
 
@@ -182,6 +233,7 @@ const emit = defineEmits<{
           >
             <PenSquare class="w-4 h-4 text-primary" />
             <span>{{ t('hexAction.editBlackboard') }}</span>
+            <kbd class="kbd-hint">E</kbd>
           </button>
         </template>
       </div>
@@ -195,5 +247,16 @@ const emit = defineEmits<{
 }
 .slide-up-enter-from, .slide-up-leave-to {
   transform: translateY(100%);
+}
+.kbd-hint {
+  margin-left: auto;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
 }
 </style>
