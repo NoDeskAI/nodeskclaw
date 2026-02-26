@@ -90,6 +90,7 @@ const zhCN = {
     available: "可学习",
     installed: "已学习",
     viewInstanceGenes: "查看实例基因",
+    toolCapabilities: "工具能力",
   },
   genome: {
     apply: "应用",

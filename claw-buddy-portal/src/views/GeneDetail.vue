@@ -117,6 +117,11 @@ function resolveIcon(iconName?: string) {
   return iconMap[key] ?? iconMap[iconName] ?? Package
 }
 
+const toolAllowList = computed(() => {
+  const ta = (gene.value?.manifest as Record<string, any>)?.tool_allow
+  return Array.isArray(ta) ? ta : []
+})
+
 const descriptionHtml = computed(() => {
   const d = gene.value?.description
   if (!d) return ''
@@ -260,6 +265,12 @@ function selectInstance(instanceId: string) {
               <span class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">v{{ gene.version }}</span>
               <span class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ gene.source }}</span>
               <span v-if="gene.category" class="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ localizeGeneMeta(gene.category) }}</span>
+              <span
+                v-if="toolAllowList.length"
+                class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+              >
+                {{ t('geneMarket.hasMcpTools') }}
+              </span>
             </div>
           </div>
           <button
@@ -293,6 +304,20 @@ function selectInstance(instanceId: string) {
               class="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-a:text-primary"
               v-html="descriptionHtml"
             />
+          </section>
+
+          <section v-if="toolAllowList.length" class="mb-8">
+            <h2 class="text-lg font-semibold mb-3">{{ t('gene.toolCapabilities') }}</h2>
+            <div class="flex flex-wrap gap-2">
+              <div
+                v-for="tool in toolAllowList"
+                :key="tool"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card"
+              >
+                <Wrench class="w-4 h-4 text-cyan-400" />
+                <span class="text-sm font-mono">{{ tool }}</span>
+              </div>
+            </div>
           </section>
 
           <section v-if="skillContentRaw" class="mb-8">

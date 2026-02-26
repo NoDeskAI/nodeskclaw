@@ -90,6 +90,7 @@ const enUS = {
     available: "Available",
     installed: "Installed",
     viewInstanceGenes: "View instance genes",
+    toolCapabilities: "Tool Capabilities",
   },
   genome: {
     apply: "Apply",
