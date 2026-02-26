@@ -25,6 +25,7 @@ dependencies = [
     "kubernetes-asyncio>=31.1.0",
     "pyyaml>=6.0.3",
     "croniter>=6.0.0",
+    "lark-oapi>=1.5.3",
 ]
 
 [dependency-groups]
