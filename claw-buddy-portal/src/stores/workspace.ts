@@ -675,6 +675,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await fetchTopology(workspaceId)
   }
 
+  async function renameCorridorHex(workspaceId: string, hexId: string, displayName: string) {
+    await api.put(`/workspaces/${workspaceId}/corridor-hexes/${hexId}`, { display_name: displayName })
+    const idx = corridorHexes.value.findIndex(c => c.id === hexId)
+    if (idx >= 0) corridorHexes.value[idx].display_name = displayName
+    await fetchTopology(workspaceId)
+  }
+
   async function deleteCorridorHex(workspaceId: string, hexId: string) {
     await api.delete(`/workspaces/${workspaceId}/corridor-hexes/${hexId}`)
     corridorHexes.value = corridorHexes.value.filter(c => c.id !== hexId)
@@ -770,6 +777,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     fetchCorridorHexes,
     createCorridorHex,
     moveCorridorHex,
+    renameCorridorHex,
     deleteCorridorHex,
     fetchConnections,
     createConnection,

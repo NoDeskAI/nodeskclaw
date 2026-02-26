@@ -227,6 +227,8 @@ function onHexAction(action: string) {
       enterMoveMode()
       break
     case 'rename-corridor':
+      openRenameDialog()
+      break
     case 'manage-connections':
       hexDrawerOpen.value = false
       break
@@ -258,6 +260,31 @@ function closeHexDrawer() {
   selectedHex.value = null
   hexDrawerOpen.value = false
   selectedAgentId.value = null
+}
+
+const showRenameDialog = ref(false)
+const renameValue = ref('')
+const renameSaving = ref(false)
+const renameHexId = ref('')
+
+function openRenameDialog() {
+  renameHexId.value = selectedHex.value?.entityId || ''
+  renameValue.value = hexEntityName.value
+  showRenameDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameCorridor() {
+  const name = renameValue.value.trim()
+  if (!name || !renameHexId.value) return
+  renameSaving.value = true
+  try {
+    await store.renameCorridorHex(workspaceId.value, renameHexId.value, name)
+    toast(t('hexAction.corridorRenamed'), 'success')
+    showRenameDialog.value = false
+  } finally {
+    renameSaving.value = false
+  }
 }
 
 const showChannelDialog = ref(false)
@@ -693,6 +720,40 @@ function handleKeydown(e: KeyboardEvent) {
       @close="closeHexDrawer"
       @action="onHexAction"
     />
+
+    <!-- Rename Corridor Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameCorridorTitle') }}</h3>
+            <input
+              v-model="renameValue"
+              type="text"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              :placeholder="t('hexAction.corridorNamePlaceholder')"
+              @keydown.enter="handleRenameCorridor"
+            />
+            <div class="flex justify-end gap-3">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameSaving || !renameValue.trim()"
+                @click="handleRenameCorridor"
+              >
+                {{ renameSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Channel Config Dialog -->
     <Teleport to="body">
