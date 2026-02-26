@@ -3,6 +3,7 @@
 from app.models.base import Base, BaseModel  # noqa: F401
 from app.models.blackboard import Blackboard  # noqa: F401
 from app.models.cluster import Cluster  # noqa: F401
+from app.models.corridor import CorridorHex, HexConnection  # noqa: F401
 from app.models.deploy_record import DeployRecord  # noqa: F401
 from app.models.gene import (  # noqa: F401
     Gene,
