@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Save, Trash2, Loader2, Users, Palette } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { resolveApiErrorMessage } from '@/i18n/error'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -48,13 +50,13 @@ async function handleSave() {
 }
 
 async function handleDelete() {
-  if (!confirm('确认删除该工作区？此操作不可撤销。')) return
+  if (!confirm(t('workspaceSettings.deleteConfirm'))) return
   deleting.value = true
   try {
     await store.deleteWorkspace(workspaceId.value)
     router.push('/')
   } catch (e: any) {
-    alert(resolveApiErrorMessage(e, '删除失败'))
+    alert(resolveApiErrorMessage(e, t('workspaceSettings.deleteFailed')))
   } finally {
     deleting.value = false
   }
@@ -68,12 +70,12 @@ async function handleDelete() {
       <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push(`/workspace/${workspaceId}`)">
         <ArrowLeft class="w-5 h-5" />
       </button>
-      <h1 class="text-xl font-bold">工作区设置</h1>
+      <h1 class="text-xl font-bold">{{ t('workspaceSettings.title') }}</h1>
     </div>
 
     <div class="space-y-6">
       <div class="space-y-2">
-        <label class="text-sm font-medium">名称</label>
+        <label class="text-sm font-medium">{{ t('workspaceSettings.nameLabel') }}</label>
         <input
           v-model="name"
           class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
@@ -81,7 +83,7 @@ async function handleDelete() {
       </div>
 
       <div class="space-y-2">
-        <label class="text-sm font-medium">描述</label>
+        <label class="text-sm font-medium">{{ t('workspaceSettings.descriptionLabel') }}</label>
         <textarea
           v-model="description"
           rows="3"
@@ -92,7 +94,7 @@ async function handleDelete() {
       <div class="space-y-2">
         <label class="text-sm font-medium flex items-center gap-1.5">
           <Palette class="w-4 h-4 text-muted-foreground" />
-          主题色
+          {{ t('workspaceSettings.themeColor') }}
         </label>
         <div class="flex gap-2">
           <button
@@ -110,7 +112,7 @@ async function handleDelete() {
       <div class="space-y-3">
         <h3 class="text-sm font-medium flex items-center gap-1.5">
           <Users class="w-4 h-4 text-muted-foreground" />
-          成员 ({{ store.members.length }})
+          {{ t('workspaceSettings.members', { count: store.members.length }) }}
         </h3>
         <div class="space-y-2">
           <div
@@ -137,7 +139,7 @@ async function handleDelete() {
         >
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
           <Save v-else class="w-4 h-4" />
-          保存
+          {{ t('workspaceSettings.save') }}
         </button>
         <button
           class="px-4 py-2.5 rounded-lg border border-destructive text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors disabled:opacity-50"

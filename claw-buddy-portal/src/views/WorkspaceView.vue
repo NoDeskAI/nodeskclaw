@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -12,6 +13,7 @@ import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
 import { axialToWorld } from '@/composables/useHexLayout'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -325,7 +327,8 @@ function handleKeydown(e: KeyboardEvent) {
             class="w-6 h-6 rounded flex items-center justify-center text-xs"
             :style="{ backgroundColor: ws.color + '22', color: ws.color }"
           >
-            {{ ws.icon === 'bot' ? '🤖' : ws.icon }}
+            <Bot v-if="ws.icon === 'bot'" class="w-3.5 h-3.5" />
+            <template v-else>{{ ws.icon }}</template>
           </div>
           <span class="font-semibold text-sm">{{ ws.name }}</span>
         </div>
@@ -334,19 +337,19 @@ function handleKeydown(e: KeyboardEvent) {
           @click="router.push(`/workspace/${workspaceId}/add-agent`)"
         >
           <Plus class="w-3.5 h-3.5" />
-          添加 Agent
+          {{ t('workspaceView.addAgent') }}
         </button>
       </div>
 
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-0.5 mr-1">
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="放大 (+)" @click="handleZoomIn">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" :title="t('workspaceView.zoomIn')" @click="handleZoomIn">
             <ZoomIn class="w-4 h-4" />
           </button>
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="缩小 (-)" @click="handleZoomOut">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" :title="t('workspaceView.zoomOut')" @click="handleZoomOut">
             <ZoomOut class="w-4 h-4" />
           </button>
-          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" title="重置视角 (0)" @click="handleResetView">
+          <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" :title="t('workspaceView.resetView')" @click="handleResetView">
             <RotateCcw class="w-4 h-4" />
           </button>
         </div>
@@ -432,7 +435,7 @@ function handleKeydown(e: KeyboardEvent) {
           <button
             v-if="!showShortcutHints"
             class="p-2 rounded-lg bg-background/70 backdrop-blur-sm border border-border/50 text-muted-foreground hover:text-foreground transition-colors"
-            title="显示快捷键"
+            :title="t('workspaceView.showShortcuts')"
             @click="toggleShortcutHints"
           >
             <Keyboard class="w-4 h-4" />
@@ -446,34 +449,34 @@ function handleKeydown(e: KeyboardEvent) {
               @click="toggleShortcutHints"
             >
               <Keyboard class="w-3.5 h-3.5" />
-              <span>快捷键</span>
+              <span>{{ t('workspaceView.shortcuts') }}</span>
               <ChevronDown class="w-3 h-3 ml-auto" />
             </button>
             <div class="border-t border-border/50 px-3 py-2 space-y-1 text-muted-foreground">
               <div class="flex justify-between gap-4">
-                <span>方向键</span>
-                <span class="text-foreground/70">{{ selectedAgentId ? '移动 Agent' : '平移画布' }}</span>
+                <span>{{ t('workspaceView.arrowKeys') }}</span>
+                <span class="text-foreground/70">{{ selectedAgentId ? t('workspaceView.moveAgent') : t('workspaceView.panCanvas') }}</span>
               </div>
               <div class="flex justify-between gap-4">
                 <span>+ / -</span>
-                <span class="text-foreground/70">缩放</span>
+                <span class="text-foreground/70">{{ t('workspaceView.zoom') }}</span>
               </div>
               <div class="flex justify-between gap-4">
                 <span>0</span>
-                <span class="text-foreground/70">重置视角</span>
+                <span class="text-foreground/70">{{ t('workspaceView.resetViewShort') }}</span>
               </div>
               <div class="flex justify-between gap-4">
                 <span>Esc</span>
-                <span class="text-foreground/70">取消选中</span>
+                <span class="text-foreground/70">{{ t('workspaceView.deselect') }}</span>
               </div>
               <div class="border-t border-border/30 pt-1 mt-1">
                 <div class="flex justify-between gap-4">
-                  <span>单击</span>
-                  <span class="text-foreground/70">打开操作面板</span>
+                  <span>{{ t('workspaceView.singleClick') }}</span>
+                  <span class="text-foreground/70">{{ t('workspaceView.openActionPanel') }}</span>
                 </div>
                 <div class="flex justify-between gap-4">
-                  <span>双击</span>
-                  <span class="text-foreground/70">快速打开对话</span>
+                  <span>{{ t('workspaceView.doubleClick') }}</span>
+                  <span class="text-foreground/70">{{ t('workspaceView.quickOpenChat') }}</span>
                 </div>
               </div>
             </div>
@@ -491,7 +494,7 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="flex items-center gap-2">
               <MessageSquare class="w-4 h-4 text-primary" />
               <span class="text-sm font-medium">{{ ws?.name || 'Workspace' }}</span>
-              <span class="text-xs text-muted-foreground">Group Chat</span>
+              <span class="text-xs text-muted-foreground">{{ t('workspaceView.groupChat') }}</span>
             </div>
             <button
               class="p-1 rounded hover:bg-muted transition-colors"

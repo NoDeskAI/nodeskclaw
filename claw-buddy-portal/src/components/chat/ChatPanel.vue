@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, computed, onMounted, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -21,6 +22,7 @@ const props = defineProps<{
   workspaceId: string
 }>()
 
+const { t } = useI18n()
 const store = useWorkspaceStore()
 const authStore = useAuthStore()
 const toast = useToast()
@@ -36,8 +38,7 @@ const userAvatarUrl = computed(() => authStore.user?.avatar_url)
 const typingNames = computed(() => {
   const names = Array.from(typingAgents.value.values())
   if (names.length === 0) return ''
-  if (names.length === 1) return `${names[0]} 正在输入...`
-  return `${names.join(', ')} 正在输入...`
+  return t('chat.isTyping', { names: names.join(', ') })
 })
 
 const AGENT_COLORS = [
@@ -76,16 +77,16 @@ async function copySlug(agentId: string) {
   const slug = agentSlug(agentId)
   if (!slug) return
   await navigator.clipboard.writeText(slug)
-  toast.success('实例标识已复制')
+  toast.success(t('chat.slugCopied'))
 }
 
 // ── Commands ────────────────────────────────────────
-const COMMANDS = [
-  { name: 'status', label: '显示所有 Agent 状态', icon: Activity, needsAgent: false, immediate: true },
-  { name: 'clear', label: '清空聊天记录', icon: XCircle, needsAgent: false, immediate: true },
-  { name: 'restart', label: '重启 Agent', icon: RotateCw, needsAgent: true, immediate: false },
-  { name: 'remove', label: '移除 Agent', icon: Trash2, needsAgent: true, immediate: false },
-]
+const COMMANDS = computed(() => [
+  { name: 'status', label: t('chat.cmdStatusLabel'), icon: Activity, needsAgent: false, immediate: true },
+  { name: 'clear', label: t('chat.cmdClearLabel'), icon: XCircle, needsAgent: false, immediate: true },
+  { name: 'restart', label: t('chat.cmdRestartLabel'), icon: RotateCw, needsAgent: true, immediate: false },
+  { name: 'remove', label: t('chat.cmdRemoveLabel'), icon: Trash2, needsAgent: true, immediate: false },
+])
 
 // ── Suggestion state ─────────────────────────────────
 interface SuggestionItem {
@@ -171,47 +172,47 @@ function executeSlashCommand(name: string, arg?: string) {
   switch (name) {
     case 'status': {
       const lines = agents.value.map(a => `${agentLabel(a)}: ${a.status}`)
-      insertSystemMessage(lines.length ? lines.join('\n') : '工作区内没有 Agent')
+      insertSystemMessage(lines.length ? lines.join('\n') : t('chat.noAgentsInWorkspace'))
       break
     }
     case 'clear':
       store.chatMessages.splice(0, store.chatMessages.length)
-      insertSystemMessage('聊天记录已清空', false)
+      insertSystemMessage(t('chat.chatCleared'), false)
       break
     case 'restart':
       if (arg) doRestartAgent(arg)
-      else insertSystemMessage('用法: /restart @AgentName')
+      else insertSystemMessage(t('chat.restartUsage'))
       break
     case 'remove':
       if (arg) doRemoveAgent(arg)
-      else insertSystemMessage('用法: /remove @AgentName')
+      else insertSystemMessage(t('chat.removeUsage'))
       break
     default:
-      insertSystemMessage(`未知命令: /${name}`)
+      insertSystemMessage(t('chat.unknownCommand', { command: name }))
   }
 }
 
 async function doRestartAgent(name: string) {
   const agent = agents.value.find(a => agentLabel(a) === name)
-  if (!agent) { insertSystemMessage(`找不到 Agent: ${name}`); return }
-  insertSystemMessage(`正在重启 ${name}...`)
+  if (!agent) { insertSystemMessage(t('chat.agentNotFound', { name })); return }
+  insertSystemMessage(t('chat.restartingAgent', { name }))
   try {
     await api.post(`/instances/${agent.instance_id}/restart`)
-    insertSystemMessage(`${name} 已触发重启`)
+    insertSystemMessage(t('chat.agentRestarted', { name }))
   } catch (e: any) {
-    insertSystemMessage(`重启失败: ${resolveApiErrorMessage(e, e?.message || '重启失败')}`)
+    insertSystemMessage(t('chat.restartFailed', { error: resolveApiErrorMessage(e, e?.message || '') }))
   }
 }
 
 async function doRemoveAgent(name: string) {
   const agent = agents.value.find(a => agentLabel(a) === name)
-  if (!agent) { insertSystemMessage(`找不到 Agent: ${name}`); return }
-  insertSystemMessage(`正在移除 ${name}...`)
+  if (!agent) { insertSystemMessage(t('chat.agentNotFound', { name })); return }
+  insertSystemMessage(t('chat.removingAgent', { name }))
   try {
     await store.removeAgent(props.workspaceId, agent.instance_id)
-    insertSystemMessage(`${name} 已从工作区移除`)
+    insertSystemMessage(t('chat.agentRemoved', { name }))
   } catch (e: any) {
-    insertSystemMessage(`移除失败: ${resolveApiErrorMessage(e, e?.message || '移除失败')}`)
+    insertSystemMessage(t('chat.removeFailed', { error: resolveApiErrorMessage(e, e?.message || '') }))
   }
 }
 
@@ -304,7 +305,7 @@ const editor = useEditor({
       dropcursor: false,
     }),
     Placeholder.configure({
-      placeholder: '输入消息到工作区，@ 提及 Agent，/ 执行命令',
+      placeholder: t('chat.inputPlaceholder'),
     }),
     AgentMention.configure({
       suggestion: {
@@ -351,7 +352,7 @@ const editor = useEditor({
         char: '/',
         items: ({ query }: { query: string }) => {
           const q = query.toLowerCase()
-          return COMMANDS
+          return COMMANDS.value
             .filter(c => c.name.includes(q) || c.label.includes(q))
             .map(c => ({
               id: c.name,
@@ -518,7 +519,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
         v-if="messages.length === 0"
         class="flex items-center justify-center h-full text-muted-foreground text-sm"
       >
-        发送消息开始群聊，所有 Agent 都会看到
+        {{ t('chat.emptyHint') }}
       </div>
 
       <div v-for="msg in messages" :key="msg.id">
@@ -678,7 +679,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 :class="item.immediate
                   ? 'bg-green-500/15 text-green-600 dark:text-green-400'
                   : 'bg-primary/10 text-primary'"
-              >{{ item.immediate ? '立即执行' : 'Tag' }}</span>
+              >{{ item.immediate ? t('chat.immediate') : 'Tag' }}</span>
             </button>
           </div>
         </div>
@@ -691,14 +692,14 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
           <div class="flex items-center gap-0.5">
             <button
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              title="@ 提及 Agent"
+              :title="t('chat.mentionAgent')"
               @click="triggerMention"
             >
               <AtSign class="w-3.5 h-3.5" />
             </button>
             <button
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              title="/ 命令"
+              :title="t('chat.slashCommand')"
               @click="triggerSlash"
             >
               <Slash class="w-3.5 h-3.5" />

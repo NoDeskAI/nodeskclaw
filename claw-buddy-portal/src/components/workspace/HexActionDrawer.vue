@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { X, Plus, MessageSquare, ExternalLink, Trash2, PenSquare } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 defineProps<{
   open: boolean
@@ -25,13 +28,13 @@ const emit = defineEmits<{
       <div class="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
         <span class="text-sm font-medium text-foreground">
           <template v-if="hexType === 'empty'">
-            空工位
+            {{ t('hexAction.emptySlot') }}
           </template>
           <template v-else-if="hexType === 'agent'">
             {{ agentInfo?.name || 'Agent' }}
           </template>
           <template v-else>
-            中央黑板
+            {{ t('hexAction.centralBlackboard') }}
           </template>
         </span>
         <button
@@ -50,7 +53,7 @@ const emit = defineEmits<{
             @click="emit('action', 'add-agent')"
           >
             <Plus class="w-4 h-4 text-primary" />
-            <span>添加 Agent 到此工位</span>
+            <span>{{ t('hexAction.addAgentHere') }}</span>
           </button>
         </template>
 
@@ -61,21 +64,21 @@ const emit = defineEmits<{
             @click="emit('action', 'open-chat')"
           >
             <MessageSquare class="w-4 h-4 text-primary" />
-            <span>打开对话</span>
+            <span>{{ t('hexAction.openChat') }}</span>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'view-detail')"
           >
             <ExternalLink class="w-4 h-4 text-muted-foreground" />
-            <span>查看详情</span>
+            <span>{{ t('hexAction.viewDetail') }}</span>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
             @click="emit('action', 'remove-agent')"
           >
             <Trash2 class="w-4 h-4" />
-            <span>移除</span>
+            <span>{{ t('hexAction.remove') }}</span>
           </button>
         </template>
 
@@ -86,7 +89,7 @@ const emit = defineEmits<{
             @click="emit('action', 'edit-blackboard')"
           >
             <PenSquare class="w-4 h-4 text-primary" />
-            <span>编辑黑板</span>
+            <span>{{ t('hexAction.editBlackboard') }}</span>
           </button>
         </template>
       </div>
