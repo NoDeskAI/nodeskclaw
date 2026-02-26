@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Loader2, Palette, Bot } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { resolveApiErrorMessage } from '@/i18n/error'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useWorkspaceStore()
 
@@ -21,7 +23,7 @@ const colors = [
 
 async function handleCreate() {
   if (!name.value.trim()) {
-    error.value = '请输入工作区名称'
+    error.value = t('createWorkspace.nameRequired')
     return
   }
 
@@ -36,7 +38,7 @@ async function handleCreate() {
     })
     router.push(`/workspace/${ws.id}`)
   } catch (e: any) {
-    error.value = resolveApiErrorMessage(e, '创建失败')
+    error.value = resolveApiErrorMessage(e, t('createWorkspace.createFailed'))
   } finally {
     creating.value = false
   }
@@ -50,29 +52,29 @@ async function handleCreate() {
       <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push('/')">
         <ArrowLeft class="w-5 h-5" />
       </button>
-      <h1 class="text-xl font-bold">新建工作区</h1>
+      <h1 class="text-xl font-bold">{{ t('createWorkspace.title') }}</h1>
     </div>
 
     <div class="space-y-6">
       <!-- Name -->
       <div class="space-y-2">
-        <label class="text-sm font-medium">工作区名称</label>
+        <label class="text-sm font-medium">{{ t('createWorkspace.nameLabel') }}</label>
         <input
           v-model="name"
           class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
-          placeholder="如: 客服中心、研发助手"
+          :placeholder="t('createWorkspace.namePlaceholder')"
           maxlength="128"
         />
       </div>
 
       <!-- Description -->
       <div class="space-y-2">
-        <label class="text-sm font-medium">描述</label>
+        <label class="text-sm font-medium">{{ t('createWorkspace.descriptionLabel') }}</label>
         <textarea
           v-model="description"
           rows="3"
           class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50 resize-none"
-          placeholder="简要描述这个工作区的用途..."
+          :placeholder="t('createWorkspace.descriptionPlaceholder')"
         />
       </div>
 
@@ -80,7 +82,7 @@ async function handleCreate() {
       <div class="space-y-2">
         <label class="text-sm font-medium flex items-center gap-1.5">
           <Palette class="w-4 h-4 text-muted-foreground" />
-          主题色
+          {{ t('createWorkspace.themeColor') }}
         </label>
         <div class="flex gap-2">
           <button
@@ -103,11 +105,11 @@ async function handleCreate() {
             class="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
             :style="{ backgroundColor: selectedColor + '22', color: selectedColor }"
           >
-            🤖
+            <Bot class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="font-semibold text-sm">{{ name || '工作区名称' }}</h3>
-            <p class="text-xs text-muted-foreground">{{ description || '暂无描述' }}</p>
+            <h3 class="font-semibold text-sm">{{ name || t('createWorkspace.previewNameFallback') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ description || t('createWorkspace.previewDescFallback') }}</p>
           </div>
         </div>
       </div>
@@ -123,7 +125,7 @@ async function handleCreate() {
       >
         <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
         <Plus v-else class="w-4 h-4" />
-        创建工作区
+        {{ t('createWorkspace.submit') }}
       </button>
     </div>
   </div>
