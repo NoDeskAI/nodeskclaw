@@ -264,14 +264,17 @@ async def auto_connect_hex(
 
         aq, ar, bq, br = ordered_pair(q, r, nq, nr)
         existing = await db.execute(
-            select(HexConnection.id).where(
+            select(HexConnection).where(
                 HexConnection.workspace_id == workspace_id,
                 HexConnection.hex_a_q == aq, HexConnection.hex_a_r == ar,
                 HexConnection.hex_b_q == bq, HexConnection.hex_b_r == br,
-                not_deleted(HexConnection),
             ).limit(1)
         )
-        if existing.scalar_one_or_none():
+        row = existing.scalar_one_or_none()
+        if row is not None:
+            if row.deleted_at is not None:
+                row.deleted_at = None
+                row.auto_created = True
             continue
         conn = HexConnection(
             id=str(uuid.uuid4()),
