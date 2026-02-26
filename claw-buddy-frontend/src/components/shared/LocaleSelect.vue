@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Check, ChevronDown, Languages } from 'lucide-vue-next'
+import { Check, Languages } from 'lucide-vue-next'
 
 type LocaleValue = 'zh-CN' | 'en-US'
 
@@ -28,8 +28,6 @@ const highlightIndex = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
 
 const currentValue = computed<LocaleValue>(() => (props.modelValue === 'zh-CN' ? 'zh-CN' : 'en-US'))
-const currentLabel = computed(() => options.find((item) => item.value === currentValue.value)?.label ?? '🇺🇸 English')
-
 function setHighlightFromCurrent() {
   const idx = options.findIndex((item) => item.value === currentValue.value)
   highlightIndex.value = idx >= 0 ? idx : 0
@@ -123,19 +121,14 @@ onUnmounted(() => {
   <div ref="containerRef" class="relative">
     <button
       type="button"
-      class="h-8 w-[132px] rounded-md border border-border bg-card pl-8 pr-7 text-sm font-medium text-foreground transition-all hover:border-primary/40 hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+      class="h-8 w-8 rounded-md border border-border bg-card flex items-center justify-center text-foreground transition-all hover:border-primary/40 hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
       :disabled="disabled"
       aria-haspopup="listbox"
       :aria-expanded="open"
       @click="togglePanel"
       @keydown="onTriggerKeydown"
     >
-      <Languages class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-      <span class="block text-left truncate">{{ currentLabel }}</span>
-      <ChevronDown
-        class="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground transition-transform"
-        :class="open ? 'rotate-180' : ''"
-      />
+      <Languages class="h-4 w-4 text-muted-foreground" />
     </button>
 
     <div
