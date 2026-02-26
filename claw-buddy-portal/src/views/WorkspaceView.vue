@@ -9,14 +9,21 @@ import Workspace3D from '@/components/hex3d/Workspace3D.vue'
 import Workspace2D from '@/components/hex2d/Workspace2D.vue'
 import ModeToggle from '@/components/shared/ModeToggle.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
+import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
 import { axialToWorld } from '@/composables/useHexLayout'
+import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
+
+const locale = ref(getCurrentLocale())
+function onLocaleChange(value: string) {
+  locale.value = setCurrentLocale(value)
+}
 
 const workspaceId = computed(() => route.params.id as string)
 const ws = computed(() => store.currentWorkspace)
@@ -357,6 +364,7 @@ function handleKeydown(e: KeyboardEvent) {
         <div class="w-px h-5 bg-border" />
 
         <ModeToggle :mode="activeMode" @toggle="toggleMode" />
+        <LocaleSelect :model-value="locale" @update:model-value="onLocaleChange" />
         <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="toggleFullscreen">
           <Minimize2 v-if="isFullscreen" class="w-4 h-4" />
           <Maximize2 v-else class="w-4 h-4" />
