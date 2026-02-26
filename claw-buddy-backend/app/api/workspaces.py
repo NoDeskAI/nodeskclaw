@@ -343,6 +343,104 @@ async def collect_performance(
     return _ok(perf)
 
 
+# ── Workspace Schedules ──────────────────────────────
+
+@router.get("/{workspace_id}/schedules")
+async def list_schedules(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    from app.models.workspace_schedule import WorkspaceSchedule
+    from app.services.schedule_runner import PRESET_TEMPLATES
+    result = await db.execute(
+        select(WorkspaceSchedule).where(
+            WorkspaceSchedule.workspace_id == workspace_id,
+            WorkspaceSchedule.deleted_at.is_(None),
+        )
+    )
+    items = [
+        {"id": s.id, "workspace_id": s.workspace_id, "name": s.name,
+         "cron_expr": s.cron_expr, "message_template": s.message_template,
+         "is_active": s.is_active, "created_at": s.created_at}
+        for s in result.scalars().all()
+    ]
+    return _ok({"schedules": items, "presets": PRESET_TEMPLATES})
+
+
+@router.post("/{workspace_id}/schedules")
+async def create_schedule(
+    workspace_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    import uuid
+    from app.models.workspace_schedule import WorkspaceSchedule
+    schedule = WorkspaceSchedule(
+        id=str(uuid.uuid4()),
+        workspace_id=workspace_id,
+        name=data.get("name", ""),
+        cron_expr=data.get("cron_expr", ""),
+        message_template=data.get("message_template", ""),
+        is_active=data.get("is_active", True),
+    )
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    return _ok({
+        "id": schedule.id, "name": schedule.name,
+        "cron_expr": schedule.cron_expr, "message_template": schedule.message_template,
+        "is_active": schedule.is_active,
+    })
+
+
+@router.put("/{workspace_id}/schedules/{schedule_id}")
+async def update_schedule(
+    workspace_id: str, schedule_id: str, data: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    from app.models.workspace_schedule import WorkspaceSchedule
+    result = await db.execute(
+        select(WorkspaceSchedule).where(
+            WorkspaceSchedule.id == schedule_id,
+            WorkspaceSchedule.workspace_id == workspace_id,
+            WorkspaceSchedule.deleted_at.is_(None),
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise _error(404, 40434, "errors.schedule.not_found", "定时器不存在")
+    for field in ("name", "cron_expr", "message_template", "is_active"):
+        if field in data:
+            setattr(schedule, field, data[field])
+    await db.commit()
+    return _ok({"id": schedule.id, "name": schedule.name, "is_active": schedule.is_active})
+
+
+@router.delete("/{workspace_id}/schedules/{schedule_id}")
+async def delete_schedule(
+    workspace_id: str, schedule_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    from app.models.workspace_schedule import WorkspaceSchedule
+    result = await db.execute(
+        select(WorkspaceSchedule).where(
+            WorkspaceSchedule.id == schedule_id,
+            WorkspaceSchedule.workspace_id == workspace_id,
+            WorkspaceSchedule.deleted_at.is_(None),
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise _error(404, 40434, "errors.schedule.not_found", "定时器不存在")
+    schedule.soft_delete()
+    await db.commit()
+    return _ok(message="deleted")
+
+
 # ── Workspace Members ────────────────────────────────
 
 @router.get("/{workspace_id}/members")

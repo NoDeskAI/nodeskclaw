@@ -24,6 +24,7 @@ dependencies = [
     # K8s
     "kubernetes-asyncio>=31.1.0",
     "pyyaml>=6.0.3",
+    "croniter>=6.0.0",
 ]
 
 [dependency-groups]

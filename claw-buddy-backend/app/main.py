@@ -639,6 +639,10 @@ async def lifespan(app: FastAPI):
     summary_job = SummaryJob(async_session_factory)
     summary_job.start()
 
+    from app.services.schedule_runner import ScheduleRunner
+    schedule_runner = ScheduleRunner(async_session_factory)
+    schedule_runner.start()
+
     # ── 恢复工作区 SSE 连接 ──
     from app.services.sse_listener import sse_listener_manager
 
@@ -678,6 +682,7 @@ async def lifespan(app: FastAPI):
     await sse_listener_manager.disconnect_all()
     logger.info("已关闭所有 SSE 连接")
     await summary_job.stop()
+    await schedule_runner.stop()
     await health_checker.stop()
     await k8s_manager.close_all()
     logger.info("已关闭所有 K8s 连接")

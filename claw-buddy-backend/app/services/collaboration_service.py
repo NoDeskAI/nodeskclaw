@@ -334,3 +334,43 @@ async def _invoke_target_agent(
             "instance_id": instance_id,
             "agent_name": agent_name,
         })
+
+
+async def send_system_message_to_agents(
+    workspace_id: str,
+    agent_ids: list[str],
+    message: str,
+    db: AsyncSession,
+) -> None:
+    """Send a system-generated message to specific agents via their SSE channels."""
+    from app.models.base import not_deleted
+
+    for agent_id in agent_ids:
+        inst_q = await db.execute(
+            select(Instance).where(Instance.id == agent_id, not_deleted(Instance))
+        )
+        inst = inst_q.scalar_one_or_none()
+        if not inst or inst.status != "running":
+            continue
+
+        ws_info = await workspace_service.get_workspace_detail(db, workspace_id)
+        if not ws_info:
+            continue
+
+        members = [
+            {"name": "System", "role": "system"},
+        ]
+        recent = await msg_service.get_recent_messages(db, workspace_id)
+
+        asyncio.create_task(
+            _stream_agent_reply(
+                workspace_id=workspace_id,
+                instance_id=inst.id,
+                agent_name=inst.agent_display_name or inst.name,
+                proxy_token=inst.proxy_token,
+                user_content=message,
+                members=members,
+                recent_messages=recent,
+                depth=0,
+            )
+        )
