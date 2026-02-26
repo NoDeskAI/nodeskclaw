@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Search,
   Loader2,
@@ -34,6 +35,7 @@ import { useToast } from '@/composables/useToast'
 const router = useRouter()
 const store = useGeneStore()
 const toast = useToast()
+const { t, locale } = useI18n()
 
 const viewMode = ref<'genes' | 'genomes' | 'evolution'>('genes')
 const keyword = ref('')
@@ -43,23 +45,44 @@ const sortBy = ref('popularity')
 const page = ref(1)
 const pageSize = ref(12)
 
-const categories = [
-  { value: '开发', label: '开发' },
-  { value: '数据', label: '数据' },
-  { value: '运维', label: '运维' },
-  { value: '网络', label: '网络' },
-  { value: '创意', label: '创意' },
-  { value: '沟通', label: '沟通' },
-  { value: '安全', label: '安全' },
-  { value: '效率', label: '效率' },
-]
+const categories = ['开发', '数据', '运维', '网络', '创意', '沟通', '安全', '效率']
 
-const sortOptions = [
-  { value: 'popularity', label: '热门' },
-  { value: 'rating', label: '评分' },
-  { value: 'effectiveness', label: '效能' },
-  { value: 'newest', label: '最新' },
-]
+const sortOptions = ['popularity', 'rating', 'effectiveness', 'newest']
+
+const geneMetaKeyMap: Record<string, string> = {
+  开发: 'geneMeta.development',
+  数据: 'geneMeta.data',
+  运维: 'geneMeta.ops',
+  网络: 'geneMeta.network',
+  创意: 'geneMeta.creativity',
+  沟通: 'geneMeta.communication',
+  安全: 'geneMeta.security',
+  效率: 'geneMeta.efficiency',
+  性格: 'geneMeta.personality',
+  能力: 'geneMeta.ability',
+  知识: 'geneMeta.knowledge',
+}
+
+function localizeGeneMeta(value?: string) {
+  if (!value) return ''
+  const key = geneMetaKeyMap[value]
+  if (!key) return value
+  const translated = t(key)
+  return translated === key ? value : translated
+}
+
+function getSortLabel(value: string) {
+  const map: Record<string, string> = {
+    popularity: 'geneMarket.sortPopularity',
+    rating: 'geneMarket.sortRating',
+    effectiveness: 'geneMarket.sortEffectiveness',
+    newest: 'geneMarket.sortNewest',
+  }
+  const key = map[value]
+  if (!key) return value
+  const translated = t(key)
+  return translated === key ? value : translated
+}
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -117,28 +140,32 @@ async function handleReview(geneId: string, action: 'approve' | 'reject') {
   try {
     await store.reviewGene(geneId, action)
     evoPending.value = evoPending.value.filter((g) => g.id !== geneId)
-    toast.success(action === 'approve' ? '已通过' : '已拒绝')
+    toast.success(action === 'approve' ? t('geneMarket.reviewApproved') : t('geneMarket.reviewRejected'))
   } catch {
-    toast.error('操作失败')
+    toast.error(t('geneMarket.actionFailed'))
   } finally {
     evoReviewingId.value = null
   }
 }
 
-function formatMetricType(t: string): string {
+function formatMetricType(metricType: string): string {
   const map: Record<string, string> = {
-    user_positive: '用户正向',
-    user_negative: '用户负向',
-    task_success: '任务成功',
-    agent_self_eval: 'Agent 自评',
+    user_positive: 'geneMarket.metricUserPositive',
+    user_negative: 'geneMarket.metricUserNegative',
+    task_success: 'geneMarket.metricTaskSuccess',
+    agent_self_eval: 'geneMarket.metricAgentSelfEval',
   }
-  return map[t] ?? t
+  const key = map[metricType]
+  if (!key) return metricType
+  const translated = t(key)
+  return translated === key ? metricType : translated
 }
 
 function formatDate(s?: string): string {
   if (!s) return '-'
   const d = new Date(s)
-  return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const currentLocale = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+  return d.toLocaleString(currentLocale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 const featuredItems = computed(() =>
@@ -220,13 +247,20 @@ function goToGenome(id: string) {
   router.push(`/gene-market/genome/${id}`)
 }
 
+function hasMcpTools(gene: GeneItem): boolean {
+  const mcpServers = gene.manifest?.mcp_servers
+  if (Array.isArray(mcpServers) && mcpServers.length > 0) return true
+  const tags = gene.tags ?? []
+  return tags.some((t) => String(t).toLowerCase() === 'mcp')
+}
+
 </script>
 
 <template>
   <div class="flex flex-col h-[calc(100vh-3.5rem)] bg-background text-foreground">
     <div class="shrink-0 border-b border-border">
       <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
-        <h1 class="text-2xl font-bold mb-4">基因市场</h1>
+        <h1 class="text-2xl font-bold mb-4">{{ t('geneMarket.title') }}</h1>
 
         <div class="flex flex-wrap items-center gap-2">
           <button
@@ -238,7 +272,7 @@ function goToGenome(id: string) {
             ]"
             @click="viewMode = 'genes'"
           >
-            基因
+            {{ t('geneMarket.tabGenes') }}
           </button>
           <button
             :class="[
@@ -249,7 +283,7 @@ function goToGenome(id: string) {
             ]"
             @click="viewMode = 'genomes'"
           >
-            基因组
+            {{ t('geneMarket.tabGenomes') }}
           </button>
           <button
             :class="[
@@ -260,7 +294,7 @@ function goToGenome(id: string) {
             ]"
             @click="viewMode = 'evolution'"
           >
-            进化趋势
+            {{ t('geneMarket.tabEvolution') }}
           </button>
         </div>
       </div>
@@ -279,35 +313,35 @@ function goToGenome(id: string) {
             <div class="rounded-xl border border-border bg-card p-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <Dna class="w-4 h-4" />
-                <span class="text-sm">基因总数</span>
+                <span class="text-sm">{{ t('geneMarket.evoTotalGenes') }}</span>
               </div>
               <div class="text-2xl font-bold">{{ evoStats?.total_genes ?? 0 }}</div>
             </div>
             <div class="rounded-xl border border-border bg-card p-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <Download class="w-4 h-4" />
-                <span class="text-sm">总学习数</span>
+                <span class="text-sm">{{ t('geneMarket.evoTotalInstalls') }}</span>
               </div>
               <div class="text-2xl font-bold">{{ evoStats?.total_installs ?? 0 }}</div>
             </div>
             <div class="rounded-xl border border-border bg-card p-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <TrendingUp class="w-4 h-4" />
-                <span class="text-sm">学习中</span>
+                <span class="text-sm">{{ t('geneMarket.evoLearning') }}</span>
               </div>
               <div class="text-2xl font-bold">{{ evoStats?.learning_count ?? 0 }}</div>
             </div>
             <div class="rounded-xl border border-border bg-card p-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <AlertCircle class="w-4 h-4" />
-                <span class="text-sm">失败数</span>
+                <span class="text-sm">{{ t('geneMarket.evoFailed') }}</span>
               </div>
               <div class="text-2xl font-bold">{{ evoStats?.failed_count ?? 0 }}</div>
             </div>
             <div class="rounded-xl border border-border bg-card p-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <Sparkles class="w-4 h-4" />
-                <span class="text-sm">Agent 创造</span>
+                <span class="text-sm">{{ t('geneMarket.evoAgentCreated') }}</span>
               </div>
               <div class="text-2xl font-bold">{{ evoStats?.agent_created_count ?? 0 }}</div>
             </div>
@@ -316,7 +350,7 @@ function goToGenome(id: string) {
           <div class="grid md:grid-cols-2 gap-6 mb-8">
             <div class="rounded-xl border border-border bg-card overflow-hidden">
               <div class="px-4 py-3 border-b border-border">
-                <h2 class="font-semibold">热门基因 (按效能)</h2>
+                <h2 class="font-semibold">{{ t('geneMarket.evoHotGenes') }}</h2>
               </div>
               <div class="divide-y divide-border max-h-[320px] overflow-y-auto">
                 <div
@@ -327,7 +361,15 @@ function goToGenome(id: string) {
                 >
                   <span class="text-muted-foreground w-6">{{ i + 1 }}</span>
                   <div class="min-w-0 flex-1">
-                    <div class="font-medium truncate">{{ g.name }}</div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium truncate">{{ g.name }}</span>
+                      <span
+                        v-if="hasMcpTools(g)"
+                        class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+                      >
+                        {{ t('geneMarket.hasMcpTools') }}
+                      </span>
+                    </div>
                     <div class="text-xs text-muted-foreground">{{ g.slug }}</div>
                   </div>
                   <div class="shrink-0">
@@ -341,7 +383,7 @@ function goToGenome(id: string) {
                   </div>
                 </div>
                 <div v-if="evoHotGenes.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
-                  暂无数据
+                  {{ t('geneMarket.evoNoData') }}
                 </div>
               </div>
             </div>
@@ -349,7 +391,7 @@ function goToGenome(id: string) {
             <div class="rounded-xl border border-border bg-card overflow-hidden">
               <div class="px-4 py-3 border-b border-border flex items-center gap-2">
                 <Activity class="w-4 h-4" />
-                <h2 class="font-semibold">活动流</h2>
+                <h2 class="font-semibold">{{ t('geneMarket.evoActivity') }}</h2>
               </div>
               <div class="divide-y divide-border max-h-[320px] overflow-y-auto">
                 <div v-if="evoActivityLoading" class="px-4 py-8 flex justify-center">
@@ -366,7 +408,7 @@ function goToGenome(id: string) {
                   <span class="text-muted-foreground">{{ formatDate(a.created_at) }}</span>
                 </div>
                 <div v-if="!evoActivityLoading && evoActivity.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
-                  暂无活动
+                  {{ t('geneMarket.evoNoActivity') }}
                 </div>
               </div>
             </div>
@@ -374,13 +416,13 @@ function goToGenome(id: string) {
 
           <div class="rounded-xl border border-border bg-card overflow-hidden">
             <div class="px-4 py-3 border-b border-border">
-              <h2 class="font-semibold">待审核</h2>
+              <h2 class="font-semibold">{{ t('geneMarket.evoPendingReview') }}</h2>
             </div>
             <div v-if="evoPendingLoading" class="px-4 py-8 flex justify-center">
               <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
             <div v-else-if="evoPending.length === 0" class="px-4 py-8 text-center text-muted-foreground text-sm">
-              暂无待审核基因
+              {{ t('geneMarket.evoNoPending') }}
             </div>
             <div v-else class="divide-y divide-border">
               <div
@@ -400,7 +442,7 @@ function goToGenome(id: string) {
                   >
                     <Loader2 v-if="evoReviewingId === g.id" class="w-4 h-4 animate-spin" />
                     <Check v-else class="w-4 h-4" />
-                    通过
+                    {{ t('geneMarket.approve') }}
                   </button>
                   <button
                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-red-500/10 text-red-600 hover:bg-red-500/20 disabled:opacity-50"
@@ -408,7 +450,7 @@ function goToGenome(id: string) {
                     @click="handleReview(g.id, 'reject')"
                   >
                     <X class="w-4 h-4" />
-                    拒绝
+                    {{ t('geneMarket.reject') }}
                   </button>
                 </div>
               </div>
@@ -425,7 +467,7 @@ function goToGenome(id: string) {
           <input
             v-model="keyword"
             type="text"
-            placeholder="搜索关键词"
+            :placeholder="t('geneMarket.searchPlaceholder')"
             class="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
@@ -442,7 +484,7 @@ function goToGenome(id: string) {
             ]"
             @click="selectedTag = selectedTag === t.tag ? null : t.tag"
           >
-            {{ t.tag }}
+            {{ localizeGeneMeta(t.tag) }}
           </button>
         </div>
 
@@ -451,9 +493,9 @@ function goToGenome(id: string) {
             v-model="selectedCategory"
             class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
           >
-            <option :value="null">全部分类</option>
-            <option v-for="c in categories" :key="c.value" :value="c.value">
-              {{ c.label }}
+            <option :value="null">{{ t('geneMarket.allCategories') }}</option>
+            <option v-for="c in categories" :key="c" :value="c">
+              {{ localizeGeneMeta(c) }}
             </option>
           </select>
           <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -464,8 +506,8 @@ function goToGenome(id: string) {
             v-model="sortBy"
             class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
           >
-            <option v-for="s in sortOptions" :key="s.value" :value="s.value">
-              {{ s.label }}
+            <option v-for="s in sortOptions" :key="s" :value="s">
+              {{ getSortLabel(s) }}
             </option>
           </select>
           <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -478,7 +520,7 @@ function goToGenome(id: string) {
 
       <template v-else>
         <section v-if="hasFeatured" class="mb-8">
-          <h2 class="text-lg font-semibold mb-4">精选</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('geneMarket.featured') }}</h2>
           <div class="flex gap-4 overflow-x-auto pb-2 -mx-1">
             <div
               v-for="item in featuredItems"
@@ -494,7 +536,15 @@ function goToGenome(id: string) {
                   />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="font-medium truncate">{{ item.name }}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium truncate">{{ item.name }}</span>
+                    <span
+                      v-if="viewMode === 'genes' && hasMcpTools(item as GeneItem)"
+                      class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      {{ t('geneMarket.hasMcpTools') }}
+                    </span>
+                  </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                     {{ (item as GeneItem).short_description ?? (item as GenomeItem).short_description ?? '' }}
                   </p>
@@ -505,7 +555,7 @@ function goToGenome(id: string) {
                   <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   {{ ((item as GeneItem).avg_rating ?? (item as GenomeItem).avg_rating ?? 0).toFixed(1) }}
                 </span>
-                <span>{{ (item as GeneItem).install_count ?? (item as GenomeItem).install_count ?? 0 }} 次学习</span>
+                <span>{{ t('geneMarket.learnCount', { count: (item as GeneItem).install_count ?? (item as GenomeItem).install_count ?? 0 }) }}</span>
               </div>
             </div>
           </div>
@@ -525,10 +575,16 @@ function goToGenome(id: string) {
                   <component :is="resolveIcon(gene.icon)" class="w-5 h-5 text-primary" />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-medium truncate">{{ gene.name }}</span>
                     <span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                       v{{ gene.version }}
+                    </span>
+                    <span
+                      v-if="hasMcpTools(gene)"
+                      class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      {{ t('geneMarket.hasMcpTools') }}
                     </span>
                   </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-1">
@@ -542,7 +598,7 @@ function goToGenome(id: string) {
                   :key="tag"
                   class="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary"
                 >
-                  {{ tag }}
+                  {{ localizeGeneMeta(tag) }}
                 </span>
               </div>
               <div class="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
@@ -558,7 +614,7 @@ function goToGenome(id: string) {
                     />
                   </div>
                 </div>
-                <span class="shrink-0">{{ gene.install_count ?? 0 }} 次学习</span>
+                <span class="shrink-0">{{ t('geneMarket.learnCount', { count: gene.install_count ?? 0 }) }}</span>
               </div>
               </div>
             </template>
@@ -585,7 +641,7 @@ function goToGenome(id: string) {
                   <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   {{ (genome.avg_rating ?? 0).toFixed(1) }}
                 </span>
-                <span class="shrink-0">{{ genome.install_count ?? 0 }} 次学习</span>
+                <span class="shrink-0">{{ t('geneMarket.learnCount', { count: genome.install_count ?? 0 }) }}</span>
               </div>
             </div>
             </template>
@@ -606,7 +662,7 @@ function goToGenome(id: string) {
             ]"
             @click="page = Math.max(1, page - 1)"
           >
-            上一页
+            {{ t('geneMarket.prevPage') }}
           </button>
           <span class="text-sm text-muted-foreground">
             {{ page }} / {{ totalPages }}
@@ -621,7 +677,7 @@ function goToGenome(id: string) {
             ]"
             @click="page = Math.min(totalPages, page + 1)"
           >
-            下一页
+            {{ t('geneMarket.nextPage') }}
           </button>
         </div>
       </template>

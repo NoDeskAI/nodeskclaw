@@ -282,6 +282,7 @@ const zhCN = {
     metricUserNegative: "用户负向",
     metricTaskSuccess: "任务成功",
     metricAgentSelfEval: "Agent 自评",
+    hasMcpTools: "含 MCP 工具",
   },
   errors: {
     common: {
