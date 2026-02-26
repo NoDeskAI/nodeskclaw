@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_org, get_db
 from app.models.base import not_deleted
+from app.models.decision_record import DecisionRecord
 from app.models.trust_policy import TrustPolicy
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,6 @@ async def submit_approval_request(
     if not human_endpoints:
         return _ok({"status": "no_human_reachable"})
 
-    from app.models.decision_record import DecisionRecord
     record = DecisionRecord(
         id=str(uuid.uuid4()),
         workspace_id=body.workspace_id,
@@ -203,7 +203,6 @@ async def resolve_approval(
 ):
     """Human resolves an approval request."""
     from datetime import datetime, timezone
-    from app.models.decision_record import DecisionRecord
 
     result = await db.execute(
         select(DecisionRecord).where(DecisionRecord.id == record_id, not_deleted(DecisionRecord))
@@ -237,3 +236,76 @@ async def resolve_approval(
 
     await db.commit()
     return _ok({"decision": body.decision, "record_id": record.id})
+
+
+@router.get("/{workspace_id}/decision-records")
+async def list_decision_records(
+    workspace_id: str,
+    agent_id: str | None = None,
+    decision_type: str | None = None,
+    org: dict = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(DecisionRecord).where(
+        DecisionRecord.workspace_id == workspace_id,
+        not_deleted(DecisionRecord),
+    )
+    if agent_id:
+        query = query.where(DecisionRecord.agent_instance_id == agent_id)
+    if decision_type:
+        query = query.where(DecisionRecord.decision_type == decision_type)
+    result = await db.execute(query)
+    items = [
+        {
+            "id": r.id,
+            "workspace_id": r.workspace_id,
+            "agent_instance_id": r.agent_instance_id,
+            "decision_type": r.decision_type,
+            "context_summary": r.context_summary,
+            "proposal": r.proposal,
+            "outcome": r.outcome,
+            "reviewer_id": r.reviewer_id,
+            "review_type": r.review_type,
+            "review_comment": r.review_comment,
+            "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in result.scalars().all()
+    ]
+    return _ok(items)
+
+
+@router.get("/{workspace_id}/decision-records/{record_id}")
+async def get_decision_record(
+    workspace_id: str,
+    record_id: str,
+    org: dict = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(DecisionRecord).where(
+            DecisionRecord.id == record_id,
+            DecisionRecord.workspace_id == workspace_id,
+            not_deleted(DecisionRecord),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(404, "decision record not found")
+    return _ok(
+        {
+            "id": record.id,
+            "workspace_id": record.workspace_id,
+            "agent_instance_id": record.agent_instance_id,
+            "decision_type": record.decision_type,
+            "context_summary": record.context_summary,
+            "proposal": record.proposal,
+            "outcome": record.outcome,
+            "reviewer_id": record.reviewer_id,
+            "review_type": record.review_type,
+            "review_comment": record.review_comment,
+            "resolved_at": record.resolved_at.isoformat() if record.resolved_at else None,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+        }
+    )
