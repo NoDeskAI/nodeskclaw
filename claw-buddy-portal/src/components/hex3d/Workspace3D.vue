@@ -484,8 +484,17 @@ addToLoop(() => {
       const isSelectedHex = props.selectedHex?.q === group.userData.hexQ && props.selectedHex?.r === group.userData.hexR
       const targetY = isHovered ? 0.04 : isSelectedHex ? 0.03 : 0.02
       group.position.y += (targetY - group.position.y) * 0.1
+      mat.emissive.set(0x38bdf8)
       mat.emissiveIntensity = isSelectedHex ? 0.25 + Math.sin(t * 3) * 0.1 : isHovered ? 0.2 : 0.08
       mat.opacity = isSelectedHex ? 0.8 : isHovered ? 0.75 : 0.6
+      continue
+    }
+
+    if (id.startsWith('human:')) {
+      const mesh = group.children[0] as THREE.Mesh
+      if (!mesh?.material) continue
+      const mat = mesh.material as THREE.MeshStandardMaterial
+      mat.emissive.set(0xf59e0b)
       continue
     }
 
@@ -505,9 +514,14 @@ addToLoop(() => {
       const mat = mesh.material as THREE.MeshStandardMaterial
       const pulse = Math.sin(t * 2) * 0.1 + 0.15
       if (isMoveSource) {
-        mat.emissive = new THREE.Color(0xf59e0b)
+        mat.emissive.set(0xf59e0b)
         mat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.25
       } else {
+        const agent = props.agents.find(a => a.instance_id === id)
+        if (agent) {
+          const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
+          mat.emissive.set(agent.sse_connected ? baseColor : DISCONNECTED_COLOR)
+        }
         mat.emissiveIntensity = (isSelected || isSelectedHex) ? 0.5 + Math.sin(t * 3) * 0.15 : isHovered ? 0.4 : pulse
       }
     }
