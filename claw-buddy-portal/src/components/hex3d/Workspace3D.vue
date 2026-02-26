@@ -86,6 +86,9 @@ scene.background = new THREE.Color(0x0a0a1a)
 
 // Hex meshes management
 const hexMeshes = new Map<string, THREE.Group>()
+const labelSprites = new Set<THREE.Sprite>()
+const LABEL_REF_DISTANCE = 12
+const _tmpWorldPos = new THREE.Vector3()
 
 const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
 
@@ -196,6 +199,7 @@ function createBlackboardMesh(): THREE.Group {
   labelSprite.position.set(0, 0.25, 0)
   labelSprite.name = 'bb-stats-label'
   group.add(labelSprite)
+  labelSprites.add(labelSprite)
 
   return group
 }
@@ -215,6 +219,7 @@ function createBBLabelSprite(): THREE.Sprite {
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
   const sprite = new THREE.Sprite(mat)
   sprite.scale.set(1.2, 0.2, 1)
+  sprite.userData.baseScale = { x: 1.2, y: 0.2 }
   return sprite
 }
 
@@ -236,6 +241,7 @@ function createCorridorLabelSprite(name: string): THREE.Sprite {
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
   const sprite = new THREE.Sprite(mat)
   sprite.scale.set(1.2, 0.2, 1)
+  sprite.userData.baseScale = { x: 1.2, y: 0.2 }
   return sprite
 }
 
@@ -267,6 +273,7 @@ function createCorridorHexMesh(node: TopologyNode): THREE.Group {
     const label = createCorridorLabelSprite(node.display_name)
     label.position.set(0, 0.2, 0)
     group.add(label)
+    labelSprites.add(label)
   }
 
   return group
@@ -387,6 +394,7 @@ function syncScene() {
     scene.remove(group)
   }
   hexMeshes.clear()
+  labelSprites.clear()
 
   for (const agent of props.agents) {
     const group = createHexMesh(agent)
@@ -542,6 +550,14 @@ addToLoop(() => {
         }
       }
     }
+  }
+
+  for (const sprite of labelSprites) {
+    sprite.getWorldPosition(_tmpWorldPos)
+    const dist = camera.position.distanceTo(_tmpWorldPos)
+    const scaleFactor = Math.max(1, dist / LABEL_REF_DISTANCE)
+    const base = sprite.userData.baseScale as { x: number; y: number }
+    sprite.scale.set(base.x * scaleFactor, base.y * scaleFactor, 1)
   }
 })
 
