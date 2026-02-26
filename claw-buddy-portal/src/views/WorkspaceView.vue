@@ -355,10 +355,8 @@ const channelSaving = ref(false)
 
 function openChannelConfig() {
   const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value?.entityId)
-  const userId = node?.extra?.user_id as string | undefined
-  const member = userId ? store.members.find(m => m.user_id === userId) : undefined
-  if (member?.channel_config) {
-    const cfg = member.channel_config as Record<string, string>
+  const cfg = node?.extra?.channel_config as Record<string, string> | undefined
+  if (cfg) {
     channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
     channelChatId.value = cfg.chat_id || ''
     channelAppId.value = cfg.app_id || ''
@@ -373,9 +371,8 @@ function openChannelConfig() {
 }
 
 async function saveChannelConfig() {
-  const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value?.entityId)
-  const userId = node?.extra?.user_id as string | undefined
-  if (!userId) return
+  const hexId = selectedHex.value?.entityId
+  if (!hexId) return
   channelSaving.value = true
   try {
     const config: Record<string, string> = {
@@ -386,7 +383,7 @@ async function saveChannelConfig() {
       config.app_id = channelAppId.value
       config.app_secret = channelAppSecret.value
     }
-    await store.setHumanChannel(workspaceId.value, userId, 'feishu', config)
+    await store.updateHumanHexChannel(workspaceId.value, hexId, 'feishu', config)
     showChannelDialog.value = false
   } finally {
     channelSaving.value = false

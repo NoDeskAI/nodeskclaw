@@ -57,12 +57,16 @@ class HumanHexCreate(BaseModel):
     hex_q: int
     hex_r: int
     display_color: str = "#f59e0b"
+    channel_type: str | None = None
+    channel_config: dict | None = None
 
 
 class HumanHexUpdate(BaseModel):
     hex_q: int | None = None
     hex_r: int | None = None
     display_color: str | None = None
+    channel_type: str | None = None
+    channel_config: dict | None = None
 
 
 class HumanHexInfo(BaseModel):
@@ -72,12 +76,9 @@ class HumanHexInfo(BaseModel):
     hex_q: int
     hex_r: int
     display_color: str
+    channel_type: str | None = None
+    channel_config: dict | None = None
     created_at: datetime
-
-
-class HumanChannelUpdate(BaseModel):
-    channel_type: str = Field(max_length=20)
-    channel_config: dict = {}
 
 
 class TopologyNodeInfo(BaseModel):

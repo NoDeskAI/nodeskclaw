@@ -111,7 +111,7 @@ async def submit_approval_request(
     org: dict = Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
     """Submit an approval request that routes to Human Hex via channel adapter."""
-    from app.models.workspace_member import WorkspaceMember
+    from app.models.corridor import HumanHex
     from app.services import corridor_router
 
     has_topo = await corridor_router.has_any_connections(body.workspace_id, db)
@@ -161,15 +161,14 @@ async def submit_approval_request(
     callback_url = f"{callback_base}/api/v1/workspaces/approval-requests/{record.id}/resolve"
 
     for ep in human_endpoints:
-        member_q = await db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id == body.workspace_id,
-                WorkspaceMember.user_id == ep.entity_id,
-                not_deleted(WorkspaceMember),
+        hh_q = await db.execute(
+            select(HumanHex).where(
+                HumanHex.id == ep.entity_id,
+                not_deleted(HumanHex),
             )
         )
-        member = member_q.scalar_one_or_none()
-        if member and member.channel_type == "feishu" and member.channel_config:
+        hh = hh_q.scalar_one_or_none()
+        if hh and hh.channel_type == "feishu" and hh.channel_config:
             try:
                 from app.services.channel_adapters.feishu import FeishuChannelAdapter
 
@@ -178,7 +177,7 @@ async def submit_approval_request(
                     app_secret=settings.FEISHU_APP_SECRET,
                 )
                 await adapter.send_approval_request(
-                    channel_config=member.channel_config,
+                    channel_config=hh.channel_config,
                     agent_name=body.agent_instance_id,
                     action_type=body.action_type,
                     proposal=body.proposal or {},
@@ -186,7 +185,7 @@ async def submit_approval_request(
                     callback_url=callback_url,
                 )
             except Exception as e:
-                logger.warning("Failed to send approval to human %s: %s", ep.entity_id, e)
+                logger.warning("Failed to send approval to human hex %s: %s", ep.entity_id, e)
 
     return _ok({
         "status": "routed",

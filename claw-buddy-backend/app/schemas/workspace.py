@@ -102,8 +102,6 @@ class WorkspaceMemberInfo(BaseModel):
     user_email: str | None = None
     user_avatar_url: str | None = None
     role: str
-    channel_type: str | None = None
-    channel_config: dict | None = None
     created_at: datetime
 
 

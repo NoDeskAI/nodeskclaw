@@ -32,7 +32,7 @@ async def _handle_message_event(
 
     from app.core.deps import async_session_factory
     from app.models.base import not_deleted
-    from app.models.workspace_member import WorkspaceMember
+    from app.models.corridor import HumanHex
     from app.services import workspace_message_service as msg_service
 
     if not chat_id or not content:
@@ -40,63 +40,51 @@ async def _handle_message_event(
 
     async with async_session_factory() as db:
         result = await db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.channel_type == "feishu",
-                not_deleted(WorkspaceMember),
+            select(HumanHex).where(
+                HumanHex.channel_type == "feishu",
+                not_deleted(HumanHex),
             )
         )
-        target_member = None
-        for member in result.scalars().all():
-            config = member.channel_config or {}
-            if config.get("chat_id") == chat_id:
-                target_member = member
+        target_hex = None
+        for hh in result.scalars().all():
+            cfg = hh.channel_config or {}
+            if cfg.get("chat_id") == chat_id:
+                target_hex = hh
                 break
 
-        if not target_member:
-            logger.warning("Feishu WS: no member for chat_id=%s", chat_id)
+        if not target_hex:
+            logger.warning("Feishu WS: no human hex for chat_id=%s", chat_id)
             return
 
-        workspace_id = target_member.workspace_id
+        workspace_id = target_hex.workspace_id
 
         await msg_service.record_message(
             db,
             workspace_id=workspace_id,
             sender_type="human",
-            sender_id=target_member.user_id,
-            sender_name=f"Human:{target_member.user_id}",
+            sender_id=target_hex.user_id,
+            sender_name=f"Human:{target_hex.user_id}",
             content=content,
             message_type="chat",
         )
 
         from app.services import corridor_router
-        from app.models.corridor import HumanHex
-        from app.models.base import not_deleted
-        from sqlalchemy import select as sa_select
 
-        hh_q = await db.execute(
-            sa_select(HumanHex.hex_q, HumanHex.hex_r).where(
-                HumanHex.workspace_id == workspace_id,
-                HumanHex.user_id == target_member.user_id,
-                not_deleted(HumanHex),
-            )
+        endpoints = await corridor_router.get_reachable_endpoints(
+            workspace_id, target_hex.hex_q, target_hex.hex_r, db
         )
-        all_agent_ids: set[str] = set()
-        for row in hh_q.all():
-            endpoints = await corridor_router.get_reachable_endpoints(
-                workspace_id, row.hex_q, row.hex_r, db
-            )
-            all_agent_ids.update(ep.entity_id for ep in endpoints if ep.endpoint_type == "agent")
-        if all_agent_ids:
+        agent_ids = [ep.entity_id for ep in endpoints if ep.endpoint_type == "agent"]
+        if agent_ids:
             from app.services.collaboration_service import send_system_message_to_agents
 
             await send_system_message_to_agents(
-                workspace_id, list(all_agent_ids), content, db
+                workspace_id, agent_ids, content, db
             )
 
         from app.api.workspaces import broadcast_event
 
         broadcast_event(workspace_id, "human:message_received", {
-            "user_id": target_member.user_id,
+            "user_id": target_hex.user_id,
             "content": content[:200],
         })
 

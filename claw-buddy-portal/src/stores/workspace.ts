@@ -58,8 +58,6 @@ export interface WorkspaceMemberInfo {
   user_email: string | null
   user_avatar_url: string | null
   role: string
-  channel_type: string | null
-  channel_config: Record<string, unknown> | null
   created_at: string
 }
 
@@ -70,6 +68,8 @@ export interface HumanHexInfo {
   hex_q: number
   hex_r: number
   display_color: string
+  channel_type: string | null
+  channel_config: Record<string, unknown> | null
   created_at: string
 }
 
@@ -741,6 +741,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           hex_q: n.hex_q,
           hex_r: n.hex_r,
           display_color: (n.extra?.display_color as string) || '#f59e0b',
+          channel_type: (n.extra?.channel_type as string) || null,
+          channel_config: (n.extra?.channel_config as Record<string, unknown>) || null,
           created_at: '',
         }))
     }
@@ -768,11 +770,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await fetchTopology(workspaceId)
   }
 
-  async function setHumanChannel(workspaceId: string, userId: string, channelType: string, channelConfig: Record<string, unknown>) {
-    await api.put(`/workspaces/${workspaceId}/members/${userId}/channel`, {
+  async function updateHumanHexChannel(workspaceId: string, hexId: string, channelType: string, channelConfig: Record<string, unknown>) {
+    await api.put(`/workspaces/${workspaceId}/human-hexes/${hexId}`, {
       channel_type: channelType, channel_config: channelConfig,
     })
-    await fetchMembers(workspaceId)
+    await fetchTopology(workspaceId)
   }
 
   function resetCurrentState() {
@@ -839,6 +841,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     moveHumanHex,
     updateHumanHexColor,
     deleteHumanHex,
-    setHumanChannel,
+    updateHumanHexChannel,
   }
 })

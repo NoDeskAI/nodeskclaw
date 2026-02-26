@@ -460,6 +460,25 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已创建 human_hexes 表并迁移 %d 条数据", migrated.rowcount)
 
+        # ── 迁移 17: human_hexes 新增 channel_type / channel_config 列 ──
+        hh_ch_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'human_hexes' AND column_name = 'channel_type'"
+        ))
+        if hh_ch_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE human_hexes "
+                "ADD COLUMN channel_type VARCHAR(20), "
+                "ADD COLUMN channel_config JSON"
+            ))
+            migrated_ch = await conn.execute(text(
+                "UPDATE human_hexes hh SET channel_type = wm.channel_type, channel_config = wm.channel_config"
+                " FROM workspace_members wm"
+                " WHERE hh.user_id = wm.user_id AND hh.workspace_id = wm.workspace_id"
+                " AND wm.channel_type IS NOT NULL AND wm.deleted_at IS NULL AND hh.deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：human_hexes 新增 channel 列并迁移 %d 条数据", migrated_ch.rowcount)
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
@@ -752,17 +771,17 @@ async def lifespan(app: FastAPI):
     feishu_ws_clients: list[FeishuWSClient] = []
 
     async with async_session_factory() as db:
-        from app.models.workspace_member import WorkspaceMember
+        from app.models.corridor import HumanHex
 
-        ws_members = await db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.channel_type == "feishu",
-                WorkspaceMember.deleted_at.is_(None),
+        hh_rows = await db.execute(
+            select(HumanHex).where(
+                HumanHex.channel_type == "feishu",
+                HumanHex.deleted_at.is_(None),
             )
         )
         seen_apps: dict[str, FeishuWSClient] = {}
-        for member in ws_members.scalars().all():
-            cfg = member.channel_config or {}
+        for hh in hh_rows.scalars().all():
+            cfg = hh.channel_config or {}
             if cfg.get("mode") != "websocket":
                 continue
             app_id = cfg.get("app_id", "")

@@ -1,6 +1,6 @@
 """Corridor system models — CorridorHex + HexConnection + HumanHex for workspace topology."""
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -51,6 +51,8 @@ class HumanHex(BaseModel):
     hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
     display_color: Mapped[str] = mapped_column(String(20), default="#f59e0b", nullable=False)
+    channel_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    channel_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     workspace = relationship("Workspace")

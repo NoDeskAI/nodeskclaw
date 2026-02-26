@@ -22,7 +22,6 @@ from app.schemas.corridor import (
     CorridorHexCreate,
     CorridorHexInfo,
     CorridorHexUpdate,
-    HumanChannelUpdate,
     HumanHexCreate,
     HumanHexInfo,
     HumanHexUpdate,
@@ -532,6 +531,8 @@ async def create_human_hex(
         hex_q=body.hex_q,
         hex_r=body.hex_r,
         display_color=body.display_color,
+        channel_type=body.channel_type,
+        channel_config=body.channel_config,
         created_by=actor_id,
     )
     db.add(hh)
@@ -552,6 +553,7 @@ async def create_human_hex(
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
         hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))
 
@@ -582,6 +584,10 @@ async def update_human_hex(
         hh.hex_r = new_r
     if body.display_color is not None:
         hh.display_color = body.display_color
+    if body.channel_type is not None:
+        hh.channel_type = body.channel_type
+    if body.channel_config is not None:
+        hh.channel_config = body.channel_config
     await db.commit()
     actor_type, actor_id = _actor(org_ctx)
     broadcast_event(workspace_id, "human:hex_updated", {"hex_id": hex_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color})
@@ -600,6 +606,7 @@ async def update_human_hex(
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
         hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))
 
@@ -638,43 +645,6 @@ async def delete_human_hex(
     db.add(audit)
     await db.commit()
     return _ok(message="human hex removed")
-
-
-@router.put("/{workspace_id}/members/{user_id}/channel")
-async def set_human_channel(
-    workspace_id: str, user_id: str, body: HumanChannelUpdate,
-    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
-):
-    _, org = org_ctx
-    await _check_workspace(workspace_id, org, db)
-    result = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-            not_deleted(WorkspaceMember),
-        )
-    )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(404, "member not found")
-    member.channel_type = body.channel_type
-    member.channel_config = body.channel_config
-    await db.commit()
-    actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "human:channel_updated", {"user_id": user_id, "channel_type": member.channel_type})
-    audit = TopologyAuditLog(
-        id=str(uuid.uuid4()),
-        workspace_id=workspace_id,
-        action="human_channel_updated",
-        target_type="human_hex",
-        target_id=user_id,
-        new_value={"channel_type": member.channel_type, "channel_config": member.channel_config},
-        actor_type=actor_type,
-        actor_id=actor_id,
-    )
-    db.add(audit)
-    await db.commit()
-    return _ok({"user_id": user_id, "channel_type": member.channel_type})
 
 
 # ── Topology ───────────────────────────────────────────
