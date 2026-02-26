@@ -568,6 +568,41 @@ async def install_gene(
     }
 
 
+async def _inject_mcp_servers(
+    db: AsyncSession, instance_id: str, gene_id: str, mcp_servers: list[dict],
+) -> None:
+    """Auto-inject MCP servers from gene manifest into instance_mcp_servers."""
+    import uuid
+    from app.models.instance_mcp_server import InstanceMcpServer
+
+    for mcp_def in mcp_servers:
+        name = mcp_def.get("name", "")
+        if not name:
+            continue
+        existing = await db.execute(
+            select(InstanceMcpServer).where(
+                InstanceMcpServer.instance_id == instance_id,
+                InstanceMcpServer.name == name,
+                not_deleted(InstanceMcpServer),
+            ).limit(1)
+        )
+        if existing.scalar_one_or_none():
+            continue
+        mcp = InstanceMcpServer(
+            id=str(uuid.uuid4()),
+            instance_id=instance_id,
+            name=name,
+            transport=mcp_def.get("transport", "stdio"),
+            command=mcp_def.get("command"),
+            url=mcp_def.get("url"),
+            args=mcp_def.get("args"),
+            env=mcp_def.get("env"),
+            source="gene",
+            source_gene_id=gene_id,
+        )
+        db.add(mcp)
+
+
 async def _direct_install(
     instance_id: str,
     gene_id: str,
@@ -599,6 +634,10 @@ async def _direct_install(
                 openclaw_config = manifest.get("openclaw_config")
                 if openclaw_config:
                     _merge_openclaw_config(mount_path, openclaw_config)
+
+                mcp_servers = manifest.get("mcp_servers")
+                if mcp_servers and isinstance(mcp_servers, list):
+                    await _inject_mcp_servers(db, instance_id, gene_id, mcp_servers)
 
                 invalidate_skill_snapshots(mount_path)
                 inject_evolution_notification(mount_path, skill_name, "installed")
