@@ -270,7 +270,19 @@ async def workspace_chat(
         content=data.message,
     )
 
-    running_agents = await _get_running_agents(db, workspace_id)
+    from app.services import corridor_router as cr
+    use_topology = await cr.has_any_connections(db, workspace_id)
+
+    if use_topology:
+        endpoints = await cr.get_blackboard_audience(db, workspace_id)
+        agent_endpoints = [ep for ep in endpoints if ep.endpoint_type == "agent"]
+        agent_ids = {ep.entity_id for ep in agent_endpoints}
+        running_agents = [
+            a for a in await _get_running_agents(db, workspace_id) if a.id in agent_ids
+        ]
+    else:
+        running_agents = await _get_running_agents(db, workspace_id)
+
     if not running_agents:
         broadcast_event(workspace_id, "system:info", {"message": "工作区内没有运行中的 Agent"})
         return _ok({"status": "no_agents"})
