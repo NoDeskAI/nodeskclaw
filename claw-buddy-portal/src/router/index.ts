@@ -57,6 +57,7 @@ const routes: RouteRecordRaw[] = [
       { path: '', name: 'InstanceDetail', component: () => import('@/views/InstanceDetail.vue') },
       { path: 'genes', name: 'InstanceGenes', component: () => import('@/views/InstanceGenes.vue') },
       { path: 'evolution', name: 'EvolutionLog', component: () => import('@/views/EvolutionLog.vue') },
+      { path: 'mcp', name: 'InstanceMcp', component: () => import('@/views/InstanceMcp.vue') },
       { path: 'settings', name: 'InstanceSettings', component: () => import('@/views/InstanceSettings.vue') },
     ],
   },

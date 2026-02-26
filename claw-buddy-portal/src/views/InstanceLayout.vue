@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings, Dna, History } from 'lucide-vue-next'
+import { ArrowLeft, Circle, Loader2, LayoutDashboard, Settings, Dna, History, Wrench } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
@@ -58,6 +58,7 @@ const navItems = computed(() => [
   { name: 'InstanceDetail', label: t('common.overview'), icon: LayoutDashboard },
   { name: 'InstanceGenes', label: t('common.genes'), icon: Dna },
   { name: 'EvolutionLog', label: t('common.evolutionLog'), icon: History },
+  { name: 'InstanceMcp', label: t('common.tools'), icon: Wrench },
   { name: 'InstanceSettings', label: t('common.settings'), icon: Settings },
 ])
 </script>
