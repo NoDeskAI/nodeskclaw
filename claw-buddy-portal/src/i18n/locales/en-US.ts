@@ -155,6 +155,9 @@ const enUS = {
     moveModeHint: "Click an empty hex to move",
     cancel: "Cancel",
     moveSuccess: "Moved to ({q}, {r})",
+    selectMember: "Select Member",
+    noAvailableMembers: "No available members. Please add members in settings first.",
+    goToSettings: "Go to Settings",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",

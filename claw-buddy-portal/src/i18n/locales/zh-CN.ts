@@ -155,6 +155,9 @@ const zhCN = {
     moveModeHint: "点击空格移动到目标位置",
     cancel: "取消",
     moveSuccess: "已移动到 ({q}, {r})",
+    selectMember: "选择成员",
+    noAvailableMembers: "没有可放置的成员，请先在设置页添加成员",
+    goToSettings: "前往设置",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",

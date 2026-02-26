@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -109,6 +109,7 @@ onMounted(async () => {
   await store.fetchWorkspace(workspaceId.value)
   await store.fetchBlackboard(workspaceId.value)
   await store.fetchTopology(workspaceId.value)
+  await store.fetchMembers(workspaceId.value)
 
   store.connectSSE(workspaceId.value)
   window.addEventListener('keydown', handleKeydown)
@@ -230,7 +231,12 @@ function onHexAction(action: string) {
       const q = selectedHex.value?.q
       const r = selectedHex.value?.r
       if (q !== undefined && r !== undefined) {
-        store.setHumanHex(workspaceId.value, '', q, r)
+        if (availableMembers.value.length === 0) {
+          toast.info(t('hexAction.noAvailableMembers'))
+        } else {
+          pendingHumanHex.value = { q, r }
+          showMemberPicker.value = true
+        }
       }
       hexDrawerOpen.value = false
       break
@@ -297,6 +303,21 @@ async function handleRenameCorridor() {
   } finally {
     renameSaving.value = false
   }
+}
+
+const showMemberPicker = ref(false)
+const pendingHumanHex = ref<{ q: number; r: number } | null>(null)
+
+const availableMembers = computed(() =>
+  store.members.filter(m => m.hex_q == null && m.hex_r == null),
+)
+
+async function pickMember(userId: string) {
+  const hex = pendingHumanHex.value
+  if (!hex) return
+  showMemberPicker.value = false
+  await store.setHumanHex(workspaceId.value, userId, hex.q, hex.r)
+  pendingHumanHex.value = null
 }
 
 const showChannelDialog = ref(false)
@@ -760,6 +781,56 @@ function handleKeydown(e: KeyboardEvent) {
                 @click="handleRenameCorridor"
               >
                 {{ renameSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Member Picker Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showMemberPicker" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showMemberPicker = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.selectMember') }}</h3>
+            <div v-if="availableMembers.length === 0" class="text-center py-4 space-y-3">
+              <p class="text-sm text-muted-foreground">{{ t('hexAction.noAvailableMembers') }}</p>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+                @click="showMemberPicker = false; router.push(`/workspace/${workspaceId}/settings`)"
+              >
+                {{ t('hexAction.goToSettings') }}
+              </button>
+            </div>
+            <div v-else class="flex flex-col gap-1 max-h-60 overflow-y-auto">
+              <button
+                v-for="member in availableMembers"
+                :key="member.user_id"
+                class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left"
+                @click="pickMember(member.user_id)"
+              >
+                <div
+                  v-if="member.user_avatar_url"
+                  class="w-8 h-8 rounded-full bg-cover bg-center shrink-0"
+                  :style="{ backgroundImage: `url(${member.user_avatar_url})` }"
+                />
+                <div v-else class="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <User class="w-4 h-4 text-amber-500" />
+                </div>
+                <div class="min-w-0">
+                  <div class="text-sm font-medium truncate">{{ member.user_name }}</div>
+                  <div v-if="member.user_email" class="text-xs text-muted-foreground truncate">{{ member.user_email }}</div>
+                </div>
+              </button>
+            </div>
+            <div class="flex justify-end pt-2">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showMemberPicker = false"
+              >
+                {{ t('common.cancel') }}
               </button>
             </div>
           </div>
