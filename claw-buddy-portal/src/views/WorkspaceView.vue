@@ -276,7 +276,7 @@ function openRenameDialog() {
 
 async function handleRenameCorridor() {
   const name = renameValue.value.trim()
-  if (!name || !renameHexId.value) return
+  if (!renameHexId.value) return
   renameSaving.value = true
   try {
     await store.renameCorridorHex(workspaceId.value, renameHexId.value, name)
@@ -744,7 +744,7 @@ function handleKeydown(e: KeyboardEvent) {
               </button>
               <button
                 class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
-                :disabled="renameSaving || !renameValue.trim()"
+                :disabled="renameSaving"
                 @click="handleRenameCorridor"
               >
                 {{ renameSaving ? t('common.saving') : t('common.save') }}
