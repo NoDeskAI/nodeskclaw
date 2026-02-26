@@ -104,6 +104,8 @@ function handleResetView() {
 }
 
 onMounted(async () => {
+  store.resetCurrentState()
+
   await store.fetchWorkspace(workspaceId.value)
   await store.fetchBlackboard(workspaceId.value)
   await store.fetchTopology(workspaceId.value)
@@ -126,6 +128,16 @@ onMounted(async () => {
 onUnmounted(() => {
   store.disconnectSSE()
   window.removeEventListener('keydown', handleKeydown)
+})
+
+watch(workspaceId, async (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    store.resetCurrentState()
+    await store.fetchWorkspace(newId)
+    await store.fetchBlackboard(newId)
+    await store.fetchTopology(newId)
+    store.connectSSE(newId)
+  }
 })
 
 function toggleMode() {

@@ -738,6 +738,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await fetchMembers(workspaceId)
   }
 
+  function resetCurrentState() {
+    currentWorkspace.value = null
+    blackboard.value = null
+    topology.value = null
+    members.value = []
+    chatMessages.value = []
+    corridorHexes.value = []
+    connections.value = []
+    typingAgents.value.clear()
+    unreadCount.value = 0
+  }
+
   return {
     workspaces,
     currentWorkspace,
@@ -753,6 +765,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     topology,
     topologyNodes: computed(() => topology.value?.nodes || []),
     topologyEdges: computed(() => topology.value?.edges || []),
+    resetCurrentState,
     setChatVisible,
     fetchWorkspaces,
     fetchWorkspace,
