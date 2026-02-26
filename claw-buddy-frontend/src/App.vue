@@ -34,9 +34,10 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const orgStore = useOrgStore()
-const { sseConnected, clusterConnected, startGlobalSSE } = useGlobalSSE()
+const { sseConnected, clusterConnected, startGlobalSSE, stopGlobalSSE } = useGlobalSSE()
 const { tokenWarning, startTokenAlert, stopTokenAlert } = useTokenAlert()
 const locale = ref(getCurrentLocale())
+const activeClusterId = computed(() => clusterStore.currentCluster?.id ?? null)
 
 const isLoginPage = computed(() => route.path === '/login')
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin === true)
@@ -46,19 +47,20 @@ onMounted(async () => {
     await authStore.fetchUser()
   }
   if (authStore.isLoggedIn) {
-    await clusterStore.fetchClusters()
-    await orgStore.fetchMyOrgs()
+    void clusterStore.fetchClusters()
+    void orgStore.fetchMyOrgs()
   }
 })
 
 // 当集群选择变化时，重新连接全局 SSE + Token 告警轮询
 watch(
-  () => clusterStore.currentClusterId,
-  (newId) => {
-    if (newId && authStore.isLoggedIn) {
-      startGlobalSSE(newId)
-      startTokenAlert(newId)
+  [activeClusterId, () => authStore.isLoggedIn],
+  ([clusterId, isLoggedIn]) => {
+    if (clusterId && isLoggedIn) {
+      startGlobalSSE(clusterId)
+      startTokenAlert(clusterId)
     } else {
+      stopGlobalSSE()
       stopTokenAlert()
     }
   },
@@ -103,6 +105,34 @@ function navigateTo(path: string) {
 function onLocaleChange(value: string) {
   locale.value = setCurrentLocale(value)
 }
+
+const isClusterConnected = computed(() => {
+  return clusterConnected.value === true || clusterStore.currentCluster?.status === 'connected'
+})
+
+const isClusterDisconnected = computed(() => {
+  return clusterConnected.value === false || clusterStore.currentCluster?.status === 'disconnected'
+})
+
+const clusterStatusText = computed(() => {
+  if (clusterStore.clusters.length === 0) {
+    return t('adminApp.footerNoCluster')
+  }
+  const clusterName = clusterStore.currentCluster?.name || ''
+  if (isClusterConnected.value) {
+    return t('adminApp.footerConnected', { name: clusterName })
+  }
+  if (isClusterDisconnected.value) {
+    return t('adminApp.footerDisconnected', { name: clusterName })
+  }
+  return t('adminApp.footerConnecting')
+})
+
+const sseStatusText = computed(() => {
+  return t('adminApp.footerSse', {
+    status: sseConnected.value ? t('adminApp.footerSseNormal') : t('adminApp.footerSseStopped'),
+  })
+})
 </script>
 
 <template>
@@ -135,7 +165,7 @@ function onLocaleChange(value: string) {
           >
             <SelectTrigger class="h-8 w-full text-xs border-dashed">
               <Building2 class="w-3 h-3 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="选择组织" />
+              <SelectValue :placeholder="t('adminApp.selectOrg')" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem v-for="o in orgStore.orgs" :key="o.id" :value="o.id">
@@ -197,7 +227,7 @@ function onLocaleChange(value: string) {
           <div class="flex items-center gap-3">
             <button
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              :title="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              :title="sidebarCollapsed ? t('adminApp.expandSidebar') : t('adminApp.collapseSidebar')"
               @click="sidebarCollapsed = !sidebarCollapsed"
             >
               <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" />
@@ -220,7 +250,7 @@ function onLocaleChange(value: string) {
                 v-if="authStore.user?.avatar_url"
                 :src="authStore.user.avatar_url"
                 class="w-8 h-8 rounded-full"
-                alt="头像"
+                :alt="t('adminApp.avatarAlt')"
               />
               <span v-else>{{ authStore.user?.name?.charAt(0) || 'U' }}</span>
             </div>
@@ -232,15 +262,15 @@ function onLocaleChange(value: string) {
           v-if="tokenWarning === 'expired'"
           class="px-4 py-2 text-sm font-medium text-center bg-red-500/15 text-red-400 border-b border-red-500/20"
         >
-          集群 Token 已过期，K8s 操作已被阻止。请前往
-          <button class="underline font-bold" @click="router.push('/cluster')">集群管理</button>
-          更新 KubeConfig。
+          {{ t('adminApp.tokenExpiredPrefix') }}
+          <button class="underline font-bold" @click="router.push('/cluster')">{{ t('adminApp.tokenExpiredAction') }}</button>
+          {{ t('adminApp.tokenExpiredSuffix') }}
         </div>
         <div
           v-else-if="tokenWarning === 'warning'"
           class="px-4 py-2 text-sm font-medium text-center bg-yellow-500/15 text-yellow-400 border-b border-yellow-500/20"
         >
-          集群 Token 即将过期（不足 6 小时），请及时更新 KubeConfig。
+          {{ t('adminApp.tokenExpiring') }}
         </div>
 
         <!-- 页面内容 -->
@@ -261,19 +291,14 @@ function onLocaleChange(value: string) {
                   : 'bg-yellow-400'
                 "
               />
-              {{
-                clusterStore.clusters.length === 0 ? '无集群 - 请先添加集群'
-                : (clusterConnected === true || clusterStore.currentCluster?.status === 'connected') ? `已连接: ${clusterStore.currentCluster?.name || ''}`
-                : (clusterConnected === false || clusterStore.currentCluster?.status === 'disconnected') ? `集群断开: ${clusterStore.currentCluster?.name || ''}`
-                : '连接中...'
-              }}
+              {{ clusterStatusText }}
             </span>
             <span v-if="clusterStore.clusters.length > 0" class="flex items-center gap-1.5">
               <span
                 class="w-2 h-2 rounded-full inline-block"
                 :class="sseConnected ? 'bg-green-400' : 'bg-zinc-500'"
               />
-              SSE: {{ sseConnected ? '正常' : '未启动' }}
+              {{ sseStatusText }}
             </span>
           </div>
           <span>ClawBuddy v0.1.0</span>
