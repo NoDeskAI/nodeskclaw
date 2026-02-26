@@ -248,10 +248,12 @@ function goToGenome(id: string) {
 }
 
 function hasMcpTools(gene: GeneItem): boolean {
+  const toolAllow = gene.manifest?.tool_allow
+  if (Array.isArray(toolAllow) && toolAllow.length > 0) return true
   const mcpServers = gene.manifest?.mcp_servers
   if (Array.isArray(mcpServers) && mcpServers.length > 0) return true
   const tags = gene.tags ?? []
-  return tags.some((t) => String(t).toLowerCase() === 'mcp')
+  return tags.some((t) => ['mcp', 'tools'].includes(String(t).toLowerCase()))
 }
 
 </script>

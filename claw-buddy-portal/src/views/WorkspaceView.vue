@@ -221,6 +221,9 @@ function onHexAction(action: string) {
       }
       break
     case 'view-channel':
+      openChannelConfig()
+      hexDrawerOpen.value = false
+      break
     case 'change-color':
       hexDrawerOpen.value = false
       break
@@ -238,6 +241,50 @@ function closeHexDrawer() {
   selectedHex.value = null
   hexDrawerOpen.value = false
   selectedAgentId.value = null
+}
+
+const showChannelDialog = ref(false)
+const channelMode = ref<'webhook' | 'websocket'>('webhook')
+const channelChatId = ref('')
+const channelAppId = ref('')
+const channelAppSecret = ref('')
+const channelSaving = ref(false)
+
+function openChannelConfig() {
+  const member = store.members.find(m => m.user_id === selectedHex.value?.entityId)
+  if (member?.channel_config) {
+    const cfg = member.channel_config as Record<string, string>
+    channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
+    channelChatId.value = cfg.chat_id || ''
+    channelAppId.value = cfg.app_id || ''
+    channelAppSecret.value = cfg.app_secret || ''
+  } else {
+    channelMode.value = 'webhook'
+    channelChatId.value = ''
+    channelAppId.value = ''
+    channelAppSecret.value = ''
+  }
+  showChannelDialog.value = true
+}
+
+async function saveChannelConfig() {
+  const userId = selectedHex.value?.entityId
+  if (!userId) return
+  channelSaving.value = true
+  try {
+    const config: Record<string, string> = {
+      chat_id: channelChatId.value,
+      mode: channelMode.value,
+    }
+    if (channelMode.value === 'websocket') {
+      config.app_id = channelAppId.value
+      config.app_secret = channelAppSecret.value
+    }
+    await store.setHumanChannel(workspaceId.value, userId, 'feishu', config)
+    showChannelDialog.value = false
+  } finally {
+    channelSaving.value = false
+  }
 }
 
 function onCanvasAreaClick() {
@@ -593,6 +640,88 @@ function handleKeydown(e: KeyboardEvent) {
       @close="closeHexDrawer"
       @action="onHexAction"
     />
+
+    <!-- Channel Config Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showChannelDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showChannelDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('channel.configTitle') }}</h3>
+
+            <div class="space-y-3">
+              <label class="block text-xs text-muted-foreground">{{ t('channel.mode') }}</label>
+              <div class="flex gap-2">
+                <button
+                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
+                  :class="channelMode === 'webhook' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
+                  @click="channelMode = 'webhook'"
+                >
+                  Webhook
+                </button>
+                <button
+                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
+                  :class="channelMode === 'websocket' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
+                  @click="channelMode = 'websocket'"
+                >
+                  WebSocket
+                </button>
+              </div>
+
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.chatId') }}</label>
+                <input
+                  v-model="channelChatId"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="oc_xxxxx"
+                />
+              </div>
+
+              <template v-if="channelMode === 'websocket'">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appId') }}</label>
+                  <input
+                    v-model="channelAppId"
+                    type="text"
+                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="cli_xxxxx"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appSecret') }}</label>
+                  <input
+                    v-model="channelAppSecret"
+                    type="password"
+                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </template>
+
+              <p class="text-xs text-muted-foreground">
+                {{ channelMode === 'webhook' ? t('channel.webhookHint') : t('channel.websocketHint') }}
+              </p>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showChannelDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="channelSaving || !channelChatId"
+                @click="saveChannelConfig"
+              >
+                {{ channelSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -605,6 +734,14 @@ function handleKeydown(e: KeyboardEvent) {
 .chat-slide-enter-from,
 .chat-slide-leave-to {
   width: 0 !important;
+  opacity: 0;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 </style>

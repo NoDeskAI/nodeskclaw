@@ -21,6 +21,7 @@ const zhCN = {
     name: "名称",
     noData: "暂无数据",
     failed: "失败",
+    saving: "保存中...",
   },
   status: {
     running: "运行中",
@@ -283,6 +284,15 @@ const zhCN = {
     metricTaskSuccess: "任务成功",
     metricAgentSelfEval: "Agent 自评",
     hasMcpTools: "含 MCP 工具",
+  },
+  channel: {
+    configTitle: "Channel 配置",
+    mode: "通道模式",
+    chatId: "飞书群聊 ID",
+    appId: "App ID（应用凭证）",
+    appSecret: "App Secret（应用密钥）",
+    webhookHint: "Webhook 模式：通过飞书应用中配置的事件回调地址接收消息。",
+    websocketHint: "WebSocket 模式：后端保持长连接主动接收消息，需要提供 App ID 和 App Secret。",
   },
   errors: {
     common: {

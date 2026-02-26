@@ -21,6 +21,7 @@ const enUS = {
     name: "Name",
     noData: "No data",
     failed: "Failed",
+    saving: "Saving...",
   },
   status: {
     running: "Running",
@@ -283,6 +284,15 @@ const enUS = {
     metricTaskSuccess: "Task Success",
     metricAgentSelfEval: "Agent Self Eval",
     hasMcpTools: "MCP Tools",
+  },
+  channel: {
+    configTitle: "Channel Configuration",
+    mode: "Channel Mode",
+    chatId: "Feishu Chat ID",
+    appId: "App ID",
+    appSecret: "App Secret",
+    webhookHint: "Webhook mode: messages are received via the event callback URL configured in the Feishu app.",
+    websocketHint: "WebSocket mode: the backend maintains a persistent connection. Requires App ID and App Secret.",
   },
   errors: {
     common: {
