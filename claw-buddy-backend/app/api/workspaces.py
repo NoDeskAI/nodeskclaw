@@ -343,6 +343,36 @@ async def collect_performance(
     return _ok(perf)
 
 
+@router.get("/{workspace_id}/blackboard/performance/trend")
+async def performance_trend(
+    workspace_id: str,
+    instance_id: str | None = None,
+    limit: int = 30,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """Get historical performance snapshots for trend analysis."""
+    from app.models.performance_snapshot import PerformanceSnapshot
+    q = select(PerformanceSnapshot).where(
+        PerformanceSnapshot.workspace_id == workspace_id,
+        PerformanceSnapshot.deleted_at.is_(None),
+    )
+    if instance_id:
+        q = q.where(PerformanceSnapshot.instance_id == instance_id)
+    q = q.order_by(PerformanceSnapshot.collected_at.desc()).limit(limit)
+    result = await db.execute(q)
+    snapshots = [
+        {
+            "instance_id": s.instance_id,
+            "agent_name": s.agent_name,
+            "metrics": s.metrics,
+            "collected_at": s.collected_at.isoformat() if s.collected_at else None,
+        }
+        for s in result.scalars().all()
+    ]
+    return _ok(snapshots)
+
+
 # ── Workspace Schedules ──────────────────────────────
 
 @router.get("/{workspace_id}/schedules")

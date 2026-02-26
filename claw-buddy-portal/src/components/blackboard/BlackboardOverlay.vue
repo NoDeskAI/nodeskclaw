@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { X, Save, Loader2, Target, ListTodo, Users, BarChart3, FileText, Network, RefreshCw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
+import api from '@/services/api'
 import draggable from 'vuedraggable'
 
 const props = defineProps<{
@@ -100,6 +101,7 @@ const metricLabels: Record<string, string> = {
   message_activity: '消息活跃度',
   avg_gene_rating: '平均基因评分',
   avg_effectiveness: '平均效能指数',
+  collaboration_efficiency: '协作效率',
 }
 
 function metricPercent(metric: Record<string, unknown>): number {
@@ -113,6 +115,43 @@ function metricColor(percent: number): string {
   if (percent >= 50) return 'bg-yellow-500'
   return 'bg-red-500'
 }
+
+function computeScore(perf: unknown): number {
+  const metrics = (perf as Record<string, unknown>).metrics as Array<Record<string, unknown>> || []
+  let total = 0
+  for (const m of metrics) total += metricPercent(m)
+  return metrics.length > 0 ? total / metrics.length : 0
+}
+
+const rankedPerformance = computed(() =>
+  [...performance.value].sort((a, b) => computeScore(b) - computeScore(a))
+)
+
+const perfTrend = ref<Record<string, number[]>>({})
+
+async function loadTrend() {
+  try {
+    const res = await api.get(`/workspaces/${props.workspaceId}/blackboard/performance/trend`)
+    const data = res.data.data || []
+    const map: Record<string, number[]> = {}
+    for (const s of data) {
+      if (!map[s.instance_id]) map[s.instance_id] = []
+      const metrics = s.metrics || []
+      let total = 0
+      for (const m of metrics as Record<string, unknown>[]) total += metricPercent(m)
+      map[s.instance_id].push(metrics.length > 0 ? total / metrics.length : 0)
+    }
+    for (const k of Object.keys(map)) map[k].reverse()
+    perfTrend.value = map
+  } catch { /* silent */ }
+}
+
+function trendPoints(memberId: string): string {
+  const data = perfTrend.value[memberId] || []
+  return data.map((v, i) => `${i * 10},${32 - (v / 100) * 30}`).join(' ')
+}
+
+watch(() => props.open, (v) => { if (v) loadTrend() })
 </script>
 
 <template>
@@ -245,11 +284,20 @@ function metricColor(percent: number): string {
             </div>
             <div v-if="!performance.length" class="text-sm text-muted-foreground">暂无绩效数据</div>
             <div
-              v-for="perf in performance"
+              v-for="(perf, rank) in rankedPerformance"
               :key="(perf as Record<string, unknown>).member_id as string"
               class="bg-muted rounded-lg p-4"
+              :class="{ 'ring-1 ring-primary/30': rank === 0 }"
             >
-              <div class="text-sm font-medium mb-3">{{ (perf as Record<string, unknown>).member_name || (perf as Record<string, unknown>).member_id }}</div>
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-medium">
+                  <span v-if="rank === 0" class="text-primary mr-1">TOP</span>
+                  {{ (perf as Record<string, unknown>).member_name || (perf as Record<string, unknown>).member_id }}
+                </div>
+                <span class="text-xs text-muted-foreground">
+                  #{{ rank + 1 }} | {{ computeScore(perf).toFixed(0) }}
+                </span>
+              </div>
               <div class="space-y-2.5">
                 <div
                   v-for="(metric, i) in ((perf as Record<string, unknown>).metrics as unknown[] || [])"
@@ -267,6 +315,18 @@ function metricColor(percent: number): string {
                     />
                   </div>
                 </div>
+              </div>
+              <!-- Inline SVG trend sparkline -->
+              <div v-if="perfTrend[(perf as Record<string, unknown>).member_id as string]?.length > 1" class="mt-3">
+                <svg class="w-full h-8" :viewBox="`0 0 ${(perfTrend[(perf as Record<string, unknown>).member_id as string]?.length || 2) * 10} 32`" preserveAspectRatio="none">
+                  <polyline
+                    :points="trendPoints((perf as Record<string, unknown>).member_id as string)"
+                    fill="none"
+                    stroke="#a78bfa"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  />
+                </svg>
               </div>
             </div>
           </div>

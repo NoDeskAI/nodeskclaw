@@ -70,6 +70,10 @@ async def collect_agent_performance(
     )
     avg_effectiveness = float(effectiveness_q.scalar() or 0.0)
 
+    assigned_tasks = [t for t in (bb.tasks if bb and bb.tasks else []) if t.get("assignee_id") == instance_id]
+    done_tasks = [t for t in assigned_tasks if t.get("status") == "done"]
+    collab_efficiency = (len(done_tasks) / message_count) if message_count > 0 else 0.0
+
     return {
         "instance_id": instance_id,
         "workspace_id": workspace_id,
@@ -79,6 +83,7 @@ async def collect_agent_performance(
             {"name": "message_activity", "value": message_count, "target": 50},
             {"name": "avg_gene_rating", "value": round(avg_rating, 2), "target": 4.0},
             {"name": "avg_effectiveness", "value": round(avg_effectiveness, 2), "target": 0.7},
+            {"name": "collaboration_efficiency", "value": round(collab_efficiency, 4), "target": 0.1},
         ],
     }
 
@@ -103,6 +108,9 @@ async def collect_workspace_performance(
 
 async def update_blackboard_performance(db: AsyncSession, workspace_id: str) -> None:
     """Refresh the blackboard's performance field with latest collected data."""
+    import uuid
+    from app.models.performance_snapshot import PerformanceSnapshot
+
     perf_data = await collect_workspace_performance(db, workspace_id)
     bb_q = await db.execute(
         select(Blackboard).where(Blackboard.workspace_id == workspace_id)
@@ -118,4 +126,15 @@ async def update_blackboard_performance(db: AsyncSession, workspace_id: str) -> 
             }
             for p in perf_data
         ]
+
+        for p in perf_data:
+            snapshot = PerformanceSnapshot(
+                id=str(uuid.uuid4()),
+                workspace_id=workspace_id,
+                instance_id=p["instance_id"],
+                agent_name=p.get("agent_name", ""),
+                metrics=p["metrics"],
+            )
+            db.add(snapshot)
+
         await db.commit()
