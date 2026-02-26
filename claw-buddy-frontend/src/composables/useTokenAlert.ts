@@ -22,8 +22,9 @@ async function checkTokenHealth(clusterId: string) {
   }
 }
 
-function startTokenAlert(clusterId: string) {
+function startTokenAlert(clusterId: string | null | undefined) {
   stopTokenAlert()
+  if (!clusterId) return
   // Immediate check
   checkTokenHealth(clusterId)
   // Poll every 5 minutes

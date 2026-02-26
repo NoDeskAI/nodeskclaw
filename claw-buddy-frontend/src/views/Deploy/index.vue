@@ -25,6 +25,7 @@ import {
 import { toast } from 'vue-sonner'
 import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -306,23 +307,37 @@ const advancedConfig = ref({
 const precheckResult = ref<{passed: boolean; items: {name: string; status: string; message: string}[]} | null>(null)
 const checking = ref(false)
 const deploying = ref(false)
+const initializing = ref(true)
+const initError = ref('')
 
 const selectedCluster = computed(() => clusterStore.currentCluster)
 const availableInstances = computed(() =>
   instanceStore.instances.map((i) => ({ id: i.id, name: i.name }))
 )
 
-onMounted(async () => {
-  await Promise.all([
-    clusterStore.fetchClusters(),
-    instanceStore.fetchInstances(),
-    orgStore.fetchAllOrgs(),
-    fetchImageTags(true),
-    fetchBaseDomain(),
-    fetchStorageClasses(),
-  ])
-  // 自动生成实例名称
-  generateDefaultName()
+async function initializeDeployPage() {
+  initializing.value = true
+  initError.value = ''
+  try {
+    await Promise.all([
+      clusterStore.fetchClusters(),
+      instanceStore.fetchInstances(),
+      orgStore.fetchAllOrgs(),
+      fetchImageTags(true),
+      fetchBaseDomain(),
+      fetchStorageClasses(),
+    ])
+    // 自动生成实例名称
+    generateDefaultName()
+  } catch (error) {
+    initError.value = resolveApiErrorMessage(error, '加载部署页面失败，请稍后重试')
+  } finally {
+    initializing.value = false
+  }
+}
+
+onMounted(() => {
+  void initializeDeployPage()
 })
 
 function buildPayload() {
@@ -531,6 +546,17 @@ const yamlPreview = computed(() => {
       <h1 class="text-2xl font-bold">部署 OpenClaw 实例</h1>
     </div>
 
+    <div v-if="initializing" class="text-muted-foreground text-center py-12">
+      加载中...
+    </div>
+    <div v-else-if="initError" class="py-12 flex flex-col items-center gap-4">
+      <p class="text-sm text-destructive text-center">{{ initError }}</p>
+      <Button variant="outline" @click="initializeDeployPage">
+        重试
+      </Button>
+    </div>
+
+    <template v-else>
     <!-- Cluster selector hint -->
     <div v-if="!selectedCluster" class="text-destructive text-sm">
       请先在集群管理中添加并选择一个集群
@@ -961,5 +987,6 @@ const yamlPreview = computed(() => {
         </template>
       </div>
     </div>
+    </template>
   </div>
 </template>

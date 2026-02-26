@@ -5,9 +5,22 @@ export const API_BASE = '/api/v1'
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })
+
+const AUTH_REDIRECT_COOLDOWN_MS = 2000
+let lastAuthRedirectAt = 0
+
+function redirectToLoginOnce() {
+  if (typeof window === 'undefined') return
+  const now = Date.now()
+  if (now - lastAuthRedirectAt < AUTH_REDIRECT_COOLDOWN_MS) return
+  lastAuthRedirectAt = now
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  }
+}
 
 // 请求拦截：附加 JWT Token
 api.interceptors.request.use((config) => {
@@ -24,8 +37,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const requestUrl = String(error.config?.url ?? '')
+      const isAuthEndpoint = requestUrl.includes('/auth/')
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      localStorage.removeItem('refresh_token')
+      if (!isAuthEndpoint) {
+        redirectToLoginOnce()
+      }
     }
     return Promise.reject(error)
   },

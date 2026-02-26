@@ -11,6 +11,11 @@ const sseConnected = ref(false)
 const clusterConnected = ref<boolean | null>(null)
 let abortController: AbortController | null = null
 let eventCounter = 0
+let retryCount = 0
+
+const SSE_BASE_RETRY_MS = 1000
+const SSE_MAX_RETRY_MS = 30000
+const SSE_MAX_RETRY_COUNT = 8
 
 function startGlobalSSE(clusterId: string) {
   stopGlobalSSE()
@@ -21,12 +26,14 @@ function startGlobalSSE(clusterId: string) {
   }
 
   abortController = new AbortController()
+  retryCount = 0
   const token = localStorage.getItem('token')
 
   fetchEventSource(`${API_BASE}/events/stream?cluster_id=${clusterId}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: abortController.signal,
     onopen: async () => {
+      retryCount = 0
       sseConnected.value = true
       clusterConnected.value = true
     },
@@ -56,9 +63,15 @@ function startGlobalSSE(clusterId: string) {
     onerror: () => {
       sseConnected.value = false
       clusterConnected.value = false
+      retryCount += 1
+      if (retryCount > SSE_MAX_RETRY_COUNT) {
+        throw new Error('global_sse_retry_exhausted')
+      }
+      return Math.min(SSE_BASE_RETRY_MS * (2 ** (retryCount - 1)), SSE_MAX_RETRY_MS)
     },
     onclose: () => {
       sseConnected.value = false
+      clusterConnected.value = false
     },
   })
 }
@@ -66,7 +79,9 @@ function startGlobalSSE(clusterId: string) {
 function stopGlobalSSE() {
   abortController?.abort()
   abortController = null
+  retryCount = 0
   sseConnected.value = false
+  clusterConnected.value = null
 }
 
 export function useGlobalSSE() {
