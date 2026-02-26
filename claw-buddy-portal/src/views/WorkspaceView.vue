@@ -347,6 +347,7 @@ async function pickColor(color: string) {
 }
 
 const showChannelDialog = ref(false)
+const channelHexId = ref('')
 const channelMode = ref<'webhook' | 'websocket'>('webhook')
 const channelChatId = ref('')
 const channelAppId = ref('')
@@ -354,7 +355,8 @@ const channelAppSecret = ref('')
 const channelSaving = ref(false)
 
 function openChannelConfig() {
-  const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value?.entityId)
+  channelHexId.value = selectedHex.value?.entityId || ''
+  const node = store.topologyNodes.find((n: any) => n.entity_id === channelHexId.value)
   const cfg = node?.extra?.channel_config as Record<string, string> | undefined
   if (cfg) {
     channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
@@ -371,7 +373,7 @@ function openChannelConfig() {
 }
 
 async function saveChannelConfig() {
-  const hexId = selectedHex.value?.entityId
+  const hexId = channelHexId.value
   if (!hexId) return
   channelSaving.value = true
   try {
