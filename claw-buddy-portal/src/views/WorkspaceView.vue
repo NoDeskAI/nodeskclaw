@@ -68,7 +68,7 @@ const hexAgentInfo = computed(() => {
 const hexEntityName = computed(() => {
   if (!selectedHex.value?.entityId) return ''
   if (selectedHex.value.type === 'corridor') {
-    const node = store.topologyNodes.find((n: any) => n.id === selectedHex.value!.entityId)
+    const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value!.entityId)
     return node?.display_name || node?.name || ''
   }
   if (selectedHex.value.type === 'human') {
@@ -280,7 +280,7 @@ async function handleRenameCorridor() {
   renameSaving.value = true
   try {
     await store.renameCorridorHex(workspaceId.value, renameHexId.value, name)
-    toast(t('hexAction.corridorRenamed'), 'success')
+    toast.success(t('hexAction.corridorRenamed'))
     showRenameDialog.value = false
   } finally {
     renameSaving.value = false
@@ -370,7 +370,7 @@ function panCanvas(key: string) {
 }
 
 // ── Move Mode ────────────────────────────────────────
-const { toast } = useToast()
+const toast = useToast()
 
 type MovingHexSource = {
   type: 'agent' | 'corridor' | 'human'
@@ -414,7 +414,7 @@ async function moveHexTo(targetQ: number, targetR: number) {
     } else if (src.type === 'human') {
       await store.setHumanHex(workspaceId.value, src.id, targetQ, targetR)
     }
-    toast(t('hexAction.moveSuccess', { q: targetQ, r: targetR }), 'success')
+    toast.success(t('hexAction.moveSuccess', { q: targetQ, r: targetR }))
   } finally {
     cancelMoveMode()
   }
