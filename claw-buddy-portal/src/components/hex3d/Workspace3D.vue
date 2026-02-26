@@ -234,31 +234,31 @@ function updateBBLabel(taskCount: number, blockedCount: number, onlineCount: num
   (sprite.material as THREE.SpriteMaterial).map!.needsUpdate = true
 }
 
-const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.85, HEX_SIZE * 0.85, 0.2, 6)
+const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.88, HEX_SIZE * 0.88, 0.03, 6)
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
 
 function createCorridorHexMesh(node: TopologyNode): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(node.hex_q, node.hex_r)
-  group.position.set(x, 0.1, y)
+  group.position.set(x, 0.02, y)
   const hexId = `corridor:${node.entity_id}`
-  group.userData = { hexId, isHex: true }
+  group.userData = { hexId, isHex: true, hexQ: node.hex_q, hexR: node.hex_r }
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x38bdf8,
+    color: 0x1a2d4a,
     emissive: new THREE.Color(0x38bdf8),
-    emissiveIntensity: 0.2,
-    metalness: 0.1,
-    roughness: 0.4,
+    emissiveIntensity: 0.08,
+    metalness: 0.3,
+    roughness: 0.7,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.6,
   })
-  const mesh = new THREE.Mesh(CORRIDOR_HEX_GEO, mat)
-  mesh.userData = { hexId, isHex: true }
-  group.add(mesh)
+  const tile = new THREE.Mesh(CORRIDOR_HEX_GEO, mat)
+  tile.userData = { hexId, isHex: true }
+  group.add(tile)
 
   const edgeGeo = new THREE.EdgesGeometry(CORRIDOR_HEX_GEO)
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 })
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 })
   group.add(new THREE.LineSegments(edgeGeo, edgeMat))
 
   return group
@@ -292,30 +292,64 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   return group
 }
 
-const connectionMeshes: THREE.Line[] = []
+const connectionMeshes: (THREE.Mesh | THREE.Line)[] = []
 
 function createConnectionLines(edges: TopologyEdge[]) {
-  for (const line of connectionMeshes) {
-    scene.remove(line)
-    line.geometry.dispose()
-    ;(line.material as THREE.Material).dispose()
+  for (const obj of connectionMeshes) {
+    scene.remove(obj)
+    obj.geometry.dispose()
+    ;(obj.material as THREE.Material).dispose()
   }
   connectionMeshes.length = 0
+
+  const pathWidth = HEX_SIZE * 0.3
+  const pathY = 0.015
 
   for (const edge of edges) {
     const a = axialToWorld(edge.a_q, edge.a_r)
     const b = axialToWorld(edge.b_q, edge.b_r)
-    const points = [new THREE.Vector3(a.x, 0.15, a.y), new THREE.Vector3(b.x, 0.15, b.y)]
-    const geo = new THREE.BufferGeometry().setFromPoints(points)
-    const mat = new THREE.LineBasicMaterial({
-      color: edge.direction === 'both' ? 0x38bdf8 : 0xfbbf24,
+
+    const dx = b.x - a.x
+    const dz = b.y - a.y
+    const len = Math.sqrt(dx * dx + dz * dz)
+    if (len < 0.001) continue
+
+    const nx = dx / len
+    const nz = dz / len
+    const px = -nz * pathWidth / 2
+    const pz = nx * pathWidth / 2
+
+    const inset = HEX_SIZE * 0.55
+    const sx = a.x + nx * inset
+    const sz = a.y + nz * inset
+    const ex = b.x - nx * inset
+    const ez = b.y - nz * inset
+
+    const vertices = new Float32Array([
+      sx + px, pathY, sz + pz,
+      sx - px, pathY, sz - pz,
+      ex - px, pathY, ez - pz,
+      ex + px, pathY, ez + pz,
+    ])
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    geo.setIndex([0, 1, 2, 0, 2, 3])
+    geo.computeVertexNormals()
+
+    const color = edge.direction === 'both' ? 0x38bdf8 : 0xfbbf24
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x162640,
+      emissive: new THREE.Color(color),
+      emissiveIntensity: 0.1,
+      metalness: 0.2,
+      roughness: 0.8,
       transparent: true,
-      opacity: 0.6,
-      linewidth: 2,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
     })
-    const line = new THREE.Line(geo, mat)
-    scene.add(line)
-    connectionMeshes.push(line)
+    const strip = new THREE.Mesh(geo, mat)
+    scene.add(strip)
+    connectionMeshes.push(strip)
   }
 }
 
@@ -428,6 +462,19 @@ addToLoop(() => {
       continue
     }
 
+    if (id.startsWith('corridor:')) {
+      const mesh = group.children[0] as THREE.Mesh
+      if (!mesh?.material) continue
+      const mat = mesh.material as THREE.MeshStandardMaterial
+      const isHovered = hoveredId.value === id
+      const isSelectedHex = props.selectedHex?.q === group.userData.hexQ && props.selectedHex?.r === group.userData.hexR
+      const targetY = isHovered ? 0.04 : isSelectedHex ? 0.03 : 0.02
+      group.position.y += (targetY - group.position.y) * 0.1
+      mat.emissiveIntensity = isSelectedHex ? 0.25 + Math.sin(t * 3) * 0.1 : isHovered ? 0.2 : 0.08
+      mat.opacity = isSelectedHex ? 0.8 : isHovered ? 0.75 : 0.6
+      continue
+    }
+
     const isHovered = hoveredId.value === id
     const isSelected = props.selectedAgentId === id
     const isSelectedHex = props.selectedHex?.q !== undefined &&
@@ -449,9 +496,9 @@ onUnmounted(() => {
   EMPTY_HEX_GEO.dispose()
   CORRIDOR_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
-  for (const line of connectionMeshes) {
-    line.geometry.dispose()
-    ;(line.material as THREE.Material).dispose()
+  for (const obj of connectionMeshes) {
+    obj.geometry.dispose()
+    ;(obj.material as THREE.Material).dispose()
   }
 })
 
