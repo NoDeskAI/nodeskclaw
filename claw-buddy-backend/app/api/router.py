@@ -17,6 +17,7 @@ from app.api.storage import router as storage_router
 from app.api.corridors import router as corridor_router
 from app.api.mcp import router as mcp_router
 from app.api.trust import router as trust_router
+from app.api.webhooks import router as webhook_router
 from app.api.workspaces import router as workspace_router
 
 api_router = APIRouter()
