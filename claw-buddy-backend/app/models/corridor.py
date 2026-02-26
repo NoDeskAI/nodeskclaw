@@ -13,10 +13,10 @@ def is_adjacent(q1: int, r1: int, q2: int, r2: int) -> bool:
 
 
 def ordered_pair(q1: int, r1: int, q2: int, r2: int) -> tuple[int, int, int, int]:
-    """Normalize coordinate order so (a < b) to prevent duplicate connections."""
-    if (q1, r1) <= (q2, r2):
-        return q1, r1, q2, r2
-    return q2, r2, q1, r1
+    """Canonical ordering for a connection pair to prevent duplicates."""
+    if (q1, r1) > (q2, r2):
+        return q2, r2, q1, r1
+    return q1, r1, q2, r2
 
 
 class CorridorHex(BaseModel):
@@ -30,8 +30,8 @@ class CorridorHex(BaseModel):
     )
     hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
-    display_name: Mapped[str] = mapped_column(String(64), default="", nullable=False)
-    created_by: Mapped[str] = mapped_column(String(36), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), default="", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     workspace = relationship("Workspace")
 
@@ -52,8 +52,8 @@ class HexConnection(BaseModel):
     hex_a_r: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_b_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_b_r: Mapped[int] = mapped_column(Integer, nullable=False)
-    direction: Mapped[str] = mapped_column(String(8), default="both", nullable=False)
+    direction: Mapped[str] = mapped_column(String(10), default="both", nullable=False)
     auto_created: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_by: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     workspace = relationship("Workspace")

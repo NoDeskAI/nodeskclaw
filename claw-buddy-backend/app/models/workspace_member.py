@@ -1,9 +1,10 @@
-"""WorkspaceMember — RBAC for workspace access + optional Human Hex placement."""
+"""WorkspaceMember — RBAC for workspace access (owner/editor/viewer) + Human Hex."""
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSON
 
 from app.models.base import BaseModel
 
@@ -28,11 +29,12 @@ class WorkspaceMember(BaseModel):
     )
     role: Mapped[str] = mapped_column(String(16), default=WorkspaceRole.editor, nullable=False)
 
-    hex_q: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
-    hex_r: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
-    channel_type: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
-    channel_config: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    display_color: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
+    hex_q: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hex_r: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channel_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    channel_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    display_color: Mapped[str | None] = mapped_column(String(20), nullable=True, default="#f59e0b")
 
+    # relationships
     workspace = relationship("Workspace", back_populates="members")
     user = relationship("User")

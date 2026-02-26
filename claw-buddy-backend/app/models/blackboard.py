@@ -1,8 +1,9 @@
-"""Blackboard model — structured workspace context (v2: objectives, tasks, status, performance)."""
+"""Blackboard model — structured task/performance management for a workspace."""
 
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -18,9 +19,9 @@ class Blackboard(BaseModel):
     manual_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    objectives: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
-    tasks: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
-    member_status: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
-    performance: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    objectives: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    tasks: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    member_status: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    performance: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     workspace = relationship("Workspace", back_populates="blackboard")

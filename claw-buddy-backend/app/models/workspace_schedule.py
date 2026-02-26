@@ -1,4 +1,4 @@
-"""WorkspaceSchedule — cron-based timed system messages for workspaces."""
+"""WorkspaceSchedule — cron-based triggers for periodic system messages."""
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -12,8 +12,8 @@ class WorkspaceSchedule(BaseModel):
     workspace_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    name: Mapped[str] = mapped_column(String(64), nullable=False)
-    cron_expr: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    cron_expr: Mapped[str] = mapped_column(String(50), nullable=False)
     message_template: Mapped[str] = mapped_column(Text, default="", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
