@@ -477,6 +477,8 @@ async function moveHexTo(targetQ: number, targetR: number) {
       await store.moveHumanHex(workspaceId.value, src.id, targetQ, targetR)
     }
     toast.success(t('hexAction.moveSuccess', { q: targetQ, r: targetR }))
+    selectedHex.value = null
+    selectedAgentId.value = null
   } finally {
     cancelMoveMode()
   }
