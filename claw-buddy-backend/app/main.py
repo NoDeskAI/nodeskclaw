@@ -490,60 +490,65 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 blackboards 表添加 content 列")
 
-        # ── 迁移 18b: 将旧黑板字段数据搬迁到 content（幂等） ──
-        import json as _json
-
-        def _convert_bb_to_md(objectives, tasks, manual_notes, auto_summary):
-            sections: list[str] = []
-            if objectives:
-                items = objectives if isinstance(objectives, list) else []
-                if items:
-                    lines = ["## 目标", ""]
-                    for obj in items:
-                        if isinstance(obj, dict):
-                            title = obj.get("title") or ""
-                            lines.append(f"- {title}")
-                            for kr in (obj.get("key_results") or []):
-                                if isinstance(kr, dict):
-                                    lines.append(f"  - {kr.get('desc', '')}")
-                        elif isinstance(obj, str):
-                            lines.append(f"- {obj}")
-                    sections.append("\n".join(lines))
-            if tasks:
-                items = tasks if isinstance(tasks, list) else []
-                if items:
-                    lines = ["## 任务", ""]
-                    for t in items:
-                        if not isinstance(t, dict):
-                            continue
-                        title = t.get("title", "")
-                        status = t.get("status", "todo")
-                        check = "x" if status == "done" else " "
-                        lines.append(f"- [{check}] {title} ({status})")
-                    sections.append("\n".join(lines))
-            if manual_notes and str(manual_notes).strip():
-                sections.append(f"## 笔记\n\n{manual_notes.strip()}")
-            if auto_summary and str(auto_summary).strip():
-                sections.append(f"## 自动摘要\n\n{auto_summary.strip()}")
-            return "\n\n".join(sections)
-
-        rows = await conn.execute(text(
-            "SELECT id, objectives, tasks, manual_notes, auto_summary FROM blackboards WHERE content = ''"
+        # ── 迁移 18b: 将旧黑板字段数据搬迁到 content（幂等，旧列不存在则跳过） ──
+        _has_old_cols = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'blackboards' AND column_name = 'objectives'"
         ))
-        migrated_count = 0
-        for row in rows.fetchall():
-            bb_id, obj_raw, tasks_raw, notes, summary = row
-            obj = _json.loads(obj_raw) if isinstance(obj_raw, str) else obj_raw
-            tsk = _json.loads(tasks_raw) if isinstance(tasks_raw, str) else tasks_raw
-            md = _convert_bb_to_md(obj, tsk, notes or "", summary or "")
-            if md:
-                await conn.execute(
-                    text("UPDATE blackboards SET content = :c WHERE id = :id"),
-                    {"c": md, "id": bb_id},
-                )
-                migrated_count += 1
-        if migrated_count:
-            logger.info("自动迁移：已将 %d 个黑板的旧数据转换为 Markdown content", migrated_count)
+        if _has_old_cols.first() is not None:
+            import json as _json
+
+            def _convert_bb_to_md(objectives, tasks, manual_notes, auto_summary):
+                sections: list[str] = []
+                if objectives:
+                    items = objectives if isinstance(objectives, list) else []
+                    if items:
+                        lines = ["## 目标", ""]
+                        for obj in items:
+                            if isinstance(obj, dict):
+                                title = obj.get("title") or ""
+                                lines.append(f"- {title}")
+                                for kr in (obj.get("key_results") or []):
+                                    if isinstance(kr, dict):
+                                        lines.append(f"  - {kr.get('desc', '')}")
+                            elif isinstance(obj, str):
+                                lines.append(f"- {obj}")
+                        sections.append("\n".join(lines))
+                if tasks:
+                    items = tasks if isinstance(tasks, list) else []
+                    if items:
+                        lines = ["## 任务", ""]
+                        for t in items:
+                            if not isinstance(t, dict):
+                                continue
+                            title = t.get("title", "")
+                            status = t.get("status", "todo")
+                            check = "x" if status == "done" else " "
+                            lines.append(f"- [{check}] {title} ({status})")
+                        sections.append("\n".join(lines))
+                if manual_notes and str(manual_notes).strip():
+                    sections.append(f"## 笔记\n\n{manual_notes.strip()}")
+                if auto_summary and str(auto_summary).strip():
+                    sections.append(f"## 自动摘要\n\n{auto_summary.strip()}")
+                return "\n\n".join(sections)
+
+            rows = await conn.execute(text(
+                "SELECT id, objectives, tasks, manual_notes, auto_summary FROM blackboards WHERE content = ''"
+            ))
+            migrated_count = 0
+            for row in rows.fetchall():
+                bb_id, obj_raw, tasks_raw, notes, summary = row
+                obj = _json.loads(obj_raw) if isinstance(obj_raw, str) else obj_raw
+                tsk = _json.loads(tasks_raw) if isinstance(tasks_raw, str) else tasks_raw
+                md = _convert_bb_to_md(obj, tsk, notes or "", summary or "")
+                if md:
+                    await conn.execute(
+                        text("UPDATE blackboards SET content = :c WHERE id = :id"),
+                        {"c": md, "id": bb_id},
+                    )
+                    migrated_count += 1
+            if migrated_count:
+                logger.info("自动迁移：已将 %d 个黑板的旧数据转换为 Markdown content", migrated_count)
 
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
