@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Coroutine
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,15 @@ from app.schemas.workspace import (
 )
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 def _agent_brief(inst: Instance) -> AgentBrief:
@@ -186,12 +196,21 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest) 
     inst.workspace_id = workspace_id
     inst.agent_display_name = data.display_name
 
+    from app.services import corridor_router
+    connected = await corridor_router.auto_connect_hex(
+        workspace_id, inst.hex_position_q, inst.hex_position_r, None, db,
+    )
+
     await db.commit()
     await db.refresh(inst)
 
     await _deploy_channel_plugin(inst, db, workspace_id)
 
-    asyncio.create_task(_send_welcome_message(workspace_id, inst))
+    has_topo = await corridor_router.has_any_connections(workspace_id, db)
+    if has_topo:
+        await _notify_topology_status(workspace_id, inst, connected)
+
+    _fire_task(_send_welcome_message(workspace_id, inst))
 
     return _agent_brief(inst)
 
@@ -308,6 +327,50 @@ async def _remove_channel_plugin(inst: Instance, db: AsyncSession) -> None:
         await remove_clawbuddy_channel_plugin(inst, db)
     except Exception as e:
         logger.error("移除 channel plugin 失败（非致命）: instance=%s error=%s", inst.name, e)
+
+
+_NODE_TYPE_LABELS = {
+    "blackboard": "黑板",
+    "corridor": "走廊",
+    "agent": "Agent",
+    "human": "成员",
+}
+
+
+async def _notify_topology_status(
+    workspace_id: str, inst: Instance, connected: list,
+) -> None:
+    """Broadcast a system:info event about the agent's topology connection status."""
+    from app.api.workspaces import broadcast_event
+    from datetime import datetime, timezone
+
+    agent_name = inst.agent_display_name or inst.name
+
+    if connected:
+        names = []
+        for node in connected:
+            label = _NODE_TYPE_LABELS.get(node.node_type, node.node_type)
+            if node.display_name:
+                names.append(f"{node.display_name}({label})")
+            else:
+                names.append(label)
+        content = f"{agent_name} 已自动连接到: {', '.join(names)}。可在拓扑编辑器中调整。"
+    else:
+        content = (
+            f"{agent_name} 当前位置没有相邻节点连接，"
+            "除加入消息外不会参与工作区交互。"
+            "请在拓扑编辑器中手动连接，或将 Agent 拖到已有节点旁边。"
+        )
+
+    broadcast_event(workspace_id, "system:info", {
+        "id": f"sys-topo-{inst.id[:8]}-{int(datetime.now(timezone.utc).timestamp())}",
+        "sender_type": "system",
+        "sender_id": "system",
+        "sender_name": "System",
+        "content": content,
+        "message_type": "system",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 WELCOME_MESSAGE = "你好！你刚刚加入了工作区，请向大家介绍一下你自己：你叫什么名字、你的能力和专长是什么。"

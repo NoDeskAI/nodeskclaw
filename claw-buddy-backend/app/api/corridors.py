@@ -123,7 +123,7 @@ async def create_corridor_hex(
     )
     db.add(ch)
 
-    await _auto_connect_corridor(workspace_id, body.hex_q, body.hex_r, user.id if user else None, db)
+    await corridor_router.auto_connect_hex(workspace_id, body.hex_q, body.hex_r, user.id if user else None, db)
 
     await db.commit()
     await db.refresh(ch)
@@ -147,35 +147,6 @@ async def create_corridor_hex(
         display_name=ch.display_name,
         created_by=ch.created_by, created_at=ch.created_at,
     ).model_dump())
-
-
-async def _auto_connect_corridor(
-    workspace_id: str, q: int, r: int, user_id: str | None, db: AsyncSession,
-):
-    """Auto-create bidirectional connections to all adjacent occupied hexes."""
-    offsets = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
-    for dq, dr in offsets:
-        nq, nr = q + dq, r + dr
-        if await _is_hex_occupied(workspace_id, nq, nr, db):
-            aq, ar, bq, br = ordered_pair(q, r, nq, nr)
-            existing = await db.execute(
-                select(HexConnection.id).where(
-                    HexConnection.workspace_id == workspace_id,
-                    HexConnection.hex_a_q == aq, HexConnection.hex_a_r == ar,
-                    HexConnection.hex_b_q == bq, HexConnection.hex_b_r == br,
-                    not_deleted(HexConnection),
-                ).limit(1)
-            )
-            if existing.scalar_one_or_none():
-                continue
-            conn = HexConnection(
-                id=str(uuid.uuid4()),
-                workspace_id=workspace_id,
-                hex_a_q=aq, hex_a_r=ar, hex_b_q=bq, hex_b_r=br,
-                direction="both", auto_created=True,
-                created_by=user_id,
-            )
-            db.add(conn)
 
 
 async def _cascade_update_connections(
@@ -257,7 +228,7 @@ async def update_corridor_hex(
 
     if position_changed:
         await _cascade_update_connections(workspace_id, old_q, old_r, ch.hex_q, ch.hex_r, db)
-        await _auto_connect_corridor(workspace_id, ch.hex_q, ch.hex_r, ch.created_by, db)
+        await corridor_router.auto_connect_hex(workspace_id, ch.hex_q, ch.hex_r, ch.created_by, db)
         await db.commit()
 
     actor_type, actor_id = _actor(org_ctx)

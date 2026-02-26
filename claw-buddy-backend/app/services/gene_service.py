@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Coroutine
 
 import httpx
 from sqlalchemy import Integer, Select, case, cast, func, select
@@ -48,6 +49,15 @@ from app.services.openclaw_session import (
 )
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 def _json_loads(raw: str | None) -> list | dict | None:
@@ -547,7 +557,7 @@ async def install_gene(
                 "instance_id": instance_id,
                 "gene_slug": gene_slug,
             })
-        asyncio.create_task(
+        _fire_task(
             _send_learning_task(instance.id, gene.id, ig.id)
         )
     else:
@@ -556,7 +566,7 @@ async def install_gene(
                 "instance_id": instance_id,
                 "gene_slug": gene_slug,
             })
-        asyncio.create_task(
+        _fire_task(
             _direct_install(instance.id, gene.id, ig.id, workspace_id)
         )
 
@@ -1387,12 +1397,12 @@ async def uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str) -> di
     if has_learning:
         ig.status = InstanceGeneStatus.forgetting
         await db.commit()
-        asyncio.create_task(_send_forgetting_task(instance_id, gene_id, ig.id))
+        _fire_task(_send_forgetting_task(instance_id, gene_id, ig.id))
         return {"status": "forgetting", "method": "deep"}
     else:
         ig.status = InstanceGeneStatus.uninstalling
         await db.commit()
-        asyncio.create_task(_direct_uninstall(instance_id, gene_id, ig.id))
+        _fire_task(_direct_uninstall(instance_id, gene_id, ig.id))
         return {"status": "uninstalling", "method": "direct"}
 
 

@@ -5,6 +5,7 @@ import json
 import logging
 import re as _re
 from datetime import datetime, timezone
+from typing import Coroutine
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,15 @@ from app.services.k8s.k8s_client import K8sClient
 from app.services.k8s.resource_builder import build_configmap, build_labels
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 def _sanitize_name(name: str) -> str:
@@ -221,7 +231,7 @@ async def restart_instance(instance_id: str, db: AsyncSession):
         raise
 
     logger.info("实例 %s (%s) 已触发重启 (scale 0->%d)", instance.name, instance_id, desired)
-    asyncio.create_task(_monitor_restart(instance_id, cluster.id, cluster.kubeconfig_encrypted, instance.namespace, name))
+    _fire_task(_monitor_restart(instance_id, cluster.id, cluster.kubeconfig_encrypted, instance.namespace, name))
 
 
 _RESTART_POLL_INTERVAL = 5

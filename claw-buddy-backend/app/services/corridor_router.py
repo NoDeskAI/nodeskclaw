@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -9,10 +11,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import not_deleted
-from app.models.corridor import CorridorHex, HexConnection, HumanHex
+from app.models.corridor import CorridorHex, HexConnection, HumanHex, ordered_pair
 from app.models.instance import Instance
 from app.models.workspace_member import WorkspaceMember
 from app.models.workspace_message import WorkspaceMessage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -219,6 +223,48 @@ async def has_any_connections(workspace_id: str, db: AsyncSession) -> bool:
         ).limit(1)
     )
     return result.scalar_one_or_none() is not None
+
+
+async def auto_connect_hex(
+    workspace_id: str, q: int, r: int, created_by: str | None, db: AsyncSession,
+) -> list[TopologyNode]:
+    """Auto-create bidirectional connections to all adjacent occupied hexes.
+
+    Returns the list of neighbor TopologyNodes that were connected (including
+    already-connected ones).
+    """
+    hex_map = await _build_hex_map(workspace_id, db)
+    offsets = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+    connected: list[TopologyNode] = []
+
+    for dq, dr in offsets:
+        nq, nr = q + dq, r + dr
+        neighbor = hex_map.get((nq, nr))
+        if neighbor is None:
+            continue
+        connected.append(neighbor)
+
+        aq, ar, bq, br = ordered_pair(q, r, nq, nr)
+        existing = await db.execute(
+            select(HexConnection.id).where(
+                HexConnection.workspace_id == workspace_id,
+                HexConnection.hex_a_q == aq, HexConnection.hex_a_r == ar,
+                HexConnection.hex_b_q == bq, HexConnection.hex_b_r == br,
+                not_deleted(HexConnection),
+            ).limit(1)
+        )
+        if existing.scalar_one_or_none():
+            continue
+        conn = HexConnection(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            hex_a_q=aq, hex_a_r=ar, hex_b_q=bq, hex_b_r=br,
+            direction="both", auto_created=True,
+            created_by=created_by,
+        )
+        db.add(conn)
+
+    return connected
 
 
 def _build_undirected_adjacency(

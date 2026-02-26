@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from typing import Coroutine
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,15 @@ from app.services import workspace_message_service as msg_service
 from app.services import workspace_service
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 async def handle_collaboration_message(
@@ -82,7 +92,7 @@ async def handle_collaboration_message(
                     if not can:
                         logger.info("Corridor topology blocks %s -> %s", source_name, target_name)
                         return
-                asyncio.create_task(
+                _fire_task(
                     _invoke_target_agent(
                         workspace_id=workspace_id,
                         target_instance=target_inst,
@@ -104,7 +114,7 @@ async def handle_collaboration_message(
                 agents = await _get_workspace_agents(db, workspace_id)
                 for agent in agents:
                     if agent.id != source_instance_id and agent.id in reachable_ids:
-                        asyncio.create_task(
+                        _fire_task(
                             _invoke_target_agent(
                                 workspace_id=workspace_id,
                                 target_instance=agent,
@@ -117,7 +127,7 @@ async def handle_collaboration_message(
                 agents = await _get_workspace_agents(db, workspace_id)
                 for agent in agents:
                     if agent.id != source_instance_id:
-                        asyncio.create_task(
+                        _fire_task(
                             _invoke_target_agent(
                                 workspace_id=workspace_id,
                                 target_instance=agent,
@@ -362,7 +372,7 @@ async def send_system_message_to_agents(
         ]
         recent = await msg_service.get_recent_messages(db, workspace_id)
 
-        asyncio.create_task(
+        _fire_task(
             _stream_agent_reply(
                 workspace_id=workspace_id,
                 instance_id=inst.id,

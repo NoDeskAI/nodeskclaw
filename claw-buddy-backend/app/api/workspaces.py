@@ -3,7 +3,9 @@
 import asyncio
 import json
 import logging
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Coroutine
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -30,6 +32,15 @@ from app.services import workspace_message_service as msg_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 def _ok(data=None, message: str = "success"):
@@ -554,7 +565,8 @@ async def workspace_chat(
 
     running_agents = await _get_running_agents(db, workspace_id)
     if not running_agents:
-        broadcast_event(workspace_id, "system:info", {"message": "工作区内没有运行中的 Agent"})
+        logger.warning("workspace_chat: workspace=%s 没有运行中的 Agent", workspace_id)
+        _broadcast_system_info(workspace_id, "工作区内没有运行中的 Agent")
         return _ok({"status": "no_agents"})
 
     from app.services import corridor_router
@@ -564,18 +576,29 @@ async def workspace_chat(
         audience = await corridor_router.get_blackboard_audience(workspace_id, db)
         reachable_ids = {ep.entity_id for ep in audience if ep.endpoint_type == "agent"}
         target_agents = [a for a in running_agents if a.id in reachable_ids]
+        excluded = [a for a in running_agents if a.id not in reachable_ids]
+        if excluded:
+            excluded_names = [a.agent_display_name or a.name for a in excluded]
+            logger.warning(
+                "workspace_chat: workspace=%s 拓扑过滤排除了 %d 个 Agent: %s",
+                workspace_id, len(excluded), excluded_names,
+            )
     else:
         target_agents = running_agents
 
     if not target_agents:
-        broadcast_event(workspace_id, "system:info", {"message": "没有可达的运行中 Agent"})
+        logger.warning(
+            "workspace_chat: workspace=%s has_topo=%s, 没有可达的运行中 Agent (running=%d)",
+            workspace_id, has_topo, len(running_agents),
+        )
+        _broadcast_system_info(workspace_id, "没有可达的运行中 Agent")
         return _ok({"status": "no_reachable_agents"})
 
     members = _build_members_list(ws_info, user)
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)
 
     for inst in target_agents:
-        asyncio.create_task(
+        _fire_task(
             _stream_agent_response(
                 workspace_id=workspace_id,
                 instance=inst,
@@ -747,6 +770,19 @@ def broadcast_event(workspace_id: str, event_type: str, data: dict):
     queues = _workspace_queues.get(workspace_id, set())
     for q in queues:
         q.put_nowait({"event": event_type, "data": data})
+
+
+def _broadcast_system_info(workspace_id: str, content: str) -> None:
+    """Broadcast a system:info event with full fields expected by the frontend."""
+    broadcast_event(workspace_id, "system:info", {
+        "id": f"sys-{int(time.time() * 1000)}",
+        "sender_type": "system",
+        "sender_id": "system",
+        "sender_name": "System",
+        "content": content,
+        "message_type": "system",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 @router.get("/{workspace_id}/events")
