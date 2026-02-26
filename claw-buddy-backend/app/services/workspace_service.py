@@ -274,11 +274,30 @@ async def update_agent(
 
     if data.display_name is not None:
         inst.agent_display_name = data.display_name
-    if data.hex_q is not None:
+
+    position_changed = False
+    old_q, old_r = inst.hex_position_q, inst.hex_position_r
+    if data.hex_q is not None and data.hex_r is not None:
+        new_q, new_r = data.hex_q, data.hex_r
+        if (new_q, new_r) != (old_q, old_r):
+            inst.hex_position_q = new_q
+            inst.hex_position_r = new_r
+            position_changed = True
+    elif data.hex_q is not None:
         inst.hex_position_q = data.hex_q
-    if data.hex_r is not None:
+    elif data.hex_r is not None:
         inst.hex_position_r = data.hex_r
+
     await db.commit()
+
+    if position_changed:
+        from app.services import corridor_router
+        await corridor_router.cascade_delete_connections(workspace_id, old_q, old_r, db)
+        await corridor_router.auto_connect_hex(
+            workspace_id, inst.hex_position_q, inst.hex_position_r, inst.created_by, db,
+        )
+        await db.commit()
+
     await db.refresh(inst)
     return _agent_brief(inst)
 

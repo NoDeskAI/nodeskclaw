@@ -225,6 +225,24 @@ async def has_any_connections(workspace_id: str, db: AsyncSession) -> bool:
     return result.scalar_one_or_none() is not None
 
 
+async def cascade_delete_connections(
+    workspace_id: str, q: int, r: int, db: AsyncSession,
+) -> None:
+    """Soft-delete all hex connections referencing the given position."""
+    conns = await db.execute(
+        select(HexConnection).where(
+            HexConnection.workspace_id == workspace_id,
+            not_deleted(HexConnection),
+            (
+                ((HexConnection.hex_a_q == q) & (HexConnection.hex_a_r == r))
+                | ((HexConnection.hex_b_q == q) & (HexConnection.hex_b_r == r))
+            ),
+        )
+    )
+    for conn in conns.scalars().all():
+        conn.soft_delete()
+
+
 async def auto_connect_hex(
     workspace_id: str, q: int, r: int, created_by: str | None, db: AsyncSession,
 ) -> list[TopologyNode]:

@@ -152,19 +152,7 @@ async def create_corridor_hex(
 async def _cascade_update_connections(
     workspace_id: str, old_q: int, old_r: int, new_q: int, new_r: int, db: AsyncSession,
 ):
-    """Soft-delete all connections referencing the old position."""
-    conns = await db.execute(
-        select(HexConnection).where(
-            HexConnection.workspace_id == workspace_id,
-            not_deleted(HexConnection),
-            (
-                ((HexConnection.hex_a_q == old_q) & (HexConnection.hex_a_r == old_r))
-                | ((HexConnection.hex_b_q == old_q) & (HexConnection.hex_b_r == old_r))
-            ),
-        )
-    )
-    for conn in conns.scalars().all():
-        conn.soft_delete()
+    await corridor_router.cascade_delete_connections(workspace_id, old_q, old_r, db)
 
 
 @router.get("/{workspace_id}/corridor-hexes")
@@ -548,11 +536,14 @@ async def update_human_hex(
         raise HTTPException(404, "human hex not found")
     new_q = body.hex_q if body.hex_q is not None else hh.hex_q
     new_r = body.hex_r if body.hex_r is not None else hh.hex_r
-    if (new_q, new_r) != (hh.hex_q, hh.hex_r):
+    position_changed = False
+    old_q, old_r = hh.hex_q, hh.hex_r
+    if (new_q, new_r) != (old_q, old_r):
         if await _is_hex_occupied(workspace_id, new_q, new_r, db):
             raise HTTPException(400, "hex position already occupied")
         hh.hex_q = new_q
         hh.hex_r = new_r
+        position_changed = True
     if body.display_color is not None:
         hh.display_color = body.display_color
     if body.channel_type is not None:
@@ -560,6 +551,13 @@ async def update_human_hex(
     if body.channel_config is not None:
         hh.channel_config = body.channel_config
     await db.commit()
+    if position_changed:
+        await corridor_router.cascade_delete_connections(workspace_id, old_q, old_r, db)
+        user = org_ctx[0]
+        await corridor_router.auto_connect_hex(
+            workspace_id, hh.hex_q, hh.hex_r, user.id if user else None, db,
+        )
+        await db.commit()
     actor_type, actor_id = _actor(org_ctx)
     broadcast_event(workspace_id, "human:hex_updated", {"hex_id": hex_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color})
     audit = TopologyAuditLog(
