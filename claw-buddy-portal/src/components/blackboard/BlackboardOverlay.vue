@@ -182,7 +182,7 @@ watch(() => props.open, (v) => { if (v) loadTrend() })
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-5 py-4 min-h-0">
+        <div class="flex-1 overflow-y-auto px-5 py-4 min-h-[350px]">
           <!-- Objectives Tab -->
           <div v-if="activeTab === 'objectives'" class="space-y-3">
             <div v-if="!objectives.length" class="text-sm text-muted-foreground">暂无目标</div>
