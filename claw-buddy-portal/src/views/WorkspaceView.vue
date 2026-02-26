@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -35,6 +35,10 @@ const bbBlockedCount = computed(() =>
     .filter(t => t.status === 'blocked').length,
 )
 const bbOnlineCount = computed(() => agents.value.filter(a => a.sse_connected).length)
+const humanCount = computed(() => store.members.length)
+const humanSeatCount = computed(() =>
+  store.members.filter(m => m.hex_q !== null && m.hex_r !== null).length,
+)
 
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
@@ -556,6 +560,14 @@ function handleKeydown(e: KeyboardEvent) {
           <span class="flex items-center gap-1" :class="bbOnlineCount > 0 ? 'text-green-500' : ''">
             <Wifi class="w-3.5 h-3.5" />
             {{ t('workspaceView.bbOnline') }} {{ bbOnlineCount }}
+          </span>
+          <span class="flex items-center gap-1">
+            <Users class="w-3.5 h-3.5" />
+            {{ t('workspaceView.bbHumans') }} {{ humanCount }}
+          </span>
+          <span class="flex items-center gap-1">
+            <MapPin class="w-3.5 h-3.5" />
+            {{ t('workspaceView.bbHumanSeats') }} {{ humanSeatCount }}
           </span>
         </div>
       </div>

@@ -121,6 +121,8 @@ const enUS = {
     bbTasks: "Tasks",
     bbBlocked: "Blocked",
     bbOnline: "Online",
+    bbHumans: "Humans",
+    bbHumanSeats: "Human Seats",
   },
   workspaceSettings: {
     title: "Workspace Settings",

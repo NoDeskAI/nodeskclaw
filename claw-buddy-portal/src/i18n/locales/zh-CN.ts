@@ -121,6 +121,8 @@ const zhCN = {
     bbTasks: "任务",
     bbBlocked: "卡点",
     bbOnline: "在线",
+    bbHumans: "人类",
+    bbHumanSeats: "人类工位",
   },
   workspaceSettings: {
     title: "工作区设置",
