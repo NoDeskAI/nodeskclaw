@@ -558,6 +558,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       })
     }
 
+    const topologyEvents = [
+      'corridor:hex_placed', 'corridor:hex_updated', 'corridor:hex_removed',
+      'connection:created', 'connection:updated', 'connection:removed',
+      'human:hex_placed', 'human:hex_removed', 'human:channel_updated',
+    ]
+    for (const eventName of topologyEvents) {
+      eventSource.addEventListener(eventName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          externalCallback?.(eventName, data)
+        } catch { /* ignore */ }
+        fetchTopology(workspaceId)
+      })
+    }
+
     eventSource.onerror = () => {
       setTimeout(() => {
         if (eventSource?.readyState === EventSource.CLOSED) {
