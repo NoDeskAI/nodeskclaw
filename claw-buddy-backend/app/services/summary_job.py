@@ -53,6 +53,7 @@ class SummaryJob:
             updated = await self._refresh_summaries(db)
             if updated:
                 logger.info("Refreshed summaries for %d workspaces", updated)
+            await self._refresh_performance(db)
 
     async def _refresh_summaries(self, db) -> int:
         result = await db.execute(
@@ -156,3 +157,15 @@ class SummaryJob:
             })
 
         return status_list
+
+    @staticmethod
+    async def _refresh_performance(db) -> None:
+        from app.services.performance_service import update_blackboard_performance
+        result = await db.execute(
+            select(Workspace).where(Workspace.deleted_at.is_(None))
+        )
+        for ws in result.scalars().all():
+            try:
+                await update_blackboard_performance(db, ws.id)
+            except Exception as e:
+                logger.warning("Performance refresh failed for workspace %s: %s", ws.id, e)

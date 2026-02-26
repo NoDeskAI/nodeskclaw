@@ -330,6 +330,19 @@ async def update_performance(
     return _ok({"performance": bb.performance})
 
 
+@router.post("/{workspace_id}/blackboard/performance/collect")
+async def collect_performance(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """Trigger performance data collection for all agents in the workspace."""
+    from app.services.performance_service import collect_workspace_performance, update_blackboard_performance
+    await update_blackboard_performance(db, workspace_id)
+    perf = await collect_workspace_performance(db, workspace_id)
+    return _ok(perf)
+
+
 # ── Workspace Members ────────────────────────────────
 
 @router.get("/{workspace_id}/members")

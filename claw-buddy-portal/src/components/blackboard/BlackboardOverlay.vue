@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { X, Save, Loader2, Target, ListTodo, Users, BarChart3, FileText, Network } from 'lucide-vue-next'
+import { X, Save, Loader2, Target, ListTodo, Users, BarChart3, FileText, Network, RefreshCw } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const props = defineProps<{
@@ -70,6 +70,38 @@ const priorityColors: Record<string, string> = {
   high: 'bg-red-500/20 text-red-400',
   medium: 'bg-yellow-500/20 text-yellow-400',
   low: 'bg-blue-500/20 text-blue-400',
+}
+
+const collecting = ref(false)
+async function collectPerformance() {
+  collecting.value = true
+  try {
+    await store.collectPerformance(props.workspaceId)
+    await store.fetchBlackboard(props.workspaceId)
+  } catch (e) {
+    console.error('collect performance error:', e)
+  } finally {
+    collecting.value = false
+  }
+}
+
+const metricLabels: Record<string, string> = {
+  task_completion_rate: '任务完成率',
+  message_activity: '消息活跃度',
+  avg_gene_rating: '平均基因评分',
+  avg_effectiveness: '平均效能指数',
+}
+
+function metricPercent(metric: Record<string, unknown>): number {
+  const val = metric.value as number || 0
+  const target = metric.target as number || 1
+  return Math.min(100, (val / target) * 100)
+}
+
+function metricColor(percent: number): string {
+  if (percent >= 80) return 'bg-green-500'
+  if (percent >= 50) return 'bg-yellow-500'
+  return 'bg-red-500'
 }
 </script>
 
@@ -179,21 +211,44 @@ const priorityColors: Record<string, string> = {
           </div>
 
           <!-- Performance Tab -->
-          <div v-if="activeTab === 'performance'" class="space-y-3">
+          <div v-if="activeTab === 'performance'" class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-muted-foreground">
+                绩效数据每小时自动采集，也可手动触发
+              </div>
+              <button
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                :disabled="collecting"
+                @click="collectPerformance"
+              >
+                <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': collecting }" />
+                {{ collecting ? '采集中...' : '立即采集' }}
+              </button>
+            </div>
             <div v-if="!performance.length" class="text-sm text-muted-foreground">暂无绩效数据</div>
             <div
               v-for="perf in performance"
               :key="(perf as Record<string, unknown>).member_id as string"
-              class="bg-muted rounded-lg p-3"
+              class="bg-muted rounded-lg p-4"
             >
-              <div class="text-sm font-medium mb-2">{{ (perf as Record<string, unknown>).member_id }}</div>
-              <div
-                v-for="(metric, i) in ((perf as Record<string, unknown>).metrics as unknown[] || [])"
-                :key="i"
-                class="flex items-center justify-between text-xs"
-              >
-                <span class="text-muted-foreground">{{ (metric as Record<string, unknown>).name }}</span>
-                <span>{{ (metric as Record<string, unknown>).value }} / {{ (metric as Record<string, unknown>).target }}</span>
+              <div class="text-sm font-medium mb-3">{{ (perf as Record<string, unknown>).member_name || (perf as Record<string, unknown>).member_id }}</div>
+              <div class="space-y-2.5">
+                <div
+                  v-for="(metric, i) in ((perf as Record<string, unknown>).metrics as unknown[] || [])"
+                  :key="i"
+                >
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-muted-foreground">{{ metricLabels[(metric as Record<string, unknown>).name as string] || (metric as Record<string, unknown>).name }}</span>
+                    <span>{{ (metric as Record<string, unknown>).value }} / {{ (metric as Record<string, unknown>).target }}</span>
+                  </div>
+                  <div class="w-full bg-background rounded-full h-1.5">
+                    <div
+                      class="h-1.5 rounded-full transition-all"
+                      :class="metricColor(metricPercent(metric as Record<string, unknown>))"
+                      :style="{ width: `${metricPercent(metric as Record<string, unknown>)}%` }"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
