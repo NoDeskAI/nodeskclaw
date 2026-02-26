@@ -356,6 +356,16 @@ async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
 
 # ── Blackboard ───────────────────────────────────────
 
+def _bb_to_info(bb: Blackboard) -> BlackboardInfo:
+    return BlackboardInfo(
+        id=bb.id, workspace_id=bb.workspace_id, auto_summary=bb.auto_summary,
+        manual_notes=bb.manual_notes, summary_updated_at=bb.summary_updated_at,
+        objectives=bb.objectives, tasks=bb.tasks,
+        member_status=bb.member_status, performance=bb.performance,
+        updated_at=bb.updated_at,
+    )
+
+
 async def get_blackboard(db: AsyncSession, workspace_id: str) -> BlackboardInfo | None:
     result = await db.execute(
         select(Blackboard).where(Blackboard.workspace_id == workspace_id)
@@ -363,11 +373,7 @@ async def get_blackboard(db: AsyncSession, workspace_id: str) -> BlackboardInfo 
     bb = result.scalar_one_or_none()
     if bb is None:
         return None
-    return BlackboardInfo(
-        id=bb.id, workspace_id=bb.workspace_id, auto_summary=bb.auto_summary,
-        manual_notes=bb.manual_notes, summary_updated_at=bb.summary_updated_at,
-        updated_at=bb.updated_at,
-    )
+    return _bb_to_info(bb)
 
 
 async def update_blackboard(db: AsyncSession, workspace_id: str, data: BlackboardUpdate) -> BlackboardInfo | None:
@@ -377,14 +383,17 @@ async def update_blackboard(db: AsyncSession, workspace_id: str, data: Blackboar
     bb = result.scalar_one_or_none()
     if bb is None:
         return None
-    bb.manual_notes = data.manual_notes
+    if data.manual_notes is not None:
+        bb.manual_notes = data.manual_notes
+    if data.objectives is not None:
+        bb.objectives = data.objectives
+    if data.tasks is not None:
+        bb.tasks = data.tasks
+    if data.performance is not None:
+        bb.performance = data.performance
     await db.commit()
     await db.refresh(bb)
-    return BlackboardInfo(
-        id=bb.id, workspace_id=bb.workspace_id, auto_summary=bb.auto_summary,
-        manual_notes=bb.manual_notes, summary_updated_at=bb.summary_updated_at,
-        updated_at=bb.updated_at,
-    )
+    return _bb_to_info(bb)
 
 
 # ── Workspace Members ────────────────────────────────
