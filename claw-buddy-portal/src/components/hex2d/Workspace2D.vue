@@ -8,22 +8,22 @@ import type { AgentBrief } from '@/stores/workspace'
 const { t } = useI18n()
 
 interface TopologyNode {
-  id: string
   hex_q: number
   hex_r: number
-  node_type: 'agent' | 'blackboard' | 'corridor_hex' | 'human'
-  display_name?: string
+  node_type: 'agent' | 'blackboard' | 'corridor' | 'human'
   entity_id?: string
+  display_name?: string
+  extra?: Record<string, unknown>
   color?: string
 }
 
 interface TopologyEdge {
-  id: string
-  from_q: number
-  from_r: number
-  to_q: number
-  to_r: number
+  a_q: number
+  a_r: number
+  b_q: number
+  b_r: number
   direction: string
+  auto_created?: boolean
 }
 
 const props = defineProps<{
@@ -114,7 +114,7 @@ function bbHexPoints(): string {
 
 const corridorNodes = computed(() =>
   (props.topologyNodes || [])
-    .filter(n => n.node_type === 'corridor_hex')
+    .filter(n => n.node_type === 'corridor')
     .map(n => {
       const { x, y } = axialToWorld(n.hex_q, n.hex_r)
       return { ...n, px: x * SCALE, py: y * SCALE }
@@ -131,11 +131,11 @@ const humanNodes = computed(() =>
 )
 
 const connectionLines = computed(() =>
-  (props.topologyEdges || []).map(e => {
-    const from = axialToWorld(e.from_q, e.from_r)
-    const to = axialToWorld(e.to_q, e.to_r)
+  (props.topologyEdges || []).map((e, idx) => {
+    const from = axialToWorld(e.a_q, e.a_r)
+    const to = axialToWorld(e.b_q, e.b_r)
     return {
-      id: e.id,
+      id: `${e.a_q},${e.a_r}-${e.b_q},${e.b_r}-${idx}`,
       x1: from.x * SCALE,
       y1: from.y * SCALE,
       x2: to.x * SCALE,
@@ -347,10 +347,10 @@ const emptyHexes = computed(() => {
       <!-- Corridor hexes -->
       <g
         v-for="ch in corridorNodes"
-        :key="'corridor-' + ch.id"
+        :key="'corridor-' + ch.entity_id"
         class="cursor-pointer"
         :transform="`translate(${ch.px}, ${ch.py})`"
-        @click.stop="emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.id })"
+        @click.stop="emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.entity_id })"
       >
         <polygon
           :points="corridorHexPoints(0, 0)"
@@ -368,7 +368,7 @@ const emptyHexes = computed(() => {
       <!-- Human hexes -->
       <g
         v-for="hh in humanNodes"
-        :key="'human-' + hh.id"
+        :key="'human-' + hh.entity_id"
         class="cursor-pointer"
         :transform="`translate(${hh.px}, ${hh.py})`"
         @click.stop="emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', entityId: hh.entity_id })"
