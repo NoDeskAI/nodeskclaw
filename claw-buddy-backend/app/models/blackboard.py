@@ -1,4 +1,4 @@
-"""Blackboard model — human-readable view of a workspace's context."""
+"""Blackboard model — structured workspace context (v2: objectives, tasks, status, performance)."""
 
 from datetime import datetime
 
@@ -18,5 +18,9 @@ class Blackboard(BaseModel):
     manual_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # relationships
+    objectives: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    tasks: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    member_status: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    performance: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+
     workspace = relationship("Workspace", back_populates="blackboard")

@@ -4,6 +4,9 @@ from app.models.base import Base, BaseModel  # noqa: F401
 from app.models.blackboard import Blackboard  # noqa: F401
 from app.models.cluster import Cluster  # noqa: F401
 from app.models.corridor import CorridorHex, HexConnection  # noqa: F401
+from app.models.decision_record import DecisionRecord  # noqa: F401
+from app.models.topology_audit_log import TopologyAuditLog  # noqa: F401
+from app.models.workspace_schedule import WorkspaceSchedule  # noqa: F401
 from app.models.deploy_record import DeployRecord  # noqa: F401
 from app.models.gene import (  # noqa: F401
     Gene,
