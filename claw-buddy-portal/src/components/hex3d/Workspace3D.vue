@@ -284,9 +284,8 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   const { x, y } = axialToWorld(node.hex_q, node.hex_r)
   group.position.set(x, 0.25, y)
   const hexId = `human:${node.entity_id}`
-  group.userData = { hexId, isHex: true }
-
   const colorHex = (node.extra?.display_color as string) || '#f59e0b'
+  group.userData = { hexId, isHex: true, displayColor: colorHex }
   const color = new THREE.Color(colorHex)
   const mat = new THREE.MeshStandardMaterial({
     color,
@@ -504,7 +503,7 @@ addToLoop(() => {
       const mesh = group.children[0] as THREE.Mesh
       if (!mesh?.material) continue
       const mat = mesh.material as THREE.MeshStandardMaterial
-      mat.emissive.set(0xf59e0b)
+      mat.emissive.set(group.userData.displayColor || '#f59e0b')
       continue
     }
 
@@ -547,7 +546,7 @@ addToLoop(() => {
         const mesh = group.children[0] as THREE.Mesh
         if (mesh?.material && 'emissiveIntensity' in mesh.material) {
           const mat = mesh.material as THREE.MeshStandardMaterial
-          mat.emissive = new THREE.Color(0xf59e0b)
+          mat.emissive = new THREE.Color(group.userData.displayColor || '#f59e0b')
           mat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.25
         }
       }
