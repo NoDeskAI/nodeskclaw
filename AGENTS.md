@@ -214,3 +214,40 @@ refactor(frontend): SSE 流 baseURL 统一走配置常量
 ### 文档同步
 
 代码和文档必须在同一次操作中同步完成。
+
+## 工具脚本
+
+### Git 统计脚本（scripts/git_stats/）
+
+生成 Git 仓库的 commit 数量和代码行数折线图。
+
+#### 安装
+
+```bash
+cd scripts/git_stats
+pip install -r requirements.txt
+```
+
+#### 使用
+
+```bash
+# 基本用法
+python git_stats.py --author "your.email@example.com" --granularity daily
+
+# 参数说明
+--repo REPO         # 仓库路径，默认当前目录
+--author AUTHOR     # 作者名称/邮箱
+--since DATE        # 开始日期，默认自动（第一个 commit）
+--until DATE        # 结束日期，默认自动（最后一个 commit）
+--granularity       # 时间粒度：daily/weekly/monthly，默认 monthly
+--output-dir DIR    # 输出目录
+```
+
+#### 输出图表
+
+| 文件 | 说明 |
+|------|------|
+| commit_counts.png | Commit 数量折线图 |
+| code_lines.png | 新增/删除代码行数折线图 |
+| total_lines.png | 累计净代码量折线图 |
+| code_breakdown.png | 目录占比饼图 |

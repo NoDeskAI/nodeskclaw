@@ -61,3 +61,5 @@ Thumbs.db
 data/
 scripts/git_stats/code_lines.png
 scripts/git_stats/commit_counts.png
+scripts/git_stats/code_breakdown.png
+scripts/git_stats/total_lines.png
