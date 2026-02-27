@@ -158,6 +158,8 @@ const zhCN = {
     topoCorridorNode: "过道",
     topoHumanNode: "人类工位",
     topoBlackboardNode: "黑板",
+    topoAutoCreated: "自动创建",
+    topoManual: "手动创建",
   },
   hexAction: {
     emptySlot: "空工位",
@@ -175,7 +177,6 @@ const zhCN = {
     renameCorridorTitle: "重命名过道",
     corridorNamePlaceholder: "输入过道名称",
     corridorRenamed: "过道已重命名",
-    manageConnections: "管理连接方向",
     viewChannel: "查看 Channel 配置",
     changeColor: "修改颜色",
     move: "移动",

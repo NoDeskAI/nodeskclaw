@@ -253,9 +253,6 @@ function onHexAction(action: string) {
     case 'rename-corridor':
       openRenameDialog()
       break
-    case 'manage-connections':
-      hexDrawerOpen.value = false
-      break
     case 'remove-corridor':
       if (selectedHex.value?.entityId) {
         store.deleteCorridorHex(workspaceId.value, selectedHex.value.entityId)

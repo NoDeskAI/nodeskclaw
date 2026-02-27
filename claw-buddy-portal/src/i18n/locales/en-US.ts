@@ -158,6 +158,8 @@ const enUS = {
     topoCorridorNode: "Corridor",
     topoHumanNode: "Human Seat",
     topoBlackboardNode: "Blackboard",
+    topoAutoCreated: "Auto Created",
+    topoManual: "Manual",
   },
   hexAction: {
     emptySlot: "Empty Slot",
@@ -175,7 +177,6 @@ const enUS = {
     renameCorridorTitle: "Rename Corridor",
     corridorNamePlaceholder: "Enter corridor name",
     corridorRenamed: "Corridor renamed",
-    manageConnections: "Manage Connections",
     viewChannel: "View Channel Config",
     changeColor: "Change Color",
     move: "Move",

@@ -18,7 +18,6 @@ from app.models.workspace_member import WorkspaceMember
 from app.schemas.corridor import (
     ConnectionCreate,
     ConnectionInfo,
-    ConnectionUpdate,
     CorridorHexCreate,
     CorridorHexInfo,
     CorridorHexUpdate,
@@ -323,15 +322,11 @@ async def create_connection(
     if existing.scalar_one_or_none():
         raise HTTPException(400, "connection already exists")
 
-    direction = body.direction
-    if (body.hex_a_q, body.hex_a_r) != (aq, ar) and direction != "both":
-        direction = "b_to_a" if direction == "a_to_b" else "a_to_b"
-
     conn = HexConnection(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
         hex_a_q=aq, hex_a_r=ar, hex_b_q=bq, hex_b_r=br,
-        direction=direction, auto_created=False,
+        direction="both", auto_created=False,
         created_by=user.id if user else None,
     )
     db.add(conn)
@@ -388,42 +383,6 @@ async def list_connections(
         for c in result.scalars().all()
     ]
     return _ok(items)
-
-
-@router.put("/{workspace_id}/connections/{conn_id}")
-async def update_connection(
-    workspace_id: str, conn_id: str, body: ConnectionUpdate,
-    org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
-):
-    _, org = org_ctx
-    await _check_workspace(workspace_id, org, db)
-    result = await db.execute(
-        select(HexConnection).where(
-            HexConnection.id == conn_id,
-            HexConnection.workspace_id == workspace_id,
-            not_deleted(HexConnection),
-        )
-    )
-    conn = result.scalar_one_or_none()
-    if not conn:
-        raise HTTPException(404, "connection not found")
-    conn.direction = body.direction
-    await db.commit()
-    actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "connection:updated", {"conn_id": conn.id, "direction": conn.direction})
-    audit = TopologyAuditLog(
-        id=str(uuid.uuid4()),
-        workspace_id=workspace_id,
-        action="connection_updated",
-        target_type="connection",
-        target_id=conn.id,
-        new_value={"direction": conn.direction},
-        actor_type=actor_type,
-        actor_id=actor_id,
-    )
-    db.add(audit)
-    await db.commit()
-    return _ok({"id": conn.id, "direction": conn.direction})
 
 
 @router.delete("/{workspace_id}/connections/{conn_id}")

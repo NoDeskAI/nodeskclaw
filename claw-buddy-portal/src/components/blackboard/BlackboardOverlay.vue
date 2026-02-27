@@ -265,7 +265,7 @@ function nodeTypeLabel(type: string): string {
                     class="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-sm"
                   >
                     <span class="font-mono text-xs">({{ edge.a_q }},{{ edge.a_r }}) &mdash; ({{ edge.b_q }},{{ edge.b_r }})</span>
-                    <span class="text-xs text-muted-foreground">{{ edge.direction }}</span>
+                    <span class="text-xs text-muted-foreground">{{ edge.auto_created ? t('blackboard.topoAutoCreated') : t('blackboard.topoManual') }}</span>
                   </div>
                 </div>
               </div>

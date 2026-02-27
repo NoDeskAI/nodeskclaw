@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class CorridorHexCreate(BaseModel):
@@ -32,11 +32,6 @@ class ConnectionCreate(BaseModel):
     hex_a_r: int
     hex_b_q: int
     hex_b_r: int
-    direction: str = Field(default="both", pattern=r"^(both|a_to_b|b_to_a)$")
-
-
-class ConnectionUpdate(BaseModel):
-    direction: str = Field(pattern=r"^(both|a_to_b|b_to_a)$")
 
 
 class ConnectionInfo(BaseModel):

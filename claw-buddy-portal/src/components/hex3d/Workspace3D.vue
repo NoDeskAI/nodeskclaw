@@ -351,7 +351,7 @@ function createConnectionLines(edges: TopologyEdge[]) {
     geo.setIndex([0, 1, 2, 0, 2, 3])
     geo.computeVertexNormals()
 
-    const color = edge.direction === 'both' ? 0x38bdf8 : 0xfbbf24
+    const color = 0x38bdf8
     const mat = new THREE.MeshStandardMaterial({
       color: 0x162640,
       emissive: new THREE.Color(color),

@@ -1,4 +1,4 @@
-"""Corridor routing engine — BFS-based directed graph traversal for workspace topology."""
+"""Corridor routing engine — BFS-based bidirectional graph traversal for workspace topology."""
 
 from __future__ import annotations
 
@@ -101,11 +101,11 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
     return hex_map
 
 
-async def _get_adjacency(workspace_id: str, db: AsyncSession) -> dict[tuple[int, int], list[tuple[tuple[int, int], str]]]:
-    """Build directed adjacency list from hex_connections.
+async def _get_adjacency(workspace_id: str, db: AsyncSession) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """Build bidirectional adjacency list from hex_connections.
 
-    Returns {(q, r): [((neighbor_q, neighbor_r), direction), ...]}
-    where direction indicates the traversal direction relative to the edge.
+    All connections are treated as bidirectional (direction control removed in this version).
+    Returns {(q, r): [(neighbor_q, neighbor_r), ...]}
     """
     conns_q = await db.execute(
         select(HexConnection).where(
@@ -113,16 +113,12 @@ async def _get_adjacency(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
             not_deleted(HexConnection),
         )
     )
-    adj: dict[tuple[int, int], list[tuple[tuple[int, int], str]]] = {}
+    adj: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for conn in conns_q.scalars().all():
         a = (conn.hex_a_q, conn.hex_a_r)
         b = (conn.hex_b_q, conn.hex_b_r)
-        d = conn.direction
-
-        if d == "both" or d == "a_to_b":
-            adj.setdefault(a, []).append((b, d))
-        if d == "both" or d == "b_to_a":
-            adj.setdefault(b, []).append((a, d))
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
 
     return adj
 
@@ -140,7 +136,7 @@ async def get_reachable_endpoints(
 
     while queue:
         current = queue.popleft()
-        for neighbor, _ in adj.get(current, []):
+        for neighbor in adj.get(current, []):
             if neighbor in visited:
                 continue
             visited.add(neighbor)
@@ -173,7 +169,7 @@ async def get_blackboard_audience(
 async def can_reach(
     workspace_id: str, from_q: int, from_r: int, to_q: int, to_r: int, db: AsyncSession
 ) -> bool:
-    """Check if there is a directed path from source to target."""
+    """Check if there is a path from source to target."""
     hex_map = await _build_hex_map(workspace_id, db)
     adj = await _get_adjacency(workspace_id, db)
 
@@ -183,7 +179,7 @@ async def can_reach(
 
     while queue:
         current = queue.popleft()
-        for neighbor, _ in adj.get(current, []):
+        for neighbor in adj.get(current, []):
             if neighbor == target:
                 return True
             if neighbor in visited:
@@ -207,7 +203,7 @@ async def get_topology(workspace_id: str, db: AsyncSession) -> Topology:
         )
     )
     edges = [
-        TopologyEdge(c.hex_a_q, c.hex_a_r, c.hex_b_q, c.hex_b_r, c.direction, c.auto_created)
+        TopologyEdge(c.hex_a_q, c.hex_a_r, c.hex_b_q, c.hex_b_r, "both", c.auto_created)
         for c in conns_q.scalars().all()
     ]
 
@@ -288,20 +284,6 @@ async def auto_connect_hex(
     return connected
 
 
-def _build_undirected_adjacency(
-    adj: dict[tuple[int, int], list[tuple[tuple[int, int], str]]],
-) -> dict[tuple[int, int], list[tuple[int, int]]]:
-    """Build undirected adjacency for connected component / articulation point detection."""
-    undirected: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for node, neighbors in adj.items():
-        for neighbor, _ in neighbors:
-            undirected.setdefault(node, []).append(neighbor)
-            undirected.setdefault(neighbor, []).append(node)
-    for key in undirected:
-        undirected[key] = list(dict.fromkeys(undirected[key]))
-    return undirected
-
-
 async def detect_islands(
     workspace_id: str, db: AsyncSession
 ) -> list[list[str]]:
@@ -311,7 +293,6 @@ async def detect_islands(
     """
     hex_map = await _build_hex_map(workspace_id, db)
     adj = await _get_adjacency(workspace_id, db)
-    undirected = _build_undirected_adjacency(adj)
 
     all_nodes = set(hex_map.keys())
     visited: set[tuple[int, int]] = set()
@@ -326,7 +307,7 @@ async def detect_islands(
         while queue:
             current = queue.popleft()
             component.append(f"{current[0]},{current[1]}")
-            for neighbor in undirected.get(current, []):
+            for neighbor in adj.get(current, []):
                 if neighbor not in visited:
                     visited.add(neighbor)
                     queue.append(neighbor)
@@ -344,7 +325,6 @@ async def detect_single_points_of_failure(
     """
     hex_map = await _build_hex_map(workspace_id, db)
     adj = await _get_adjacency(workspace_id, db)
-    undirected = _build_undirected_adjacency(adj)
     all_nodes = set(hex_map.keys())
 
     if len(all_nodes) <= 1:
@@ -353,11 +333,9 @@ async def detect_single_points_of_failure(
     spof: list[str] = []
 
     for node in all_nodes:
-        if node not in undirected:
+        if node not in adj:
             continue
-        removed = undirected.copy()
-        removed = {k: [n for n in v if n != node] for k, v in removed.items() if k != node}
-        removed.pop(node, None)
+        removed = {k: [n for n in v if n != node] for k, v in adj.items() if k != node}
 
         remaining = set(removed.keys())
         if not remaining:

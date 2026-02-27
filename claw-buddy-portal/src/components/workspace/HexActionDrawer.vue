@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Settings, Link, Move } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Settings, Move } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -22,7 +22,7 @@ const emit = defineEmits<{
 const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
   agent: { c: 'open-chat', d: 'view-detail', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
-  corridor: { r: 'rename-corridor', l: 'manage-connections', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
+  corridor: { r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
   human: { s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
   blackboard: { e: 'view-blackboard' },
 }
@@ -162,14 +162,6 @@ onUnmounted(() => {
             <PenSquare class="w-4 h-4 text-cyan-400" />
             <span>{{ t('hexAction.renameCorridor') }}</span>
             <kbd class="kbd-hint">R</kbd>
-          </button>
-          <button
-            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
-            @click="emit('action', 'manage-connections')"
-          >
-            <Link class="w-4 h-4 text-muted-foreground" />
-            <span>{{ t('hexAction.manageConnections') }}</span>
-            <kbd class="kbd-hint">L</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"

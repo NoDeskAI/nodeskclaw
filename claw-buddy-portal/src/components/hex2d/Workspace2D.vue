@@ -139,7 +139,6 @@ const connectionLines = computed(() =>
       y1: from.y * SCALE,
       x2: to.x * SCALE,
       y2: to.y * SCALE,
-      direction: e.direction,
     }
   })
 )
@@ -329,19 +328,12 @@ const emptyHexes = computed(() => {
       </g>
 
       <!-- Connection lines -->
-      <g v-for="conn in connectionLines" :key="'conn-' + conn.id">
-        <defs>
-          <marker :id="'arrow-' + conn.id" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <path d="M0,0 L8,3 L0,6" fill="#06b6d4" opacity="0.6" />
-          </marker>
-        </defs>
-        <line
-          :x1="conn.x1" :y1="conn.y1" :x2="conn.x2" :y2="conn.y2"
-          stroke="#06b6d4" stroke-width="2" opacity="0.4"
-          :marker-end="conn.direction === 'a_to_b' || conn.direction === 'both' ? `url(#arrow-${conn.id})` : undefined"
-          :marker-start="conn.direction === 'b_to_a' || conn.direction === 'both' ? `url(#arrow-${conn.id})` : undefined"
-        />
-      </g>
+      <line
+        v-for="conn in connectionLines"
+        :key="'conn-' + conn.id"
+        :x1="conn.x1" :y1="conn.y1" :x2="conn.x2" :y2="conn.y2"
+        stroke="#06b6d4" stroke-width="2" opacity="0.4"
+      />
 
       <!-- Corridor hexes -->
       <g

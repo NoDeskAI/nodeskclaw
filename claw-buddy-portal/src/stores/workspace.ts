@@ -558,7 +558,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     const topologyEvents = [
       'corridor:hex_placed', 'corridor:hex_updated', 'corridor:hex_removed',
-      'connection:created', 'connection:updated', 'connection:removed',
+      'connection:created', 'connection:removed',
       'human:hex_placed', 'human:hex_removed', 'human:channel_updated',
     ]
     for (const eventName of topologyEvents) {
@@ -690,20 +690,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function createConnection(workspaceId: string, aQ: number, aR: number, bQ: number, bR: number, direction = 'both') {
+  async function createConnection(workspaceId: string, aQ: number, aR: number, bQ: number, bR: number) {
     const res = await api.post(`/workspaces/${workspaceId}/connections`, {
-      hex_a_q: aQ, hex_a_r: aR, hex_b_q: bQ, hex_b_r: bR, direction,
+      hex_a_q: aQ, hex_a_r: aR, hex_b_q: bQ, hex_b_r: bR,
     })
     const conn = res.data.data
     connections.value.push(conn)
     await fetchTopology(workspaceId)
     return conn as ConnectionInfo
-  }
-
-  async function updateConnection(workspaceId: string, connId: string, direction: string) {
-    await api.put(`/workspaces/${workspaceId}/connections/${connId}`, { direction })
-    const idx = connections.value.findIndex(c => c.id === connId)
-    if (idx >= 0) connections.value[idx].direction = direction
   }
 
   async function deleteConnection(workspaceId: string, connId: string) {
@@ -816,7 +810,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     deleteCorridorHex,
     fetchConnections,
     createConnection,
-    updateConnection,
     deleteConnection,
     humanHexes,
     fetchHumanHexes,
