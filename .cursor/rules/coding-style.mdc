@@ -128,7 +128,7 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 ```
 即将执行以下破坏性操作，请确认：
 1. 删除 IngressClass nginx（会影响所有 nginx class Ingress）
-2. 删除 clawbuddy-system namespace（包含其中所有资源）
+2. 删除 nodeskclaw-system namespace（包含其中所有资源）
 3. ...
 
 确认后我再执行。
@@ -497,6 +497,23 @@ docker build -t my-image:latest .
 
 - 禁止在未获明确需求时自行启动浏览器自动化流程
 - 禁止把"顺手验证"当作默认动作执行页面自动化测试
+
+## 部署脚本执行规则
+
+**禁止 AI 助手直接运行 `deploy/deploy.sh` 或任何构建/部署命令。** 构建镜像和部署到集群必须由用户手动执行。
+
+### 必须做
+
+- 代码改完后提交 commit，然后告知用户"代码已提交，可以部署了"
+- 如果用户需要部署命令，给出完整的可复制命令，让用户自己粘贴运行
+- 部署相关的命令示例用代码块展示，不要用 Shell 工具执行
+
+### 严禁
+
+- **禁止通过 Shell 工具运行 `deploy/deploy.sh`**
+- **禁止通过 Shell 工具运行 `docker build`、`docker push`**
+- **禁止通过 Shell 工具运行 `kubectl set image`、`kubectl rollout`**
+- **禁止以任何方式自动触发构建或部署流程**
 
 ## 变更规模判断规则
 
