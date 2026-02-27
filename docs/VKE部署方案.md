@@ -1371,13 +1371,13 @@ LLM Proxy 复用已有的 Controller ALB + Nginx Ingress Controller，不单独�
 ```
 OpenClaw Pod
   │
-  │ HTTPS (nodeskclaw-llm-proxy.nodeskai.com)
+  │ HTTPS (llm-proxy-claw.nodeskai.com)
   ▼
 Controller ALB (私网 10.3.32.251, HTTPS:443)
   │ *.nodeskai.com 通配转发规则
   ▼
 Nginx Ingress Controller Pod (nodeskclaw-system)
-  │ Host: nodeskclaw-llm-proxy.nodeskai.com
+  │ Host: llm-proxy-claw.nodeskai.com
   ▼
 LLM Proxy Service (ClusterIP, port:80 -> targetPort:8080)
   │
@@ -1390,11 +1390,11 @@ LLM Proxy Pod (:8080)
 | 资源 | 名称 | 命名空间 | 说明 |
 |------|------|----------|------|
 | Ingress (alb) | `nodeskclaw-controller-alb-route` | nodeskclaw-system | `*.nodeskai.com` 通配，转发到 Nginx Controller |
-| Ingress (nginx) | `nodeskclaw-llm-proxy` | nodeskclaw-system | 匹配 `nodeskclaw-llm-proxy.nodeskai.com`，转发到 LLM Proxy Service |
+| Ingress (nginx) | `nodeskclaw-llm-proxy` | nodeskclaw-system | 匹配 `llm-proxy-claw.nodeskai.com`，转发到 LLM Proxy Service |
 | Service | `nodeskclaw-llm-proxy` | nodeskclaw-system | ClusterIP，port 80 -> targetPort 8080 |
 | Deployment | `nodeskclaw-llm-proxy` | nodeskclaw-system | 1 副本，含 Clash sidecar |
 
-DNS 配置：`nodeskclaw-llm-proxy.nodeskai.com` 解析到 Controller ALB 的私网 VIP `10.3.32.251`（可用 `*.nodeskai.com` 通配 A 记录覆盖）。
+DNS 配置：`llm-proxy-claw.nodeskai.com` 解析到 Controller ALB 的私网 VIP `10.3.32.251`（可用 `*.nodeskai.com` 通配 A 记录覆盖）。
 
 ### 10.3 部署步骤
 
@@ -1423,7 +1423,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: nodeskclaw-llm-proxy.nodeskai.com
+  - host: llm-proxy-claw.nodeskai.com
     http:
       paths:
       - path: /
@@ -1437,7 +1437,7 @@ EOF
 
 # 6. 验证
 kubectl exec -n <any-openclaw-namespace> <pod> -- \
-  curl -sk https://nodeskclaw-llm-proxy.nodeskai.com/health
+  curl -sk https://llm-proxy-claw.nodeskai.com/health
 # 期望返回: {"status":"ok"}
 ```
 
@@ -1446,7 +1446,7 @@ kubectl exec -n <any-openclaw-namespace> <pod> -- \
 在 `nodeskclaw-backend/.env` 中设置 LLM Proxy 地址：
 
 ```
-LLM_PROXY_URL=https://nodeskclaw-llm-proxy.nodeskai.com
+LLM_PROXY_URL=https://llm-proxy-claw.nodeskai.com
 LLM_PROXY_INTERNAL_URL=http://nodeskclaw-llm-proxy.nodeskclaw-system
 ```
 
@@ -1540,7 +1540,7 @@ kubectl describe ingress nodeskclaw-controller-alb-route -n nodeskclaw-system
 # 从任意 Pod 测试多个路径
 for path in / /health /api /v1/chat/completions; do
   code=$(curl -sk -o /dev/null -w '%{http_code}' \
-    https://nodeskclaw-llm-proxy.nodeskai.com${path})
+    https://llm-proxy-claw.nodeskai.com${path})
   echo "${path} -> ${code}"
 done
 # 所有路径都应返回非 503 的状态码
