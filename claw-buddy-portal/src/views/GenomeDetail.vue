@@ -160,7 +160,23 @@ function goToGene(slug: string) {
             <component :is="resolveIcon(genome.icon)" class="w-6 h-6 text-primary" />
           </div>
           <div class="min-w-0 flex-1">
-            <h1 class="text-xl font-bold">{{ genome.name }}</h1>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="text-xl font-bold">{{ genome.name }}</h1>
+              <span
+                v-if="genome.native_tool_count"
+                class="shrink-0 inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-400 text-xs px-2 py-0.5 rounded"
+              >
+                <Wrench class="w-3.5 h-3.5" />
+                {{ t('genome.nativeToolCount', { count: genome.native_tool_count }) }}
+              </span>
+              <span
+                v-if="genome.mcp_server_count"
+                class="shrink-0 inline-flex items-center gap-1 bg-violet-500/10 text-violet-400 text-xs px-2 py-0.5 rounded"
+              >
+                <Server class="w-3.5 h-3.5" />
+                {{ t('genome.mcpServerCount', { count: genome.mcp_server_count }) }}
+              </span>
+            </div>
           </div>
           <button
             class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"

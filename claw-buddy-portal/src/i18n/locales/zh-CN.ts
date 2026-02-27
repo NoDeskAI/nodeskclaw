@@ -98,6 +98,8 @@ const zhCN = {
     viewDetail: "查看详情",
     noGeneContent: "暂无基因内容",
     notFound: "未找到该基因组",
+    nativeToolCount: "含 {count} 个原生工具",
+    mcpServerCount: "含 {count} 个 MCP 服务",
   },
   workspaceView: {
     addAgent: "添加 Agent",

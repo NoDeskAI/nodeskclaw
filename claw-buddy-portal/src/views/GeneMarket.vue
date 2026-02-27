@@ -538,13 +538,27 @@ function hasNativeTools(gene: GeneItem): boolean {
                   />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-medium truncate">{{ item.name }}</span>
                     <span
                       v-if="viewMode === 'genes' && hasNativeTools(item as GeneItem)"
                       class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
                     >
                       {{ t('geneMarket.hasNativeTools') }}
+                    </span>
+                    <span
+                      v-if="viewMode === 'genomes' && (item as GenomeItem).native_tool_count"
+                      class="shrink-0 inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      <Wrench class="w-3 h-3" />
+                      {{ t('genome.nativeToolCount', { count: (item as GenomeItem).native_tool_count }) }}
+                    </span>
+                    <span
+                      v-if="viewMode === 'genomes' && (item as GenomeItem).mcp_server_count"
+                      class="shrink-0 inline-flex items-center gap-1 bg-violet-500/10 text-violet-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      <Server class="w-3 h-3" />
+                      {{ t('genome.mcpServerCount', { count: (item as GenomeItem).mcp_server_count }) }}
                     </span>
                   </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-0.5">
@@ -632,7 +646,23 @@ function hasNativeTools(gene: GeneItem): boolean {
                   <component :is="resolveIcon(genome.icon)" class="w-5 h-5 text-primary" />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="font-medium truncate">{{ genome.name }}</div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-medium truncate">{{ genome.name }}</span>
+                    <span
+                      v-if="genome.native_tool_count"
+                      class="shrink-0 inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      <Wrench class="w-3 h-3" />
+                      {{ t('genome.nativeToolCount', { count: genome.native_tool_count }) }}
+                    </span>
+                    <span
+                      v-if="genome.mcp_server_count"
+                      class="shrink-0 inline-flex items-center gap-1 bg-violet-500/10 text-violet-400 text-[10px] px-1.5 py-0.5 rounded"
+                    >
+                      <Server class="w-3 h-3" />
+                      {{ t('genome.mcpServerCount', { count: genome.mcp_server_count }) }}
+                    </span>
+                  </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-1">
                     {{ genome.short_description ?? genome.description ?? '' }}
                   </p>

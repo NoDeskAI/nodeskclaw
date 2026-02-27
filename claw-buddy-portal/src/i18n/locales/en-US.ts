@@ -98,6 +98,8 @@ const enUS = {
     viewDetail: "View Details",
     noGeneContent: "No gene content",
     notFound: "Genome not found",
+    nativeToolCount: "{count} Native Tools",
+    mcpServerCount: "{count} MCP Servers",
   },
   workspaceView: {
     addAgent: "Add Agent",

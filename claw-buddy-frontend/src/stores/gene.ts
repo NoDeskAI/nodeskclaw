@@ -44,6 +44,8 @@ export interface GenomeItem {
   avg_rating: number
   is_featured: boolean
   is_published: boolean
+  native_tool_count?: number
+  mcp_server_count?: number
   created_by: string | null
   org_id: string | null
   created_at: string | null

@@ -38,6 +38,8 @@ export interface GenomeItem {
   install_count: number
   avg_rating: number
   is_featured: boolean
+  native_tool_count?: number
+  mcp_server_count?: number
   created_at?: string
 }
 

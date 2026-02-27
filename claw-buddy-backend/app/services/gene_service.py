@@ -177,6 +177,41 @@ def _genome_to_dict(genome: Genome) -> dict:
     }
 
 
+async def _enrich_genomes_tool_counts(db: AsyncSession, genome_dicts: list[dict]) -> list[dict]:
+    all_slugs: set[str] = set()
+    for gd in genome_dicts:
+        all_slugs.update(gd.get("gene_slugs") or [])
+    if not all_slugs:
+        for gd in genome_dicts:
+            gd["native_tool_count"] = 0
+            gd["mcp_server_count"] = 0
+        return genome_dicts
+
+    result = await db.execute(
+        select(Gene.slug, Gene.manifest).where(Gene.slug.in_(list(all_slugs)), not_deleted(Gene))
+    )
+    slug_tools: dict[str, tuple[int, int]] = {}
+    for slug, manifest_raw in result.all():
+        m = _json_loads(manifest_raw) if isinstance(manifest_raw, str) else (manifest_raw or {})
+        ta = m.get("tool_allow", [])
+        ms = m.get("mcp_servers", [])
+        slug_tools[slug] = (
+            len(ta) if isinstance(ta, list) else 0,
+            len(ms) if isinstance(ms, list) else 0,
+        )
+
+    for gd in genome_dicts:
+        native = 0
+        mcp = 0
+        for s in gd.get("gene_slugs") or []:
+            counts = slug_tools.get(s, (0, 0))
+            native += counts[0]
+            mcp += counts[1]
+        gd["native_tool_count"] = native
+        gd["mcp_server_count"] = mcp
+    return genome_dicts
+
+
 # ═══════════════════════════════════════════════════
 #  CRUD + Market Query
 # ═══════════════════════════════════════════════════
@@ -338,7 +373,7 @@ async def get_gene_genomes(db: AsyncSession, gene_id: str) -> list[dict]:
         slugs = _json_loads(g.gene_slugs) or []
         if gene_obj.slug in slugs:
             matched.append(_genome_to_dict(g))
-    return matched
+    return await _enrich_genomes_tool_counts(db, matched)
 
 
 # ── Genome CRUD ──────────────────────────────────
@@ -360,7 +395,8 @@ async def list_genomes(
 
     base = base.order_by(Genome.install_count.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(base)
-    return [_genome_to_dict(g) for g in result.scalars().all()], total
+    items = await _enrich_genomes_tool_counts(db, [_genome_to_dict(g) for g in result.scalars().all()])
+    return items, total
 
 
 async def get_genome(db: AsyncSession, genome_id: str) -> dict:
@@ -370,7 +406,8 @@ async def get_genome(db: AsyncSession, genome_id: str) -> dict:
     genome = result.scalar_one_or_none()
     if not genome:
         raise NotFoundError("基因组不存在")
-    return _genome_to_dict(genome)
+    items = await _enrich_genomes_tool_counts(db, [_genome_to_dict(genome)])
+    return items[0]
 
 
 async def create_genome(
@@ -402,7 +439,7 @@ async def get_featured_genomes(db: AsyncSession, limit: int = 10) -> list[dict]:
         .order_by(Genome.install_count.desc())
         .limit(limit)
     )
-    return [_genome_to_dict(g) for g in result.scalars().all()]
+    return await _enrich_genomes_tool_counts(db, [_genome_to_dict(g) for g in result.scalars().all()])
 
 
 # ═══════════════════════════════════════════════════
@@ -1715,7 +1752,8 @@ async def admin_list_genomes(
 
     base = base.order_by(Genome.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(base)
-    return [_genome_to_dict(g) for g in result.scalars().all()], total
+    items = await _enrich_genomes_tool_counts(db, [_genome_to_dict(g) for g in result.scalars().all()])
+    return items, total
 
 
 async def update_gene(db: AsyncSession, gene_id: str, req: UpdateGeneRequest) -> dict:
