@@ -128,7 +128,7 @@ function nodeTypeLabel(type: string): string {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       @click.self="emit('close')"
     >
-      <div class="w-full max-w-3xl mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="w-full max-w-[80%] mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col h-[85vh]">
         <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <h2 class="text-lg font-semibold">{{ t('hexAction.centralBlackboard') }}</h2>
           <div class="flex items-center gap-1">
@@ -168,7 +168,7 @@ function nodeTypeLabel(type: string): string {
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-5 py-4 min-h-[350px]">
+        <div class="flex-1 overflow-y-auto px-5 py-4">
 
           <template v-if="activeTab === 'objectives-tasks'">
             <div v-if="editing">
