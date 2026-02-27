@@ -136,7 +136,7 @@ build_and_push() {
   local dockerfile; dockerfile="$(get_dockerfile "$component")"
 
   log "[$component] 构建镜像: $image"
-  docker build --platform linux/amd64 \
+  if ! docker build --platform linux/amd64 \
     $NO_CACHE \
     -f "$dockerfile" \
     --build-arg http_proxy= \
@@ -144,10 +144,16 @@ build_and_push() {
     --build-arg HTTP_PROXY= \
     --build-arg HTTPS_PROXY= \
     -t "$image" \
-    "$context"
+    "$context"; then
+    err "[$component] 镜像构建失败"
+    return 1
+  fi
 
   log "[$component] 推送镜像..."
-  docker push "$image"
+  if ! docker push "$image"; then
+    err "[$component] 镜像推送失败"
+    return 1
+  fi
 
   ok "[$component] $image"
 }
