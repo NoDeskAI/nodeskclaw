@@ -20,7 +20,7 @@ spec:
       containers:
         # LLM Proxy
         - name: llm-proxy
-          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-llm-proxy:20260221-ed29c25
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-llm-proxy:20260222-c84653a
           ports:
             - containerPort: 8080
           env:
