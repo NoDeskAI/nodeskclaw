@@ -105,6 +105,47 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 - **禁止"分析完顺手就改"**：即使已经定位了根因、方案也很明确，仍然必须先报告并等用户说"改"才动手。"我直接改了"这种话不应出现
 - **禁止把"用户让我排查"等同于"用户让我修"**：排查 = 查原因并汇报，不等于授权修改代码
 
+## 破坏性操作必须逐项确认
+
+**以下操作属于"破坏性操作"，执行前必须逐项列出并获得用户明确确认，即使用户已经确认了总体计划。**
+
+"确认了计划" ≠ "授权了每一步破坏性操作"。计划是方向，执行时每个不可逆操作都要单独确认。
+
+### 必须逐项确认的操作
+
+- **K8s 资源删除**：`kubectl delete namespace`、`kubectl delete deployment`、`kubectl delete ingress`、`kubectl delete service`、`kubectl delete secret` 等
+- **K8s 资源替换**：删除后重建 IngressClass、StorageClass 等不可变资源
+- **数据库操作**：`DROP DATABASE`、`ALTER DATABASE RENAME`、`DELETE FROM`、`TRUNCATE`
+- **DNS / 域名变更**：修改 Ingress host、删除 ALB 路由规则
+- **Docker 镜像删除**：删除远程仓库中的镜像 tag
+- **NAS / 存储路径变更**：重命名或删除 NFS 目录、修改 StorageClass subPath
+- **Git 历史操作**：`git push --force`、`git rebase`、`git reset --hard`
+
+### 确认格式
+
+执行前必须以清单形式列出即将执行的破坏性操作，等用户逐条确认：
+
+```
+即将执行以下破坏性操作，请确认：
+1. 删除 IngressClass nginx（会影响所有 nginx class Ingress）
+2. 删除 clawbuddy-system namespace（包含其中所有资源）
+3. ...
+
+确认后我再执行。
+```
+
+### 严禁
+
+- **禁止连锁执行**：不能因为用户确认了"删除旧 namespace"就顺带把 IngressClass、ALB Ingress 都删了
+- **禁止在 AskQuestion 选项中隐含破坏性操作**：选项描述必须明确告知会删除什么
+- **禁止"先删再建"的乐观假设**：删除和创建之间如果有失败风险，必须先告知用户可能的中断时间
+
+### 例外（可以不单独确认）
+
+- 用户明确说"直接执行"、"全部按计划来"、"不用问我"时
+- 在测试环境中用户已声明可以随意操作时
+- 创建操作（不涉及删除、修改现有资源）
+
 ## K8s / OpenClaw 排查规则
 
 **用户提到的任何 OpenClaw 或 K8s 相关问题，必须先通过 kubectl 实际查看集群状态，再做判断。** 不允许凭代码逻辑或经验猜测。
