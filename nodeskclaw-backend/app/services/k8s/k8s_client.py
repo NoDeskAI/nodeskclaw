@@ -5,8 +5,29 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 from kubernetes_asyncio import client as k8s_client, watch
+from kubernetes_asyncio.stream import WsApiClient
 
 logger = logging.getLogger(__name__)
+
+
+class _ExecWsApiClient(WsApiClient):
+    """WsApiClient that returns raw exec output without JSON auto-parsing.
+
+    kubernetes_asyncio's ApiClient.deserialize() calls json.loads() on the
+    response body before converting to the target type.  When exec stdout
+    happens to be valid JSON (e.g. ``cat openclaw.json``), the library
+    parses it into a Python dict then str(dict) — producing single-quoted
+    keys and Python booleans, which is NOT valid JSON.
+
+    This subclass short-circuits that path for ``str`` return types so the
+    raw stdout bytes are returned as-is.
+    """
+
+    def deserialize(self, response, response_type):
+        if response_type == "str":
+            data = response.data
+            return data if isinstance(data, str) else data.decode("utf-8")
+        return super().deserialize(response, response_type)
 
 
 class K8sClient:
@@ -261,9 +282,7 @@ class K8sClient:
         self, ns: str, pod: str, command: list[str], container: str | None = None
     ) -> str:
         """Execute a command in a pod and return stdout."""
-        from kubernetes_asyncio.stream import WsApiClient
-
-        async with WsApiClient(self._api.configuration) as ws_api:
+        async with _ExecWsApiClient(self._api.configuration) as ws_api:
             core_ws = k8s_client.CoreV1Api(api_client=ws_api)
             resp = await core_ws.connect_get_namespaced_pod_exec(
                 pod, ns,
@@ -280,9 +299,7 @@ class K8sClient:
         self, ns: str, pod: str, command: list[str], container: str | None = None
     ) -> str:
         """Execute a command and return raw stdout without stderr mixing."""
-        from kubernetes_asyncio.stream import WsApiClient
-
-        async with WsApiClient(self._api.configuration) as ws_api:
+        async with _ExecWsApiClient(self._api.configuration) as ws_api:
             core_ws = k8s_client.CoreV1Api(api_client=ws_api)
             resp = await core_ws.connect_get_namespaced_pod_exec(
                 pod, ns,
