@@ -171,7 +171,7 @@ async def delete_workspace(db: AsyncSession, workspace_id: str) -> bool:
 
 # ── Agent management ─────────────────────────────────
 
-async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest) -> AgentBrief:
+async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest, user_id: str) -> AgentBrief:
     result = await db.execute(
         select(Instance).where(Instance.id == data.instance_id, Instance.deleted_at.is_(None))
     )
@@ -199,7 +199,7 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest) 
 
     from app.services import corridor_router
     connected = await corridor_router.auto_connect_hex(
-        workspace_id, inst.hex_position_q, inst.hex_position_r, None, db,
+        workspace_id, inst.hex_position_q, inst.hex_position_r, user_id, db,
     )
 
     await db.commit()

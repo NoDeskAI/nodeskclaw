@@ -144,7 +144,7 @@ async def add_agent(
     user=Depends(_get_current_user_dep()),
 ):
     try:
-        agent = await workspace_service.add_agent(db, workspace_id, data)
+        agent = await workspace_service.add_agent(db, workspace_id, data, user.id)
     except ValueError as e:
         raise _error(400, 40031, "errors.workspace.add_agent_invalid", str(e))
     return _ok(agent.model_dump(mode="json"))
