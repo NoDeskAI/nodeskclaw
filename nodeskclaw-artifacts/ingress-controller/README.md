@@ -4,21 +4,29 @@ NoDeskClaw 使用 Nginx Ingress Controller 实现 OpenClaw 实例的子域名自
 
 ## 架构
 
+### 多集群中心网关模式
+
 ```
 用户浏览器
   | *.nodeskai.com DNS 泛解析
   v
-火山云 SLB (:80/:443)
+infra ALB (TLS 终止)
   |
   v
-K8s Nginx Ingress Controller (NodePort 30080/30443)
-  | 按 Host 匹配: {instance-name}-nodeskclaw.nodeskai.com
+infra nginx-ingress-controller
+  | 管理平台子域名 → 本地 Service
+  | 实例子域名 → ExternalName Service → inst 集群 ALB
+  v
+inst nginx-ingress-controller
+  | 按 Host 匹配: {slug}-claw.nodeskai.com
   v
 实例 ClusterIP Service (:18789)
   |
   v
 OpenClaw Pod (:18789)
 ```
+
+每个 inst 集群需要独立安装本 deploy.yaml。infra 集群和 inst 集群各有一套 nginx-ingress-controller。
 
 ## 前置条件
 

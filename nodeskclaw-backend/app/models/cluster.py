@@ -38,6 +38,7 @@ class Cluster(BaseModel):
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
 
     ingress_class: Mapped[str] = mapped_column(String(32), default="nginx", nullable=False)
+    proxy_endpoint: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # SaaS：组织专属集群绑定（null = 共享集群）
     org_id: Mapped[str | None] = mapped_column(

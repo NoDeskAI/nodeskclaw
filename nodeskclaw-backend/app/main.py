@@ -560,6 +560,17 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 clusters 表添加 ingress_class 列")
 
+        # ── 迁移 20: clusters 表新增 proxy_endpoint 列（多集群网关代理） ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'clusters' AND column_name = 'proxy_endpoint'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE clusters ADD COLUMN proxy_endpoint VARCHAR(512)"
+            ))
+            logger.info("自动迁移：已为 clusters 表添加 proxy_endpoint 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

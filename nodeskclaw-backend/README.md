@@ -150,6 +150,12 @@ cp .env.example .env
 | `FEISHU_APP_SECRET` | 飞书应用 App Secret |
 | `FEISHU_REDIRECT_URI` | 飞书 OAuth 回调地址 |
 
+可选项：
+
+| 变量 | 说明 |
+|------|------|
+| `GATEWAY_KUBECONFIG` | 本地开发时网关集群（infra）的 kubeconfig 文件路径。生产环境使用 in-cluster config，无需配置 |
+
 ### 启动
 
 ```bash

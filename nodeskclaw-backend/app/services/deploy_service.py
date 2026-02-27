@@ -30,9 +30,11 @@ from app.services.k8s.k8s_client import K8sClient
 from app.services.k8s.resource_builder import (
     build_configmap,
     build_deployment,
+    build_external_name_service,
     build_ingress,
     build_labels,
     build_network_policy,
+    build_proxy_ingress,
     build_pvc,
     build_resource_quota,
     build_service,
@@ -207,6 +209,7 @@ class _DeployContext:
     advanced_config: dict | None
     kubeconfig_encrypted: str
     ingress_class: str = "nginx"
+    proxy_endpoint: str | None = None
     org_id: str | None = None
 
 
@@ -332,6 +335,7 @@ async def deploy_instance(
         advanced_config=req.advanced_config,
         kubeconfig_encrypted=cluster.kubeconfig_encrypted,
         ingress_class=cluster.ingress_class,
+        proxy_endpoint=cluster.proxy_endpoint,
         org_id=org_id,
     )
 
@@ -486,6 +490,27 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 instance = inst_result.scalar_one()
                 instance.ingress_domain = ingress_host
                 await db.commit()
+                # 网关代理：在 infra 集群创建 proxy Ingress，将流量转发到 inst 集群
+                if ctx.proxy_endpoint:
+                    try:
+                        from app.services.k8s.client_manager import GATEWAY_NS
+                        gateway_api = await k8s_manager.get_gateway_client()
+                        gateway_k8s = K8sClient(gateway_api)
+
+                        ext_svc = build_external_name_service(ctx.cluster_id, ctx.proxy_endpoint)
+                        await gateway_k8s.create_or_skip(
+                            gateway_k8s.core.create_namespaced_service, GATEWAY_NS, ext_svc,
+                        )
+
+                        proxy_ing = build_proxy_ingress(
+                            ctx.name, ingress_host, ext_svc.metadata.name,
+                        )
+                        await gateway_k8s.create_or_skip(
+                            gateway_k8s.networking.create_namespaced_ingress, GATEWAY_NS, proxy_ing,
+                        )
+                        logger.info("已在网关集群创建代理 Ingress: %s -> %s", ingress_host, ctx.proxy_endpoint)
+                    except Exception as e:
+                        logger.warning("创建网关代理 Ingress 失败（非致命）: %s", e)
             else:
                 logger.warning("未配置 ingress_base_domain，跳过 Ingress 创建")
 
@@ -620,6 +645,8 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 except Exception:
                     logger.warning("清理命名空间 %s 失败", ctx.namespace)
 
+                await _cleanup_proxy_ingress(ctx)
+
                 record.status = DeployStatus.failed
                 record.message = f"就绪超时: {cond_msg}"[:500]
                 record.finished_at = datetime.now(timezone.utc)
@@ -646,7 +673,6 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             logger.exception("部署失败: %s", ctx.name)
             ns_cleaned = False
             try:
-                # 尝试清理 K8s namespace（级联删除所有资源）
                 api_client = await k8s_manager.get_or_create(ctx.cluster_id, ctx.kubeconfig_encrypted)
                 cleanup_k8s = K8sClient(api_client)
                 await cleanup_k8s.core.delete_namespace(ctx.namespace)
@@ -654,6 +680,8 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 logger.info("部署异常，已清理命名空间: %s", ctx.namespace)
             except Exception:
                 logger.warning("清理命名空间 %s 失败", ctx.namespace)
+
+            await _cleanup_proxy_ingress(ctx)
 
             try:
                 rec_result = await db.execute(select(DeployRecord).where(DeployRecord.id == ctx.record_id))
@@ -678,3 +706,19 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
 
             cleanup_hint = "，命名空间已清理" if ns_cleaned else ""
             _publish(total, "失败", status="failed", message=f"{str(e)[:180]}{cleanup_hint}")
+
+
+async def _cleanup_proxy_ingress(ctx: _DeployContext) -> None:
+    """清理 infra 网关集群上的代理 Ingress（部署失败或实例删除时调用）。"""
+    if not ctx.proxy_endpoint:
+        return
+    try:
+        from app.services.k8s.client_manager import GATEWAY_NS
+        gateway_api = await k8s_manager.get_gateway_client()
+        gateway_k8s = K8sClient(gateway_api)
+        await gateway_k8s.networking.delete_namespaced_ingress(
+            f"proxy-{ctx.name}", GATEWAY_NS,
+        )
+        logger.info("已清理网关代理 Ingress: proxy-%s", ctx.name)
+    except Exception:
+        logger.debug("清理网关代理 Ingress proxy-%s 失败（可能不存在）", ctx.name)

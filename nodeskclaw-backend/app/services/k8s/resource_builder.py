@@ -46,6 +46,8 @@ from kubernetes_asyncio.client import (
     V1VolumeMount,
 )
 
+from app.services.k8s.client_manager import GATEWAY_NS
+
 MANAGED_BY = "nodeskclaw"
 
 # 系统保留标签前缀 -- 用户自定义标签不可覆盖
@@ -534,6 +536,82 @@ def build_ingress(
                                     service=V1IngressServiceBackend(
                                         name=svc_name,
                                         port=V1ServiceBackendPort(number=port),
+                                    )
+                                ),
+                            ),
+                        ]
+                    ),
+                )
+            ],
+        ),
+    )
+
+
+def build_external_name_service(
+    cluster_id: str,
+    external_name: str,
+) -> V1Service:
+    """构建 ExternalName Service，用于 infra 网关代理到 inst 集群 ALB。
+
+    每个 inst 集群对应一个 ExternalName Service，部署在 infra 的 GATEWAY_NS。
+    """
+    return V1Service(
+        metadata=V1ObjectMeta(
+            name=f"proxy-inst-{cluster_id[:8]}",
+            namespace=GATEWAY_NS,
+            labels={
+                "app.kubernetes.io/managed-by": MANAGED_BY,
+                "nodeskclaw/proxy-type": "inst-cluster",
+                "nodeskclaw/cluster-id": cluster_id,
+            },
+        ),
+        spec=V1ServiceSpec(
+            type="ExternalName",
+            external_name=external_name,
+        ),
+    )
+
+
+def build_proxy_ingress(
+    instance_name: str,
+    host: str,
+    proxy_service_name: str,
+) -> V1Ingress:
+    """构建代理 Ingress，部署在 infra 网关集群，将实例流量转发到 inst 集群。
+
+    infra nginx 收到实例子域名请求后，通过 ExternalName Service 转发到
+    对应 inst 集群的 ALB，再由 inst nginx 路由到实际 Pod。
+    """
+    return V1Ingress(
+        metadata=V1ObjectMeta(
+            name=f"proxy-{instance_name}",
+            namespace=GATEWAY_NS,
+            labels={
+                "app.kubernetes.io/managed-by": MANAGED_BY,
+                "nodeskclaw/proxy-type": "instance",
+                "nodeskclaw/instance-name": instance_name,
+            },
+            annotations={
+                "nginx.ingress.kubernetes.io/proxy-read-timeout": "86400",
+                "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+                "nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
+                "nginx.ingress.kubernetes.io/proxy-buffering": "off",
+            },
+        ),
+        spec=V1IngressSpec(
+            ingress_class_name="nginx",
+            rules=[
+                V1IngressRule(
+                    host=host,
+                    http=V1HTTPIngressRuleValue(
+                        paths=[
+                            V1HTTPIngressPath(
+                                path="/",
+                                path_type="Prefix",
+                                backend=V1IngressBackend(
+                                    service=V1IngressServiceBackend(
+                                        name=proxy_service_name,
+                                        port=V1ServiceBackendPort(number=80),
                                     )
                                 ),
                             ),

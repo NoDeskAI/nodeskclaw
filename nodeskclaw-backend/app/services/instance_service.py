@@ -165,15 +165,27 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
             try:
                 api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
                 k8s = K8sClient(api_client)
-                # 删除整个命名空间（级联删除 Deployment、Service、Ingress、PVC、ConfigMap 等所有资源）
                 try:
                     await k8s.core.delete_namespace(instance.namespace)
                     logger.info("已删除命名空间 %s（实例 %s）", instance.namespace, instance.name)
                 except Exception:
-                    # 命名空间可能已不存在，忽略
                     logger.warning("删除命名空间 %s 失败，可能已不存在", instance.namespace)
             except Exception as e:
                 logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
+
+            # 清理 infra 网关集群上的代理 Ingress
+            if cluster and cluster.proxy_endpoint:
+                try:
+                    from app.services.k8s.client_manager import GATEWAY_NS
+                    gateway_api = await k8s_manager.get_gateway_client()
+                    gateway_k8s = K8sClient(gateway_api)
+                    inst_name = instance.name
+                    await gateway_k8s.networking.delete_namespaced_ingress(
+                        f"proxy-{inst_name}", GATEWAY_NS,
+                    )
+                    logger.info("已清理网关代理 Ingress: proxy-%s", inst_name)
+                except Exception:
+                    logger.debug("清理网关代理 Ingress 失败（可能不存在）")
 
     # 逻辑删除实例
     instance.soft_delete()

@@ -1,5 +1,7 @@
 """Cluster service: CRUD, KubeConfig encryption, connection test."""
 
+import logging
+
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,8 @@ from app.models.deploy_record import DeployRecord
 from app.models.instance import Instance
 from app.models.user import User
 from app.schemas.cluster import ClusterCreate, ClusterInfo, ClusterUpdate, ConnectionTestResult
+
+logger = logging.getLogger(__name__)
 
 
 async def list_clusters(db: AsyncSession) -> list[ClusterInfo]:
@@ -38,12 +42,17 @@ async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> C
         auth_type=auth_type,
         api_server_url=api_server_url,
         ingress_class=data.ingress_class,
+        proxy_endpoint=data.proxy_endpoint,
         status=ClusterStatus.disconnected,
         created_by=user.id,
     )
     db.add(cluster)
     await db.commit()
     await db.refresh(cluster)
+
+    if cluster.proxy_endpoint:
+        await _ensure_gateway_proxy_service(cluster.id, cluster.proxy_endpoint)
+
     return ClusterInfo.model_validate(cluster)
 
 
@@ -65,8 +74,14 @@ async def update_cluster(cluster_id: str, data: ClusterUpdate, db: AsyncSession)
         cluster.provider = data.provider
     if data.ingress_class is not None:
         cluster.ingress_class = data.ingress_class
+    if data.proxy_endpoint is not None:
+        cluster.proxy_endpoint = data.proxy_endpoint
     await db.commit()
     await db.refresh(cluster)
+
+    if cluster.proxy_endpoint:
+        await _ensure_gateway_proxy_service(cluster.id, cluster.proxy_endpoint)
+
     return ClusterInfo.model_validate(cluster)
 
 
@@ -191,3 +206,26 @@ def _parse_kubeconfig_meta(kubeconfig: str) -> tuple[str, str]:
         return api_server, auth_type
     except Exception:
         return "", "unknown"
+
+
+async def _ensure_gateway_proxy_service(cluster_id: str, proxy_endpoint: str) -> None:
+    """在 infra 网关集群创建/更新 ExternalName Service，指向 inst 集群 ALB。"""
+    try:
+        from app.services.k8s.client_manager import GATEWAY_NS, k8s_manager
+        from app.services.k8s.k8s_client import K8sClient
+        from app.services.k8s.resource_builder import build_external_name_service
+
+        gateway_api = await k8s_manager.get_gateway_client()
+        gateway_k8s = K8sClient(gateway_api)
+        ext_svc = build_external_name_service(cluster_id, proxy_endpoint)
+
+        try:
+            await gateway_k8s.core.create_namespaced_service(GATEWAY_NS, ext_svc)
+            logger.info("已在网关集群创建 ExternalName Service: %s -> %s", ext_svc.metadata.name, proxy_endpoint)
+        except Exception:
+            await gateway_k8s.core.patch_namespaced_service(
+                ext_svc.metadata.name, GATEWAY_NS, ext_svc,
+            )
+            logger.info("已在网关集群更新 ExternalName Service: %s -> %s", ext_svc.metadata.name, proxy_endpoint)
+    except Exception as e:
+        logger.warning("创建网关 ExternalName Service 失败: %s", e)

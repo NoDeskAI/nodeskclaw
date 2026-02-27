@@ -1,6 +1,7 @@
 """K8s client manager: connection pool with health check and token detection."""
 
 import logging
+import os
 import tempfile
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -12,6 +13,8 @@ from kubernetes_asyncio.config import load_kube_config
 from app.core.security import decrypt_kubeconfig
 
 logger = logging.getLogger(__name__)
+
+GATEWAY_NS = "nodeskclaw-system"
 
 
 @dataclass
@@ -104,6 +107,35 @@ class K8sClientManager:
         for entry in self._entries.values():
             await entry.api_client.close()
         self._entries.clear()
+
+    async def get_gateway_client(self) -> k8s_client.ApiClient:
+        """获取网关集群（infra）的 K8s 客户端。
+
+        生产环境使用 in-cluster config（后端 Pod 的 ServiceAccount 自动认证）；
+        本地开发 fallback 到 GATEWAY_KUBECONFIG 环境变量或 ~/.kube/config。
+        """
+        entry = self._entries.get("_gateway")
+        if entry is not None:
+            return entry.api_client
+
+        cfg = k8s_client.Configuration()
+
+        if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token"):
+            from kubernetes_asyncio.config import load_incluster_config
+            load_incluster_config(client_configuration=cfg)
+            logger.info("网关客户端：使用 in-cluster config")
+        else:
+            gw_kubeconfig = os.environ.get("GATEWAY_KUBECONFIG")
+            if gw_kubeconfig and os.path.exists(gw_kubeconfig):
+                await load_kube_config(config_file=gw_kubeconfig, client_configuration=cfg)
+                logger.info("网关客户端：使用 GATEWAY_KUBECONFIG=%s", gw_kubeconfig)
+            else:
+                await load_kube_config(client_configuration=cfg)
+                logger.info("网关客户端：使用默认 kubeconfig（本地开发）")
+
+        api = k8s_client.ApiClient(configuration=cfg)
+        self._entries["_gateway"] = ClientEntry(api_client=api)
+        return api
 
     def get_status(self) -> dict[str, dict]:
         return {

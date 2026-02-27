@@ -1559,3 +1559,41 @@ done
 | 5 | DNS 解析是否指向正确的 ALB VIP | `python3 -c "import socket; print(socket.gethostbyname('xxx.nodeskai.com'))"` |
 | 6 | 是否有残留的 Ingress 或 ALB 资源 | `kubectl get ingress -A` / `kubectl get alb` |
 | 7 | 强制重新同步 | `kubectl annotate ingress <name> -n nodeskclaw-system force-sync=$(date +%s) --overwrite` |
+
+---
+
+## 十二、Inst 集群基础设施搭建
+
+每个 inst 集群（用于运行 OpenClaw 实例）需要以下基础设施。
+
+### 12.1 安装 nginx-ingress-controller
+
+复用 `nodeskclaw-artifacts/ingress-controller/deploy.yaml`：
+
+```bash
+kubectl --context <inst-cluster> apply -f nodeskclaw-artifacts/ingress-controller/deploy.yaml
+```
+
+同时复制镜像拉取 Secret：
+
+```bash
+kubectl --context <infra-cluster> get secret cr-pull-secret -n nodeskclaw-system -o json \
+  | python3 -c "import sys,json; s=json.load(sys.stdin); s['metadata']={'name':s['metadata']['name'],'namespace':'nodeskclaw-system'}; json.dump(s,sys.stdout)" \
+  | kubectl --context <inst-cluster> apply -n nodeskclaw-system -f -
+```
+
+### 12.2 创建 ALB + 通配符 Ingress
+
+在火山云 VKE 控制台：
+
+1. 为 inst 集群创建 ALB 实例（HTTP 监听 80 端口，TLS 在 infra ALB 终止）
+2. 创建绑定该 ALB 的 IngressClass
+3. 创建通配符 ALB Ingress：`*.nodeskai.com` -> `nodeskclaw-system-controller:80`
+
+### 12.3 记录 proxy_endpoint
+
+获取 ALB hostname 并在管理后台更新集群的 `proxy_endpoint` 字段。后端会自动在 infra 集群创建对应的 ExternalName Service。
+
+### 12.4 RBAC（infra 集群）
+
+后端 ServiceAccount 需要 `nodeskclaw-gateway-proxy` Role 权限来管理 `nodeskclaw-system` 命名空间的 proxy Ingress 和 ExternalName Service。
