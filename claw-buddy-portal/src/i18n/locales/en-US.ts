@@ -93,13 +93,15 @@ const enUS = {
     toolCapabilities: "Tool Capabilities",
   },
   genome: {
-    apply: "Apply",
+    learn: "Learn",
     genesIncluded: "Included Genes",
     viewDetail: "View Details",
     noGeneContent: "No gene content",
     notFound: "Genome not found",
     nativeToolCount: "{count} Native Tools",
     mcpServerCount: "{count} MCP Servers",
+    selectInstance: "Select Instance",
+    selectInstanceHint: "Select an instance to learn genome {name} (all included genes will be installed)",
   },
   workspaceView: {
     addAgent: "Add Agent",

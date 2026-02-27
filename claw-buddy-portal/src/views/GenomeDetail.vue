@@ -22,6 +22,10 @@ import {
   Check,
   FileText,
   AlertTriangle,
+  Download,
+  X,
+  Copy,
+  ExternalLink,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import { useGeneStore } from '@/stores/gene'
@@ -37,6 +41,65 @@ const genomeId = computed(() => route.params.id as string)
 const genome = computed(() => store.currentGenome)
 const geneMap = ref<Record<string, GeneItem>>({})
 const activeGeneTab = ref<string>('')
+
+const installDialogOpen = ref(false)
+const instances = ref<{ id: string; name: string; slug: string; status: string }[]>([])
+const instancesLoading = ref(false)
+
+const statusConfig: Record<string, { dot: string; text: string; bg: string }> = {
+  running: { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  learning: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  creating: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  pending: { dot: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/40' },
+  deploying: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  updating: { dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+  failed: { dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
+  deleting: { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' },
+}
+
+function getStatusConfig(status: string) {
+  return statusConfig[status] ?? { dot: 'bg-gray-400', text: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-950/40' }
+}
+
+function getStatusLabel(status: string) {
+  const key = `status.${status}`
+  const translated = t(key)
+  return translated === key ? status : translated
+}
+
+const copiedSlug = ref<string | null>(null)
+async function copySlug(slug: string) {
+  try {
+    await navigator.clipboard.writeText(slug)
+    copiedSlug.value = slug
+    setTimeout(() => { copiedSlug.value = null }, 1500)
+  } catch { /* ignore */ }
+}
+
+function openInstallDialog() {
+  installDialogOpen.value = true
+  instancesLoading.value = true
+  api.get('/instances').then((res) => {
+    instances.value = (res.data.data || []).map((i: { id: string; name: string; slug: string; status: string }) => ({
+      id: i.id, name: i.name, slug: i.slug, status: i.status,
+    }))
+  }).catch(() => {
+    instances.value = []
+  }).finally(() => {
+    instancesLoading.value = false
+  })
+}
+
+function closeInstallDialog() {
+  installDialogOpen.value = false
+}
+
+function selectInstance(instanceId: string) {
+  store.applyGenome(instanceId, genomeId.value).then(() => {
+    closeInstallDialog()
+    router.push({ path: `/instances/${instanceId}/genes` })
+  })
+}
 
 const activeGeneContentRaw = computed(() => {
   const gene = geneMap.value[activeGeneTab.value]
@@ -180,9 +243,10 @@ function goToGene(slug: string) {
           </div>
           <button
             class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            @click="openInstallDialog"
           >
-            <Check class="w-4 h-4" />
-            {{ t('genome.apply') }}
+            <Download class="w-4 h-4" />
+            {{ t('genome.learn') }}
           </button>
         </div>
       </div>
@@ -306,5 +370,77 @@ function goToGene(slug: string) {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="installDialogOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        @click.self="closeInstallDialog"
+      >
+        <div
+          class="w-full max-w-md mx-4 rounded-xl border border-border bg-card p-6 shadow-lg"
+          @click.stop
+        >
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">{{ t('genome.selectInstance') }}</h3>
+            <button
+              class="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              @click="closeInstallDialog"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <p class="text-sm text-muted-foreground mb-4">
+            {{ t('genome.selectInstanceHint', { name: genome?.name ?? '' }) }}
+          </p>
+          <div v-if="instancesLoading" class="flex justify-center py-8">
+            <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else class="max-h-72 overflow-y-auto space-y-1.5">
+            <div v-if="instances.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+              {{ t('gene.noAvailableInstances') }}
+            </div>
+            <button
+              v-for="inst in instances"
+              :key="inst.id"
+              :disabled="inst.status !== 'running' && inst.status !== 'learning'"
+              :class="[
+                'w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition text-left',
+                inst.status === 'running' || inst.status === 'learning'
+                  ? 'border-border bg-background hover:border-emerald-300 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 cursor-pointer'
+                  : 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed opacity-60',
+              ]"
+              @click="(inst.status === 'running' || inst.status === 'learning') && selectInstance(inst.id)"
+            >
+              <span
+                :class="['w-2 h-2 rounded-full shrink-0', getStatusConfig(inst.status).dot]"
+              />
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span class="font-medium text-sm truncate">{{ inst.name }}</span>
+                <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
+                  <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
+                  <button
+                    class="ml-0.5 p-0.5 rounded opacity-0 group-hover/slug:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                    @click.stop="copySlug(inst.slug)"
+                  >
+                    <Check v-if="copiedSlug === inst.slug" class="w-3 h-3 text-emerald-500" />
+                    <Copy v-else class="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+              <span
+                :class="[
+                  'text-xs shrink-0 px-2 py-0.5 rounded-full',
+                  getStatusConfig(inst.status).text,
+                  getStatusConfig(inst.status).bg,
+                ]"
+              >
+                {{ getStatusLabel(inst.status) }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
