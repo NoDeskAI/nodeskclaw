@@ -622,13 +622,16 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                     ensure_openclaw_gateway_config,
                     sync_openclaw_llm_config,
                 )
+                llm_sync_warning = ""
                 await ensure_openclaw_gateway_config(instance, db)
                 try:
                     await sync_openclaw_llm_config(instance, db)
                 except Exception as e:
                     logger.warning("部署后同步 LLM 配置失败（非致命）: %s", e)
+                    llm_sync_warning = "（LLM 配置注入失败，请在管理后台手动同步）"
 
-                _publish(total, "完成", status="success", message="部署成功")
+                success_msg = f"部署成功{llm_sync_warning}"
+                _publish(total, "完成", status="success", message=success_msg)
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
             else:
                 # 超时未就绪 —— 标记失败，附带 Deployment 状态详情
