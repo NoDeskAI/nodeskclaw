@@ -49,9 +49,18 @@ get_image_name() {
 
 get_build_context() {
   case "$1" in
-    backend) echo "$PROJECT_ROOT/nodeskclaw-backend" ;;
+    backend) echo "$PROJECT_ROOT" ;;
     admin)   echo "$PROJECT_ROOT/nodeskclaw-frontend" ;;
     portal)  echo "$PROJECT_ROOT/nodeskclaw-portal" ;;
+    *)       return 1 ;;
+  esac
+}
+
+get_dockerfile() {
+  case "$1" in
+    backend) echo "$PROJECT_ROOT/nodeskclaw-backend/Dockerfile" ;;
+    admin)   echo "$PROJECT_ROOT/nodeskclaw-frontend/Dockerfile" ;;
+    portal)  echo "$PROJECT_ROOT/nodeskclaw-portal/Dockerfile" ;;
     *)       return 1 ;;
   esac
 }
@@ -124,10 +133,12 @@ build_and_push() {
   local image_name; image_name="$(get_image_name "$component")"
   local image="${REGISTRY}/${image_name}:${TAG}"
   local context; context="$(get_build_context "$component")"
+  local dockerfile; dockerfile="$(get_dockerfile "$component")"
 
   log "[$component] 构建镜像: $image"
   docker build --platform linux/amd64 \
     $NO_CACHE \
+    -f "$dockerfile" \
     --build-arg http_proxy= \
     --build-arg https_proxy= \
     --build-arg HTTP_PROXY= \

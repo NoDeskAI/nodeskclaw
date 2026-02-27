@@ -6,10 +6,11 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock ./
+COPY nodeskclaw-backend/pyproject.toml nodeskclaw-backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
-COPY . .
+COPY nodeskclaw-backend/ .
+COPY openclaw-channel-nodeskclaw/ ./openclaw-channel-nodeskclaw/
 
 RUN mkdir -p /app/data
 

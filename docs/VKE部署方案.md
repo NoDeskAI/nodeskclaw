@@ -1239,11 +1239,11 @@ deploy/
 
 三个组件均部署在 `nodeskclaw-system` Namespace，镜像推送到火山云 CR `nodesk-center-cn-beijing.cr.volces.com/base-image/`：
 
-| 组件 | 镜像名 | Dockerfile | 端口 |
-|------|--------|-----------|------|
-| backend | `nodeskclaw-backend:TAG` | `nodeskclaw-backend/Dockerfile` | 8000 |
-| admin | `nodeskclaw-admin:TAG` | `nodeskclaw-frontend/Dockerfile` (多阶段 Node+Nginx) | 80 |
-| portal | `nodeskclaw-portal:TAG` | `nodeskclaw-portal/Dockerfile` (多阶段 Node+Nginx) | 80 |
+| 组件 | 镜像名 | Dockerfile | Build Context | 端口 |
+|------|--------|-----------|---------------|------|
+| backend | `nodeskclaw-backend:TAG` | `nodeskclaw-backend/Dockerfile` | 项目根目录（需包含 `openclaw-channel-nodeskclaw/`） | 8000 |
+| admin | `nodeskclaw-admin:TAG` | `nodeskclaw-frontend/Dockerfile` (多阶段 Node+Nginx) | `nodeskclaw-frontend/` | 80 |
+| portal | `nodeskclaw-portal:TAG` | `nodeskclaw-portal/Dockerfile` (多阶段 Node+Nginx) | `nodeskclaw-portal/` | 80 |
 
 Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://nodeskclaw-backend:8000`（K8s Service DNS），Admin 额外代理 `/stream`（SSE 事件流）。
 
