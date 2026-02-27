@@ -60,7 +60,7 @@ def _build_auth_headers(provider: str, api_key: str, original_headers: dict) -> 
     headers = {}
     for k, v in original_headers.items():
         lower = k.lower()
-        if lower in ("host", "content-length", "transfer-encoding", "authorization", "x-api-key"):
+        if lower in ("host", "content-length", "transfer-encoding", "authorization", "x-api-key", "accept-encoding"):
             continue
         headers[k] = v
 
