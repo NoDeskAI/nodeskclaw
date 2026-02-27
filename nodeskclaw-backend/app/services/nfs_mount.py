@@ -40,11 +40,12 @@ class PodFS:
     async def read_text(self, path: str) -> str | None:
         """Read a file from the Pod. Returns None if the file does not exist."""
         try:
-            return await self._k8s.exec_in_pod_binary(
+            result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
-                ["cat", f"/root/{path}"],
+                ["bash", "-c", f"cat '/root/{path}' 2>/dev/null || true"],
                 container=self._container,
             )
+            return result if result else None
         except Exception:
             return None
 
@@ -122,11 +123,12 @@ class PodFS:
     async def read_last_line(self, path: str) -> str | None:
         """Read the last line of a file from the Pod."""
         try:
-            return await self._k8s.exec_in_pod_binary(
+            result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
-                ["tail", "-1", f"/root/{path}"],
+                ["bash", "-c", f"tail -1 '/root/{path}' 2>/dev/null || true"],
                 container=self._container,
             )
+            return result if result else None
         except Exception:
             return None
 
