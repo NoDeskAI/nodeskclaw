@@ -35,24 +35,35 @@ ok()   { echo -e "${GREEN}[  OK  ]${NC} $*"; }
 warn() { echo -e "${YELLOW}[ WARN ]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR ]${NC} $*" >&2; }
 
-# ── 组件配置表 ────────────────────────────────────────────
-declare -A IMAGE_NAMES=(
-  [backend]="nodeskclaw-backend"
-  [admin]="nodeskclaw-admin"
-  [portal]="nodeskclaw-portal"
-)
+# ── 组件配置查表（兼容 bash 3.x / macOS）─────────────────
+ALL_COMPONENTS="backend admin portal"
 
-declare -A BUILD_CONTEXTS=(
-  [backend]="$PROJECT_ROOT/nodeskclaw-backend"
-  [admin]="$PROJECT_ROOT/nodeskclaw-frontend"
-  [portal]="$PROJECT_ROOT/nodeskclaw-portal"
-)
+get_image_name() {
+  case "$1" in
+    backend) echo "nodeskclaw-backend" ;;
+    admin)   echo "nodeskclaw-admin" ;;
+    portal)  echo "nodeskclaw-portal" ;;
+    *)       return 1 ;;
+  esac
+}
 
-declare -A K8S_DEPLOYMENTS=(
-  [backend]="nodeskclaw-backend"
-  [admin]="nodeskclaw-admin"
-  [portal]="nodeskclaw-portal"
-)
+get_build_context() {
+  case "$1" in
+    backend) echo "$PROJECT_ROOT/nodeskclaw-backend" ;;
+    admin)   echo "$PROJECT_ROOT/nodeskclaw-frontend" ;;
+    portal)  echo "$PROJECT_ROOT/nodeskclaw-portal" ;;
+    *)       return 1 ;;
+  esac
+}
+
+get_k8s_deployment() {
+  case "$1" in
+    backend) echo "nodeskclaw-backend" ;;
+    admin)   echo "nodeskclaw-admin" ;;
+    portal)  echo "nodeskclaw-portal" ;;
+    *)       return 1 ;;
+  esac
+}
 
 # ── 参数解析 ──────────────────────────────────────────────
 TARGET=""
@@ -89,7 +100,7 @@ fi
 TARGETS=()
 if [[ "$TARGET" == "all" ]]; then
   TARGETS=(backend admin portal)
-elif [[ -n "${IMAGE_NAMES[$TARGET]+_}" ]]; then
+elif get_image_name "$TARGET" >/dev/null 2>&1; then
   TARGETS=("$TARGET")
 else
   err "未知目标: $TARGET"
@@ -110,8 +121,9 @@ echo ""
 # ── 构建 & 推送 ──────────────────────────────────────────
 build_and_push() {
   local component="$1"
-  local image="${REGISTRY}/${IMAGE_NAMES[$component]}:${TAG}"
-  local context="${BUILD_CONTEXTS[$component]}"
+  local image_name; image_name="$(get_image_name "$component")"
+  local image="${REGISTRY}/${image_name}:${TAG}"
+  local context; context="$(get_build_context "$component")"
 
   log "[$component] 构建镜像: $image"
   docker build --platform linux/amd64 \
@@ -132,9 +144,10 @@ build_and_push() {
 # ── K8s 滚动更新 ─────────────────────────────────────────
 deploy_to_k8s() {
   local component="$1"
-  local image="${REGISTRY}/${IMAGE_NAMES[$component]}:${TAG}"
-  local deployment="${K8S_DEPLOYMENTS[$component]}"
-  local container="${IMAGE_NAMES[$component]}"
+  local image_name; image_name="$(get_image_name "$component")"
+  local image="${REGISTRY}/${image_name}:${TAG}"
+  local deployment; deployment="$(get_k8s_deployment "$component")"
+  local container="$image_name"
 
   log "[$component] 更新 Deployment: $deployment -> $image"
 
