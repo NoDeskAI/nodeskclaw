@@ -13,6 +13,7 @@ import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
 import { useToast } from '@/composables/useToast'
+import { axialToWorld } from '@/composables/useHexLayout'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 
 const { t } = useI18n()
@@ -70,7 +71,7 @@ const hexEntityName = computed(() => {
   if (!selectedHex.value?.entityId) return ''
   if (selectedHex.value.type === 'corridor') {
     const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value!.entityId)
-    return node?.display_name || node?.name || ''
+    return node?.display_name || ''
   }
   if (selectedHex.value.type === 'human') {
     const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value!.entityId)

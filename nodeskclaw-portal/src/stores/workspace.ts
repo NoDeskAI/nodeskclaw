@@ -93,7 +93,7 @@ export interface ConnectionInfo {
 export interface TopologyNode {
   hex_q: number
   hex_r: number
-  node_type: string
+  node_type: 'blackboard' | 'corridor' | 'agent' | 'human'
   entity_id: string | null
   display_name: string | null
   extra: Record<string, unknown>
@@ -709,9 +709,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const humanHexes = ref<HumanHexInfo[]>([])
 
   async function fetchHumanHexes(workspaceId: string) {
-    const topo = await fetchTopology(workspaceId)
-    if (topo) {
-      humanHexes.value = topo.nodes
+    await fetchTopology(workspaceId)
+    if (topology.value) {
+      humanHexes.value = topology.value.nodes
         .filter((n: TopologyNode) => n.node_type === 'human')
         .map((n: TopologyNode) => ({
           id: n.entity_id || '',
