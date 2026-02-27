@@ -247,7 +247,7 @@ function goToGenome(id: string) {
   router.push(`/gene-market/genome/${id}`)
 }
 
-function hasMcpTools(gene: GeneItem): boolean {
+function hasNativeTools(gene: GeneItem): boolean {
   const toolAllow = gene.manifest?.tool_allow
   if (Array.isArray(toolAllow) && toolAllow.length > 0) return true
   const mcpServers = gene.manifest?.mcp_servers
@@ -366,10 +366,10 @@ function hasMcpTools(gene: GeneItem): boolean {
                     <div class="flex items-center gap-2">
                       <span class="font-medium truncate">{{ g.name }}</span>
                       <span
-                        v-if="hasMcpTools(g)"
+                        v-if="hasNativeTools(g)"
                         class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
                       >
-                        {{ t('geneMarket.hasMcpTools') }}
+                        {{ t('geneMarket.hasNativeTools') }}
                       </span>
                     </div>
                     <div class="text-xs text-muted-foreground">{{ g.slug }}</div>
@@ -541,10 +541,10 @@ function hasMcpTools(gene: GeneItem): boolean {
                   <div class="flex items-center gap-2">
                     <span class="font-medium truncate">{{ item.name }}</span>
                     <span
-                      v-if="viewMode === 'genes' && hasMcpTools(item as GeneItem)"
+                      v-if="viewMode === 'genes' && hasNativeTools(item as GeneItem)"
                       class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
                     >
-                      {{ t('geneMarket.hasMcpTools') }}
+                      {{ t('geneMarket.hasNativeTools') }}
                     </span>
                   </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-0.5">
@@ -583,10 +583,10 @@ function hasMcpTools(gene: GeneItem): boolean {
                       v{{ gene.version }}
                     </span>
                     <span
-                      v-if="hasMcpTools(gene)"
+                      v-if="hasNativeTools(gene)"
                       class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
                     >
-                      {{ t('geneMarket.hasMcpTools') }}
+                      {{ t('geneMarket.hasNativeTools') }}
                     </span>
                   </div>
                   <p class="text-xs text-muted-foreground line-clamp-2 mt-1">

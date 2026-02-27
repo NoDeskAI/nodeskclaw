@@ -323,7 +323,7 @@ const enUS = {
     metricUserNegative: "User Negative",
     metricTaskSuccess: "Task Success",
     metricAgentSelfEval: "Agent Self Eval",
-    hasMcpTools: "MCP Tools",
+    hasNativeTools: "Native Tools",
   },
   channel: {
     configTitle: "Channel Configuration",

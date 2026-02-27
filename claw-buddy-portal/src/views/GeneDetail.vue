@@ -269,7 +269,7 @@ function selectInstance(instanceId: string) {
                 v-if="toolAllowList.length"
                 class="shrink-0 bg-cyan-500/10 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded"
               >
-                {{ t('geneMarket.hasMcpTools') }}
+                {{ t('geneMarket.hasNativeTools') }}
               </span>
             </div>
           </div>
