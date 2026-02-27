@@ -60,13 +60,21 @@ def _build_providers_config(
     configs: list[UserLlmConfig],
     wp_api_key: str,
     user_keys: dict[str, UserLlmKey],
+    *,
+    use_external_proxy: bool = False,
 ) -> dict:
     """Build the models.providers section for openclaw.json.
 
     org  key_source  -> proxy URL + wp_api_key
     personal key_source -> provider base URL + user's real API key
+
+    use_external_proxy: True when the instance is on a remote cluster
+    (K8s internal DNS unreachable), forcing the external LLM proxy URL.
     """
-    proxy_url = (settings.LLM_PROXY_INTERNAL_URL or settings.LLM_PROXY_URL or "").rstrip("/")
+    if use_external_proxy:
+        proxy_url = (settings.LLM_PROXY_URL or "").rstrip("/")
+    else:
+        proxy_url = (settings.LLM_PROXY_INTERNAL_URL or settings.LLM_PROXY_URL or "").rstrip("/")
     providers: dict = {}
     for cfg in configs:
         provider = cfg.provider
@@ -326,7 +334,15 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
     if has_org and not wp_api_key:
         logger.warning("实例 %s 缺少 wp_api_key，Working Plan 模式无法写入", instance.name)
 
-    providers = _build_providers_config(configs, wp_api_key, user_keys)
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id)
+    )
+    cluster = cluster_result.scalar_one_or_none()
+    use_external = bool(cluster and cluster.proxy_endpoint)
+
+    providers = _build_providers_config(
+        configs, wp_api_key, user_keys, use_external_proxy=use_external,
+    )
 
     async with remote_fs(instance, db) as fs:
         try:
