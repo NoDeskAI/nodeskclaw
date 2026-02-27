@@ -335,6 +335,9 @@ async def _handle_stream(
         if k.lower() not in ("content-encoding", "content-length", "transfer-encoding"):
             resp_headers[k] = v
 
+    resp_headers["cache-control"] = "no-transform"
+    resp_headers["x-accel-buffering"] = "no"
+
     return StreamingResponse(
         stream_generator(),
         status_code=resp.status_code,
