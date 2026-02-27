@@ -477,9 +477,10 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                     ingress_host = f"{ctx.name}-{subdomain_suffix}.{ingress_base_domain}"
                 else:
                     ingress_host = f"{ctx.name}.{ingress_base_domain}"
+                inst_tls = None if ctx.proxy_endpoint else tls_secret_name
                 ing = build_ingress(
                     ctx.name, ctx.namespace, ingress_host, labels,
-                    tls_secret_name=tls_secret_name,
+                    tls_secret_name=inst_tls,
                     ingress_class=ctx.ingress_class,
                 )
                 await k8s.create_or_skip(k8s.networking.create_namespaced_ingress, ctx.namespace, ing)
