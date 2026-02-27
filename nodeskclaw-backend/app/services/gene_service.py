@@ -5,7 +5,6 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Coroutine
 
 import httpx
@@ -39,15 +38,15 @@ from app.schemas.gene import (
     UpdateGeneRequest,
     UpdateGenomeRequest,
 )
-from app.services.nfs_mount import nfs_mount
+from app.services.nfs_mount import PodFS, remote_fs
 from app.services.openclaw_session import (
-    OPENCLAW_CONFIG_REL,
-    SKILLS_DIR_REL,
-    SKILLS_EXTRA_DIR,
     ensure_skills_discovery,
     inject_evolution_notification,
     invalidate_skill_snapshots,
 )
+
+OPENCLAW_CONFIG_REL = ".openclaw/openclaw.json"
+SKILLS_DIR_REL = ".openclaw/skills"
 
 logger = logging.getLogger(__name__)
 
@@ -693,16 +692,16 @@ async def _direct_install(
                 manifest = _json_loads(gene.manifest) or {}
                 skill = manifest.get("skill", {})
 
-                async with nfs_mount(instance, db) as mount_path:
+                async with remote_fs(instance, db) as fs:
                     skill_name = skill.get("name", gene.slug)
                     skill_content = skill.get("content", "")
-                    _write_skill_file(mount_path, skill_name, skill_content, gene.short_description or gene.description or "")
-                    ensure_skills_discovery(mount_path)
+                    await _write_skill_file(fs, skill_name, skill_content, gene.short_description or gene.description or "")
+                    await ensure_skills_discovery(fs)
 
-                    _apply_engineering_actions(mount_path, manifest)
+                    await _apply_engineering_actions(fs, manifest)
 
-                    invalidate_skill_snapshots(mount_path)
-                    inject_evolution_notification(mount_path, skill_name, "installed")
+                    await invalidate_skill_snapshots(fs)
+                    await inject_evolution_notification(fs, skill_name, "installed")
 
                 ig.status = InstanceGeneStatus.installed
                 ig.installed_at = datetime.now(timezone.utc)
@@ -809,34 +808,28 @@ def _get_learning_plugin_url(instance: Instance) -> str | None:
     return f"{base}/extensions/learning"
 
 
-def _write_skill_file(
-    mount_path: Path,
+async def _write_skill_file(
+    fs: PodFS,
     skill_name: str,
     content: str,
     description: str = "",
 ) -> None:
-    """Write SKILL.md with YAML front matter required by OpenClaw.
-
-    OpenClaw requires `name` and `description` in YAML front matter to discover
-    a skill. If the content doesn't already have front matter, we prepend it.
-    """
+    """Write SKILL.md with YAML front matter required by OpenClaw."""
     if not content.lstrip().startswith("---"):
         desc = description or f"Skill: {skill_name}"
         front_matter = f"---\nname: {skill_name}\ndescription: {desc}\n---\n\n"
         content = front_matter + content
 
-    skill_dir = mount_path / SKILLS_DIR_REL / skill_name
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    skill_file = skill_dir / "SKILL.md"
-    skill_file.write_text(content, encoding="utf-8")
+    await fs.mkdir(f"{SKILLS_DIR_REL}/{skill_name}")
+    await fs.write_text(f"{SKILLS_DIR_REL}/{skill_name}/SKILL.md", content)
 
 
-def _merge_openclaw_config(mount_path: Path, patch: dict) -> None:
-    config_path = mount_path / OPENCLAW_CONFIG_REL
+async def _merge_openclaw_config(fs: PodFS, patch: dict) -> None:
+    raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}
-    if config_path.exists():
+    if raw is not None:
         try:
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
+            existing = json.loads(raw)
         except json.JSONDecodeError:
             existing = {}
 
@@ -846,20 +839,19 @@ def _merge_openclaw_config(mount_path: Path, patch: dict) -> None:
         else:
             existing[key] = val
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(
+    await fs.write_text(
+        OPENCLAW_CONFIG_REL,
         json.dumps(existing, indent=2, ensure_ascii=False),
-        encoding="utf-8",
     )
 
 
-def _append_tool_allow(mount_path: Path, tool_names: list[str]) -> None:
+async def _append_tool_allow(fs: PodFS, tool_names: list[str]) -> None:
     """Deduplicate-append tool names to openclaw.json tools.allow array."""
-    config_path = mount_path / OPENCLAW_CONFIG_REL
+    raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}
-    if config_path.exists():
+    if raw is not None:
         try:
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
+            existing = json.loads(raw)
         except json.JSONDecodeError:
             existing = {}
 
@@ -874,29 +866,22 @@ def _append_tool_allow(mount_path: Path, tool_names: list[str]) -> None:
             existing_set.add(name)
     tools["allow"] = allow
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+    await fs.write_text(OPENCLAW_CONFIG_REL, json.dumps(existing, indent=2, ensure_ascii=False))
 
 
-def _apply_engineering_actions(mount_path: Path, manifest: dict) -> None:
-    """Execute all engineering actions from a gene manifest atomically.
-
-    Called from _direct_install and both branches of handle_learning_callback.
-    """
+async def _apply_engineering_actions(fs: PodFS, manifest: dict) -> None:
+    """Execute all engineering actions from a gene manifest."""
     openclaw_config = manifest.get("openclaw_config")
     if openclaw_config:
-        _merge_openclaw_config(mount_path, openclaw_config)
+        await _merge_openclaw_config(fs, openclaw_config)
 
     tool_allow = manifest.get("tool_allow")
     if tool_allow and isinstance(tool_allow, list):
-        _append_tool_allow(mount_path, tool_allow)
+        await _append_tool_allow(fs, tool_allow)
 
 
-def _remove_skill_file(mount_path: Path, skill_name: str) -> None:
-    import shutil
-
-    skill_dir = mount_path / SKILLS_DIR_REL / skill_name
-    shutil.rmtree(skill_dir, ignore_errors=True)
+async def _remove_skill_file(fs: PodFS, skill_name: str) -> None:
+    await fs.remove(f"{SKILLS_DIR_REL}/{skill_name}")
 
 
 
@@ -947,11 +932,11 @@ async def handle_learning_callback(
         skill = manifest.get("skill", {})
         gene_desc = gene_obj.short_description or gene_obj.description or ""
         skill_name = skill.get("name", gene_obj.slug)
-        async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, skill_name, skill.get("content", ""), gene_desc)
-            _apply_engineering_actions(mount_path, manifest)
-            invalidate_skill_snapshots(mount_path)
-            inject_evolution_notification(mount_path, skill_name, "installed")
+        async with remote_fs(instance, db) as fs:
+            await _write_skill_file(fs, skill_name, skill.get("content", ""), gene_desc)
+            await _apply_engineering_actions(fs, manifest)
+            await invalidate_skill_snapshots(fs)
+            await inject_evolution_notification(fs, skill_name, "installed")
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -959,12 +944,12 @@ async def handle_learning_callback(
     elif payload.decision == "learned":
         content = payload.content or ""
         gene_desc = gene_obj.short_description or gene_obj.description or ""
-        async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, gene_obj.slug, content, gene_desc)
+        async with remote_fs(instance, db) as fs:
+            await _write_skill_file(fs, gene_obj.slug, content, gene_desc)
             manifest = _json_loads(gene_obj.manifest) or {}
-            _apply_engineering_actions(mount_path, manifest)
-            invalidate_skill_snapshots(mount_path)
-            inject_evolution_notification(mount_path, gene_obj.slug, "installed")
+            await _apply_engineering_actions(fs, manifest)
+            await invalidate_skill_snapshots(fs)
+            await inject_evolution_notification(fs, gene_obj.slug, "installed")
 
         ig_obj.status = InstanceGeneStatus.installed
         ig_obj.installed_at = datetime.now(timezone.utc)
@@ -1485,11 +1470,11 @@ async def _direct_uninstall(
                 if gene:
                     manifest = _json_loads(gene.manifest) or {}
                     skill_name = manifest.get("skill", {}).get("name", gene.slug)
-                    async with nfs_mount(instance, db) as mount_path:
-                        _remove_skill_file(mount_path, skill_name)
-                        ensure_skills_discovery(mount_path)
-                        invalidate_skill_snapshots(mount_path)
-                        inject_evolution_notification(mount_path, skill_name, "uninstalled")
+                    async with remote_fs(instance, db) as fs:
+                        await _remove_skill_file(fs, skill_name)
+                        await ensure_skills_discovery(fs)
+                        await invalidate_skill_snapshots(fs)
+                        await inject_evolution_notification(fs, skill_name, "uninstalled")
 
                 ig.soft_delete()
                 if gene:
@@ -1606,10 +1591,10 @@ async def handle_forgetting_callback(
         manifest = _json_loads(gene.manifest) or {}
         skill_name = manifest.get("skill", {}).get("name", gene.slug)
         content = payload.content or ""
-        async with nfs_mount(instance, db) as mount_path:
-            _write_skill_file(mount_path, skill_name, content, gene.short_description or "")
-            invalidate_skill_snapshots(mount_path)
-            inject_evolution_notification(mount_path, skill_name, "uninstalled")
+        async with remote_fs(instance, db) as fs:
+            await _write_skill_file(fs, skill_name, content, gene.short_description or "")
+            await invalidate_skill_snapshots(fs)
+            await inject_evolution_notification(fs, skill_name, "uninstalled")
 
         ig.status = InstanceGeneStatus.simplified
         await _record_evolution(
@@ -1641,11 +1626,11 @@ async def handle_forgetting_callback(
     if gene:
         manifest = _json_loads(gene.manifest) or {}
         skill_name = manifest.get("skill", {}).get("name", gene.slug)
-        async with nfs_mount(instance, db) as mount_path:
-            _remove_skill_file(mount_path, skill_name)
-            ensure_skills_discovery(mount_path)
-            invalidate_skill_snapshots(mount_path)
-            inject_evolution_notification(mount_path, skill_name, "uninstalled")
+        async with remote_fs(instance, db) as fs:
+            await _remove_skill_file(fs, skill_name)
+            await ensure_skills_discovery(fs)
+            await invalidate_skill_snapshots(fs)
+            await inject_evolution_notification(fs, skill_name, "uninstalled")
 
     ig.soft_delete()
     if gene:

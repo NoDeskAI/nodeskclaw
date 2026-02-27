@@ -20,9 +20,6 @@ spec:
       containers:
         - name: nodeskclaw-backend
           image: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-backend:20260227-a195b8d
-          securityContext:
-            capabilities:
-              add: ["SYS_ADMIN"]
           ports:
             - containerPort: 8000
           envFrom:

@@ -276,6 +276,25 @@ class K8sClient:
             )
         return resp.strip() if resp else ""
 
+    async def exec_in_pod_binary(
+        self, ns: str, pod: str, command: list[str], container: str | None = None
+    ) -> str:
+        """Execute a command and return raw stdout without stderr mixing."""
+        from kubernetes_asyncio.stream import WsApiClient
+
+        async with WsApiClient(self._api.configuration) as ws_api:
+            core_ws = k8s_client.CoreV1Api(api_client=ws_api)
+            resp = await core_ws.connect_get_namespaced_pod_exec(
+                pod, ns,
+                command=command,
+                container=container,
+                stderr=False,
+                stdin=False,
+                stdout=True,
+                tty=False,
+            )
+        return resp or ""
+
     # ── Watch ────────────────────────────────────────
 
     async def watch_pods(self, ns: str, label_selector: str = "", timeout_seconds: int = 1800) -> AsyncIterator[dict]:

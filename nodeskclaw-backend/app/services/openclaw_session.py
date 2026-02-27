@@ -1,50 +1,37 @@
-"""OpenClaw session & config file operations on NFS mounts.
+"""OpenClaw session & config file operations via kubectl exec.
 
-Provides utilities for manipulating OpenClaw's file-system state after
-an NFS mount is established (by ``nfs_mount.py``).  These helpers are
-intentionally kept free of DB / ORM dependencies so any service can use
-them by simply passing a ``mount_path``.
+Provides utilities for manipulating OpenClaw's file-system state on the
+running Pod.  These helpers accept a ``PodFS`` instance — all I/O is
+a single exec call per operation.
 """
 
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+
+from app.services.nfs_mount import PodFS
 
 logger = logging.getLogger(__name__)
 
-OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
-SKILLS_DIR_REL = Path(".openclaw") / "skills"
+OPENCLAW_CONFIG_REL = ".openclaw/openclaw.json"
 SKILLS_EXTRA_DIR = "/root/.openclaw/skills"
 
-_SESSIONS_REL = Path(".openclaw") / "agents" / "main" / "sessions" / "sessions.json"
+_SESSIONS_REL = ".openclaw/agents/main/sessions/sessions.json"
 
 
-def write_sessions_json(sessions_path: Path, store: dict) -> None:
-    """Write sessions.json preserving Node.js JSON.stringify compatibility.
-
-    OpenClaw (Node.js) reads this file; we must produce output that round-trips
-    cleanly through both Python json and Node JSON.parse/stringify.
-    """
+async def _write_sessions_json(fs: PodFS, path: str, store: dict) -> None:
     payload = json.dumps(store, indent=2, ensure_ascii=False)
-    json.loads(payload)  # validate round-trip before writing
-    sessions_path.write_text(payload + "\n", encoding="utf-8")
+    json.loads(payload)
+    await fs.write_text(path, payload + "\n")
 
 
-def invalidate_skill_snapshots(mount_path: Path) -> None:
-    """Clear cached skillsSnapshot from all OpenClaw sessions.
-
-    OpenClaw caches a skillsSnapshot per session in sessions.json. On NFS mounts
-    chokidar file watching doesn't work (no inotify support), so the snapshot
-    version counter never increments and stale sessions never refresh. We clear
-    the snapshot field so the next chat message rebuilds it with the latest skills.
-    """
-    sessions_path = mount_path / _SESSIONS_REL
-    if not sessions_path.exists():
+async def invalidate_skill_snapshots(fs: PodFS) -> None:
+    """Clear cached skillsSnapshot from all OpenClaw sessions."""
+    raw = await fs.read_text(_SESSIONS_REL)
+    if raw is None:
         return
     try:
-        raw = sessions_path.read_text(encoding="utf-8")
         store = json.loads(raw)
         changed = False
         for key, entry in store.items():
@@ -52,30 +39,20 @@ def invalidate_skill_snapshots(mount_path: Path) -> None:
                 del entry["skillsSnapshot"]
                 changed = True
         if changed:
-            write_sessions_json(sessions_path, store)
+            await _write_sessions_json(fs, _SESSIONS_REL, store)
             logger.info("Cleared stale skillsSnapshot from %d session(s)", len(store))
     except Exception as e:
         logger.warning("Failed to invalidate skill snapshots: %s", e)
 
 
-def inject_evolution_notification(
-    mount_path: Path,
+async def inject_evolution_notification(
+    fs: PodFS,
     gene_name: str,
     action: str,
 ) -> None:
-    """Inject evolution notification messages into all active session JSONL files.
-
-    After a gene install/uninstall, old conversation history may contain stale
-    skill listings from the agent. The LLM tends to repeat its previous answer
-    instead of re-checking the system prompt. By appending a user+assistant
-    message pair about the evolution, we override the stale context and ensure
-    the agent acknowledges the skill change.
-
-    Also resets ``systemSent`` to ``false`` so the next turn forces a full
-    system prompt rebuild with the updated skill list.
-    """
-    sessions_path = mount_path / _SESSIONS_REL
-    if not sessions_path.exists():
+    """Inject evolution notification messages into all active session JSONL files."""
+    raw = await fs.read_text(_SESSIONS_REL)
+    if raw is None:
         return
 
     if action == "installed":
@@ -92,7 +69,7 @@ def inject_evolution_notification(
         assistant_text = f"收到，基因「{gene_name}」已遗忘。我的技能列表已更新。"
 
     try:
-        store = json.loads(sessions_path.read_text(encoding="utf-8"))
+        store = json.loads(raw)
         store_changed = False
 
         for key, entry in store.items():
@@ -102,20 +79,19 @@ def inject_evolution_notification(
             if not session_file:
                 continue
 
-            # sessionFile stores the container-internal absolute path
-            # (e.g. /root/.openclaw/agents/main/sessions/xxx.jsonl).
-            # Resolve to local NFS mount path via the same parent dir as sessions.json.
-            local_session_path = sessions_path.parent / Path(session_file).name
-            if not local_session_path.exists():
+            # sessionFile = container absolute path e.g. /root/.openclaw/.../xxx.jsonl
+            # Strip /root/ prefix for PodFS (which prepends /root/)
+            if session_file.startswith("/root/"):
+                rel_path = session_file[len("/root/"):]
+            else:
+                rel_path = session_file.lstrip("/")
+
+            last_line = await fs.read_last_line(rel_path)
+            if not last_line or not last_line.strip():
                 continue
 
             try:
-                content = local_session_path.read_text(encoding="utf-8").rstrip("\n")
-                if not content:
-                    continue
-
-                last_line = content.rsplit("\n", 1)[-1]
-                last_entry = json.loads(last_line)
+                last_entry = json.loads(last_line.strip())
                 parent_id = last_entry.get("id", uuid.uuid4().hex[:8])
 
                 now = datetime.now(timezone.utc)
@@ -137,8 +113,6 @@ def inject_evolution_notification(
                     },
                 }, ensure_ascii=False)
 
-                # pi-coding-agent reads usage.totalTokens from the last
-                # assistant message; omitting it causes a TypeError crash.
                 model_provider = entry.get("modelProvider", "system")
                 model_name = entry.get("model", "system")
                 assistant_msg = json.dumps({
@@ -169,9 +143,7 @@ def inject_evolution_notification(
                     },
                 }, ensure_ascii=False)
 
-                with local_session_path.open("a", encoding="utf-8") as f:
-                    f.write(f"\n{user_msg}\n{assistant_msg}")
-
+                await fs.append_text(rel_path, f"\n{user_msg}\n{assistant_msg}")
                 logger.info("Injected evolution notification into session %s", key)
             except Exception as e:
                 logger.warning("Failed to inject notification into %s: %s", session_file, e)
@@ -180,7 +152,7 @@ def inject_evolution_notification(
             store_changed = True
 
         if store_changed:
-            write_sessions_json(sessions_path, store)
+            await _write_sessions_json(fs, _SESSIONS_REL, store)
             logger.info("Reset systemSent for %d session(s)", sum(
                 1 for v in store.values() if isinstance(v, dict) and v.get("systemSent") is False
             ))
@@ -188,18 +160,13 @@ def inject_evolution_notification(
         logger.warning("Failed to inject evolution notifications: %s", e)
 
 
-def ensure_skills_discovery(mount_path: Path) -> None:
-    """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir.
-
-    OpenClaw only auto-discovers native skills; custom skills in .openclaw/skills/
-    require an explicit extraDirs entry. Uses absolute path to avoid OpenClaw resolving
-    relative to its workspace directory.
-    """
-    config_path = mount_path / OPENCLAW_CONFIG_REL
+async def ensure_skills_discovery(fs: PodFS) -> None:
+    """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir."""
+    raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}
-    if config_path.exists():
+    if raw is not None:
         try:
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
+            existing = json.loads(raw)
         except json.JSONDecodeError:
             existing = {}
 
@@ -208,8 +175,7 @@ def ensure_skills_discovery(mount_path: Path) -> None:
     extra_dirs = load.setdefault("extraDirs", [])
     if SKILLS_EXTRA_DIR not in extra_dirs:
         extra_dirs.append(SKILLS_EXTRA_DIR)
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(
+        await fs.write_text(
+            OPENCLAW_CONFIG_REL,
             json.dumps(existing, indent=2, ensure_ascii=False),
-            encoding="utf-8",
         )

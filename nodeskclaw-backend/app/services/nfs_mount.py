@@ -1,10 +1,13 @@
-"""NFS temporary mount: mount PVC storage via NFS for local file I/O, unmount after use."""
+"""Remote file operations on OpenClaw Pods via kubectl exec.
 
-import asyncio
+Replaces the previous NFS mount approach. Each file read/write/delete
+is a single exec call to the target Pod — no temp dirs, no tar, no bulk sync.
+"""
+
+import base64
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,14 +20,115 @@ from app.services.k8s.k8s_client import K8sClient
 
 logger = logging.getLogger(__name__)
 
-NFS_BASE_DIR = Path("/tmp/nodeskclaw-nfs")
-
-_nfs_info_cache: dict[str, tuple[str, str, list[str]]] = {}
+CHUNK_SIZE = 98_000
 
 
 class NFSMountError(AppException):
-    def __init__(self, message: str = "NFS 挂载失败"):
+    def __init__(self, message: str = "远程文件操作失败"):
         super().__init__(code=50300, message=message, status_code=503)
+
+
+class PodFS:
+    """Remote filesystem proxy — each method is one kubectl exec call."""
+
+    def __init__(self, k8s: K8sClient, ns: str, pod: str, container: str):
+        self._k8s = k8s
+        self._ns = ns
+        self._pod = pod
+        self._container = container
+
+    async def read_text(self, path: str) -> str | None:
+        """Read a file from the Pod. Returns None if the file does not exist."""
+        try:
+            return await self._k8s.exec_in_pod_binary(
+                self._ns, self._pod,
+                ["cat", f"/root/{path}"],
+                container=self._container,
+            )
+        except Exception:
+            return None
+
+    async def write_text(self, path: str, content: str) -> None:
+        """Write content to a file in the Pod (creates parent dirs)."""
+        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        if len(encoded) < CHUNK_SIZE:
+            await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["bash", "-c",
+                 f"mkdir -p \"$(dirname '/root/{path}')\" && "
+                 f"printf '%s' '{encoded}' | base64 -d > '/root/{path}'"],
+                container=self._container,
+            )
+        else:
+            await self._chunked_write(path, encoded)
+
+    async def _chunked_write(self, path: str, encoded: str) -> None:
+        tmp = "/tmp/_ndk_upload.b64"
+        await self._k8s.exec_in_pod(
+            self._ns, self._pod, ["rm", "-f", tmp],
+            container=self._container,
+        )
+        for i in range(0, len(encoded), CHUNK_SIZE):
+            chunk = encoded[i:i + CHUNK_SIZE]
+            await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["bash", "-c", f"printf '%s' '{chunk}' >> {tmp}"],
+                container=self._container,
+            )
+        await self._k8s.exec_in_pod(
+            self._ns, self._pod,
+            ["bash", "-c",
+             f"mkdir -p \"$(dirname '/root/{path}')\" && "
+             f"base64 -d {tmp} > '/root/{path}' && rm -f {tmp}"],
+            container=self._container,
+        )
+
+    async def remove(self, path: str) -> None:
+        """Remove a file or directory from the Pod."""
+        await self._k8s.exec_in_pod(
+            self._ns, self._pod,
+            ["rm", "-rf", f"/root/{path}"],
+            container=self._container,
+        )
+
+    async def exists(self, path: str) -> bool:
+        try:
+            result = await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["test", "-e", f"/root/{path}"],
+                container=self._container,
+            )
+            return True
+        except Exception:
+            return False
+
+    async def mkdir(self, path: str) -> None:
+        await self._k8s.exec_in_pod(
+            self._ns, self._pod,
+            ["mkdir", "-p", f"/root/{path}"],
+            container=self._container,
+        )
+
+    async def append_text(self, path: str, content: str) -> None:
+        """Append content to a file in the Pod."""
+        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        await self._k8s.exec_in_pod(
+            self._ns, self._pod,
+            ["bash", "-c",
+             f"printf '%s' '{encoded}' | base64 -d >> '/root/{path}'"],
+            container=self._container,
+        )
+
+    async def read_last_line(self, path: str) -> str | None:
+        """Read the last line of a file from the Pod."""
+        try:
+            return await self._k8s.exec_in_pod_binary(
+                self._ns, self._pod,
+                ["tail", "-1", f"/root/{path}"],
+                container=self._container,
+            )
+        except Exception:
+            return None
 
 
 async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient:
@@ -33,7 +137,7 @@ async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient:
     )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster or not cluster.kubeconfig_encrypted:
-        raise NFSMountError("实例所属集群不可用，无法查询 NFS 信息")
+        raise NFSMountError("实例所属集群不可用")
     api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
     return K8sClient(api_client)
 
@@ -42,119 +146,23 @@ def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
-async def _resolve_nfs_info(instance: Instance, db: AsyncSession) -> tuple[str, str, list[str]]:
-    """Resolve NFS server + path from PVC -> PV spec. Results are cached by instance ID.
-
-    Supports both native NFS PVs (spec.nfs) and CSI-based NAS PVs
-    (spec.csi with volumeAttributes containing server/path, e.g. VKE nas-subpath).
-    """
-    cached = _nfs_info_cache.get(instance.id)
-    if cached:
-        return cached
-
-    k8s = await _get_k8s_client(instance, db)
-    pvc_name = f"{_k8s_name(instance)}-root-data"
-
-    try:
-        pvc = await k8s.read_pvc(instance.namespace, pvc_name)
-    except Exception as e:
-        raise NFSMountError(f"读取 PVC {pvc_name} 失败: {e}") from e
-
-    pv_name = pvc.spec.volume_name
-    if not pv_name:
-        raise NFSMountError(f"PVC {pvc_name} 尚未绑定 PV")
-
-    try:
-        pv = await k8s.read_pv(pv_name)
-    except Exception as e:
-        raise NFSMountError(f"读取 PV {pv_name} 失败: {e}") from e
-
-    server: str | None = None
-    path: str | None = None
-    mount_options: list[str] = []
-
-    if pv.spec.nfs:
-        server = pv.spec.nfs.server
-        path = pv.spec.nfs.path
-    elif pv.spec.csi and pv.spec.csi.volume_attributes:
-        attrs = pv.spec.csi.volume_attributes
-        server = attrs.get("server")
-        path = attrs.get("path")
-    else:
-        raise NFSMountError(f"PV {pv_name} 既非 NFS 类型也非 CSI NAS 类型，无法提取存储地址")
-
-    if not server or not path:
-        raise NFSMountError(f"PV {pv_name} 缺少 NFS server 或 path")
-
-    if pv.spec.mount_options:
-        mount_options = list(pv.spec.mount_options)
-
-    _nfs_info_cache[instance.id] = (server, path, mount_options)
-    logger.info(
-        "解析 NFS 信息: instance=%s server=%s path=%s mount_options=%s",
-        instance.name, server, path, mount_options,
-    )
-    return server, path, mount_options
-
-
-async def _run_cmd(cmd: list[str]) -> tuple[int, str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    return proc.returncode or 0, stdout.decode(), stderr.decode()
+async def _find_running_pod(
+    k8s: K8sClient, instance: Instance,
+) -> tuple[str, str]:
+    """Return (pod_name, container_name) for the first Running pod."""
+    container = _k8s_name(instance)
+    label_selector = f"app.kubernetes.io/name={container}"
+    pods = await k8s.list_pods(instance.namespace, label_selector)
+    running = [p for p in pods if p["phase"] == "Running"]
+    if not running:
+        raise NFSMountError("实例无运行中的 Pod，无法同步文件")
+    return running[0]["name"], container
 
 
 @asynccontextmanager
-async def nfs_mount(instance: Instance, db: AsyncSession) -> AsyncIterator[Path]:
-    """Temporarily mount instance PVC via NFS, yield local path, unmount on exit."""
-    server, nfs_path, mount_options = await _resolve_nfs_info(instance, db)
-
-    mount_point = NFS_BASE_DIR / instance.namespace
-    mount_point.mkdir(parents=True, exist_ok=True)
-
-    already_mounted = False
-    if mount_point.is_mount():
-        already_mounted = True
-        logger.debug("挂载点 %s 已存在，复用", mount_point)
-
-    if not already_mounted:
-        nfs_source = f"{server}:{nfs_path}"
-        cmd = ["mount", "-t", "nfs"]
-        if mount_options:
-            cmd += ["-o", ",".join(mount_options)]
-        cmd += [nfs_source, str(mount_point)]
-        rc, _out, err = await _run_cmd(cmd)
-        if rc != 0:
-            try:
-                mount_point.rmdir()
-            except OSError:
-                pass
-            if "permission denied" in err.lower() or "not permitted" in err.lower():
-                raise NFSMountError(f"NFS 挂载失败（权限不足）: {err.strip()}")
-            raise NFSMountError(f"NFS 挂载失败: {err.strip()}")
-        logger.info("已挂载 NFS: %s -> %s (options=%s)", nfs_source, mount_point, mount_options)
-
-        rc, _out, err = await _run_cmd(
-            ["chmod", "-R", "a+rwX", str(mount_point)]
-        )
-        if rc != 0:
-            logger.warning("NFS 挂载后修复权限失败: %s", err.strip())
-        else:
-            logger.debug("已修复 NFS 挂载点权限: %s", mount_point)
-
-    try:
-        yield mount_point
-    finally:
-        if not already_mounted:
-            rc, _out, err = await _run_cmd(["umount", str(mount_point)])
-            if rc != 0:
-                logger.warning("NFS 卸载失败: %s (err=%s)", mount_point, err.strip())
-            else:
-                logger.info("已卸载 NFS: %s", mount_point)
-            try:
-                mount_point.rmdir()
-            except OSError:
-                pass
+async def remote_fs(instance: Instance, db: AsyncSession) -> AsyncIterator[PodFS]:
+    """Yield a PodFS connected to the instance's running Pod."""
+    k8s = await _get_k8s_client(instance, db)
+    pod_name, container = await _find_running_pod(k8s, instance)
+    logger.debug("remote_fs: pod=%s container=%s ns=%s", pod_name, container, instance.namespace)
+    yield PodFS(k8s, instance.namespace, pod_name, container)

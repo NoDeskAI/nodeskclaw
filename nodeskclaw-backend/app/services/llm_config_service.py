@@ -1,4 +1,4 @@
-"""LLM config service: read/write openclaw.json via NFS mount."""
+"""LLM config service: read/write openclaw.json via kubectl exec."""
 
 import asyncio
 import json
@@ -19,7 +19,7 @@ from app.models.user_llm_key import UserLlmKey
 from app.schemas.llm import OpenClawConfigResponse, OpenClawProviderEntry
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
-from app.services.nfs_mount import nfs_mount
+from app.services.nfs_mount import PodFS, remote_fs
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +185,8 @@ def _set_default_agent_model(config: dict, providers: dict) -> None:
     defaults["model"] = {"primary": first_provider}
 
 
-def _read_config_file(mount_path: Path) -> dict | None:
-    """Read openclaw.json from NFS mount.
+async def _read_config_file(fs: PodFS) -> dict | None:
+    """Read openclaw.json from Pod via exec.
 
     Returns:
         dict  - parsed config on success
@@ -195,13 +195,9 @@ def _read_config_file(mount_path: Path) -> dict | None:
     Raises:
         ValueError - file exists but cannot be parsed (must NOT overwrite)
     """
-    config_path = mount_path / OPENCLAW_CONFIG_REL
-    if not config_path.exists():
+    raw = await fs.read_text(str(OPENCLAW_CONFIG_REL))
+    if raw is None:
         return None
-    try:
-        raw = config_path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise ValueError(f"无法读取 openclaw.json: {e}") from e
 
     try:
         return json.loads(raw)
@@ -216,23 +212,21 @@ def _read_config_file(mount_path: Path) -> dict | None:
         ) from e
 
 
-def _write_config_file(mount_path: Path, data: dict) -> None:
-    """Write openclaw.json to NFS mount. Permissions are fixed at mount time."""
-    config_path = mount_path / OPENCLAW_CONFIG_REL
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(
+async def _write_config_file(fs: PodFS, data: dict) -> None:
+    """Write openclaw.json to Pod via exec."""
+    await fs.write_text(
+        str(OPENCLAW_CONFIG_REL),
         json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
     )
 
 
 async def read_openclaw_providers(
     instance: Instance, db: AsyncSession
 ) -> OpenClawConfigResponse:
-    """Read openclaw.json via NFS and enrich with DB key source info."""
-    async with nfs_mount(instance, db) as mount_path:
+    """Read openclaw.json via exec and enrich with DB key source info."""
+    async with remote_fs(instance, db) as fs:
         try:
-            raw_json = _read_config_file(mount_path)
+            raw_json = await _read_config_file(fs)
         except ValueError as e:
             logger.warning("读取 openclaw.json 解析失败: %s", e)
             raw_json = None
@@ -334,9 +328,9 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
     providers = _build_providers_config(configs, wp_api_key, user_keys)
 
-    async with nfs_mount(instance, db) as mount_path:
+    async with remote_fs(instance, db) as fs:
         try:
-            existing_json = _read_config_file(mount_path)
+            existing_json = await _read_config_file(fs)
         except ValueError as e:
             logger.error("openclaw.json 解析失败，中止写入以防覆盖原有配置: %s", e)
             raise AppException(
@@ -354,10 +348,10 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
         _ensure_gateway_config(existing_json, instance)
         _set_default_agent_model(existing_json, providers)
-        _write_config_file(mount_path, existing_json)
+        await _write_config_file(fs, existing_json)
 
     logger.info(
-        "已写入 openclaw.json LLM 配置 (NFS): instance=%s providers=%s",
+        "已写入 openclaw.json LLM 配置: instance=%s providers=%s",
         instance.name, list(providers.keys()),
     )
 
@@ -369,16 +363,16 @@ async def ensure_openclaw_gateway_config(instance: Instance, db: AsyncSession) -
     skips config generation because the file already exists.
     """
     try:
-        async with nfs_mount(instance, db) as mount_path:
+        async with remote_fs(instance, db) as fs:
             try:
-                existing = _read_config_file(mount_path)
+                existing = await _read_config_file(fs)
             except ValueError as e:
                 logger.warning("ensure_gateway_config: 解析失败 %s", e)
                 return
             if existing is None:
                 existing = {}
             _ensure_gateway_config(existing, instance)
-            _write_config_file(mount_path, existing)
+            await _write_config_file(fs, existing)
         logger.info("已注入 gateway 配置: instance=%s", instance.name)
     except Exception as e:
         logger.warning("注入 gateway 配置失败（非致命）: %s", e)
@@ -411,17 +405,18 @@ def _get_plugin_source_dir() -> Path:
     )
 
 
-def _deploy_plugin_files(mount_path: Path, plugin_source: Path) -> None:
-    """Copy channel plugin files to the NFS mount (.openclaw/extensions/)."""
-    target_dir = mount_path / ".openclaw" / "extensions" / CHANNEL_PLUGIN_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / "src").mkdir(parents=True, exist_ok=True)
+async def _deploy_plugin_files(fs: PodFS, plugin_source: Path) -> None:
+    """Copy channel plugin files to the Pod (.openclaw/extensions/)."""
+    target_base = f".openclaw/extensions/{CHANNEL_PLUGIN_DIR}"
+    await fs.mkdir(f"{target_base}/src")
 
     for rel_path in PLUGIN_FILES:
         src = plugin_source / rel_path
-        dst = target_dir / rel_path
         if src.exists():
-            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            await fs.write_text(
+                f"{target_base}/{rel_path}",
+                src.read_text(encoding="utf-8"),
+            )
 
 
 def _inject_channel_config(
@@ -479,11 +474,11 @@ async def deploy_nodeskclaw_channel_plugin(
     """
     plugin_source = _get_plugin_source_dir()
 
-    async with nfs_mount(instance, db) as mount_path:
-        _deploy_plugin_files(mount_path, plugin_source)
+    async with remote_fs(instance, db) as fs:
+        await _deploy_plugin_files(fs, plugin_source)
 
         try:
-            existing = _read_config_file(mount_path)
+            existing = await _read_config_file(fs)
         except ValueError as e:
             logger.error("deploy_channel_plugin: openclaw.json 解析失败: %s", e)
             raise
@@ -493,7 +488,7 @@ async def deploy_nodeskclaw_channel_plugin(
 
         _inject_channel_config(existing, instance, workspace_id)
         _ensure_gateway_config(existing, instance)
-        _write_config_file(mount_path, existing)
+        await _write_config_file(fs, existing)
 
     logger.info(
         "已部署 nodeskclaw channel plugin: instance=%s workspace=%s",
@@ -506,9 +501,9 @@ async def remove_nodeskclaw_channel_plugin(
 ) -> None:
     """Remove nodeskclaw channel config from openclaw.json when agent leaves workspace."""
     try:
-        async with nfs_mount(instance, db) as mount_path:
+        async with remote_fs(instance, db) as fs:
             try:
-                existing = _read_config_file(mount_path)
+                existing = await _read_config_file(fs)
             except ValueError:
                 return
             if existing is None:
@@ -524,7 +519,7 @@ async def remove_nodeskclaw_channel_plugin(
 
             existing.get("plugins", {}).get("entries", {}).pop("nodeskclaw", None)
 
-            _write_config_file(mount_path, existing)
+            await _write_config_file(fs, existing)
         logger.info("已移除 nodeskclaw channel 配置: instance=%s", instance.name)
     except Exception as e:
         logger.warning("移除 channel 配置失败（非致命）: %s", e)
@@ -556,16 +551,17 @@ def _get_learning_plugin_source_dir() -> Path:
     )
 
 
-def _deploy_learning_plugin_files(mount_path: Path, plugin_source: Path) -> None:
-    target_dir = mount_path / ".openclaw" / "extensions" / LEARNING_PLUGIN_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / "src").mkdir(parents=True, exist_ok=True)
+async def _deploy_learning_plugin_files(fs: PodFS, plugin_source: Path) -> None:
+    target_base = f".openclaw/extensions/{LEARNING_PLUGIN_DIR}"
+    await fs.mkdir(f"{target_base}/src")
 
     for rel_path in LEARNING_PLUGIN_FILES:
         src = plugin_source / rel_path
-        dst = target_dir / rel_path
         if src.exists():
-            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            await fs.write_text(
+                f"{target_base}/{rel_path}",
+                src.read_text(encoding="utf-8"),
+            )
 
 
 def _inject_learning_channel_config(
@@ -607,11 +603,11 @@ async def deploy_learning_channel_plugin(
         logger.warning("Learning plugin source not found, skipping deployment")
         return
 
-    async with nfs_mount(instance, db) as mount_path:
-        _deploy_learning_plugin_files(mount_path, plugin_source)
+    async with remote_fs(instance, db) as fs:
+        await _deploy_learning_plugin_files(fs, plugin_source)
 
         try:
-            existing = _read_config_file(mount_path)
+            existing = await _read_config_file(fs)
         except ValueError as e:
             logger.error("deploy_learning_plugin: openclaw.json parse error: %s", e)
             raise
@@ -620,13 +616,13 @@ async def deploy_learning_channel_plugin(
             existing = {}
 
         _inject_learning_channel_config(existing, instance)
-        _write_config_file(mount_path, existing)
+        await _write_config_file(fs, existing)
 
     logger.info("已部署 learning channel plugin: instance=%s", instance.name)
 
 
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
-    """Update openclaw.json via NFS and restart OpenClaw.
+    """Update openclaw.json and restart OpenClaw.
 
     Strategy: try graceful SIGTERM first; if exec fails (pod crashed / not ready),
     fall back to Deployment rolling restart.
