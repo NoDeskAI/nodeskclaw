@@ -1,4 +1,4 @@
-# ClawBuddy
+# NoDeskClaw
 
 OpenClaw 实例可视化管理平台 -- One-click deploy, full control.
 
@@ -7,20 +7,20 @@ OpenClaw 实例可视化管理平台 -- One-click deploy, full control.
 ## 项目结构
 
 ```
-ClawBuddy/
-├── claw-buddy-frontend/      # 前端（Vue 3 + shadcn-vue + Tailwind CSS）
-├── claw-buddy-portal/        # 用户门户前端（Vue 3 + Tailwind CSS）
-├── claw-buddy-backend/       # 后端（Python 3.12 + FastAPI）
-├── claw-buddy-llm-proxy/     # LLM Proxy 服务（Go）
-├── claw-buddy-artifacts/     # 镜像构建 & 部署制品
-├── openclaw-channel-clawbuddy/  # OpenClaw channel plugin（工作区 Agent 协同）
+NoDeskClaw/
+├── nodeskclaw-frontend/      # 前端（Vue 3 + shadcn-vue + Tailwind CSS）
+├── nodeskclaw-portal/        # 用户门户前端（Vue 3 + Tailwind CSS）
+├── nodeskclaw-backend/       # 后端（Python 3.12 + FastAPI）
+├── nodeskclaw-llm-proxy/     # LLM Proxy 服务（Go）
+├── nodeskclaw-artifacts/     # 镜像构建 & 部署制品
+├── openclaw-channel-nodeskclaw/  # OpenClaw channel plugin（工作区 Agent 协同）
 ├── openclaw/                 # OpenClaw 源码（独立仓库，不纳入 Git）
 └── vibecraft/                # VibeCraft 源码（独立仓库，不纳入 Git）
 ```
 
 ## 全局 i18n（国际化）
 
-- 覆盖范围：`claw-buddy-portal`（用户门户前端）、`claw-buddy-frontend`（管理前端）、`claw-buddy-backend`（后端错误契约）
+- 覆盖范围：`nodeskclaw-portal`（用户门户前端）、`nodeskclaw-frontend`（管理前端）、`nodeskclaw-backend`（后端错误契约）
 - 语言选择：浏览器语言 `zh*` -> `zh-CN`，`en*` -> `en-US`，其他默认 `en-US`
 - 前端错误展示：优先使用后端 `message_key`（文案键）本地翻译；词条缺失时回退后端 `message`（文案）
 - 后端失败响应：`code` + `error_code`（错误码） + `message_key`（文案键） + `message`（文案） + `data`
@@ -41,7 +41,7 @@ ClawBuddy/
 ### 1. 配置后端环境变量
 
 ```bash
-cd claw-buddy-backend
+cd nodeskclaw-backend
 cp .env.example .env
 ```
 
@@ -59,7 +59,7 @@ cp .env.example .env
 ### 2. 启动后端
 
 ```bash
-cd claw-buddy-backend
+cd nodeskclaw-backend
 uv sync                    # 安装依赖（首次）
 uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -72,7 +72,7 @@ uv run uvicorn app.main:app --reload --port 8000
 ### 3. 启动前端
 
 ```bash
-cd claw-buddy-frontend
+cd nodeskclaw-frontend
 npm install                # 安装依赖（首次）
 npm run dev
 ```
@@ -89,6 +89,6 @@ npm run dev
 
 ## 各子项目文档
 
-- [后端 README](claw-buddy-backend/README.md) -- API 概览、目录结构、环境变量详解
-- [制品 README](claw-buddy-artifacts/README.md) -- OpenClaw 镜像构建、Dockerfile 说明
-- [Channel Plugin README](openclaw-channel-clawbuddy/README.md) -- 工作区 Agent 协同 channel plugin
+- [后端 README](nodeskclaw-backend/README.md) -- API 概览、目录结构、环境变量详解
+- [制品 README](nodeskclaw-artifacts/README.md) -- OpenClaw 镜像构建、Dockerfile 说明
+- [Channel Plugin README](openclaw-channel-nodeskclaw/README.md) -- 工作区 Agent 协同 channel plugin

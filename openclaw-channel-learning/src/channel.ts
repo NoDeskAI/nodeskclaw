@@ -72,7 +72,7 @@ export const learningPlugin: ChannelPlugin<ResolvedLearningAccount> = {
     label: "Learning",
     selectionLabel: "Learning (Gene Evolution)",
     docsPath: "/channels/learning",
-    blurb: "Gene learning and creation channel for ClawBuddy evolution ecosystem.",
+    blurb: "Gene learning and creation channel for NoDeskClaw evolution ecosystem.",
     aliases: ["learn"],
   },
   capabilities: {

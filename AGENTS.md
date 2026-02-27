@@ -1,8 +1,8 @@
-# AGENTS.md - ClawBuddy 开发指南
+# AGENTS.md - NoDeskClaw 开发指南
 
 ## 项目概述
 
-ClawBuddy 是 OpenClaw 实例可视化管理系统，通过 Web 界面管理 K8s 集群上的 OpenClaw 实例，支持一键部署、实时日志、集群健康巡检、飞书 SSO 登录。
+NoDeskClaw 是 OpenClaw 实例可视化管理系统，通过 Web 界面管理 K8s 集群上的 OpenClaw 实例，支持一键部署、实时日志、集群健康巡检、飞书 SSO 登录。
 
 ## 技术栈
 
@@ -17,24 +17,24 @@ ClawBuddy 是 OpenClaw 实例可视化管理系统，通过 Web 界面管理 K8s
 ## 目录结构
 
 ```
-ClawBuddy/
-├── claw-buddy-backend/           # 后端 API 服务（Python 3.12 + FastAPI）
-├── claw-buddy-frontend/          # 管理后台前端（Vue 3）
-├── claw-buddy-portal/            # 用户门户前端（Vue 3 + Three.js）
-├── claw-buddy-llm-proxy/         # LLM 代理服务（Go）
-├── claw-buddy-artifacts/         # 镜像构建 & 部署制品
+NoDeskClaw/
+├── nodeskclaw-backend/           # 后端 API 服务（Python 3.12 + FastAPI）
+├── nodeskclaw-frontend/          # 管理后台前端（Vue 3）
+├── nodeskclaw-portal/            # 用户门户前端（Vue 3 + Three.js）
+├── nodeskclaw-llm-proxy/         # LLM 代理服务（Go）
+├── nodeskclaw-artifacts/         # 镜像构建 & 部署制品
 ├── openclaw/                     # OpenClaw 源码副本
-├── openclaw-channel-clawbuddy/   # Channel 插件
+├── openclaw-channel-nodeskclaw/   # Channel 插件
 ├── deploy/                       # K8s 部署配置
 └── docs/                         # 设计文档
 ```
 
 ## 构建/测试命令
 
-### 后端（claw-buddy-backend）
+### 后端（nodeskclaw-backend）
 
 ```bash
-cd claw-buddy-backend
+cd nodeskclaw-backend
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 uv run pytest
@@ -44,10 +44,10 @@ uv run ruff check .
 uv run ruff check --fix .
 ```
 
-### 前端（claw-buddy-frontend / claw-buddy-portal）
+### 前端（nodeskclaw-frontend / nodeskclaw-portal）
 
 ```bash
-cd claw-buddy-frontend
+cd nodeskclaw-frontend
 npm install
 npm run dev
 npm run build

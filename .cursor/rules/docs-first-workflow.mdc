@@ -21,7 +21,7 @@ alwaysApply: true
 
 **任何新建的目录/项目/模块，必须包含 README。** 没有 README 不算完成。
 
-- 新建子项目目录（如 `claw-buddy-artifacts/`）→ 必须写 README
+- 新建子项目目录（如 `nodeskclaw-artifacts/`）→ 必须写 README
 - 新建功能模块目录 → 如有独立用途，必须写 README
 - README 内容至少包含：项目/模块用途、目录结构、使用方法
 - 已有目录补 README 时，随改动一并提交
@@ -37,19 +37,19 @@ alwaysApply: true
 | 变更内容 | 必须更新 |
 |----------|----------|
 | 新增/修改 API、路由、中间件 | `docs/后端架构设计.md` |
-| 新增/修改页面、交互流程 | `docs/页面线框图.md`、`docs/PRD-ClawBuddy产品需求文档.md` |
+| 新增/修改页面、交互流程 | `docs/页面线框图.md`、`docs/PRD-NoDeskClaw产品需求文档.md` |
 | K8s 资源定义变更（Deployment/Service/Ingress 等） | `docs/K8s交互层实现设计.md`、`docs/VKE部署方案.md` |
 | 部署流程、镜像构建变更 | `docs/VKE部署方案.md`、`docs/OpenClaw镜像构建规范.md` |
-| 技术栈、整体架构变更 | `docs/PRD-ClawBuddy产品需求文档.md`、`docs/后端架构设计.md` |
+| 技术栈、整体架构变更 | `docs/PRD-NoDeskClaw产品需求文档.md`、`docs/后端架构设计.md` |
 | 数据库模型、表结构变更 | `docs/后端架构设计.md` |
 | 新增基础设施组件（如日志、Ingress Controller） | `docs/后端架构设计.md`、`docs/VKE部署方案.md` |
 
 ### 2. README 文档（按影响范围更新）
 
 - **根 README** (`README.md`)：整体架构、项目结构变更时更新
-- **后端 README** (`claw-buddy-backend/README.md`)：后端配置项、启动方式、目录结构、新功能模块变更时更新
-- **前端 README** (`claw-buddy-frontend/README.md`)：前端配置项、启动方式变更时更新
-- **制品 README** (`claw-buddy-artifacts/README.md`)：部署制品、镜像变更时更新
+- **后端 README** (`nodeskclaw-backend/README.md`)：后端配置项、启动方式、目录结构、新功能模块变更时更新
+- **前端 README** (`nodeskclaw-frontend/README.md`)：前端配置项、启动方式变更时更新
+- **制品 README** (`nodeskclaw-artifacts/README.md`)：部署制品、镜像变更时更新
 - **子目录 README**：新建目录时必须创建
 
 ### 3. 注释 / docstring

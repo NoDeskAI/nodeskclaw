@@ -1,0 +1,14 @@
+{
+  "name": "nodeskclaw-blackboard-tools",
+  "slug": "nodeskclaw-blackboard-tools",
+  "description": "Native agent tools for reading/writing blackboard tasks, objectives, and performance data.",
+  "category": "tools",
+  "tags": ["tools", "blackboard", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "nodeskclaw-blackboard-tools",
+      "content": "---\nname: nodeskclaw-blackboard-tools\ndescription: Tools to interact with the workspace blackboard\nalways: true\n---\n\nYou have access to blackboard management via the `nodeskclaw_blackboard` tool.\n\n## Actions\n- `get_blackboard` — Read the full structured blackboard\n- `list_tasks` — List all tasks\n- `create_task` — Create a new task (title, description, priority, assignee_id)\n- `update_task` — Update task status/description (task_id required)\n- `get_objectives` — Read current OKR objectives\n\n## Usage Rules\n- When completing a task, update its status to 'done'\n- When blocked, update status to 'blocked' and describe the blocker\n- Always sync task status after finishing work"
+    },
+    "tool_allow": ["nodeskclaw_blackboard"]
+  }
+}

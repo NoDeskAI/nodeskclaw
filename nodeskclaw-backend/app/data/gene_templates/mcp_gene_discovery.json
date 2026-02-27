@@ -1,0 +1,14 @@
+{
+  "name": "nodeskclaw-gene-discovery",
+  "slug": "nodeskclaw-gene-discovery",
+  "description": "Native agent tools for searching the gene market, inspecting genes, and requesting learning.",
+  "category": "tools",
+  "tags": ["tools", "gene-market", "learning", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "nodeskclaw-gene-discovery",
+      "content": "---\nname: nodeskclaw-gene-discovery\ndescription: Tools for gene market discovery and learning\nalways: true\n---\n\nYou can explore the gene market via the `nodeskclaw_gene_discovery` tool.\n\n## Actions\n- `search_genes` — Search by keyword or category\n- `get_gene_detail` — Detailed info about a specific gene (provide gene_id)\n- `request_gene_learning` — Request to install a gene on your instance (provide gene_slug)\n\n## Usage Rules\n- Search for genes that match your identified skill gaps\n- Review gene details before requesting installation\n- Provide a reason when requesting learning\n- Gene installation may require human approval via trust mechanism"
+    },
+    "tool_allow": ["nodeskclaw_gene_discovery"]
+  }
+}

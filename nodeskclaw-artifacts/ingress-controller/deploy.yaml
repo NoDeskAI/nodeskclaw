@@ -1,0 +1,256 @@
+# Nginx Ingress Controller for NoDeskClaw
+# 用于将外部流量按子域名路由到各 OpenClaw 实例的 ClusterIP Service
+#
+# 部署方式: kubectl apply -f deploy.yaml
+# 前置条件: 火山云 SLB 已将 80/443 流量转发到 K8s 节点的 30080/30443 端口
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+    app.kubernetes.io/part-of: nodeskclaw-system
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nodeskclaw-system
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "endpoints", "nodes", "pods", "secrets", "namespaces"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list", "watch", "get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nodeskclaw-system
+subjects:
+  - kind: ServiceAccount
+    name: nodeskclaw-system
+    namespace: nodeskclaw-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nodeskclaw-system
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps", "pods", "secrets", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nodeskclaw-system
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nodeskclaw-system
+subjects:
+  - kind: ServiceAccount
+    name: nodeskclaw-system
+    namespace: nodeskclaw-system
+
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: nginx
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: k8s.io/nodeskclaw-system
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nodeskclaw-system-controller
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+data:
+  # WebSocket 长连接支持（OpenClaw 需要）
+  proxy-read-timeout: "3600"
+  proxy-send-timeout: "3600"
+  proxy-body-size: "50m"
+  # 开启 WebSocket 自动升级
+  use-forwarded-headers: "true"
+  compute-full-forwarded-for: "true"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodeskclaw-system-controller
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nodeskclaw-system
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nodeskclaw-system
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: nodeskclaw-system
+      terminationGracePeriodSeconds: 300
+      imagePullSecrets:
+        - name: cr-pull-secret
+      containers:
+        - name: controller
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nginx-ingress-controller:v1.12.0
+          args:
+            - /nginx-ingress-controller
+            - --publish-service=$(POD_NAMESPACE)/nodeskclaw-system-controller
+            - --election-id=nodeskclaw-system-leader
+            - --controller-class=k8s.io/nodeskclaw-system
+            - --ingress-class=nginx
+            - --configmap=$(POD_NAMESPACE)/nodeskclaw-system-controller
+            - --watch-ingress-without-class=true
+            # 默认 TLS 证书：解决跨 Namespace 引用 Secret 的问题
+            # 所有 Ingress 自动使用此证书，无需在每个实例 Namespace 重复创建
+            - --default-ssl-certificate=nodeskclaw-system/wildcard-nodeskai-tls
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 10254
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 10254
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodeskclaw-system-controller
+  namespace: nodeskclaw-system
+  labels:
+    app.kubernetes.io/name: nodeskclaw-system
+    app.kubernetes.io/component: controller
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: nodeskclaw-system
+    app.kubernetes.io/component: controller

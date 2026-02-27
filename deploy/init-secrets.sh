@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# ClawBuddy 首次部署初始化脚本
+# NoDeskClaw 首次部署初始化脚本
 #
 # 功能:
 #   1. 从 .env 文件创建后端 K8s Secret
@@ -11,15 +11,15 @@
 #
 # 前置条件:
 #   - kubectl 已配置正确的集群上下文
-#   - cr-pull-secret 已在 clawbuddy-system 中创建
+#   - cr-pull-secret 已在 nodeskclaw-system 中创建
 # ============================================================
 set -euo pipefail
 
-NAMESPACE="clawbuddy-system"
-SECRET_NAME="clawbuddy-backend-env"
+NAMESPACE="nodeskclaw-system"
+SECRET_NAME="nodeskclaw-backend-env"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$PROJECT_ROOT/claw-buddy-backend/.env"
+ENV_FILE="$PROJECT_ROOT/nodeskclaw-backend/.env"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -41,7 +41,7 @@ done
 if [[ ! -f "$ENV_FILE" ]]; then
   err "环境变量文件不存在: $ENV_FILE"
   echo "请复制 .env.example 并填写实际值:"
-  echo "  cp claw-buddy-backend/.env.example claw-buddy-backend/.env"
+  echo "  cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env"
   exit 1
 fi
 
@@ -90,4 +90,4 @@ echo ""
 echo "  ./deploy/deploy.sh all"
 echo ""
 log "当前 Deployment 状态:"
-kubectl -n "$NAMESPACE" get deployments -l 'app in (clawbuddy-backend, clawbuddy-admin, clawbuddy-portal)' 2>/dev/null || true
+kubectl -n "$NAMESPACE" get deployments -l 'app in (nodeskclaw-backend, nodeskclaw-admin, nodeskclaw-portal)' 2>/dev/null || true

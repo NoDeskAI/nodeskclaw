@@ -1,0 +1,32 @@
+# ============================================================
+# NAS 极速型 StorageClass（NFS subpath 动态供给）
+# ============================================================
+# 前提: VKE 集群已安装 csi-nas 组件（集群 -> 组件管理 -> 存储）
+# 使用: kubectl apply -f nas-storageclass.yaml
+# 参考: https://github.com/volcengine/volcengine-csi-driver/blob/master/example/nas/csi-storageclass.yaml
+# ============================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nas-subpath
+provisioner: nas.csi.volcengine.com
+parameters:
+  # subpath 模式：共享同一 NAS，每个 PVC 自动创建子目录
+  volumeAs: subpath
+  # NAS 服务器 IP（仅 IP，不含路径）
+  server: "10.5.47.32"
+  # NAS 文件系统 ID
+  fsId: "enas-cnbja0b6b74212c25c"
+  # 子目录基路径（所有 PVC 在此路径下创建子目录）
+  subPath: "/nodeskclaw"
+  # 删除 PVC 时将子目录归档（重命名，不物理删除），便于恢复
+  archiveOnDelete: "true"
+# Retain: 即使 PVC 被删除，NAS 上的数据也保留
+reclaimPolicy: Retain
+# 允许后续扩容 PVC
+allowVolumeExpansion: true
+# 立即绑定
+volumeBindingMode: Immediate
+mountOptions:
+  - nolock,proto=tcp,noresvport
+  - vers=3

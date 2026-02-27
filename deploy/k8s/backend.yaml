@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: clawbuddy-backend
-  namespace: clawbuddy-system
+  name: nodeskclaw-backend
+  namespace: nodeskclaw-system
   labels:
-    app: clawbuddy-backend
+    app: nodeskclaw-backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: clawbuddy-backend
+      app: nodeskclaw-backend
   template:
     metadata:
       labels:
-        app: clawbuddy-backend
+        app: nodeskclaw-backend
     spec:
       imagePullSecrets:
         - name: cr-pull-secret
       containers:
-        - name: clawbuddy-backend
-          image: nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-backend:latest
+        - name: nodeskclaw-backend
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-backend:latest
           ports:
             - containerPort: 8000
           envFrom:
             - secretRef:
-                name: clawbuddy-backend-env
+                name: nodeskclaw-backend-env
           resources:
             requests:
               cpu: 250m
@@ -48,14 +48,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: clawbuddy-backend
-  namespace: clawbuddy-system
+  name: nodeskclaw-backend
+  namespace: nodeskclaw-system
   labels:
-    app: clawbuddy-backend
+    app: nodeskclaw-backend
 spec:
   type: ClusterIP
   selector:
-    app: clawbuddy-backend
+    app: nodeskclaw-backend
   ports:
     - port: 8000
       targetPort: 8000

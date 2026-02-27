@@ -10,7 +10,7 @@
 |------|-----|
 | 仓库 | 火山云容器镜像服务 (CR) |
 | 地址 | `cr-{region}.volces.com/{namespace}/openclaw` |
-| 示例 | `cr-cn-beijing.volces.com/clawbuddy/openclaw:v1.0.0` |
+| 示例 | `cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0` |
 | 访问 | VKE 集群内走内网拉取，免公网带宽 |
 
 ---
@@ -177,7 +177,7 @@ K8s 相关配置：
 ```
 优先级 (高 → 低)
   │
-  ├─ 1. 环境变量 (ConfigMap/Secret)   ← ClawBuddy 部署时注入
+  ├─ 1. 环境变量 (ConfigMap/Secret)   ← NoDeskClaw 部署时注入
   ├─ 2. 配置文件 (entrypoint 生成)     ← 模板 + 环境变量替换
   └─ 3. 镜像内默认值 (模板默认值)       ← Dockerfile 构建时写入
 ```
@@ -188,7 +188,7 @@ K8s 相关配置：
 
 > openclaw.json 采用 JSON5 格式，完整 schema 定义在源码 `src/config/zod-schema.ts`（`OpenClawSchema`），类型在 `src/config/types.openclaw.ts`（`OpenClawConfig`）。
 
-**模板 envsubst 占位符**（ClawBuddy 部署时注入的核心字段）：
+**模板 envsubst 占位符**（NoDeskClaw 部署时注入的核心字段）：
 
 | 模板占位符 | 环境变量 | 映射到 openclaw.json | 默认值 |
 |-----------|----------|---------------------|--------|
@@ -208,7 +208,7 @@ K8s 相关配置：
 
 > OpenClaw 的模型配置在 `models.providers` 字段，支持 provider/baseUrl/apiKey/models 等。但 API Key 通常直接通过环境变量注入（如 `OPENAI_API_KEY`），不需要写入配置文件。
 
-**openclaw.json 核心字段概览**（完整字段 30+，这里列 ClawBuddy 关心的）：
+**openclaw.json 核心字段概览**（完整字段 30+，这里列 NoDeskClaw 关心的）：
 
 | 字段路径 | 类型 | 说明 |
 |----------|------|------|
@@ -227,10 +227,10 @@ K8s 相关配置：
 
 ### 4.3 配置更新机制
 
-用户通过 ClawBuddy 修改实例配置后，需要让新配置生效：
+用户通过 NoDeskClaw 修改实例配置后，需要让新配置生效：
 
 ```
-ClawBuddy 用户修改配置
+NoDeskClaw 用户修改配置
   │
   ├─ 1. 后端更新 ConfigMap/Secret（新的环境变量值）
   │
@@ -259,12 +259,12 @@ ClawBuddy 用户修改配置
 | `OPENCLAW_GATEWAY_TOKEN` | 环境变量（Secret） | Gateway 认证 token |
 | `OPENCLAW_CREDENTIALS_JSON` | entrypoint 写入 `/root/.openclaw/credentials/oauth.json` | OAuth 凭证（如需要） |
 
-> **credentials/ 目录说明**：OpenClaw 的 credentials 目录包含 `oauth.json`（OAuth 凭据）、`<channel>-pairing.json`（渠道配对）、`<channel>-allowFrom.json`（白名单）等 JSON 文件。对于 ClawBuddy 管理的实例，大部分配置通过环境变量注入即可，credentials 文件按需处理。
+> **credentials/ 目录说明**：OpenClaw 的 credentials 目录包含 `oauth.json`（OAuth 凭据）、`<channel>-pairing.json`（渠道配对）、`<channel>-allowFrom.json`（白名单）等 JSON 文件。对于 NoDeskClaw 管理的实例，大部分配置通过环境变量注入即可，credentials 文件按需处理。
 
 ### 4.5 部署时注入流程
 
 ```
-ClawBuddy 部署表单
+NoDeskClaw 部署表单
   │
   ├─ 用户填写配置（模型、插件、凭证等）
   ├─ 后端存入 DB（敏感字段加密）
@@ -341,7 +341,7 @@ docker build \
   --build-arg NODE_VERSION=24 \
   --build-arg OPENCLAW_VERSION=1.0.0 \
   --build-arg IMAGE_VERSION=v1.0.0 \
-  -t cr-cn-beijing.volces.com/clawbuddy/openclaw:v1.0.0 \
+  -t cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0 \
   -f deploy/docker/Dockerfile \
   deploy/docker/
 ```
@@ -350,7 +350,7 @@ docker build \
 
 ```bash
 docker login cr-cn-beijing.volces.com -u {access_key}
-docker push cr-cn-beijing.volces.com/clawbuddy/openclaw:v1.0.0
+docker push cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
 ```
 
 ### 6.3 构建产物检查清单

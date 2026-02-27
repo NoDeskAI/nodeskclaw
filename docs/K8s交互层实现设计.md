@@ -1,4 +1,4 @@
-# ClawBuddy - K8s 交互层实现设计
+# NoDeskClaw - K8s 交互层实现设计
 
 > 补充后端架构设计，详解后端与 K8s 的全部交互逻辑
 
@@ -248,7 +248,7 @@ ensure_namespace_with_isolation("oc-prod-main", "4", "8Gi", 20, "200Gi")
   │     Container max: cpu=2, memory=4Gi
   │
   └─ 4. 创建 NetworkPolicy "openclaw-isolation"
-        入站：仅允许同 NS + ClawBuddy NS + Ingress Controller
+        入站：仅允许同 NS + NoDeskClaw NS + Ingress Controller
         出站：不限制（OpenClaw 需要访问外部 API）
 ```
 
@@ -359,7 +359,7 @@ async def delete_openclaw_instance(k8s, namespace, name): ...
 async def rollback_openclaw_instance(k8s, instance, target_record): ...
 ```
 
-所有资源统一标签：`app.kubernetes.io/managed-by: clawbuddy`，便于识别和批量管理。
+所有资源统一标签：`app.kubernetes.io/managed-by: nodeskclaw`，便于识别和批量管理。
 
 ### 8.2 默认 PVC + Init Container 设计
 
@@ -515,7 +515,7 @@ _check_one(cluster):
   └─ 5. 网络放行
       └─ 为每条 NetworkAllowConfig 创建独立 NetworkPolicy
           命名: {instance}-allow-{target_namespace}
-          标签: clawbuddy/policy-type: cross-instance
+          标签: nodeskclaw/policy-type: cross-instance
 ```
 
 ### 10.3 操作矩阵

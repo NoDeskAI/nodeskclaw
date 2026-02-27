@@ -1,9 +1,0 @@
-{
-  "id": "clawbuddy",
-  "channels": ["clawbuddy"],
-  "configSchema": {
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {}
-  }
-}

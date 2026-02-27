@@ -122,7 +122,7 @@ import { Search, Bell, Settings } from 'lucide-vue-next'
 
 ### 源码获取方式
 
-**本项目在 `/Users/xy718/workspace/ClawBuddy/openclaw/` 有 OpenClaw 的完整 TypeScript 源码副本。** 优先使用本地源码，可读性远优于 Pod 上的 minified dist 文件。
+**本项目在 `/Users/xy718/workspace/NoDeskClaw/openclaw/` 有 OpenClaw 的完整 TypeScript 源码副本。** 优先使用本地源码，可读性远优于 Pod 上的 minified dist 文件。
 
 按优先级：
 
@@ -301,7 +301,7 @@ docker build -t my-image:latest .
 
 **修改一处逻辑后，必须主动搜索项目中是否存在相同或相似的逻辑副本，全部同步修改。**
 
-本项目存在多个前端工程（`claw-buddy-frontend` 管理平台、`claw-buddy-portal` 用户门户）和共享的后端逻辑，同一功能经常在多处有对应实现。
+本项目存在多个前端工程（`nodeskclaw-frontend` 管理平台、`nodeskclaw-portal` 用户门户）和共享的后端逻辑，同一功能经常在多处有对应实现。
 
 ### 必须做
 
@@ -313,7 +313,7 @@ docker build -t my-image:latest .
 
 | 逻辑类型 | 可能存在的位置 |
 |----|----|
-| slug 生成、表单校验 | `claw-buddy-portal` 和 `claw-buddy-frontend` 的对应页面 |
+| slug 生成、表单校验 | `nodeskclaw-portal` 和 `nodeskclaw-frontend` 的对应页面 |
 | API 调用封装 | 两个前端工程各自的 `api.ts` / `composables` |
 | 类型定义、常量 | 两个前端工程各自的 `types/`、组件内 |
 | K8s 资源构建逻辑 | 后端 `resource_builder.py`、`deploy_service.py` |
@@ -359,18 +359,18 @@ docker build -t my-image:latest .
 
 - 在源目录新增文件后，**立刻检查**是否有对应的文件清单/白名单需要更新
 - 删除文件时同步从清单中移除
-- 当前已知的文件清单：`claw-buddy-backend/app/services/llm_config_service.py` 中的 `PLUGIN_FILES`
+- 当前已知的文件清单：`nodeskclaw-backend/app/services/llm_config_service.py` 中的 `PLUGIN_FILES`
 
 ### 检查流程
 
-1. 向 `openclaw-channel-clawbuddy/` 添加新 `.ts` 文件
+1. 向 `openclaw-channel-nodeskclaw/` 添加新 `.ts` 文件
 2. 搜索 `PLUGIN_FILES` 关键词
 3. 确认新文件已加入列表
 4. 如果遗漏，立即补上
 
 ## 按钮光标规则
 
-**全局 CSS 已在 `globals.css` 的 `@layer base` 中为 `button:not(:disabled)` 和 `[role="button"]:not(:disabled)` 设置了 `cursor: pointer`。** 两个前端项目（`claw-buddy-frontend`、`claw-buddy-portal`）均已配置。
+**全局 CSS 已在 `globals.css` 的 `@layer base` 中为 `button:not(:disabled)` 和 `[role="button"]:not(:disabled)` 设置了 `cursor: pointer`。** 两个前端项目（`nodeskclaw-frontend`、`nodeskclaw-portal`）均已配置。
 
 ### 禁止
 

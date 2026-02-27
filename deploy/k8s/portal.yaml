@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: clawbuddy-portal
-  namespace: clawbuddy-system
+  name: nodeskclaw-portal
+  namespace: nodeskclaw-system
   labels:
-    app: clawbuddy-portal
+    app: nodeskclaw-portal
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: clawbuddy-portal
+      app: nodeskclaw-portal
   template:
     metadata:
       labels:
-        app: clawbuddy-portal
+        app: nodeskclaw-portal
     spec:
       imagePullSecrets:
         - name: cr-pull-secret
       containers:
-        - name: clawbuddy-portal
-          image: nodesk-center-cn-beijing.cr.volces.com/base-image/clawbuddy-portal:latest
+        - name: nodeskclaw-portal
+          image: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-portal:latest
           ports:
             - containerPort: 80
           resources:
@@ -39,14 +39,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: clawbuddy-portal
-  namespace: clawbuddy-system
+  name: nodeskclaw-portal
+  namespace: nodeskclaw-system
   labels:
-    app: clawbuddy-portal
+    app: nodeskclaw-portal
 spec:
   type: ClusterIP
   selector:
-    app: clawbuddy-portal
+    app: nodeskclaw-portal
   ports:
     - port: 80
       targetPort: 80

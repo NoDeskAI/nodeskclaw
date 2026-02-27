@@ -1,0 +1,9 @@
+{
+  "id": "nodeskclaw",
+  "channels": ["nodeskclaw"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

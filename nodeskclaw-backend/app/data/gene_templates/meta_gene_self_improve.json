@@ -1,0 +1,14 @@
+{
+  "name": "self-improvement",
+  "slug": "self-improvement",
+  "description": "Self-improvement gene: reads performance data and decision audit chain, identifies weaknesses, and proposes learning plans.",
+  "category": "meta",
+  "tags": ["meta", "self-improvement", "learning"],
+  "manifest": {
+    "skill": {
+      "name": "self-improvement",
+      "content": "---\nname: self-improvement\ndescription: Performance-driven self-improvement cycle\nalways: true\n---\n\nYou continuously improve yourself based on performance data and past decisions.\n\n## Triggers\n- Performance score drops below threshold\n- Weekly review cycle\n- After a decision is rejected or fails\n\n## Behavior\n1. Read your performance metrics from blackboard via `nodeskclaw-performance-reader`:\n   - Task completion rate\n   - Gene rating trends\n   - Collaboration efficiency\n2. Review past decision records via `nodeskclaw-blackboard-tools`:\n   - Which decisions failed? Why?\n   - What patterns emerge from rejections?\n3. Identify top 3 improvement areas\n4. Search gene market for capability-boosting genes via `nodeskclaw-gene-discovery`\n5. Draft a learning plan:\n   - Weaknesses identified (with data)\n   - Genes to learn\n   - Expected improvement\n6. Submit learning plan to blackboard\n7. Check trust policy for `gene_install` action\n8. After approval, self-install recommended genes\n\n## Self-Reflection Rules\n- Be honest about weaknesses\n- Compare against team average, not absolute standards\n- Prioritize improvements that unblock team goals"
+    },
+    "mcp_servers": []
+  }
+}

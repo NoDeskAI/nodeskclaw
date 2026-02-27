@@ -1,21 +1,21 @@
-# ClawBuddy - 火山云 VKE 部署方案
+# NoDeskClaw - 火山云 VKE 部署方案
 
-> 解决核心问题：ClawBuddy 怎么往火山云 VKE 集群里创建 OpenClaw 的 K8s 资源
+> 解决核心问题：NoDeskClaw 怎么往火山云 VKE 集群里创建 OpenClaw 的 K8s 资源
 
 ---
 
 ## 一、部署到 K8s 的两件事
 
-ClawBuddy 要部署两类东西到 VKE：
+NoDeskClaw 要部署两类东西到 VKE：
 
 ```
 火山云 VKE 集群
 │
-├── 1. ClawBuddy 自身（一次性人工部署）
+├── 1. NoDeskClaw 自身（一次性人工部署）
 │     Deployment + Service + Ingress
 │     管理后台，部署一次就行
 │
-└── 2. OpenClaw 实例（通过 ClawBuddy 页面一键部署，可以 N 个）
+└── 2. OpenClaw 实例（通过 NoDeskClaw 页面一键部署，可以 N 个）
       每个实例 = Deployment + Service + ConfigMap + (可选)Ingress
       这是核心功能，通过 kubernetes-asyncio 直接创建 K8s 资源
 ```
@@ -36,14 +36,14 @@ VKE 提供两种 KubeConfig：
 
 | 类型 | 网络要求 | 适用场景 |
 |------|----------|----------|
-| **公网 KubeConfig** | 通过公网访问 API Server | ClawBuddy 部署在 VKE 集群外部 |
-| **内网 KubeConfig** | 通过 VPC 内网访问 | ClawBuddy 部署在同一 VKE 集群或同 VPC |
+| **公网 KubeConfig** | 通过公网访问 API Server | NoDeskClaw 部署在 VKE 集群外部 |
+| **内网 KubeConfig** | 通过 VPC 内网访问 | NoDeskClaw 部署在同一 VKE 集群或同 VPC |
 
-**推荐**：ClawBuddy 自身部署在 VKE 集群内，用 **ServiceAccount + RBAC** 访问本集群，不需要 KubeConfig 文件。管理其他集群时才需要导入 KubeConfig。
+**推荐**：NoDeskClaw 自身部署在 VKE 集群内，用 **ServiceAccount + RBAC** 访问本集群，不需要 KubeConfig 文件。管理其他集群时才需要导入 KubeConfig。
 
-### 2.2 ClawBuddy 内访问本集群
+### 2.2 NoDeskClaw 内访问本集群
 
-ClawBuddy 跑在 VKE 里时，用 Pod 自带的 ServiceAccount Token 就行：
+NoDeskClaw 跑在 VKE 里时，用 Pod 自带的 ServiceAccount Token 就行：
 
 ```python
 # kubernetes-asyncio 支持自动检测 in-cluster 环境
@@ -56,9 +56,9 @@ await config.load_incluster_config()
 await config.load_kube_config()
 ```
 
-需要给 ClawBuddy 的 ServiceAccount 足够权限（见第六节 RBAC）。
+需要给 NoDeskClaw 的 ServiceAccount 足够权限（见第六节 RBAC）。
 
-### 2.3 ClawBuddy 内访问其他集群
+### 2.3 NoDeskClaw 内访问其他集群
 
 用户通过页面上传 KubeConfig → AES 加密存入 DB → 使用时解密内存加载：
 
@@ -85,7 +85,7 @@ VKE 的 KubeConfig 支持两种认证方式：
 | **Token** (bearer token) | **48 小时** | 下载时选择「Token 认证」 | ⚠️ 短期有效 |
 
 **Token 过期处理**：
-- ClawBuddy 后台 `ClusterHealthChecker` 每 60 秒巡检所有集群
+- NoDeskClaw 后台 `ClusterHealthChecker` 每 60 秒巡检所有集群
 - Token 不足 6 小时 → 后端标记 `health_status=token_expiring`，前端轮询 `GET /clusters/:id/health` 展示黄色告警
 - Token 已过期 → 后端标记 `health_status=token_expired`，阻止所有操作，前端轮询时展示红色告警，用户需重新上传 KubeConfig
 - 用户上传新 KubeConfig 后，`K8sClientManager` 自动重建连接
@@ -114,12 +114,12 @@ AdvancedConfig 中 `VolumeConfig.storage_class` 可指定上述值。不指定�
 ```
 火山云 VKE 集群
 │
-├── Namespace: clawbuddy              ← ClawBuddy 自身
+├── Namespace: nodeskclaw              ← NoDeskClaw 自身
 │
 ├── Namespace: oc-prod-main           ← OpenClaw 生产主力
 │   ├── ResourceQuota (4c / 8Gi)
 │   ├── LimitRange (单容器上限 2c/4Gi)
-│   ├── NetworkPolicy (仅允许同 NS + ClawBuddy + Ingress)
+│   ├── NetworkPolicy (仅允许同 NS + NoDeskClaw + Ingress)
 │   └── 业务资源: ConfigMap + Deployment + Service + Ingress
 │
 ├── Namespace: oc-staging             ← OpenClaw 预发
@@ -160,7 +160,7 @@ AdvancedConfig 中 `VolumeConfig.storage_class` 可指定上述值。不指定�
   oc-test-pr-123       PR 自动测试
 ```
 
-> 用户在部署表单里只填 **实例名**（如 `prod-main`），Namespace 由 ClawBuddy 自动生成 `oc-prod-main`。
+> 用户在部署表单里只填 **实例名**（如 `prod-main`），Namespace 由 NoDeskClaw 自动生成 `oc-prod-main`。
 
 ### 3.3 ResourceQuota（防止资源抢占）
 
@@ -257,7 +257,7 @@ def build_network_policy(namespace: str) -> dict:
     """
     网络隔离策略:
     - 允许同 Namespace 内 Pod 互访（同一实例内部通信）
-    - 允许从 clawbuddy Namespace 访问（管理：健康检查、日志）
+    - 允许从 nodeskclaw Namespace 访问（管理：健康检查、日志）
     - 允许 Ingress Controller 流量进入
     - 禁止其他 Namespace（其他 OpenClaw 实例）访问
     - 出站不限制（OpenClaw 需要访问外部 API）
@@ -275,9 +275,9 @@ def build_network_policy(namespace: str) -> dict:
             "ingress": [
                 # 同 Namespace 内互访
                 {"from": [{"podSelector": {}}]},
-                # ClawBuddy 管理访问
+                # NoDeskClaw 管理访问
                 {"from": [{"namespaceSelector": {
-                    "matchLabels": {"app.kubernetes.io/name": "clawbuddy"}
+                    "matchLabels": {"app.kubernetes.io/name": "nodeskclaw"}
                 }}]},
                 # Ingress Controller 流量
                 {"from": [{"namespaceSelector": {
@@ -297,7 +297,7 @@ def build_network_policy(namespace: str) -> dict:
 oc-prod-main 的 Pod  ──✗──→  oc-staging 的 Pod         (禁止)
 oc-prod-main 的 Pod  ──✗──→  oc-dev-zhangsan 的 Pod    (禁止)
 oc-prod-main 的 Pod  ──✓──→  oc-prod-main 的 Pod       (允许，同 NS)
-clawbuddy 的 Pod     ──✓──→  任何 oc-* 的 Pod           (允许，管理需要)
+nodeskclaw 的 Pod     ──✓──→  任何 oc-* 的 Pod           (允许，管理需要)
 ingress-nginx        ──✓──→  任何 oc-* 的 Pod           (允许，流量入口)
 ```
 
@@ -305,7 +305,7 @@ ingress-nginx        ──✓──→  任何 oc-* 的 Pod           (允许�
 
 ### 3.6 Namespace 创建编排
 
-部署时 ClawBuddy 自动创建 Namespace 并配置隔离：
+部署时 NoDeskClaw 自动创建 Namespace 并配置隔离：
 
 ```python
 async def ensure_namespace_with_isolation(
@@ -322,8 +322,8 @@ async def ensure_namespace_with_isolation(
         metadata=k8s_client.V1ObjectMeta(
             name=namespace,
             labels={
-                "app.kubernetes.io/managed-by": "clawbuddy",
-                "clawbuddy.io/type": "openclaw-instance",
+                "app.kubernetes.io/managed-by": "nodeskclaw",
+                "nodeskclaw.io/type": "openclaw-instance",
             },
         )
     )
@@ -381,7 +381,7 @@ Namespace: oc-prod-main (每实例独占)
 │   └── default: 1c/1Gi, max: 2c/4Gi
 │
 ├── NetworkPolicy: openclaw-isolation    ← 自动创建，网络隔离
-│   └── 仅允许同 NS + ClawBuddy + Ingress
+│   └── 仅允许同 NS + NoDeskClaw + Ingress
 │
 ├── PVC: prod-main-root-data             ← 自动创建，实例持久化存储
 │   ├── size: 100Gi (默认)
@@ -400,7 +400,7 @@ Namespace: oc-prod-main (每实例独占)
 │       │   └── volumeMount: PVC → /init-data
 │       │
 │       └── Container: openclaw
-│           ├── image: cr-cn-beijing.volces.com/clawbuddy/openclaw:v1.0.0
+│           ├── image: cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
 │           ├── command: entrypoint 内 exec openclaw gateway --allow-unconfigured --bind lan
 │           ├── resources: {requests: 0.5c/512Mi, limits: 1c/1Gi}
 │           ├── envFrom: ConfigMap + Secret
@@ -458,13 +458,13 @@ Namespace: oc-prod-main (每实例独占)
 from kubernetes_asyncio import client as k8s_client
 
 def build_labels(instance_name: str, instance_id: str, image_tag: str) -> dict:
-    """统一标签，所有 ClawBuddy 管理的资源都带这组标签"""
+    """统一标签，所有 NoDeskClaw 管理的资源都带这组标签"""
     return {
         "app.kubernetes.io/name": "openclaw",
         "app.kubernetes.io/instance": instance_name,
         "app.kubernetes.io/version": image_tag,
-        "app.kubernetes.io/managed-by": "clawbuddy",
-        "clawbuddy.io/instance-id": instance_id,
+        "app.kubernetes.io/managed-by": "nodeskclaw",
+        "nodeskclaw.io/instance-id": instance_id,
     }
 
 def build_selector_labels(instance_name: str) -> dict:
@@ -578,7 +578,7 @@ def build_deployment(
             template=k8s_client.V1PodTemplateSpec(
                 metadata=k8s_client.V1ObjectMeta(
                     labels=selector_labels,
-                    annotations={"clawbuddy.io/restartedAt": ""},
+                    annotations={"nodeskclaw.io/restartedAt": ""},
                 ),
                 spec=k8s_client.V1PodSpec(
                     init_containers=[init_container],
@@ -708,7 +708,7 @@ def build_ingress(
 
 ---
 
-## 五、ClawBuddy 怎么创建 K8s 资源
+## 五、NoDeskClaw 怎么创建 K8s 资源
 
 ### 5.1 页面表单 → 资源对象
 
@@ -966,9 +966,9 @@ async def _wait_for_pods_ready(self, k8s: K8sClient, instance, deploy_id: str, t
 
 ---
 
-## 六、RBAC — ClawBuddy 需要的 K8s 权限
+## 六、RBAC — NoDeskClaw 需要的 K8s 权限
 
-ClawBuddy 部署在 VKE 集群内时，需要 ServiceAccount 有足够权限操作其他 Namespace 的资源：
+NoDeskClaw 部署在 VKE 集群内时，需要 ServiceAccount 有足够权限操作其他 Namespace 的资源：
 
 ```yaml
 # deploy/k8s/rbac.yaml
@@ -977,15 +977,15 @@ ClawBuddy 部署在 VKE 集群内时，需要 ServiceAccount 有足够权限操�
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: clawbuddy-sa
-  namespace: clawbuddy
+  name: nodeskclaw-sa
+  namespace: nodeskclaw
 
 ---
 # 2. ClusterRole（集群级别权限）
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: clawbuddy-role
+  name: nodeskclaw-role
 rules:
   # Namespace 管理
   - apiGroups: [""]
@@ -1052,15 +1052,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: clawbuddy-binding
+  name: nodeskclaw-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: clawbuddy-role
+  name: nodeskclaw-role
 subjects:
   - kind: ServiceAccount
-    name: clawbuddy-sa
-    namespace: clawbuddy
+    name: nodeskclaw-sa
+    namespace: nodeskclaw
 ```
 
 ---
@@ -1129,16 +1129,16 @@ spec:
 
 ### 7.3 VKE 环境变量配置
 
-ClawBuddy 的 `.env` 需要配置 VKE 相关参数：
+NoDeskClaw 的 `.env` 需要配置 VKE 相关参数：
 
 ```bash
 # 火山云 VKE 专用
-CLAWBUDDY_VKE_SUBNET_ID=subnet-abc123          # CLB 子网 ID
-CLAWBUDDY_VKE_DEFAULT_ADDRESS_TYPE=PUBLIC       # 默认 CLB 类型
-CLAWBUDDY_VKE_INGRESS_CLASS=nginx               # Ingress Class
+NODESKCLAW_VKE_SUBNET_ID=subnet-abc123          # CLB 子网 ID
+NODESKCLAW_VKE_DEFAULT_ADDRESS_TYPE=PUBLIC       # 默认 CLB 类型
+NODESKCLAW_VKE_INGRESS_CLASS=nginx               # Ingress Class
 
 # 镜像仓库（火山云 CR）
-CLAWBUDDY_IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
+NODESKCLAW_IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
 ```
 
 ---
@@ -1178,7 +1178,7 @@ CLAWBUDDY_IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
 │   └─ 创建 Namespace (带管理标签)                              │
 │   └─ 创建 ResourceQuota (4c/8Gi/20 pods)                    │
 │   └─ 创建 LimitRange (单容器上限 2c/4Gi)                     │
-│   └─ 创建 NetworkPolicy (同 NS + ClawBuddy + Ingress 放行)   │
+│   └─ 创建 NetworkPolicy (同 NS + NoDeskClaw + Ingress 放行)   │
 │                                                              │
 │ Step 2: create_openclaw_instance(k8s, request, instance_id)  │
 │   通过 kubernetes-asyncio 直接创建:                           │
@@ -1221,7 +1221,7 @@ CLAWBUDDY_IMAGE_REGISTRY=cr-xxx.volcengine.com/openclaw/openclaw
 
 ---
 
-## 九、ClawBuddy 自身的 VKE 部署
+## 九、NoDeskClaw 自身的 VKE 部署
 
 ### 9.0 CI/CD 自动化脚本
 
@@ -1237,15 +1237,15 @@ deploy/
     └── portal.yaml   # Portal 前端 Deployment + Service
 ```
 
-三个组件均部署在 `clawbuddy-system` Namespace，镜像推送到火山云 CR `nodesk-center-cn-beijing.cr.volces.com/base-image/`：
+三个组件均部署在 `nodeskclaw-system` Namespace，镜像推送到火山云 CR `nodesk-center-cn-beijing.cr.volces.com/base-image/`：
 
 | 组件 | 镜像名 | Dockerfile | 端口 |
 |------|--------|-----------|------|
-| backend | `clawbuddy-backend:TAG` | `claw-buddy-backend/Dockerfile` | 8000 |
-| admin | `clawbuddy-admin:TAG` | `claw-buddy-frontend/Dockerfile` (多阶段 Node+Nginx) | 80 |
-| portal | `clawbuddy-portal:TAG` | `claw-buddy-portal/Dockerfile` (多阶段 Node+Nginx) | 80 |
+| backend | `nodeskclaw-backend:TAG` | `nodeskclaw-backend/Dockerfile` | 8000 |
+| admin | `nodeskclaw-admin:TAG` | `nodeskclaw-frontend/Dockerfile` (多阶段 Node+Nginx) | 80 |
+| portal | `nodeskclaw-portal:TAG` | `nodeskclaw-portal/Dockerfile` (多阶段 Node+Nginx) | 80 |
 
-Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://clawbuddy-backend:8000`（K8s Service DNS），Admin 额外代理 `/stream`（SSE 事件流）。
+Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://nodeskclaw-backend:8000`（K8s Service DNS），Admin 额外代理 `/stream`（SSE 事件流）。
 
 ```bash
 # 日常更新：构建 + 推送 + K8s 滚动更新
@@ -1269,7 +1269,7 @@ Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://
 export KUBECONFIG=~/.kube/vke-prod.yaml
 
 # 2. 确保 Namespace 和镜像拉取密钥已存在
-kubectl create namespace clawbuddy-system   # 如果不存在
+kubectl create namespace nodeskclaw-system   # 如果不存在
 # cr-pull-secret 应已在集群中创建
 
 # 3. 初始化：从 .env 创建 K8s Secret + 应用部署清单
@@ -1279,40 +1279,40 @@ kubectl create namespace clawbuddy-system   # 如果不存在
 ./deploy/deploy.sh all
 
 # 5. 验证
-kubectl -n clawbuddy-system get pods
-kubectl -n clawbuddy-system get svc
+kubectl -n nodeskclaw-system get pods
+kubectl -n nodeskclaw-system get svc
 ```
 
-### 9.2 ClawBuddy 自身的 Deployment YAML
+### 9.2 NoDeskClaw 自身的 Deployment YAML
 
 ```yaml
 # deploy/k8s/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: clawbuddy
-  namespace: clawbuddy
+  name: nodeskclaw
+  namespace: nodeskclaw
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: clawbuddy
+      app: nodeskclaw
   template:
     metadata:
       labels:
-        app: clawbuddy
+        app: nodeskclaw
     spec:
-      serviceAccountName: clawbuddy-sa    # 使用有权限的 SA
+      serviceAccountName: nodeskclaw-sa    # 使用有权限的 SA
       containers:
-        - name: clawbuddy
-          image: cr-xxx.volcengine.com/clawbuddy/clawbuddy:v0.1.0
+        - name: nodeskclaw
+          image: cr-xxx.volcengine.com/nodeskclaw/nodeskclaw:v0.1.0
           ports:
             - containerPort: 8000
           envFrom:
             - secretRef:
-                name: clawbuddy-secret
+                name: nodeskclaw-secret
             - configMapRef:
-                name: clawbuddy-config
+                name: nodeskclaw-config
           # 数据库使用火山云 RDS PostgreSQL，无需本地 volume
           livenessProbe:
             httpGet:
@@ -1327,7 +1327,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: clawbuddy-data
+            claimName: nodeskclaw-data
 ```
 
 ---
@@ -1336,16 +1336,16 @@ spec:
 
 ### 10.1 概述
 
-LLM Proxy 是独立于 ClawBuddy 后端的微服务，负责组织 Key 模式下的 LLM 请求代理转发。独立部署到 K8s 后，OpenClaw 实例通过私网域名访问该服务。
+LLM Proxy 是独立于 NoDeskClaw 后端的微服务，负责组织 Key 模式下的 LLM 请求代理转发。独立部署到 K8s 后，OpenClaw 实例通过私网域名访问该服务。
 
-项目目录：`claw-buddy-llm-proxy/`，包含代码、Dockerfile、构建脚本和 K8s 部署清单。
+项目目录：`nodeskclaw-llm-proxy/`，包含代码、Dockerfile、构建脚本和 K8s 部署清单。
 
 ### 10.2 架构
 
 #### 10.2.1 Pod 内部架构
 
 ```
-LLM Proxy Pod (clawbuddy-system namespace)
+LLM Proxy Pod (nodeskclaw-system namespace)
 ┌──────────────────────────────────┐
 │ ┌──────────────┐                 │
 │ │  LLM Proxy   │──── DB (RDS)   │
@@ -1361,7 +1361,7 @@ LLM Proxy Pod (clawbuddy-system namespace)
 └──────────────────────────────────┘
 ```
 
-- **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 `wp_api_key`（格式 `clawbuddy-wp-{hex}`）鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
+- **LLM Proxy**（FastAPI :8080）：接收 OpenClaw 的 LLM 请求，通过 `wp_api_key`（格式 `nodeskclaw-wp-{hex}`）鉴权，解析组织/个人 Key，转发到目标 Provider，记录 usage
 - **Clash Sidecar**（mihomo :7890）：提供出站 HTTPS 代理，用于访问 OpenAI/Anthropic 等需要翻墙的外部 API
 
 #### 10.2.2 网络链路（实际部署方案）
@@ -1371,13 +1371,13 @@ LLM Proxy 复用已有的 Controller ALB + Nginx Ingress Controller，不单独�
 ```
 OpenClaw Pod
   │
-  │ HTTPS (clawbuddy-llm-proxy.nodesk.tech)
+  │ HTTPS (nodeskclaw-llm-proxy.nodeskai.com)
   ▼
 Controller ALB (私网 10.3.32.251, HTTPS:443)
-  │ *.nodesk.tech 通配转发规则
+  │ *.nodeskai.com 通配转发规则
   ▼
-Nginx Ingress Controller Pod (clawbuddy-system)
-  │ Host: clawbuddy-llm-proxy.nodesk.tech
+Nginx Ingress Controller Pod (nodeskclaw-system)
+  │ Host: nodeskclaw-llm-proxy.nodeskai.com
   ▼
 LLM Proxy Service (ClusterIP, port:80 -> targetPort:8080)
   │
@@ -1389,18 +1389,18 @@ LLM Proxy Pod (:8080)
 
 | 资源 | 名称 | 命名空间 | 说明 |
 |------|------|----------|------|
-| Ingress (alb) | `clawbuddy-controller-alb-route` | clawbuddy-system | `*.nodesk.tech` 通配，转发到 Nginx Controller |
-| Ingress (nginx) | `clawbuddy-llm-proxy` | clawbuddy-system | 匹配 `clawbuddy-llm-proxy.nodesk.tech`，转发到 LLM Proxy Service |
-| Service | `clawbuddy-llm-proxy` | clawbuddy-system | ClusterIP，port 80 -> targetPort 8080 |
-| Deployment | `clawbuddy-llm-proxy` | clawbuddy-system | 1 副本，含 Clash sidecar |
+| Ingress (alb) | `nodeskclaw-controller-alb-route` | nodeskclaw-system | `*.nodeskai.com` 通配，转发到 Nginx Controller |
+| Ingress (nginx) | `nodeskclaw-llm-proxy` | nodeskclaw-system | 匹配 `nodeskclaw-llm-proxy.nodeskai.com`，转发到 LLM Proxy Service |
+| Service | `nodeskclaw-llm-proxy` | nodeskclaw-system | ClusterIP，port 80 -> targetPort 8080 |
+| Deployment | `nodeskclaw-llm-proxy` | nodeskclaw-system | 1 副本，含 Clash sidecar |
 
-DNS 配置：`clawbuddy-llm-proxy.nodesk.tech` 解析到 Controller ALB 的私网 VIP `10.3.32.251`（可用 `*.nodesk.tech` 通配 A 记录覆盖）。
+DNS 配置：`nodeskclaw-llm-proxy.nodeskai.com` 解析到 Controller ALB 的私网 VIP `10.3.32.251`（可用 `*.nodeskai.com` 通配 A 记录覆盖）。
 
 ### 10.3 部署步骤
 
 ```bash
 # 1. 构建并推送镜像
-cd claw-buddy-llm-proxy
+cd nodeskclaw-llm-proxy
 ./build-and-push.sh
 
 # 2. 创建 Secret（DATABASE_URL）
@@ -1418,36 +1418,36 @@ kubectl apply -f - <<EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: clawbuddy-llm-proxy
-  namespace: clawbuddy-system
+  name: nodeskclaw-llm-proxy
+  namespace: nodeskclaw-system
 spec:
   ingressClassName: nginx
   rules:
-  - host: clawbuddy-llm-proxy.nodesk.tech
+  - host: nodeskclaw-llm-proxy.nodeskai.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: clawbuddy-llm-proxy
+            name: nodeskclaw-llm-proxy
             port:
               number: 80
 EOF
 
 # 6. 验证
 kubectl exec -n <any-openclaw-namespace> <pod> -- \
-  curl -sk https://clawbuddy-llm-proxy.nodesk.tech/health
+  curl -sk https://nodeskclaw-llm-proxy.nodeskai.com/health
 # 期望返回: {"status":"ok"}
 ```
 
 ### 10.4 后端配置
 
-在 `claw-buddy-backend/.env` 中设置 LLM Proxy 地址：
+在 `nodeskclaw-backend/.env` 中设置 LLM Proxy 地址：
 
 ```
-LLM_PROXY_URL=https://clawbuddy-llm-proxy.nodesk.tech
-LLM_PROXY_INTERNAL_URL=http://clawbuddy-llm-proxy.clawbuddy-system
+LLM_PROXY_URL=https://nodeskclaw-llm-proxy.nodeskai.com
+LLM_PROXY_INTERNAL_URL=http://nodeskclaw-llm-proxy.nodeskclaw-system
 ```
 
 `LLM_PROXY_INTERNAL_URL`（K8s 内网 DNS）优先使用，可绕过 ALB 压缩问题。后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 指向 `{LLM_PROXY_INTERNAL_URL}/{provider}/v1`，`apiKey` 使用实例的 `wp_api_key`（独立于 gateway token）。
@@ -1457,7 +1457,7 @@ LLM_PROXY_INTERNAL_URL=http://clawbuddy-llm-proxy.clawbuddy-system
 早期方案尝试过为 LLM Proxy 创建独立 ALB Ingress（`ingressClassName: alb`），但遇到 VKE ALB 控制器的问题导致失败，详见第十一节。最终采用复用 Controller ALB + Nginx Ingress 的方案，优势：
 
 - 不额外创建 ALB 实例，节省资源
-- 复用已有的 `*.nodesk.tech` 通配转发规则和 TLS 证书
+- 复用已有的 `*.nodeskai.com` 通配转发规则和 TLS 证书
 - Nginx Ingress 配置简单、行为可预测
 
 ---
@@ -1475,7 +1475,7 @@ VKE 支持两种 IngressClass：
 | `nginx` | 通过 Nginx Ingress Controller 路由，所有域名共享一个入口 ALB | 大多数场景 |
 | `alb` | 每个 Ingress 可对应一个独立 ALB 实例，VKE ALB 控制器自动管理 | 需要独立 ALB 的场景 |
 
-项目当前架构：一个 Controller ALB（`alb-njd4tb8nlqn9`，私网 `10.3.32.251`）负责所有 `*.nodesk.tech` 流量，通过通配转发规则将请求转给 Nginx Ingress Controller，再由 Nginx 根据 Host header 分发到各个后端 Service。
+项目当前架构：一个 Controller ALB（`alb-njd4tb8nlqn9`，私网 `10.3.32.251`）负责所有 `*.nodeskai.com` 流量，通过通配转发规则将请求转给 Nginx Ingress Controller，再由 Nginx 根据 Host header 分发到各个后端 Service。
 
 ### 11.2 问题 1：新建 ALB Ingress 后端服务器组为空
 
@@ -1507,7 +1507,7 @@ spec:
 
 ### 11.3 问题 2：共享 ALB 上的 Ingress 增删导致后端服务器组被清空
 
-**现象**：在同一个 ALB（`alb-njd4tb8nlqn9`）上多次创建、删除 LLM Proxy 的 Ingress 资源后，原本正常的 `*.nodesk.tech` 通配规则也开始返回 503，所有域名全部不可用。
+**现象**：在同一个 ALB（`alb-njd4tb8nlqn9`）上多次创建、删除 LLM Proxy 的 Ingress 资源后，原本正常的 `*.nodeskai.com` 通配规则也开始返回 503，所有域名全部不可用。
 
 **原因**：VKE ALB 控制器在处理同一 ALB 上多个 Ingress 的增删时，内部状态出现异常，导致后端服务器组被错误地清空。
 
@@ -1515,12 +1515,12 @@ spec:
 
 ```bash
 # 给 Ingress 加一个无害的 annotation，触发 VKE 控制器重新同步
-kubectl annotate ingress clawbuddy-controller-alb-route \
-  -n clawbuddy-system \
+kubectl annotate ingress nodeskclaw-controller-alb-route \
+  -n nodeskclaw-system \
   force-sync=$(date +%s) --overwrite
 
 # 等待几秒后检查 events
-kubectl describe ingress clawbuddy-controller-alb-route -n clawbuddy-system
+kubectl describe ingress nodeskclaw-controller-alb-route -n nodeskclaw-system
 # 应看到: ReconcileALBIngressSuccessfully
 ```
 
@@ -1530,7 +1530,7 @@ kubectl describe ingress clawbuddy-controller-alb-route -n clawbuddy-system
 
 **现象**：ALB 重新同步后，只有根路径 `/` 能正确转发到后端，非根路径（`/health`、`/api`、`/v1/chat/completions` 等）全部返回 503。
 
-**原因**：ALB 控制台上 `*.nodesk.tech` 转发规则的 URL 路径 `/` 被配置为**精确匹配**而非**前缀匹配**。Kubernetes Ingress 中 `pathType: Prefix` 的语义未被正确映射到 ALB 的转发规则。
+**原因**：ALB 控制台上 `*.nodeskai.com` 转发规则的 URL 路径 `/` 被配置为**精确匹配**而非**前缀匹配**。Kubernetes Ingress 中 `pathType: Prefix` 的语义未被正确映射到 ALB 的转发规则。
 
 **修复方法**：在 ALB 控制台手动修改转发规则，将路径匹配从"精确匹配"改为"前缀匹配"，或添加 `/**` 前缀匹配规则。
 
@@ -1540,7 +1540,7 @@ kubectl describe ingress clawbuddy-controller-alb-route -n clawbuddy-system
 # 从任意 Pod 测试多个路径
 for path in / /health /api /v1/chat/completions; do
   code=$(curl -sk -o /dev/null -w '%{http_code}' \
-    https://clawbuddy-llm-proxy.nodesk.tech${path})
+    https://nodeskclaw-llm-proxy.nodeskai.com${path})
   echo "${path} -> ${code}"
 done
 # 所有路径都应返回非 503 的状态码
@@ -1552,10 +1552,10 @@ done
 
 | 步骤 | 检查项 | 命令/操作 |
 |------|--------|-----------|
-| 1 | Nginx Controller Pod 是否 Running | `kubectl get pods -n clawbuddy-system -l app.kubernetes.io/component=controller` |
-| 2 | 直接访问 Nginx Controller Pod 是否正常 | `curl -H "Host: xxx.nodesk.tech" http://<pod-ip>:80/health` |
+| 1 | Nginx Controller Pod 是否 Running | `kubectl get pods -n nodeskclaw-system -l app.kubernetes.io/component=controller` |
+| 2 | 直接访问 Nginx Controller Pod 是否正常 | `curl -H "Host: xxx.nodeskai.com" http://<pod-ip>:80/health` |
 | 3 | ALB 后端服务器组是否有后端 | ALB 控制台 -> 服务器组 -> 查看后端数量 |
 | 4 | ALB 转发规则路径匹配类型 | ALB 控制台 -> 转发规则 -> 确认为"前缀匹配" |
-| 5 | DNS 解析是否指向正确的 ALB VIP | `python3 -c "import socket; print(socket.gethostbyname('xxx.nodesk.tech'))"` |
+| 5 | DNS 解析是否指向正确的 ALB VIP | `python3 -c "import socket; print(socket.gethostbyname('xxx.nodeskai.com'))"` |
 | 6 | 是否有残留的 Ingress 或 ALB 资源 | `kubectl get ingress -A` / `kubectl get alb` |
-| 7 | 强制重新同步 | `kubectl annotate ingress <name> -n clawbuddy-system force-sync=$(date +%s) --overwrite` |
+| 7 | 强制重新同步 | `kubectl annotate ingress <name> -n nodeskclaw-system force-sync=$(date +%s) --overwrite` |

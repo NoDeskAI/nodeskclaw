@@ -1,0 +1,17 @@
+{
+  "name": "nodeskclaw-self-management",
+  "slug": "nodeskclaw-self-management",
+  "description": "Complete self-management genome: bundles all 5 NoDeskClaw native tool genes for full workspace autonomy.",
+  "category": "genome",
+  "tags": ["genome", "tools", "self-management", "autonomy"],
+  "gene_slugs": [
+    "nodeskclaw-blackboard-tools",
+    "nodeskclaw-topology-awareness",
+    "nodeskclaw-performance-reader",
+    "nodeskclaw-proposals",
+    "nodeskclaw-gene-discovery"
+  ],
+  "config_override": {
+    "description": "Installing this genome gives the agent full self-management capabilities: read/write blackboard, understand topology, monitor performance, submit proposals, and discover new genes."
+  }
+}

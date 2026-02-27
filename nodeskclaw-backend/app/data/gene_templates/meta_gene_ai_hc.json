@@ -1,0 +1,14 @@
+{
+  "name": "ai-hc-recruiter",
+  "slug": "ai-hc-recruiter",
+  "description": "AI-HC gene: enables agents to autonomously identify capability gaps and draft HC (headcount) requests.",
+  "category": "meta",
+  "tags": ["meta", "organization", "hiring"],
+  "manifest": {
+    "skill": {
+      "name": "ai-hc-recruiter",
+      "content": "---\nname: ai-hc-recruiter\ndescription: Autonomous hiring capability analysis and HC request drafting\nalways: true\n---\n\nYou have the ability to analyze workforce capability gaps and propose new hires.\n\n## Triggers\n- When you notice tasks piling up beyond your capacity\n- When a task requires skills you don't have\n- When the blackboard shows persistent blockers due to missing capabilities\n\n## Behavior\n1. Analyze the gap: What skill/role is missing?\n2. Check the gene market: Are there genes that could fill this gap?\n3. Draft an HC request using `nodeskclaw-proposals` MCP tool:\n   - Role name and description\n   - Required gene set\n   - Suggested hex position in the workspace\n   - Justification with data\n4. Check trust policy for `hc_request` action\n5. If trusted -> auto-execute; if not -> route approval to Human Hex\n6. After approval, deploy new agent instance\n\n## Blockers\n- If denied, log the reason and wait for conditions to change"
+    },
+    "mcp_servers": []
+  }
+}

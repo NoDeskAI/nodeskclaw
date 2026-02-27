@@ -1,7 +1,7 @@
 # i18n 手工回归测试报告
 
 **执行时间**: 2025-02-25  
-**测试范围**: 门户 (claw-buddy-portal) + 管理前端 (claw-buddy-frontend)
+**测试范围**: 门户 (nodeskclaw-portal) + 管理前端 (nodeskclaw-frontend)
 
 ---
 
@@ -31,7 +31,7 @@
 
 | 项目 | 结果 | 依据 |
 |-----|------|------|
-| message_key 优先 | **符合** | `claw-buddy-portal/src/i18n/error.ts`：`if (message_key && i18n.global.te(message_key)) return i18n.global.t(message_key)` |
+| message_key 优先 | **符合** | `nodeskclaw-portal/src/i18n/error.ts`：`if (message_key && i18n.global.te(message_key)) return i18n.global.t(message_key)` |
 | message 回退 | **符合** | 同上：`if (message && message.trim()) return message` |
 | 不使用 detail | **符合** | `resolveApiErrorMessage` 仅读取 `message_key`、`message`，无 `detail` 逻辑 |
 | 中文错误文案可读 | **通过** | 登录失败显示「邮箱或密码错误」 |

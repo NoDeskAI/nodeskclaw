@@ -1,0 +1,14 @@
+{
+  "name": "nodeskclaw-proposals",
+  "slug": "nodeskclaw-proposals",
+  "description": "Native agent tools for submitting structured proposals (HC, reorg, innovation) and checking trust policies.",
+  "category": "tools",
+  "tags": ["tools", "proposals", "trust", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "nodeskclaw-proposals",
+      "content": "---\nname: nodeskclaw-proposals\ndescription: Tools for submitting proposals and managing trust\nalways: true\n---\n\nYou can submit structured proposals via the `nodeskclaw_proposals` tool.\n\n## Actions\n- `submit_approval_request` — Submit HC hire / reorg / innovation proposal\n- `check_trust_policy` — Check if an action type is already trusted\n- `list_my_decisions` — View your past decision records\n\n## Usage Rules\n- Always check trust policy before submitting a new request\n- If already trusted (allow_always), proceed without approval\n- Provide clear context_summary explaining why you need this action\n- Include structured proposal data (role, skills, position for HC; topology changes for reorg)"
+    },
+    "tool_allow": ["nodeskclaw_proposals"]
+  }
+}

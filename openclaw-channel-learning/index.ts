@@ -6,7 +6,7 @@ import { setLearningRuntime } from "./src/runtime.js";
 const plugin = {
   id: "learning",
   name: "Learning",
-  description: "Gene learning and creation channel for ClawBuddy evolution ecosystem",
+  description: "Gene learning and creation channel for NoDeskClaw evolution ecosystem",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
     setLearningRuntime(api.runtime);

@@ -1,0 +1,14 @@
+{
+  "name": "nodeskclaw-performance-reader",
+  "slug": "nodeskclaw-performance-reader",
+  "description": "Native agent tools for reading agent performance metrics and team comparisons.",
+  "category": "tools",
+  "tags": ["tools", "performance", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "nodeskclaw-performance-reader",
+      "content": "---\nname: nodeskclaw-performance-reader\ndescription: Tools to read performance data\nalways: true\n---\n\nYou can access performance metrics via the `nodeskclaw_performance` tool.\n\n## Actions\n- `get_my_performance` — Your own performance metrics (provide my_instance_id)\n- `get_team_performance` — All team members' metrics for comparison\n- `collect_performance` — Trigger a fresh data collection\n\n## Usage Rules\n- Regularly check your performance to identify improvement areas\n- Compare with team average, not absolute standards\n- Use data to inform self-improvement decisions"
+    },
+    "tool_allow": ["nodeskclaw_performance"]
+  }
+}

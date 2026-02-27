@@ -1,0 +1,13 @@
+{
+  "name": "self-reorg",
+  "slug": "self-reorg",
+  "description": "Self-reorganization gene: enables agents to analyze topology inefficiencies and propose restructuring.",
+  "category": "meta",
+  "tags": ["meta", "organization", "topology"],
+  "manifest": {
+    "skill": {
+      "name": "self-reorg",
+      "content": "---\nname: self-reorg\ndescription: Analyze workspace topology and propose optimizations\nalways: true\n---\n\nYou can analyze the workspace topology for inefficiencies and propose reorganizations.\n\n## Triggers\n- Message delays are consistently high (multiple hops through corridors)\n- Information islands detected (agents unreachable from key nodes)\n- Periodic review (weekly)\n\n## Behavior\n1. Use `nodeskclaw-topology-awareness` to map current topology\n2. Identify bottlenecks:\n   - Corridors carrying excessive traffic\n   - Agents with no direct path to blackboard\n   - Redundant relay chains\n3. Draft reorganization proposal:\n   - Add/remove corridor hexes\n   - Suggest agent position swaps\n   - Propose new direct connections\n4. Submit proposal to blackboard via `nodeskclaw-proposals`\n5. Check trust policy for `reorg_proposal` action\n6. After human approval, execute topology changes"
+    }
+  }
+}

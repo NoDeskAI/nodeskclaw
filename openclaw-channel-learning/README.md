@@ -1,6 +1,6 @@
 # openclaw-channel-learning
 
-OpenClaw channel plugin for ClawBuddy Gene Evolution Ecosystem.
+OpenClaw channel plugin for NoDeskClaw Gene Evolution Ecosystem.
 
 ## Overview
 
@@ -12,10 +12,10 @@ This plugin handles three types of asynchronous tasks:
 
 ## How it works
 
-1. ClawBuddy backend POSTs a task to the plugin's webhook endpoint
+1. NoDeskClaw backend POSTs a task to the plugin's webhook endpoint
 2. Plugin injects the task as a message into the Agent's context
 3. Agent processes the task and responds via the `send` tool
-4. Plugin forwards the result to ClawBuddy backend's callback URL
+4. Plugin forwards the result to NoDeskClaw backend's callback URL
 
 ## Directory Structure
 

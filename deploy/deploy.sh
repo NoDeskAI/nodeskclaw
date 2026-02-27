@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# ClawBuddy CI/CD 统一构建 & 部署脚本
+# NoDeskClaw CI/CD 统一构建 & 部署脚本
 #
 # 用法:
 #   ./deploy/deploy.sh <target> [options]
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 REGISTRY="nodesk-center-cn-beijing.cr.volces.com/base-image"
-NAMESPACE="clawbuddy-system"
+NAMESPACE="nodeskclaw-system"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -30,28 +30,28 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log()  { echo -e "${CYAN}[ClawBuddy]${NC} $*"; }
+log()  { echo -e "${CYAN}[NoDeskClaw]${NC} $*"; }
 ok()   { echo -e "${GREEN}[  OK  ]${NC} $*"; }
 warn() { echo -e "${YELLOW}[ WARN ]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR ]${NC} $*" >&2; }
 
 # ── 组件配置表 ────────────────────────────────────────────
 declare -A IMAGE_NAMES=(
-  [backend]="clawbuddy-backend"
-  [admin]="clawbuddy-admin"
-  [portal]="clawbuddy-portal"
+  [backend]="nodeskclaw-backend"
+  [admin]="nodeskclaw-admin"
+  [portal]="nodeskclaw-portal"
 )
 
 declare -A BUILD_CONTEXTS=(
-  [backend]="$PROJECT_ROOT/claw-buddy-backend"
-  [admin]="$PROJECT_ROOT/claw-buddy-frontend"
-  [portal]="$PROJECT_ROOT/claw-buddy-portal"
+  [backend]="$PROJECT_ROOT/nodeskclaw-backend"
+  [admin]="$PROJECT_ROOT/nodeskclaw-frontend"
+  [portal]="$PROJECT_ROOT/nodeskclaw-portal"
 )
 
 declare -A K8S_DEPLOYMENTS=(
-  [backend]="clawbuddy-backend"
-  [admin]="clawbuddy-admin"
-  [portal]="clawbuddy-portal"
+  [backend]="nodeskclaw-backend"
+  [admin]="nodeskclaw-admin"
+  [portal]="nodeskclaw-portal"
 )
 
 # ── 参数解析 ──────────────────────────────────────────────

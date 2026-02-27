@@ -1,0 +1,14 @@
+{
+  "name": "nodeskclaw-topology-awareness",
+  "slug": "nodeskclaw-topology-awareness",
+  "description": "Native agent tools for querying workspace topology, neighbors, and member status.",
+  "category": "tools",
+  "tags": ["tools", "topology", "self-management"],
+  "manifest": {
+    "skill": {
+      "name": "nodeskclaw-topology-awareness",
+      "content": "---\nname: nodeskclaw-topology-awareness\ndescription: Tools to understand workspace topology\nalways: true\n---\n\nYou can query the workspace topology via the `nodeskclaw_topology` tool.\n\n## Actions\n- `get_topology` — Full workspace topology (nodes, edges, reachability)\n- `get_members` — All workspace members with current status\n- `get_my_neighbors` — Agents/humans directly reachable from your position (provide my_instance_id)\n\n## Usage Rules\n- Check topology before sending targeted messages\n- Use neighbor awareness to route messages efficiently\n- Monitor team member status for collaboration planning"
+    },
+    "tool_allow": ["nodeskclaw_topology"]
+  }
+}
