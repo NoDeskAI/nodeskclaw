@@ -1452,7 +1452,7 @@ LLM_PROXY_INTERNAL_URL=http://nodeskclaw-llm-proxy.nodeskclaw-system
 
 `LLM_PROXY_INTERNAL_URL`（K8s 内网 DNS）优先使用，可绕过 ALB。跨集群实例（inst 集群）无法访问 infra 集群的 K8s 内网 DNS，此时后端自动回退到 `LLM_PROXY_URL`（外部域名，经 ALB）。后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 指向 `{LLM_PROXY_URL}/{provider}/v1`，`apiKey` 使用实例的 `wp_api_key`（独立于 gateway token）。
 
-**经 ALB 的流式响应必须防压缩**：LLM Proxy 的 `_handle_stream` 已在 StreamingResponse 中设置 `Cache-Control: no-transform` + `X-Accel-Buffering: no`。若未来修改流式转发逻辑，务必保留这两个头，否则火山云 ALB 会压缩 SSE 流但不设 `Content-Encoding`，导致客户端解析失败（详见第十一节）。
+**Proxy 转发上游请求时必须剥离 `Accept-Encoding`**：`_build_auth_headers` 已将 `accept-encoding` 加入剥离清单。Node.js 22 的原生 `fetch`（undici）默认携带 `Accept-Encoding: gzip, deflate`，若 Proxy 原样转发该头给上游 LLM Provider（如 MiniMax），上游返回 gzip 压缩的 SSE 流，但 `httpx` 因 `Accept-Encoding` 非自身添加而跳过自动解压，`aiter_lines()` 遍历到的是压缩二进制，客户端收到乱码导致空回复。剥离后 `httpx` 自行管理压缩协商并自动解压（详见第十一节）。此外 `_handle_stream` 保留了 `Cache-Control: no-transform` + `X-Accel-Buffering: no` 作为防御性措施，防止中间代理（ALB/Nginx）对响应流做二次压缩。
 
 ### 10.5 为什么不给 LLM Proxy 单独创建 ALB
 
@@ -1562,31 +1562,47 @@ done
 | 6 | 是否有残留的 Ingress 或 ALB 资源 | `kubectl get ingress -A` / `kubectl get alb` |
 | 7 | 强制重新同步 | `kubectl annotate ingress <name> -n nodeskclaw-system force-sync=$(date +%s) --overwrite` |
 
-### 11.4 问题 3：ALB 压缩 SSE 流但不设 Content-Encoding 头
+### 11.4 问题 3：LLM Proxy 转发 Accept-Encoding 导致上游返回压缩 SSE 流
 
-**现象**：OpenClaw 实例通过 LLM Proxy（经 ALB）调用 MiniMax 等 Provider，流式请求返回 HTTP 200 但 OpenClaw 显示空回复。Session 文件中 assistant 消息 `content:[]`、`usage:{totalTokens:0}`。
+**现象**：OpenClaw 实例通过 LLM Proxy 调用 MiniMax，流式请求返回 HTTP 200 但 OpenClaw 显示空回复。Session 文件中 assistant 消息 `content:[]`、`usage:{totalTokens:0}`。Proxy 日志显示上游返回 200 且有数据。
 
 **排查过程**：
 
-1. `curl` 从 Pod 内测试 LLM Proxy 流式端点，SSE 事件正常返回
-2. 用 OpenAI Node SDK v6（OpenClaw 内置）测试同一端点，`for await (chunk of stream)` 循环 0 次迭代
-3. 通过 SDK 的 `.asResponse()` 读取原始响应体，发现是压缩的二进制数据，仅末尾 `data: [DONE]` 为明文
-4. 检查响应头：`Vary: Accept-Encoding` 存在，但 **`Content-Encoding` 缺失**
-5. 对比测试：`curl`（HTTP/2 via ALPN）正常、Node.js `https`（HTTP/1.1 + `Accept-Encoding`）收到压缩数据
+1. `curl --compressed` 从 Pod 内测试 LLM Proxy 流式端点，SSE 事件正常（`curl` 自动解压）
+2. `curl` 不带 `--compressed` 但手动加 `-H "Accept-Encoding: gzip, deflate"` 测试同一端点，收到二进制乱码
+3. 用 OpenAI Node SDK v6（OpenClaw 内置）测试，`for await (chunk of stream)` 循环 0 次迭代
+4. 在 OpenClaw Pod 上验证 Node.js 22 的 `fetch` 默认请求头，确认自动携带 `accept-encoding: gzip, deflate`
+5. 检查 Proxy 的 `_build_auth_headers` 代码，确认未剥离 `accept-encoding`，原样转发给上游
 
-**根因**：火山云 ALB 在 HTTP/1.1 模式下，当客户端发送 `Accept-Encoding: gzip` 时，会对 `text/event-stream` 响应体做 gzip 压缩，但不添加 `Content-Encoding: gzip` 响应头。客户端（Node.js undici / OpenAI SDK）不知道需要解压，将压缩二进制当作 SSE 文本解析，找不到有效的 `data:` 行，导致 0 chunks 产出。
+**根因**：
 
-**解决方案**：在 LLM Proxy 的 `_handle_stream` StreamingResponse 中添加防压缩响应头：
+1. Node.js 22 的原生 `fetch`（undici）默认携带 `Accept-Encoding: gzip, deflate` 请求头
+2. LLM Proxy 的 `_build_auth_headers` 将客户端请求头（含 `Accept-Encoding`）原样转发给上游 MiniMax
+3. MiniMax 收到 `Accept-Encoding: gzip` 后返回 gzip 压缩的 SSE 流
+4. Python `httpx` 的行为：当 `Accept-Encoding` 由调用方显式设置（非 httpx 自动添加）时，**不执行自动解压**
+5. Proxy 的 `resp.aiter_lines()` 遍历到的是压缩二进制数据，无法产出有效 SSE 文本行
+6. 压缩二进制被原样流式转发给 OpenClaw，OpenAI SDK 解析不到 `data:` 行，0 chunks 产出
+
+**时间线**：此 bug 从 Proxy 创建（2026-02-21）起即存在。2 月 22 日 MiniMax 流式正常工作（`c84653a` 仅修复缺少 `[DONE]` 标记的问题），说明 MiniMax 当时未对 SSE 做压缩。2 月 27 日复现，推断 MiniMax 近期更新服务端行为，开始在收到 `Accept-Encoding` 时压缩 SSE 响应。
+
+**解决方案**：在 `_build_auth_headers` 中将 `accept-encoding` 加入剥离清单：
 
 ```python
-resp_headers["cache-control"] = "no-transform"
-resp_headers["x-accel-buffering"] = "no"
+if lower in ("host", "content-length", "transfer-encoding",
+             "authorization", "x-api-key", "accept-encoding"):
+    continue
 ```
 
-- `Cache-Control: no-transform`：HTTP 标准指令，禁止中间代理修改响应体（包括压缩）
-- `X-Accel-Buffering: no`：nginx/ALB 通用指令，禁用缓冲和压缩
+剥离后，`httpx` 自行决定是否添加 `Accept-Encoding` 并负责自动解压，Proxy 的 `aiter_lines()` 始终拿到明文 SSE 数据。
 
-**教训**：任何经过火山云 ALB 的 SSE / streaming 响应，都应携带 `Cache-Control: no-transform` 防止 ALB 静默压缩。`curl` 测试可能因协商到 HTTP/2 而不触发此问题，排查时应同时用 HTTP/1.1 客户端验证。
+此外 `_handle_stream` 保留 `Cache-Control: no-transform` + `X-Accel-Buffering: no` 作为防御性措施，防止中间代理（ALB/Nginx）对 Proxy 返回给客户端的响应流做二次压缩。
+
+**教训**：
+
+- HTTP 代理转发请求时，`Accept-Encoding` 属于 hop-by-hop 语义的头，**必须剥离**，由代理自身与上游协商压缩
+- `httpx` 的自动解压仅在 `Accept-Encoding` 由 httpx 自身添加时生效，显式传入时视为"调用方自行处理"
+- `curl --compressed` 会自动解压，容易掩盖压缩问题；排查时应同时用 `curl -H "Accept-Encoding: gzip"` 不带 `--compressed` 来暴露原始响应
+- LLM Provider 的压缩行为可能随时变化，代理层必须主动防御而非依赖上游不压缩
 
 ---
 
