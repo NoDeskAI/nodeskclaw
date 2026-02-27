@@ -9,11 +9,13 @@ class ClusterCreate(BaseModel):
     name: str
     provider: str = "vke"
     kubeconfig: str  # plaintext, encrypted by backend
+    ingress_class: str = "nginx"
 
 
 class ClusterUpdate(BaseModel):
     name: str | None = None
     provider: str | None = None
+    ingress_class: str | None = None
 
 
 class ClusterInfo(BaseModel):
@@ -21,6 +23,7 @@ class ClusterInfo(BaseModel):
     name: str
     provider: str
     auth_type: str
+    ingress_class: str = "nginx"
     api_server_url: str | None = None
     k8s_version: str | None = None
     status: str

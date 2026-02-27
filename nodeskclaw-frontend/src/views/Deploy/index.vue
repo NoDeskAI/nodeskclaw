@@ -510,18 +510,23 @@ const yamlPreview = computed(() => {
   lines.push('      targetPort: 18789')
   if (baseDomain.value && slug !== '<slug>') {
     const host = `${slug}.${baseDomain.value}`
+    const ic = selectedCluster.value?.ingress_class || 'nginx'
     lines.push('---')
     lines.push('apiVersion: networking.k8s.io/v1')
     lines.push('kind: Ingress')
     lines.push('metadata:')
     lines.push(`  name: ${slug}`)
-    lines.push('  annotations:')
-    lines.push('    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"')
-    lines.push('    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"')
+    if (ic === 'nginx') {
+      lines.push('  annotations:')
+      lines.push('    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"')
+      lines.push('    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"')
+    }
     lines.push('spec:')
-    lines.push('  ingressClassName: nginx')
-    lines.push('  tls:')
-    lines.push(`    - hosts: ["${host}"]`)
+    lines.push(`  ingressClassName: ${ic}`)
+    if (ic === 'nginx') {
+      lines.push('  tls:')
+      lines.push(`    - hosts: ["${host}"]`)
+    }
     lines.push('  rules:')
     lines.push(`    - host: ${host}`)
     lines.push('      http:')

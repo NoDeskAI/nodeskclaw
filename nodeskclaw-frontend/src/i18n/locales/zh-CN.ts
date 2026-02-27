@@ -158,6 +158,12 @@ const zhCN = {
       status_503: "服务暂时不可用",
     },
   },
+  clusterDetail: {
+    ingressClass: "Ingress Class",
+    ingressClassDesc: "Ingress 控制器类型",
+    ingressClassUpdated: "Ingress Class 已更新",
+    ingressClassUpdateFailed: "Ingress Class 更新失败",
+  },
 } as const
 
 export default zhCN

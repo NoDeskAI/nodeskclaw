@@ -37,6 +37,8 @@ class Cluster(BaseModel):
     last_health_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
 
+    ingress_class: Mapped[str] = mapped_column(String(32), default="nginx", nullable=False)
+
     # SaaS：组织专属集群绑定（null = 共享集群）
     org_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("organizations.id"), nullable=True, index=True

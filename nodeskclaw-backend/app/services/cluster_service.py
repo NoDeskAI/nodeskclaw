@@ -37,6 +37,7 @@ async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> C
         kubeconfig_encrypted=encrypt_kubeconfig(data.kubeconfig),
         auth_type=auth_type,
         api_server_url=api_server_url,
+        ingress_class=data.ingress_class,
         status=ClusterStatus.disconnected,
         created_by=user.id,
     )
@@ -62,6 +63,8 @@ async def update_cluster(cluster_id: str, data: ClusterUpdate, db: AsyncSession)
         cluster.name = data.name
     if data.provider is not None:
         cluster.provider = data.provider
+    if data.ingress_class is not None:
+        cluster.ingress_class = data.ingress_class
     await db.commit()
     await db.refresh(cluster)
     return ClusterInfo.model_validate(cluster)

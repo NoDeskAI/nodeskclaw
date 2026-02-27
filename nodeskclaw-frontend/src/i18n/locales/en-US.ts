@@ -158,6 +158,12 @@ const enUS = {
       status_503: "Service unavailable",
     },
   },
+  clusterDetail: {
+    ingressClass: "Ingress Class",
+    ingressClassDesc: "Ingress controller type",
+    ingressClassUpdated: "Ingress Class updated",
+    ingressClassUpdateFailed: "Failed to update Ingress Class",
+  },
 } as const
 
 export default enUS

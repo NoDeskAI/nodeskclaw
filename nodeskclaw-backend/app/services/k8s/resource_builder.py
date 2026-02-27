@@ -477,37 +477,40 @@ def build_ingress(
     service_name: str | None = None,
     port: int = 18789,
     tls_secret_name: str | None = None,
+    ingress_class: str = "nginx",
 ) -> V1Ingress:
     """构建 Ingress 资源，支持子域名路由 + TLS + WebSocket。
 
-    Args:
-        host: 完整域名，如 ``prod-1.nodeskai.com``
-        tls_secret_name: 通配符证书 Secret 名称，如 ``wildcard-nodeskai-tls``
+    根据 ``ingress_class`` 动态生成 annotations 和 TLS 配置：
+
+    - **nginx**: nginx-ingress 专属注解 + K8s Secret TLS
+    - **alb** 等其他类型: 不加控制器专属注解，TLS 由云厂商控制台管理
     """
     svc_name = service_name or name
 
-    annotations: dict[str, str] = {
-        "nginx.ingress.kubernetes.io/proxy-read-timeout": "86400",
-        "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
-        "nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
-        "nginx.ingress.kubernetes.io/proxy-buffering": "off",
-    }
-
-    # TLS 配置
+    annotations: dict[str, str] = {}
     tls: list[V1IngressTLS] | None = None
-    if tls_secret_name:
-        tls = [V1IngressTLS(hosts=[host], secret_name=tls_secret_name)]
-        annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
+
+    if ingress_class == "nginx":
+        annotations = {
+            "nginx.ingress.kubernetes.io/proxy-read-timeout": "86400",
+            "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+            "nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
+            "nginx.ingress.kubernetes.io/proxy-buffering": "off",
+        }
+        if tls_secret_name:
+            tls = [V1IngressTLS(hosts=[host], secret_name=tls_secret_name)]
+            annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
 
     return V1Ingress(
         metadata=V1ObjectMeta(
             name=name,
             namespace=namespace,
             labels=labels,
-            annotations=annotations,
+            annotations=annotations or None,
         ),
         spec=V1IngressSpec(
-            ingress_class_name="nginx",
+            ingress_class_name=ingress_class,
             tls=tls,
             rules=[
                 V1IngressRule(

@@ -7,10 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import StatusDot from '@/components/StatusDot.vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { ArrowLeft, Server, Cpu, MemoryStick, Box, KeyRound, Plug, Pencil, Check, X } from 'lucide-vue-next'
+import { ArrowLeft, Server, Cpu, MemoryStick, Box, KeyRound, Plug, Pencil, Check, X, Globe } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useI18n } from 'vue-i18n'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -54,9 +57,16 @@ interface StorageClassInfo {
   enabled: boolean
 }
 
+interface IngressClassItem {
+  name: string
+  controller: string
+}
+
 const summary = ref<OverviewSummary | null>(null)
 const nodes = ref<NodeInfo[]>([])
 const storageClasses = ref<StorageClassInfo[]>([])
+const ingressClasses = ref<IngressClassItem[]>([])
+const savingIngressClass = ref(false)
 
 onMounted(async () => {
   // Find cluster from store
@@ -77,6 +87,7 @@ onMounted(async () => {
     summary.value = data.summary
     nodes.value = data.nodes
     storageClasses.value = data.storage_classes || []
+    ingressClasses.value = data.ingress_classes || []
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '获取集群概览失败'
   } finally {
@@ -164,6 +175,21 @@ async function handleTestConnection() {
     toast.error('测试连接失败')
   } finally {
     testingConnection.value = false
+  }
+}
+
+async function handleIngressClassChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (!value || value === cluster.value?.ingress_class) return
+  savingIngressClass.value = true
+  try {
+    const updated = await clusterStore.updateCluster(clusterId, { ingress_class: value })
+    cluster.value = updated
+    toast.success(t('clusterDetail.ingressClassUpdated'))
+  } catch (e: any) {
+    toast.error(resolveApiErrorMessage(e, t('clusterDetail.ingressClassUpdateFailed')))
+  } finally {
+    savingIngressClass.value = false
   }
 }
 </script>
@@ -334,6 +360,41 @@ async function handleTestConnection() {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- IngressClass 配置 -->
+      <Card>
+        <CardHeader>
+          <CardTitle>{{ t('clusterDetail.ingressClass') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+              <Globe class="w-4 h-4" />
+              <span>{{ t('clusterDetail.ingressClassDesc') }}</span>
+            </div>
+            <select
+              :value="cluster?.ingress_class || 'nginx'"
+              :disabled="savingIngressClass"
+              class="rounded-md bg-card border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              @change="handleIngressClassChange"
+            >
+              <option
+                v-for="ic in ingressClasses"
+                :key="ic.name"
+                :value="ic.name"
+              >
+                {{ ic.name }} ({{ ic.controller }})
+              </option>
+              <option
+                v-if="cluster && !ingressClasses.some(ic => ic.name === cluster!.ingress_class)"
+                :value="cluster.ingress_class"
+              >
+                {{ cluster.ingress_class }}
+              </option>
+            </select>
           </div>
         </CardContent>
       </Card>

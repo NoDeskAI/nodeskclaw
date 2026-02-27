@@ -7,6 +7,7 @@ export interface ClusterInfo {
   name: string
   provider: string
   auth_type: string
+  ingress_class: string
   api_server_url: string | null
   k8s_version: string | null
   status: string
@@ -66,7 +67,7 @@ export const useClusterStore = defineStore('cluster', () => {
     return res.data.data
   }
 
-  async function updateCluster(id: string, data: { name?: string; provider?: string }) {
+  async function updateCluster(id: string, data: { name?: string; provider?: string; ingress_class?: string }) {
     const res = await api.put(`/clusters/${id}`, data)
     const updated = res.data.data as ClusterInfo
     const idx = clusters.value.findIndex((c) => c.id === id)

@@ -206,6 +206,7 @@ class _DeployContext:
     env_vars: dict | None
     advanced_config: dict | None
     kubeconfig_encrypted: str
+    ingress_class: str = "nginx"
     org_id: str | None = None
 
 
@@ -330,6 +331,7 @@ async def deploy_instance(
         env_vars=env_vars,
         advanced_config=req.advanced_config,
         kubeconfig_encrypted=cluster.kubeconfig_encrypted,
+        ingress_class=cluster.ingress_class,
         org_id=org_id,
     )
 
@@ -474,6 +476,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 ing = build_ingress(
                     ctx.name, ctx.namespace, ingress_host, labels,
                     tls_secret_name=tls_secret_name,
+                    ingress_class=ctx.ingress_class,
                 )
                 await k8s.create_or_skip(k8s.networking.create_namespaced_ingress, ctx.namespace, ing)
                 # 回写自动生成的域名到实例记录

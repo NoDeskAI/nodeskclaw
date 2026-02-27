@@ -139,7 +139,27 @@ async def cluster_overview(
     except Exception:
         pass  # StorageClass 获取失败不影响概览
 
-    return ApiResponse(data={"summary": summary, "nodes": nodes, "storage_classes": storage_classes})
+    # 获取 IngressClass 列表
+    ingress_classes = []
+    try:
+        from kubernetes_asyncio.client import NetworkingV1Api
+
+        networking_api = NetworkingV1Api(api_client)
+        ic_list = await networking_api.list_ingress_class()
+        for ic in ic_list.items:
+            ingress_classes.append({
+                "name": ic.metadata.name,
+                "controller": ic.spec.controller if ic.spec else "",
+            })
+    except Exception:
+        pass
+
+    return ApiResponse(data={
+        "summary": summary,
+        "nodes": nodes,
+        "storage_classes": storage_classes,
+        "ingress_classes": ingress_classes,
+    })
 
 
 @router.post("/{cluster_id}/test", response_model=ApiResponse[ConnectionTestResult])

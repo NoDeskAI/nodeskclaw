@@ -549,6 +549,17 @@ async def lifespan(app: FastAPI):
             if migrated_count:
                 logger.info("自动迁移：已将 %d 个黑板的旧数据转换为 Markdown content", migrated_count)
 
+        # ── 迁移 19: clusters 表新增 ingress_class 列 ──
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'clusters' AND column_name = 'ingress_class'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE clusters ADD COLUMN ingress_class VARCHAR(32) NOT NULL DEFAULT 'nginx'"
+            ))
+            logger.info("自动迁移：已为 clusters 表添加 ingress_class 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
