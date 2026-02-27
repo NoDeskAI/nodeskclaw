@@ -1450,7 +1450,9 @@ LLM_PROXY_URL=https://llm-proxy-claw.nodeskai.com
 LLM_PROXY_INTERNAL_URL=http://nodeskclaw-llm-proxy.nodeskclaw-system
 ```
 
-`LLM_PROXY_INTERNAL_URL`（K8s 内网 DNS）优先使用，可绕过 ALB 压缩问题。后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 指向 `{LLM_PROXY_INTERNAL_URL}/{provider}/v1`，`apiKey` 使用实例的 `wp_api_key`（独立于 gateway token）。
+`LLM_PROXY_INTERNAL_URL`（K8s 内网 DNS）优先使用，可绕过 ALB。跨集群实例（inst 集群）无法访问 infra 集群的 K8s 内网 DNS，此时后端自动回退到 `LLM_PROXY_URL`（外部域名，经 ALB）。后端写入 `openclaw.json` 时，组织 Key 的 `baseUrl` 指向 `{LLM_PROXY_URL}/{provider}/v1`，`apiKey` 使用实例的 `wp_api_key`（独立于 gateway token）。
+
+**经 ALB 的流式响应必须防压缩**：LLM Proxy 的 `_handle_stream` 已在 StreamingResponse 中设置 `Cache-Control: no-transform` + `X-Accel-Buffering: no`。若未来修改流式转发逻辑，务必保留这两个头，否则火山云 ALB 会压缩 SSE 流但不设 `Content-Encoding`，导致客户端解析失败（详见第十一节）。
 
 ### 10.5 为什么不给 LLM Proxy 单独创建 ALB
 
@@ -1559,6 +1561,32 @@ done
 | 5 | DNS 解析是否指向正确的 ALB VIP | `python3 -c "import socket; print(socket.gethostbyname('xxx.nodeskai.com'))"` |
 | 6 | 是否有残留的 Ingress 或 ALB 资源 | `kubectl get ingress -A` / `kubectl get alb` |
 | 7 | 强制重新同步 | `kubectl annotate ingress <name> -n nodeskclaw-system force-sync=$(date +%s) --overwrite` |
+
+### 11.4 问题 3：ALB 压缩 SSE 流但不设 Content-Encoding 头
+
+**现象**：OpenClaw 实例通过 LLM Proxy（经 ALB）调用 MiniMax 等 Provider，流式请求返回 HTTP 200 但 OpenClaw 显示空回复。Session 文件中 assistant 消息 `content:[]`、`usage:{totalTokens:0}`。
+
+**排查过程**：
+
+1. `curl` 从 Pod 内测试 LLM Proxy 流式端点，SSE 事件正常返回
+2. 用 OpenAI Node SDK v6（OpenClaw 内置）测试同一端点，`for await (chunk of stream)` 循环 0 次迭代
+3. 通过 SDK 的 `.asResponse()` 读取原始响应体，发现是压缩的二进制数据，仅末尾 `data: [DONE]` 为明文
+4. 检查响应头：`Vary: Accept-Encoding` 存在，但 **`Content-Encoding` 缺失**
+5. 对比测试：`curl`（HTTP/2 via ALPN）正常、Node.js `https`（HTTP/1.1 + `Accept-Encoding`）收到压缩数据
+
+**根因**：火山云 ALB 在 HTTP/1.1 模式下，当客户端发送 `Accept-Encoding: gzip` 时，会对 `text/event-stream` 响应体做 gzip 压缩，但不添加 `Content-Encoding: gzip` 响应头。客户端（Node.js undici / OpenAI SDK）不知道需要解压，将压缩二进制当作 SSE 文本解析，找不到有效的 `data:` 行，导致 0 chunks 产出。
+
+**解决方案**：在 LLM Proxy 的 `_handle_stream` StreamingResponse 中添加防压缩响应头：
+
+```python
+resp_headers["cache-control"] = "no-transform"
+resp_headers["x-accel-buffering"] = "no"
+```
+
+- `Cache-Control: no-transform`：HTTP 标准指令，禁止中间代理修改响应体（包括压缩）
+- `X-Accel-Buffering: no`：nginx/ALB 通用指令，禁用缓冲和压缩
+
+**教训**：任何经过火山云 ALB 的 SSE / streaming 响应，都应携带 `Cache-Control: no-transform` 防止 ALB 静默压缩。`curl` 测试可能因协商到 HTTP/2 而不触发此问题，排查时应同时用 HTTP/1.1 客户端验证。
 
 ---
 
