@@ -3,12 +3,13 @@
 import asyncio
 import json
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Coroutine
 
 import httpx
-from sqlalchemy import Integer, Select, case, cast, func, select
+from sqlalchemy import Integer, Select, case, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, BadRequestError, ConflictError, NotFoundError
@@ -58,6 +59,24 @@ def _fire_task(coro: Coroutine) -> asyncio.Task:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
+
+
+@asynccontextmanager
+async def _instance_pg_advisory_lock(instance_id: str):
+    """PostgreSQL advisory lock scoped to an instance, for serializing NFS operations.
+
+    Uses session-level pg_advisory_lock/pg_advisory_unlock on a dedicated connection
+    so the lock is held across the entire async block regardless of transaction boundaries.
+    """
+    from app.core.deps import async_session_factory
+
+    lock_key = hash(instance_id) % (2**31)
+    async with async_session_factory() as lock_db:
+        await lock_db.execute(text("SELECT pg_advisory_lock(:key)"), {"key": lock_key})
+        try:
+            yield
+        finally:
+            await lock_db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_key})
 
 
 def _json_loads(raw: str | None) -> list | dict | None:
@@ -661,56 +680,57 @@ async def _direct_install(
     from app.core.deps import async_session_factory
     from app.services.instance_service import restart_instance
 
-    async with async_session_factory() as db:
-        ig = await db.get(InstanceGene, ig_id)
-        gene = await db.get(Gene, gene_id)
-        instance = await db.get(Instance, instance_id)
-        if not ig or not gene or not instance:
-            logger.error("_direct_install: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
-            return
+    async with _instance_pg_advisory_lock(instance_id):
+        async with async_session_factory() as db:
+            ig = await db.get(InstanceGene, ig_id)
+            gene = await db.get(Gene, gene_id)
+            instance = await db.get(Instance, instance_id)
+            if not ig or not gene or not instance:
+                logger.error("_direct_install: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
+                return
 
-        try:
-            manifest = _json_loads(gene.manifest) or {}
-            skill = manifest.get("skill", {})
-
-            async with nfs_mount(instance, db) as mount_path:
-                skill_name = skill.get("name", gene.slug)
-                skill_content = skill.get("content", "")
-                _write_skill_file(mount_path, skill_name, skill_content, gene.short_description or gene.description or "")
-                ensure_skills_discovery(mount_path)
-
-                _apply_engineering_actions(mount_path, manifest)
-
-                invalidate_skill_snapshots(mount_path)
-                inject_evolution_notification(mount_path, skill_name, "installed")
-
-            ig.status = InstanceGeneStatus.installed
-            ig.installed_at = datetime.now(timezone.utc)
-            ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
-            await _record_evolution(
-                db, instance_id, EvolutionEventType.learned, gene.name,
-                gene_slug=gene.slug, gene_id=gene_id,
-                details={"version": gene.version, "learning_type": "direct"},
-            )
-            await db.commit()
-
-            should_restart = await _finish_learning_if_done(db, instance_id, ig_id)
-            if should_restart:
-                await restart_instance(instance.id, db)
-
-            if workspace_id:
-                broadcast_event(workspace_id, "gene:installed", {
-                    "instance_id": instance.id,
-                    "gene_slug": gene.slug,
-                    "method": "direct",
-                })
-        except Exception as e:
-            logger.error("Direct install failed for gene %s on %s: %s", gene.slug, instance.id, e)
             try:
-                ig.status = InstanceGeneStatus.failed
+                manifest = _json_loads(gene.manifest) or {}
+                skill = manifest.get("skill", {})
+
+                async with nfs_mount(instance, db) as mount_path:
+                    skill_name = skill.get("name", gene.slug)
+                    skill_content = skill.get("content", "")
+                    _write_skill_file(mount_path, skill_name, skill_content, gene.short_description or gene.description or "")
+                    ensure_skills_discovery(mount_path)
+
+                    _apply_engineering_actions(mount_path, manifest)
+
+                    invalidate_skill_snapshots(mount_path)
+                    inject_evolution_notification(mount_path, skill_name, "installed")
+
+                ig.status = InstanceGeneStatus.installed
+                ig.installed_at = datetime.now(timezone.utc)
+                ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
+                await _record_evolution(
+                    db, instance_id, EvolutionEventType.learned, gene.name,
+                    gene_slug=gene.slug, gene_id=gene_id,
+                    details={"version": gene.version, "learning_type": "direct"},
+                )
                 await db.commit()
-            except Exception:
-                logger.error("Failed to mark gene install as failed for ig=%s", ig_id)
+
+                should_restart = await _finish_learning_if_done(db, instance_id, ig_id)
+                if should_restart:
+                    await restart_instance(instance.id, db)
+
+                if workspace_id:
+                    broadcast_event(workspace_id, "gene:installed", {
+                        "instance_id": instance.id,
+                        "gene_slug": gene.slug,
+                        "method": "direct",
+                    })
+            except Exception as e:
+                logger.error("Direct install failed for gene %s on %s: %s", gene.slug, instance.id, e)
+                try:
+                    ig.status = InstanceGeneStatus.failed
+                    await db.commit()
+                except Exception:
+                    logger.error("Failed to mark gene install as failed for ig=%s", ig_id)
 
 
 async def _send_learning_task(
@@ -1452,42 +1472,43 @@ async def _direct_uninstall(
     from app.core.deps import async_session_factory
     from app.services.instance_service import restart_instance
 
-    async with async_session_factory() as db:
-        ig = await db.get(InstanceGene, ig_id)
-        gene = await db.get(Gene, gene_id)
-        instance = await db.get(Instance, instance_id)
-        if not ig or not instance:
-            logger.error("_direct_uninstall: record missing ig=%s inst=%s", ig_id, instance_id)
-            return
+    async with _instance_pg_advisory_lock(instance_id):
+        async with async_session_factory() as db:
+            ig = await db.get(InstanceGene, ig_id)
+            gene = await db.get(Gene, gene_id)
+            instance = await db.get(Instance, instance_id)
+            if not ig or not instance:
+                logger.error("_direct_uninstall: record missing ig=%s inst=%s", ig_id, instance_id)
+                return
 
-        try:
-            if gene:
-                manifest = _json_loads(gene.manifest) or {}
-                skill_name = manifest.get("skill", {}).get("name", gene.slug)
-                async with nfs_mount(instance, db) as mount_path:
-                    _remove_skill_file(mount_path, skill_name)
-                    ensure_skills_discovery(mount_path)
-                    invalidate_skill_snapshots(mount_path)
-                    inject_evolution_notification(mount_path, skill_name, "uninstalled")
+            try:
+                if gene:
+                    manifest = _json_loads(gene.manifest) or {}
+                    skill_name = manifest.get("skill", {}).get("name", gene.slug)
+                    async with nfs_mount(instance, db) as mount_path:
+                        _remove_skill_file(mount_path, skill_name)
+                        ensure_skills_discovery(mount_path)
+                        invalidate_skill_snapshots(mount_path)
+                        inject_evolution_notification(mount_path, skill_name, "uninstalled")
 
-            ig.soft_delete()
-            if gene:
-                gene.install_count = max(0, gene.install_count - 1)
-            await _record_evolution(
-                db, instance_id, EvolutionEventType.forgotten,
-                gene.name if gene else "unknown",
-                gene_slug=gene.slug if gene else None,
-                gene_id=gene_id,
-                details={"version": ig.installed_version, "usage_count": ig.usage_count, "method": "direct"},
-            )
-            await db.commit()
+                ig.soft_delete()
+                if gene:
+                    gene.install_count = max(0, gene.install_count - 1)
+                await _record_evolution(
+                    db, instance_id, EvolutionEventType.forgotten,
+                    gene.name if gene else "unknown",
+                    gene_slug=gene.slug if gene else None,
+                    gene_id=gene_id,
+                    details={"version": ig.installed_version, "usage_count": ig.usage_count, "method": "direct"},
+                )
+                await db.commit()
 
-            await restart_instance(instance.id, db)
-            logger.info("Direct uninstall completed for gene %s on %s", gene_id, instance_id)
-        except Exception as e:
-            logger.error("Direct uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
-            ig.status = InstanceGeneStatus.installed
-            await db.commit()
+                await restart_instance(instance.id, db)
+                logger.info("Direct uninstall completed for gene %s on %s", gene_id, instance_id)
+            except Exception as e:
+                logger.error("Direct uninstall failed for gene %s on %s: %s", gene_id, instance_id, e)
+                ig.status = InstanceGeneStatus.installed
+                await db.commit()
 
 
 async def _send_forgetting_task(
