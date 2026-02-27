@@ -528,7 +528,9 @@ addToLoop(() => {
         const agent = props.agents.find(a => a.instance_id === id)
         if (agent) {
           const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
+          mat.color.set(agent.sse_connected ? baseColor : DISCONNECTED_COLOR)
           mat.emissive.set(agent.sse_connected ? baseColor : DISCONNECTED_COLOR)
+          mat.opacity = agent.sse_connected ? 0.9 : 0.5
         }
         mat.emissiveIntensity = (isSelected || isSelectedHex) ? 0.5 + Math.sin(t * 3) * 0.15 : isHovered ? 0.4 : pulse
       }
