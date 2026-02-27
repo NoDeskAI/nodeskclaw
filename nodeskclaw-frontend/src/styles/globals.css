@@ -42,7 +42,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* ── Vibecraft 暗色主题（ClawBuddy 默认且唯一主题） ── */
+/* ── Vibecraft 暗色主题（NoDeskClaw 默认且唯一主题） ── */
 :root, .dark {
   --radius: 0.375rem;                          /* 6px */
   --background: #0a0a0a;                       /* body */
