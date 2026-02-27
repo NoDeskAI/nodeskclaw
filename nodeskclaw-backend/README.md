@@ -167,7 +167,7 @@ uv run uvicorn app.main:app --reload --port 8000 --timeout-graceful-shutdown 3
 后端镜像的 build context 是**项目根目录**（非 `nodeskclaw-backend/`），因为镜像需要包含 `openclaw-channel-nodeskclaw/` 插件源码（工作区 Agent 通信用）。
 
 ```bash
-cd /path/to/ClawBuddy
+cd /path/to/NoDeskClaw
 docker build --platform linux/amd64 -f nodeskclaw-backend/Dockerfile -t nodeskclaw-backend:latest .
 docker run -d -p 8000:8000 --env-file nodeskclaw-backend/.env nodeskclaw-backend:latest
 ```
