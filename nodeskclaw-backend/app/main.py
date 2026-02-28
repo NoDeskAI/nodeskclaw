@@ -55,10 +55,14 @@ async def lifespan(app: FastAPI):
     from app.models import Base  # noqa: F811 — 导入全部模型
     from app.models.cluster import Cluster, ClusterStatus
     from app.services.k8s.client_manager import k8s_manager
+    from app.utils.oauth_providers.feishu import FeishuProvider
+    from app.utils.oauth_providers.registry import register_provider
 
     logger = logging.getLogger(__name__)
 
     # ── Startup ──────────────────────────────────────
+    register_provider(FeishuProvider())
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -571,7 +575,7 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 clusters 表添加 proxy_endpoint 列")
 
-        # ── 迁移 21: 飞书租户绑定字段 ──
+        # ── 迁移 21: 飞书租户绑定字段（原始添加，保留幂等逻辑供首次部署） ──
         # 21a: organizations.feishu_tenant_key
         col = await conn.execute(text(
             "SELECT 1 FROM information_schema.columns "
@@ -608,6 +612,103 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE org_memberships ADD COLUMN job_title VARCHAR(32)"
             ))
             logger.info("自动迁移：已为 org_memberships 表添加 job_title 列")
+
+        # ── 迁移 22: OAuth 通用架构（新表 + 数据搬迁 + 删旧列） ──
+        # 22a: 创建 user_oauth_connections 表（create_all 已处理，但幂等检查）
+        tbl = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'user_oauth_connections'"
+        ))
+        if tbl.first() is None:
+            await conn.execute(text("""
+                CREATE TABLE user_oauth_connections (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NOT NULL REFERENCES users(id),
+                    provider VARCHAR(32) NOT NULL,
+                    provider_user_id VARCHAR(128) NOT NULL,
+                    provider_tenant_id VARCHAR(128),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    deleted_at TIMESTAMPTZ,
+                    CONSTRAINT uq_oauth_provider_user UNIQUE (provider, provider_user_id)
+                )
+            """))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_user_oauth_connections_provider "
+                "ON user_oauth_connections (provider)"
+            ))
+            logger.info("自动迁移：已创建 user_oauth_connections 表")
+
+        # 22b: 创建 org_oauth_bindings 表
+        tbl = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'org_oauth_bindings'"
+        ))
+        if tbl.first() is None:
+            await conn.execute(text("""
+                CREATE TABLE org_oauth_bindings (
+                    id VARCHAR(36) PRIMARY KEY,
+                    org_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+                    provider VARCHAR(32) NOT NULL,
+                    provider_tenant_id VARCHAR(128) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    deleted_at TIMESTAMPTZ,
+                    CONSTRAINT uq_oauth_provider_tenant UNIQUE (provider, provider_tenant_id)
+                )
+            """))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_org_oauth_bindings_provider "
+                "ON org_oauth_bindings (provider)"
+            ))
+            logger.info("自动迁移：已创建 org_oauth_bindings 表")
+
+        # 22c: 搬迁 users.feishu_uid → user_oauth_connections
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'feishu_uid'"
+        ))
+        if col.first() is not None:
+            await conn.execute(text("""
+                INSERT INTO user_oauth_connections (id, user_id, provider, provider_user_id, provider_tenant_id)
+                SELECT gen_random_uuid()::text, u.id, 'feishu', u.feishu_uid, u.feishu_tenant_key
+                FROM users u
+                WHERE u.feishu_uid IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_oauth_connections c
+                    WHERE c.provider = 'feishu' AND c.provider_user_id = u.feishu_uid
+                  )
+            """))
+            logger.info("自动迁移：已搬迁 feishu_uid 数据到 user_oauth_connections")
+            await conn.execute(text("ALTER TABLE users DROP COLUMN feishu_uid"))
+            logger.info("自动迁移：已删除 users.feishu_uid 列")
+
+        # 22d: 搬迁 organizations.feishu_tenant_key → org_oauth_bindings
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'organizations' AND column_name = 'feishu_tenant_key'"
+        ))
+        if col.first() is not None:
+            await conn.execute(text("""
+                INSERT INTO org_oauth_bindings (id, org_id, provider, provider_tenant_id)
+                SELECT gen_random_uuid()::text, o.id, 'feishu', o.feishu_tenant_key
+                FROM organizations o
+                WHERE o.feishu_tenant_key IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM org_oauth_bindings b
+                    WHERE b.provider = 'feishu' AND b.provider_tenant_id = o.feishu_tenant_key
+                  )
+            """))
+            logger.info("自动迁移：已搬迁 feishu_tenant_key 数据到 org_oauth_bindings")
+            await conn.execute(text("ALTER TABLE organizations DROP COLUMN feishu_tenant_key"))
+            logger.info("自动迁移：已删除 organizations.feishu_tenant_key 列")
+
+        # 22e: 删除 users.feishu_tenant_key（数据已在 user_oauth_connections.provider_tenant_id）
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'feishu_tenant_key'"
+        ))
+        if col.first() is not None:
+            await conn.execute(text("ALTER TABLE users DROP COLUMN feishu_tenant_key"))
+            logger.info("自动迁移：已删除 users.feishu_tenant_key 列")
 
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:

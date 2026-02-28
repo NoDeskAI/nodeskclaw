@@ -56,6 +56,9 @@ const enUS = {
     sendFailed: "Send failed",
     feishuLogin: "Sign in with Feishu",
     orContinueWith: "or continue with",
+    callbackMissingParams: "Callback parameters missing, please try again",
+    backToLogin: "Back to login",
+    loggingIn: "Logging in...",
   },
   orgSetup: {
     title: "Set up your organization",

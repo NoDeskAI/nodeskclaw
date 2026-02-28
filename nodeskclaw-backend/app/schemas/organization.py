@@ -62,7 +62,11 @@ class UpdateMemberRoleRequest(BaseModel):
     role: str
 
 
-class FeishuOrgSetupRequest(BaseModel):
+class OAuthOrgSetupRequest(BaseModel):
+    provider: str
     name: str
     slug: str
     job_title: str | None = None
+
+
+FeishuOrgSetupRequest = OAuthOrgSetupRequest

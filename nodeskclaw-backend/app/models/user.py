@@ -17,7 +17,6 @@ class UserRole(str, Enum):
 class User(BaseModel):
     __tablename__ = "users"
 
-    feishu_uid: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str | None] = mapped_column(String(256), unique=True, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
@@ -26,9 +25,6 @@ class User(BaseModel):
     role: Mapped[str] = mapped_column(String(16), default=UserRole.user, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    # 飞书租户标识（用户所属的飞书企业）
-    feishu_tenant_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # SaaS 多租户字段
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
@@ -41,3 +37,4 @@ class User(BaseModel):
     instances = relationship("Instance", back_populates="creator", foreign_keys="Instance.created_by")
     current_org = relationship("Organization", foreign_keys=[current_org_id])
     memberships = relationship("OrgMembership", back_populates="user", cascade="all, delete-orphan")
+    oauth_connections = relationship("UserOAuthConnection", back_populates="user", cascade="all, delete-orphan")

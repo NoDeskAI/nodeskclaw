@@ -1,4 +1,4 @@
-"""Auth service: Feishu SSO, email/password, phone/SMS login, JWT management."""
+"""Auth service: OAuth (generic), email/password, phone/SMS login, JWT management."""
 
 import hashlib
 import hmac
@@ -9,93 +9,139 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User, UserRole
 from app.schemas.auth import LoginResponse, TokenResponse, UserInfo
-from app.utils.feishu import exchange_code_for_user
+from app.utils.oauth_providers import get_provider
 
 logger = logging.getLogger(__name__)
 
-# 简易内存 SMS 验证码存储（生产环境应使用 Redis）
-_sms_codes: dict[str, tuple[str, float]] = {}  # phone -> (code, expire_ts)
+_sms_codes: dict[str, tuple[str, float]] = {}
 
 
-async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = None) -> LoginResponse:
+async def oauth_login(
+    provider_name: str, code: str, db: AsyncSession, redirect_uri: str | None = None
+) -> LoginResponse:
     """
-    飞书 SSO 回调处理：
-    1. code 换取用户信息（含 tenant_key）
-    2. Upsert 用户记录，存储 feishu_tenant_key
-    3. 用 tenant_key 查组织：找到则自动加入，未找到则标记 needs_org_setup
+    通用 OAuth 登录：
+    1. 通过 provider registry 用 code 换取用户信息
+    2. 按 (provider, provider_user_id) 查 OAuthConnection → 找到 User 或创建新 User
+    3. 按 (provider, provider_tenant_id) 查 OrgOAuthBinding → 自动加入组织或标记 needs_org_setup
     4. 签发 JWT
     """
+    from app.models.oauth_connection import UserOAuthConnection
     from app.models.org_membership import OrgMembership, OrgRole
-    from app.models.organization import Organization
+    from app.models.org_oauth_binding import OrgOAuthBinding
 
-    feishu_user = await exchange_code_for_user(code, redirect_uri=redirect_uri)
-    tenant_key = feishu_user.get("tenant_key")
+    provider = get_provider(provider_name)
+    oauth_info = await provider.exchange_code(code, redirect_uri)
 
-    result = await db.execute(
-        select(User).where(User.feishu_uid == feishu_user["open_id"], User.deleted_at.is_(None))
+    conn_result = await db.execute(
+        select(UserOAuthConnection)
+        .where(
+            UserOAuthConnection.provider == oauth_info.provider,
+            UserOAuthConnection.provider_user_id == oauth_info.provider_user_id,
+            UserOAuthConnection.deleted_at.is_(None),
+        )
     )
-    user = result.scalar_one_or_none()
+    connection = conn_result.scalar_one_or_none()
 
-    if user is None:
+    if connection is not None:
+        user_result = await db.execute(
+            select(User)
+            .options(selectinload(User.oauth_connections))
+            .where(User.id == connection.user_id, User.deleted_at.is_(None))
+        )
+        user = user_result.scalar_one_or_none()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error_code": 40106,
+                    "message_key": "errors.auth.user_not_found_or_disabled",
+                    "message": "用户不存在或已禁用",
+                },
+            )
+        user.name = oauth_info.name
+        if oauth_info.email:
+            user.email = oauth_info.email
+        if oauth_info.avatar_url:
+            user.avatar_url = oauth_info.avatar_url
+        if oauth_info.provider_tenant_id:
+            connection.provider_tenant_id = oauth_info.provider_tenant_id
+    else:
         user = User(
-            feishu_uid=feishu_user["open_id"],
-            name=feishu_user["name"],
-            email=feishu_user.get("email"),
-            avatar_url=feishu_user.get("avatar_url"),
-            feishu_tenant_key=tenant_key,
+            name=oauth_info.name,
+            email=oauth_info.email,
+            avatar_url=oauth_info.avatar_url,
             role=UserRole.user,
         )
         db.add(user)
-    else:
-        user.name = feishu_user["name"]
-        user.email = feishu_user.get("email")
-        user.avatar_url = feishu_user.get("avatar_url")
-        if tenant_key:
-            user.feishu_tenant_key = tenant_key
+        await db.flush()
+
+        connection = UserOAuthConnection(
+            user_id=user.id,
+            provider=oauth_info.provider,
+            provider_user_id=oauth_info.provider_user_id,
+            provider_tenant_id=oauth_info.provider_tenant_id,
+        )
+        db.add(connection)
 
     user.last_login_at = datetime.now(timezone.utc)
 
     needs_org_setup = False
+    tenant_id = oauth_info.provider_tenant_id
 
-    if tenant_key:
-        org_result = await db.execute(
-            select(Organization).where(
-                Organization.feishu_tenant_key == tenant_key,
-                Organization.deleted_at.is_(None),
+    if tenant_id:
+        binding_result = await db.execute(
+            select(OrgOAuthBinding).where(
+                OrgOAuthBinding.provider == oauth_info.provider,
+                OrgOAuthBinding.provider_tenant_id == tenant_id,
+                OrgOAuthBinding.deleted_at.is_(None),
             )
         )
-        org = org_result.scalar_one_or_none()
+        binding = binding_result.scalar_one_or_none()
 
-        if org is not None:
+        if binding is not None:
             await db.flush()
             existing_membership = await db.execute(
                 select(OrgMembership).where(
                     OrgMembership.user_id == user.id,
-                    OrgMembership.org_id == org.id,
+                    OrgMembership.org_id == binding.org_id,
                     OrgMembership.deleted_at.is_(None),
                 )
             )
             if existing_membership.scalar_one_or_none() is None:
-                db.add(OrgMembership(user_id=user.id, org_id=org.id, role=OrgRole.member))
-            user.current_org_id = org.id
+                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.member))
+            user.current_org_id = binding.org_id
         else:
             needs_org_setup = True
     else:
         needs_org_setup = True
 
     await db.commit()
-    await db.refresh(user)
+
+    refreshed = await db.execute(
+        select(User)
+        .options(selectinload(User.oauth_connections))
+        .where(User.id == user.id)
+    )
+    user = refreshed.scalar_one()
 
     return LoginResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
         user=UserInfo.model_validate(user),
         needs_org_setup=needs_org_setup,
+        provider=oauth_info.provider,
     )
+
+
+async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = None) -> LoginResponse:
+    """向后兼容别名。"""
+    return await oauth_login("feishu", code, db, redirect_uri)
 
 
 async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenResponse:
@@ -137,7 +183,6 @@ async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenRespo
 # ── 密码工具 ────────────────────────────────────────────
 
 def _hash_password(password: str) -> str:
-    """简单但安全的密码哈希（PBKDF2-SHA256）。"""
     salt = secrets.token_hex(16)
     dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
     return f"{salt}${dk.hex()}"
@@ -197,7 +242,6 @@ async def register_with_email(
     )
     db.add(user)
 
-    # 自动加入默认组织
     from app.models.org_membership import OrgMembership, OrgRole
     from app.models.organization import Organization
     org_result = await db.execute(
@@ -212,7 +256,11 @@ async def register_with_email(
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
-    await db.refresh(user)
+
+    refreshed = await db.execute(
+        select(User).options(selectinload(User.oauth_connections)).where(User.id == user.id)
+    )
+    user = refreshed.scalar_one()
     logger.info("邮箱注册: %s", email)
     return _issue_tokens(user)
 
@@ -220,7 +268,7 @@ async def register_with_email(
 async def login_with_email(email: str, password: str, db: AsyncSession) -> LoginResponse:
     """邮箱密码登录。"""
     result = await db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
+        select(User).options(selectinload(User.oauth_connections)).where(User.email == email, User.deleted_at.is_(None))
     )
     user = result.scalar_one_or_none()
     if user is None or not user.password_hash:
@@ -262,11 +310,10 @@ async def send_sms_code(phone: str) -> dict:
     """发送验证码（当前为 mock，生产环境接真实 SMS 服务）。"""
     import time
 
-    # 频率限制：60 秒内不能重复发送
     if phone in _sms_codes:
         _, expire_ts = _sms_codes[phone]
         remaining = expire_ts - time.time()
-        if remaining > 240:  # 300 - 60 = 240
+        if remaining > 240:
             raise HTTPException(
                 status_code=429,
                 detail={
@@ -277,7 +324,7 @@ async def send_sms_code(phone: str) -> dict:
             )
 
     code = f"{secrets.randbelow(900000) + 100000}"
-    _sms_codes[phone] = (code, time.time() + 300)  # 5 分钟过期
+    _sms_codes[phone] = (code, time.time() + 300)
 
     # TODO: 接入真实 SMS 服务（阿里云/腾讯云短信）
     logger.info("SMS 验证码 [%s]: %s (mock)", phone, code)
@@ -321,12 +368,10 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
             },
         )
 
-    # 验证通过，清除
     _sms_codes.pop(phone, None)
 
-    # 查找或创建用户
     result = await db.execute(
-        select(User).where(User.phone == phone, User.deleted_at.is_(None))
+        select(User).options(selectinload(User.oauth_connections)).where(User.phone == phone, User.deleted_at.is_(None))
     )
     user = result.scalar_one_or_none()
 
@@ -338,7 +383,6 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
         )
         db.add(user)
 
-        # 自动加入默认组织
         from app.models.org_membership import OrgMembership, OrgRole
         from app.models.organization import Organization
         org_result = await db.execute(
@@ -363,6 +407,10 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
-    await db.refresh(user)
+
+    refreshed = await db.execute(
+        select(User).options(selectinload(User.oauth_connections)).where(User.id == user.id)
+    )
+    user = refreshed.scalar_one()
     logger.info("手机登录: %s", phone)
     return _issue_tokens(user)

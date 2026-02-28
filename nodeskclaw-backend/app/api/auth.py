@@ -1,8 +1,9 @@
-"""Auth endpoints: Feishu SSO, email/password, phone/SMS, token refresh, user info, logout, user management."""
+"""Auth endpoints: OAuth, email/password, phone/SMS, token refresh, user info, logout, user management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_db, require_super_admin_dep
 from app.core.security import get_current_user
@@ -12,6 +13,7 @@ from app.schemas.auth import (
     EmailRegisterRequest,
     FeishuCallbackRequest,
     LoginResponse,
+    OAuthCallbackRequest,
     RefreshTokenRequest,
     SmsLoginRequest,
     SmsSendRequest,
@@ -24,12 +26,19 @@ from app.services import auth_service
 router = APIRouter()
 
 
-# ── 飞书 SSO ─────────────────────────────────────────────
+# ── OAuth 通用回调 ────────────────────────────────────────
+
+@router.post("/oauth/callback", response_model=ApiResponse[LoginResponse])
+async def oauth_callback(body: OAuthCallbackRequest, db: AsyncSession = Depends(get_db)):
+    """通用 OAuth 回调：provider + code 换取 JWT。"""
+    result = await auth_service.oauth_login(body.provider, body.code, db, redirect_uri=body.redirect_uri)
+    return ApiResponse(data=result)
+
 
 @router.post("/feishu/callback", response_model=ApiResponse[LoginResponse])
 async def feishu_callback(body: FeishuCallbackRequest, db: AsyncSession = Depends(get_db)):
-    """飞书 SSO 回调：用临时 code 换取 JWT。"""
-    result = await auth_service.feishu_login(body.code, db, redirect_uri=body.redirect_uri)
+    """飞书 SSO 回调（向后兼容别名）。"""
+    result = await auth_service.oauth_login("feishu", body.code, db, redirect_uri=body.redirect_uri)
     return ApiResponse(data=result)
 
 
@@ -91,7 +100,7 @@ async def list_users(
     _admin: User = Depends(require_super_admin_dep),
 ):
     """列出所有用户（超管），支持模糊搜索。"""
-    stmt = select(User).where(User.deleted_at.is_(None))
+    stmt = select(User).options(selectinload(User.oauth_connections)).where(User.deleted_at.is_(None))
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -116,7 +125,7 @@ async def list_staff(
     _admin: User = Depends(require_super_admin_dep),
 ):
     """列出运维人员（is_super_admin=True）。"""
-    stmt = select(User).where(User.deleted_at.is_(None), User.is_super_admin.is_(True))
+    stmt = select(User).options(selectinload(User.oauth_connections)).where(User.deleted_at.is_(None), User.is_super_admin.is_(True))
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -141,7 +150,7 @@ async def update_staff(
 ):
     """设置/取消超管、启用/禁用运维人员。"""
     result = await db.execute(
-        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        select(User).options(selectinload(User.oauth_connections)).where(User.id == user_id, User.deleted_at.is_(None))
     )
     user = result.scalar_one_or_none()
     if user is None:

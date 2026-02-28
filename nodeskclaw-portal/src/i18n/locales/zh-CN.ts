@@ -56,6 +56,9 @@ const zhCN = {
     sendFailed: "发送失败",
     feishuLogin: "飞书登录",
     orContinueWith: "或通过以下方式继续",
+    callbackMissingParams: "回调参数缺失，请重新登录",
+    backToLogin: "返回登录页",
+    loggingIn: "登录中...",
   },
   orgSetup: {
     title: "开通企业空间",

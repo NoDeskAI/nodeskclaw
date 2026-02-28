@@ -9,8 +9,8 @@ from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.organization import (
     AddMemberRequest,
-    FeishuOrgSetupRequest,
     MemberInfo,
+    OAuthOrgSetupRequest,
     OrgCreate,
     OrgInfo,
     OrgUpdate,
@@ -99,16 +99,29 @@ async def delete_organization(
     return ApiResponse(message="组织已删除")
 
 
-# ── 飞书自助开通 ──────────────────────────────────────────
+# ── OAuth 自助开通 ─────────────────────────────────────────
 
-@router.post("/feishu-setup", response_model=ApiResponse[OrgInfo])
-async def feishu_org_setup(
-    body: FeishuOrgSetupRequest,
+@router.post("/oauth-setup", response_model=ApiResponse[OrgInfo])
+async def oauth_org_setup(
+    body: OAuthOrgSetupRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """飞书登录后首次开通组织：创建组织并绑定当前用户的 feishu_tenant_key。"""
-    data = await org_service.feishu_org_setup(current_user, body, db)
+    """OAuth 登录后首次开通组织：创建组织并绑定 OAuth 租户。"""
+    data = await org_service.oauth_org_setup(current_user, body, db)
+    return ApiResponse(data=data)
+
+
+@router.post("/feishu-setup", response_model=ApiResponse[OrgInfo])
+async def feishu_org_setup(
+    body: OAuthOrgSetupRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """飞书开通组织（向后兼容别名）。"""
+    if not body.provider:
+        body.provider = "feishu"
+    data = await org_service.oauth_org_setup(current_user, body, db)
     return ApiResponse(data=data)
 
 

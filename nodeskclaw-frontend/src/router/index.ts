@@ -8,6 +8,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/login/callback/:provider',
+    name: 'OAuthCallback',
+    component: () => import('@/views/OAuthCallback.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/',
     name: 'Dashboard',
     component: () => import('@/views/Dashboard/index.vue'),
@@ -105,18 +111,14 @@ const router = createRouter({
   routes,
 })
 
-// 导航守卫 — 未认证跳 /login
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token')
-  const isLoginPage = to.path === '/login'
+  const isLoginPage = to.path === '/login' || to.path.startsWith('/login/callback/')
 
   if (isLoginPage) {
-    // 已登录访问 login 页，跳到首页
-    if (token) return next('/')
     return next()
   }
 
-  // 未登录，跳 login（除非 meta.requiresAuth === false）
   if (!token && to.meta.requiresAuth !== false) {
     return next('/login')
   }

@@ -24,14 +24,10 @@ class Organization(BaseModel):
         String(36), ForeignKey("clusters.id"), nullable=True
     )
 
-    # 飞书租户绑定（一个飞书企业对应一个组织）
-    feishu_tenant_key: Mapped[str | None] = mapped_column(
-        String(128), unique=True, index=True, nullable=True
-    )
-
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # relationships
     dedicated_cluster = relationship("Cluster", foreign_keys=[cluster_id])
     memberships = relationship("OrgMembership", back_populates="organization", cascade="all, delete-orphan")
     instances = relationship("Instance", back_populates="organization")
+    oauth_bindings = relationship("OrgOAuthBinding", back_populates="organization", cascade="all, delete-orphan")

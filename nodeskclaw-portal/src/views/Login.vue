@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -13,7 +13,6 @@ const authStore = useAuthStore()
 const { t } = useI18n()
 
 const loading = ref(false)
-const feishuLoading = ref(false)
 const error = ref('')
 const activeTab = ref<'email' | 'phone'>('email')
 const isRegister = ref(false)
@@ -45,42 +44,15 @@ const canSubmitPhone = computed(() => {
   return phoneForm.value.phone.length >= 8 && phoneForm.value.code.length >= 4
 })
 
-function getFeishuAuthUrl() {
-  const clientId = import.meta.env.VITE_FEISHU_APP_ID || ''
-  const redirectUri = encodeURIComponent(window.location.origin + '/login')
-  const state = Math.random().toString(36).substring(2)
-  return `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`
-}
-
-function handleFeishuLogin() {
-  window.location.href = getFeishuAuthUrl()
-}
-
-async function handleFeishuCallback(code: string) {
-  feishuLoading.value = true
-  error.value = ''
-  try {
-    const data = await authStore.feishuLogin(code)
-    if (data.needs_org_setup) {
-      router.replace('/setup-org')
-    } else {
-      router.replace('/')
-    }
-  } catch (e: any) {
-    error.value = resolveApiErrorMessage(e, t('auth.loginFailed'))
-  } finally {
-    feishuLoading.value = false
+function handleOAuthLogin(provider: string) {
+  sessionStorage.setItem('oauth_provider', provider)
+  if (provider === 'feishu') {
+    const clientId = import.meta.env.VITE_FEISHU_APP_ID || ''
+    const redirectUri = encodeURIComponent(window.location.origin + `/login/callback/${provider}`)
+    const state = Math.random().toString(36).substring(2)
+    window.location.href = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`
   }
 }
-
-onMounted(() => {
-  const params = new URLSearchParams(window.location.search)
-  const code = params.get('code')
-  if (code) {
-    window.history.replaceState({}, '', '/login')
-    handleFeishuCallback(code)
-  }
-})
 
 async function handleEmailSubmit() {
   if (!canSubmitEmail.value || loading.value) return
@@ -379,12 +351,10 @@ watch(isRegister, () => { error.value = '' })
 
           <!-- 飞书登录 -->
           <button
-            :disabled="feishuLoading"
-            class="w-full h-10 rounded-lg border border-input bg-background text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            @click="handleFeishuLogin"
+            class="w-full h-10 rounded-lg border border-input bg-background text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-2"
+            @click="handleOAuthLogin('feishu')"
           >
-            <Loader2 v-if="feishuLoading" class="w-4 h-4 animate-spin" />
-            <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M3.536 7.382L13.539 4l1.636 5.676-11.64 3.03V7.383z" fill="#00D6B9"/><path d="M20.464 10.03L13.54 4l-3.073 5.676L20.464 17V10.03z" fill="#133C9A"/><path d="M5.172 12.706L10.465 9.676 20.464 17l-8.925 3.03-6.367-7.324z" fill="#3370FF"/><path d="M5.172 12.706L3.536 7.382l6.929 2.294-5.293 3.03z" fill="#00B2A6"/></svg>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M3.536 7.382L13.539 4l1.636 5.676-11.64 3.03V7.383z" fill="#00D6B9"/><path d="M20.464 10.03L13.54 4l-3.073 5.676L20.464 17V10.03z" fill="#133C9A"/><path d="M5.172 12.706L10.465 9.676 20.464 17l-8.925 3.03-6.367-7.324z" fill="#3370FF"/><path d="M5.172 12.706L3.536 7.382l6.929 2.294-5.293 3.03z" fill="#00B2A6"/></svg>
             {{ t('auth.feishuLogin') }}
           </button>
 

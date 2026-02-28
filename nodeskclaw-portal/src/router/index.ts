@@ -8,6 +8,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/login/callback/:provider',
+    name: 'OAuthCallback',
+    component: () => import('@/views/OAuthCallback.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/setup-org',
     name: 'OrgSetup',
     component: () => import('@/views/OrgSetupView.vue'),
@@ -112,11 +118,10 @@ const router = createRouter({
 
 router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('portal_token')
-  const isLoginPage = to.path === '/login'
+  const isLoginPage = to.path === '/login' || to.path.startsWith('/login/callback/')
   const isSetupPage = to.path === '/setup-org'
 
   if (isLoginPage) {
-    if (token) return next('/')
     return next()
   }
 

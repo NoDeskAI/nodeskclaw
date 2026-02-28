@@ -2,9 +2,13 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
+export interface OAuthConnectionInfo {
+  provider: string
+  provider_user_id: string
+}
+
 export interface UserInfo {
   id: string
-  feishu_uid: string | null
   name: string
   email: string | null
   phone: string | null
@@ -13,6 +17,7 @@ export interface UserInfo {
   is_super_admin: boolean
   current_org_id: string | null
   last_login_at: string | null
+  oauth_connections: OAuthConnectionInfo[]
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -37,9 +42,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refresh_token')
   }
 
-  async function feishuLogin(code: string) {
-    const redirect_uri = window.location.origin + '/login'
-    const res = await api.post('/auth/feishu/callback', { code, redirect_uri })
+  async function oauthLogin(provider: string, code: string) {
+    const redirect_uri = window.location.origin + `/login/callback/${provider}`
+    const res = await api.post('/auth/oauth/callback', { provider, code, redirect_uri })
     const data = res.data.data
     setTokens(data.access_token, data.refresh_token)
     user.value = data.user
@@ -70,7 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     setTokens,
     clearAuth,
-    feishuLogin,
+    oauthLogin,
     fetchUser,
     logout,
   }

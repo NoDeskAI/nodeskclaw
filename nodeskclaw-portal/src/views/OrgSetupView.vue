@@ -60,7 +60,9 @@ async function handleSubmit() {
   loading.value = true
   error.value = ''
   try {
-    await api.post('/orgs/feishu-setup', {
+    const provider = authStore.lastOAuthProvider || 'feishu'
+    await api.post('/orgs/oauth-setup', {
+      provider,
       name: form.value.name.trim(),
       slug: form.value.slug,
       job_title: form.value.job_title,

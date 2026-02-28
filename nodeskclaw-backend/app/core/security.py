@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.deps import get_db
@@ -107,7 +108,9 @@ async def _get_user_by_token(
         )
 
     result = await db.execute(
-        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        select(User)
+        .options(selectinload(User.oauth_connections))
+        .where(User.id == user_id, User.deleted_at.is_(None))
     )
     user = result.scalar_one_or_none()
 
