@@ -24,7 +24,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git openssh-client && \
     rm -rf /var/lib/apt/lists/* && \
     git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
-    git config --global url."https://github.com/".insteadOf git@github.com: && \
+    git config --global --add url."https://github.com/".insteadOf git@github.com: && \
     npm install -g openclaw@${OPENCLAW_VERSION} && \
     npm cache clean --force
 
