@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-CURRENT=$(grep -oP 'ARG OPENCLAW_VERSION=\K.*' "${DOCKERFILE}")
+CURRENT=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' "${DOCKERFILE}")
 if [ -z "${CURRENT}" ]; then
   echo "错误: 无法从 Dockerfile 读取 OPENCLAW_VERSION"
   exit 1

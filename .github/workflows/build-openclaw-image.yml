@@ -26,7 +26,7 @@ jobs:
           if [ -n "${{ inputs.openclaw_version }}" ]; then
             VERSION="${{ inputs.openclaw_version }}"
           else
-            VERSION=$(grep -oP 'ARG OPENCLAW_VERSION=\K.*' nodeskclaw-artifacts/openclaw-image/Dockerfile)
+            VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' nodeskclaw-artifacts/openclaw-image/Dockerfile)
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"

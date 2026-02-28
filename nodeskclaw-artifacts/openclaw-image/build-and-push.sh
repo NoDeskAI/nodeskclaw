@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "${VERSION}" ]; then
-  VERSION=$(grep -oP 'ARG OPENCLAW_VERSION=\K.*' "${DOCKERFILE}")
+  VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' "${DOCKERFILE}")
   if [ -z "${VERSION}" ]; then
     echo "错误: 无法从 Dockerfile 读取 OPENCLAW_VERSION"
     exit 1

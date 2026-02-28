@@ -25,7 +25,7 @@ jobs:
       - name: 读取当前版本
         id: current
         run: |
-          VERSION=$(grep -oP 'ARG OPENCLAW_VERSION=\K.*' nodeskclaw-artifacts/openclaw-image/Dockerfile)
+          VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' nodeskclaw-artifacts/openclaw-image/Dockerfile)
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "当前版本: ${VERSION}"
 
