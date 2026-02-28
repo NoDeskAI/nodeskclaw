@@ -15,6 +15,7 @@ const { t } = useI18n()
 
 const isLoginPage = computed(() => route.path === '/login')
 const hideNav = computed(() => route.meta.hideNav === true)
+const isSetupPage = computed(() => route.path === '/setup-org')
 const showUserMenu = ref(false)
 const userMenuRef = ref<HTMLElement>()
 const locale = ref(getCurrentLocale())
@@ -71,7 +72,7 @@ function onLocaleChange(value: string) {
             <PawPrint class="w-5 h-5 text-primary" />
             <span class="font-bold text-base">NoDeskClaw</span>
           </div>
-          <nav class="flex items-center gap-1">
+          <nav v-if="!isSetupPage" class="flex items-center gap-1">
             <button
               :class="[
                 'px-3 py-1.5 rounded-md text-sm transition-colors',
@@ -169,6 +170,7 @@ function onLocaleChange(value: string) {
               </div>
               <div class="h-px bg-border mx-2" />
               <button
+                v-if="!isSetupPage"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
                 @click="navigateFromMenu('/settings')"
               >
