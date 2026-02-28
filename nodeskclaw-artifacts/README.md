@@ -7,7 +7,7 @@ NoDeskClaw 部署到 K8s 的制品仓库 -- 存放 Docker 镜像构建文件和�
 ```
 nodeskclaw-artifacts/
 ├── openclaw-image/              # OpenClaw 定制镜像
-│   ├── Dockerfile               # 基于 node:22-bookworm，npm 全局安装 openclaw
+│   ├── Dockerfile               # 基于 node:22-bookworm-slim，npm 全局安装 openclaw
 │   ├── docker-entrypoint.sh     # 容器启动脚本（配置生成 + 凭证注入 + 前台启动）
 │   ├── init-container.sh        # Init Container 脚本（PVC 数据初始化 + 版本升级）
 │   ├── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
