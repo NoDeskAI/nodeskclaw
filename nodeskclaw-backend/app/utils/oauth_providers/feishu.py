@@ -21,12 +21,21 @@ class FeishuProvider(OAuthProvider):
         return "feishu"
 
     def _resolve_credentials(self, redirect_uri: str | None) -> tuple[str, str, str]:
-        """根据 redirect_uri 来源域名选择 Admin 或 Portal 飞书应用凭据。"""
+        """根据 redirect_uri 来源域名选择 Admin 或 Portal 飞书应用凭据。
+
+        默认使用 Admin 凭据，仅当 redirect_uri 明确匹配已知 Portal 域名时才切换。
+        这样 localhost 等开发环境不会被误判为 Portal。
+        """
         actual_uri = redirect_uri or settings.FEISHU_REDIRECT_URI
         if settings.FEISHU_APP_ID_PORTAL and redirect_uri:
             admin_origin = urlparse(settings.FEISHU_REDIRECT_URI).netloc
+            portal_origins = {
+                urlparse(o).netloc
+                for o in settings.CORS_ORIGINS
+                if urlparse(o).netloc and urlparse(o).netloc != admin_origin
+            }
             req_origin = urlparse(redirect_uri).netloc
-            if req_origin and req_origin != admin_origin:
+            if req_origin in portal_origins:
                 return settings.FEISHU_APP_ID_PORTAL, settings.FEISHU_APP_SECRET_PORTAL, actual_uri
         return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET, actual_uri
 
