@@ -10,8 +10,8 @@ ARG NODE_VERSION=22
 FROM node:${NODE_VERSION}-bookworm
 
 # ---------- 构建参数 ----------
-ARG OPENCLAW_VERSION=2026.2.12
-ARG IMAGE_VERSION=v2026.2.12
+ARG OPENCLAW_VERSION=2026.2.26
+ARG IMAGE_VERSION=v2026.2.26
 
 # ---------- 元数据标签 ----------
 LABEL maintainer="Xy718Labs"

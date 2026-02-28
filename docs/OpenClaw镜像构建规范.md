@@ -19,32 +19,52 @@
 
 ### 2.1 Tag 规范
 
+镜像 Tag 与 OpenClaw npm 版本一一对应，格式为 `v{YYYY.M.DD}`：
+
 | Tag 格式 | 说明 | 示例 |
 |----------|------|------|
-| `v{semver}` | 正式版本（生产用） | `v1.0.0`, `v1.2.3` |
-| `v{semver}-rc.{n}` | 预发布版本 | `v1.1.0-rc.1` |
-| `latest` | 最新正式版本（仅开发环境用） | — |
-| `sha-{commit}` | CI 自动打的 commit 级别标签 | `sha-a1b2c3d` |
+| `v{YYYY.M.DD}` | 正式版本（生产用），与 npm 版本对应 | `v2026.2.26` |
+| `latest` | 最新构建版本（仅开发环境用） | — |
 
 **生产环境必须用明确版本号**，禁止用 `latest`。
 
-### 2.2 版本变更触发条件
+### 2.2 版本过滤策略
 
-| 变更类型 | 版本号 | 说明 |
-|----------|--------|------|
-| OpenClaw npm 包升级 | minor / patch | 核心功能变更 |
-| Node.js 版本升级 | minor | 运行时变更 |
-| 系统依赖变更 | minor | 如新增 apt 包 |
-| 仅修改 Dockerfile 优化 | patch | 不影响功能 |
-| 新增/修改默认插件 | patch | 插件变更 |
+OpenClaw npm 同一天可能发多个版本（如 `2026.2.22-1`、`2026.2.23-beta.1`）。
 
-### 2.3 构建参数
+**过滤规则**：只采纳"干净"的正式版本（匹配 `^\d{4}\.\d{1,2}\.\d{1,2}$`），排除所有带 `-` 后缀的版本（`-beta`、`-rc`、`-1`、`-2` 等）。
+
+### 2.3 版本更新流程
+
+通过 GitHub Actions 自动化检测和构建（详见第七节），也支持本地脚本手动操作：
+
+```
+GitHub Actions 定时检测 npm 新版本
+  │
+  ├─ 发现新版本 → 自动创建 PR（更新 Dockerfile 版本号）
+  ├─ 人工审核 PR → 确认 Release Notes 无风险后合并
+  ├─ 手动触发构建工作流 → 构建 + 推送镜像到火山云 CR
+  └─ 管理员在前端选择新 tag → 部署到具体实例
+```
+
+### 2.4 构建参数
 
 | 构建参数 | 说明 | 示例 |
 |----------|------|------|
-| `NODE_VERSION` | Node.js 大版本（用于选基础镜像） | `24` |
-| `OPENCLAW_VERSION` | OpenClaw npm 包版本 | `1.0.0` |
-| `IMAGE_VERSION` | 镜像版本标记 | `v1.0.0` |
+| `NODE_VERSION` | Node.js 大版本（用于选基础镜像） | `22` |
+| `OPENCLAW_VERSION` | OpenClaw npm 包版本 | `2026.2.26` |
+| `IMAGE_VERSION` | 镜像版本标记（自动为 `v` + `OPENCLAW_VERSION`） | `v2026.2.26` |
+
+### 2.5 稳定性保障
+
+| 环节 | 机制 |
+|------|------|
+| 版本过滤 | 只采纳正式版，排除 beta/rc/patch 后缀 |
+| PR 审核 | 自动检测但不自动合并，人工确认后才构建 |
+| 构建隔离 | 手动触发构建，合并 PR 不会自动推送镜像 |
+| 实例级锁定 | 每个实例独立绑定 `image_version`，新镜像推送不影响现有实例 |
+| 滚动升级 | 管理员在前端选择新 tag 后才更新具体实例，可逐个升级 |
+| 回滚能力 | 旧 tag 始终保留在 CR 中，随时可回退 |
 
 ---
 
@@ -334,26 +354,51 @@ NoDeskClaw 部署表单
 
 ## 六、构建命令
 
-### 6.1 本地构建
+### 6.1 一键构建推送（推荐）
 
 ```bash
-docker build \
-  --build-arg NODE_VERSION=24 \
-  --build-arg OPENCLAW_VERSION=1.0.0 \
-  --build-arg IMAGE_VERSION=v1.0.0 \
-  -t cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0 \
-  -f deploy/docker/Dockerfile \
-  deploy/docker/
+cd nodeskclaw-artifacts/openclaw-image
+
+# 使用 Dockerfile 中的默认版本
+./build-and-push.sh
+
+# 指定版本
+./build-and-push.sh --version 2026.2.26
+
+# 仅构建不推送
+./build-and-push.sh --build-only
 ```
 
-### 6.2 推送到火山云 CR
+脚本自动完成：npm 版本校验 → `docker build --platform linux/amd64` → 打 `v{version}` + `latest` tag → 推送 → 验证。
+
+### 6.2 版本检查
 
 ```bash
-docker login cr-cn-beijing.volces.com -u {access_key}
-docker push cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
+cd nodeskclaw-artifacts/openclaw-image
+
+# 检查是否有新版本
+./check-update.sh
+
+# 检查并自动更新 Dockerfile
+./check-update.sh --update
 ```
 
-### 6.3 构建产物检查清单
+### 6.3 手动构建（不使用脚本）
+
+```bash
+cd nodeskclaw-artifacts/openclaw-image
+
+docker build --platform linux/amd64 \
+  --build-arg OPENCLAW_VERSION=2026.2.26 \
+  --build-arg IMAGE_VERSION=v2026.2.26 \
+  -t nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-openclaw-base:v2026.2.26 \
+  .
+
+docker login nodesk-center-cn-beijing.cr.volces.com -u {access_key}
+docker push nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-openclaw-base:v2026.2.26
+```
+
+### 6.4 构建产物检查清单
 
 - [ ] `node --version` 输出正确版本
 - [ ] `openclaw --version` 输出正确版本
@@ -367,7 +412,34 @@ docker push cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
 
 ---
 
-## 七、待确认事项
+## 七、GitHub Actions 自动化
+
+### 7.1 版本检测工作流
+
+文件：`.github/workflows/check-openclaw-update.yml`
+
+- **触发**：每天 UTC 08:00（北京时间 16:00）+ 手动触发
+- **逻辑**：查询 npm 最新稳定版 → 对比 Dockerfile → 版本不同时自动创建 PR
+- **不自动合并**：PR 创建后等人工审核
+
+### 7.2 镜像构建推送工作流
+
+文件：`.github/workflows/build-openclaw-image.yml`
+
+- **触发**：仅手动触发（`workflow_dispatch`），需输入 `openclaw_version`
+- **逻辑**：验证 npm 版本 → 登录火山云 CR → 构建 linux/amd64 → 推送 `v{version}` + `latest`
+
+### 7.3 GitHub Secrets 配置
+
+| Secret | 说明 |
+|--------|------|
+| `VOLCENGINE_CR_REGISTRY` | 镜像仓库地址（如 `nodesk-center-cn-beijing.cr.volces.com`） |
+| `VOLCENGINE_CR_USERNAME` | 仓库用户名 |
+| `VOLCENGINE_CR_PASSWORD` | 仓库密码 |
+
+---
+
+## 八、待确认事项
 
 | # | 问题 | 状态 |
 |---|------|------|
