@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.organization import (
     AddMemberRequest,
+    FeishuOrgSetupRequest,
     MemberInfo,
     OrgCreate,
     OrgInfo,
@@ -96,6 +97,19 @@ async def delete_organization(
     """删除组织（超管）。"""
     await org_service.delete_org(org_id, db)
     return ApiResponse(message="组织已删除")
+
+
+# ── 飞书自助开通 ──────────────────────────────────────────
+
+@router.post("/feishu-setup", response_model=ApiResponse[OrgInfo])
+async def feishu_org_setup(
+    body: FeishuOrgSetupRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """飞书登录后首次开通组织：创建组织并绑定当前用户的 feishu_tenant_key。"""
+    data = await org_service.feishu_org_setup(current_user, body, db)
+    return ApiResponse(data=data)
 
 
 # ── 成员管理 ─────────────────────────────────────────────

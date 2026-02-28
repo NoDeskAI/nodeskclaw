@@ -27,6 +27,9 @@ class User(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # 飞书租户标识（用户所属的飞书企业）
+    feishu_tenant_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     # SaaS 多租户字段
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     current_org_id: Mapped[str | None] = mapped_column(

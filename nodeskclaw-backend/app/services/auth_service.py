@@ -23,14 +23,18 @@ _sms_codes: dict[str, tuple[str, float]] = {}  # phone -> (code, expire_ts)
 
 async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = None) -> LoginResponse:
     """
-    Handle Feishu SSO callback:
-    1. Exchange code for user info via Feishu API
-    2. Upsert user record
-    3. Issue JWT tokens
+    飞书 SSO 回调处理：
+    1. code 换取用户信息（含 tenant_key）
+    2. Upsert 用户记录，存储 feishu_tenant_key
+    3. 用 tenant_key 查组织：找到则自动加入，未找到则标记 needs_org_setup
+    4. 签发 JWT
     """
-    feishu_user = await exchange_code_for_user(code, redirect_uri=redirect_uri)
+    from app.models.org_membership import OrgMembership, OrgRole
+    from app.models.organization import Organization
 
-    # Upsert user by feishu open_id
+    feishu_user = await exchange_code_for_user(code, redirect_uri=redirect_uri)
+    tenant_key = feishu_user.get("tenant_key")
+
     result = await db.execute(
         select(User).where(User.feishu_uid == feishu_user["open_id"], User.deleted_at.is_(None))
     )
@@ -42,6 +46,7 @@ async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = N
             name=feishu_user["name"],
             email=feishu_user.get("email"),
             avatar_url=feishu_user.get("avatar_url"),
+            feishu_tenant_key=tenant_key,
             role=UserRole.user,
         )
         db.add(user)
@@ -49,18 +54,47 @@ async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = N
         user.name = feishu_user["name"]
         user.email = feishu_user.get("email")
         user.avatar_url = feishu_user.get("avatar_url")
+        if tenant_key:
+            user.feishu_tenant_key = tenant_key
 
     user.last_login_at = datetime.now(timezone.utc)
+
+    needs_org_setup = False
+
+    if tenant_key:
+        org_result = await db.execute(
+            select(Organization).where(
+                Organization.feishu_tenant_key == tenant_key,
+                Organization.deleted_at.is_(None),
+            )
+        )
+        org = org_result.scalar_one_or_none()
+
+        if org is not None:
+            await db.flush()
+            existing_membership = await db.execute(
+                select(OrgMembership).where(
+                    OrgMembership.user_id == user.id,
+                    OrgMembership.org_id == org.id,
+                    OrgMembership.deleted_at.is_(None),
+                )
+            )
+            if existing_membership.scalar_one_or_none() is None:
+                db.add(OrgMembership(user_id=user.id, org_id=org.id, role=OrgRole.member))
+            user.current_org_id = org.id
+        else:
+            needs_org_setup = True
+    else:
+        needs_org_setup = True
+
     await db.commit()
     await db.refresh(user)
 
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
-
     return LoginResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
         user=UserInfo.model_validate(user),
+        needs_org_setup=needs_org_setup,
     )
 
 

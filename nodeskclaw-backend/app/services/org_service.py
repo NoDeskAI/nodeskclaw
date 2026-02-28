@@ -11,7 +11,7 @@ from app.models.base import not_deleted
 from app.models.org_membership import OrgMembership, OrgRole
 from app.models.organization import Organization
 from app.models.user import User
-from app.schemas.organization import MemberInfo, OrgCreate, OrgInfo, OrgUpdate
+from app.schemas.organization import FeishuOrgSetupRequest, MemberInfo, OrgCreate, OrgInfo, OrgUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,95 @@ async def create_org(body: OrgCreate, creator: User, db: AsyncSession) -> OrgInf
     await db.refresh(org)
     logger.info("创建组织: %s (slug=%s) by user %s", org.name, org.slug, creator.id)
     return OrgInfo.model_validate(org)
+
+
+async def feishu_org_setup(
+    user: User, body: FeishuOrgSetupRequest, db: AsyncSession,
+) -> OrgInfo:
+    """飞书登录后首次开通组织。
+
+    并发安全：feishu_tenant_key 有 unique 约束，两个同企业用户
+    同时提交时，后者会因 IntegrityError 自动降级为加入已创建的组织。
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    tenant_key = user.feishu_tenant_key
+    if not tenant_key:
+        raise BadRequestError(
+            "当前用户没有关联飞书租户，无法使用飞书开通组织",
+            message_key="errors.org.missing_tenant_key",
+        )
+
+    existing = await db.execute(
+        select(Organization).where(
+            Organization.feishu_tenant_key == tenant_key,
+            not_deleted(Organization),
+        )
+    )
+    existing_org = existing.scalar_one_or_none()
+    if existing_org is not None:
+        await _ensure_membership(user, existing_org, OrgRole.member, body.job_title, db)
+        return OrgInfo.model_validate(existing_org)
+
+    if not _SLUG_RE.match(body.slug):
+        raise BadRequestError("slug 格式不合法（小写字母/数字/短横线，3-64 字符）")
+
+    slug_exists = await db.execute(
+        select(Organization).where(Organization.slug == body.slug, not_deleted(Organization))
+    )
+    if slug_exists.scalar_one_or_none():
+        raise ConflictError(f"slug '{body.slug}' 已被使用")
+
+    org = Organization(name=body.name, slug=body.slug, feishu_tenant_key=tenant_key)
+    db.add(org)
+
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(
+            select(Organization).where(
+                Organization.feishu_tenant_key == tenant_key,
+                not_deleted(Organization),
+            )
+        )
+        org = result.scalar_one()
+        await _ensure_membership(user, org, OrgRole.member, body.job_title, db)
+        return OrgInfo.model_validate(org)
+
+    membership = OrgMembership(
+        user_id=user.id, org_id=org.id, role=OrgRole.admin, job_title=body.job_title,
+    )
+    db.add(membership)
+    user.current_org_id = org.id
+
+    await db.commit()
+    await db.refresh(org)
+    logger.info(
+        "飞书开通组织: %s (slug=%s, tenant=%s) by user %s",
+        org.name, org.slug, tenant_key, user.id,
+    )
+    return OrgInfo.model_validate(org)
+
+
+async def _ensure_membership(
+    user: User, org: Organization, role: str, job_title: str | None, db: AsyncSession,
+) -> None:
+    """确保用户是组织成员，已存在则跳过。"""
+    exists = await db.execute(
+        select(OrgMembership).where(
+            OrgMembership.user_id == user.id,
+            OrgMembership.org_id == org.id,
+            not_deleted(OrgMembership),
+        )
+    )
+    if exists.scalar_one_or_none() is None:
+        db.add(OrgMembership(
+            user_id=user.id, org_id=org.id, role=role, job_title=job_title,
+        ))
+    user.current_org_id = org.id
+    await db.commit()
+    await db.refresh(user)
 
 
 async def update_org(org_id: str, body: OrgUpdate, db: AsyncSession) -> OrgInfo:

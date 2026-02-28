@@ -571,6 +571,44 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 clusters 表添加 proxy_endpoint 列")
 
+        # ── 迁移 21: 飞书租户绑定字段 ──
+        # 21a: organizations.feishu_tenant_key
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'organizations' AND column_name = 'feishu_tenant_key'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE organizations ADD COLUMN feishu_tenant_key VARCHAR(128)"
+            ))
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_organizations_feishu_tenant_key "
+                "ON organizations (feishu_tenant_key) WHERE feishu_tenant_key IS NOT NULL"
+            ))
+            logger.info("自动迁移：已为 organizations 表添加 feishu_tenant_key 列")
+
+        # 21b: users.feishu_tenant_key
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'feishu_tenant_key'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN feishu_tenant_key VARCHAR(128)"
+            ))
+            logger.info("自动迁移：已为 users 表添加 feishu_tenant_key 列")
+
+        # 21c: org_memberships.job_title
+        col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'org_memberships' AND column_name = 'job_title'"
+        ))
+        if col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE org_memberships ADD COLUMN job_title VARCHAR(32)"
+            ))
+            logger.info("自动迁移：已为 org_memberships 表添加 job_title 列")
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole

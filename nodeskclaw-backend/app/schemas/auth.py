@@ -71,3 +71,4 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int = 86400
     user: UserInfo
+    needs_org_setup: bool = False
