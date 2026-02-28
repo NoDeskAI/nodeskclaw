@@ -42,28 +42,27 @@ jobs:
           echo "已确认: openclaw@${{ steps.version.outputs.version }} 存在"
 
       - name: 登录火山云 CR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.VOLCENGINE_CR_REGISTRY }}
-          username: ${{ secrets.VOLCENGINE_CR_USERNAME }}
-          password: ${{ secrets.VOLCENGINE_CR_PASSWORD }}
+        run: echo "${{ secrets.VOLCENGINE_CR_PASSWORD }}" | docker login "${{ secrets.VOLCENGINE_CR_REGISTRY }}" -u "${{ secrets.VOLCENGINE_CR_USERNAME }}" --password-stdin
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: 构建镜像
+        run: |
+          IMAGE="${{ secrets.VOLCENGINE_CR_REGISTRY }}/base-image/nodeskclaw-openclaw-base"
+          TAG="${{ steps.version.outputs.tag }}"
 
-      - name: 构建并推送镜像
-        uses: docker/build-push-action@v6
-        with:
-          context: nodeskclaw-artifacts/openclaw-image
-          file: nodeskclaw-artifacts/openclaw-image/Dockerfile
-          platforms: linux/amd64
-          push: true
-          build-args: |
-            OPENCLAW_VERSION=${{ steps.version.outputs.version }}
-            IMAGE_VERSION=${{ steps.version.outputs.tag }}
-          tags: |
-            ${{ secrets.VOLCENGINE_CR_REGISTRY }}/base-image/nodeskclaw-openclaw-base:${{ steps.version.outputs.tag }}
-            ${{ secrets.VOLCENGINE_CR_REGISTRY }}/base-image/nodeskclaw-openclaw-base:latest
+          docker build --platform linux/amd64 \
+            --build-arg OPENCLAW_VERSION=${{ steps.version.outputs.version }} \
+            --build-arg IMAGE_VERSION=${TAG} \
+            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:latest" \
+            nodeskclaw-artifacts/openclaw-image
+
+      - name: 推送镜像
+        run: |
+          IMAGE="${{ secrets.VOLCENGINE_CR_REGISTRY }}/base-image/nodeskclaw-openclaw-base"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          docker push "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:latest"
 
       - name: 输出构建结果
         run: |
