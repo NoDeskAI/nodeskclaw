@@ -75,6 +75,7 @@ class HexConnection(BaseModel):
     hex_a_r: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_b_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_b_r: Mapped[int] = mapped_column(Integer, nullable=False)
+    # deprecated: direction is no longer used in routing; kept for DB compat
     direction: Mapped[str] = mapped_column(String(10), default="both", nullable=False)
     auto_created: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

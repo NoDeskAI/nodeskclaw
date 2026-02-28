@@ -48,8 +48,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (!myNode) return { error: "Node not found" };
         const neighborIds = new Set<string>();
         for (const e of edges) {
-          if (e.from_q === myNode.hex_q && e.from_r === myNode.hex_r) neighborIds.add(`${e.to_q},${e.to_r}`);
-          if (e.to_q === myNode.hex_q && e.to_r === myNode.hex_r) neighborIds.add(`${e.from_q},${e.from_r}`);
+          if (e.a_q === myNode.hex_q && e.a_r === myNode.hex_r) neighborIds.add(`${e.b_q},${e.b_r}`);
+          if (e.b_q === myNode.hex_q && e.b_r === myNode.hex_r) neighborIds.add(`${e.a_q},${e.a_r}`);
         }
         return nodes.filter((n: any) => neighborIds.has(`${n.hex_q},${n.hex_r}`));
       });

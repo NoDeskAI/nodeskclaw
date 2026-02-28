@@ -41,7 +41,6 @@ class ConnectionInfo(BaseModel):
     hex_a_r: int
     hex_b_q: int
     hex_b_r: int
-    direction: str
     auto_created: bool
     created_by: str | None
     created_at: datetime
@@ -90,7 +89,6 @@ class TopologyEdgeInfo(BaseModel):
     a_r: int
     b_q: int
     b_r: int
-    direction: str
     auto_created: bool
 
 

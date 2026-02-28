@@ -343,7 +343,6 @@ async def create_connection(
         new_value={
             "hex_a_q": conn.hex_a_q, "hex_a_r": conn.hex_a_r,
             "hex_b_q": conn.hex_b_q, "hex_b_r": conn.hex_b_r,
-            "direction": conn.direction,
         },
         actor_type=actor_type,
         actor_id=actor_id,
@@ -354,7 +353,7 @@ async def create_connection(
         id=conn.id, workspace_id=conn.workspace_id,
         hex_a_q=conn.hex_a_q, hex_a_r=conn.hex_a_r,
         hex_b_q=conn.hex_b_q, hex_b_r=conn.hex_b_r,
-        direction=conn.direction, auto_created=conn.auto_created,
+        auto_created=conn.auto_created,
         created_by=conn.created_by, created_at=conn.created_at,
     ).model_dump())
 
@@ -377,7 +376,7 @@ async def list_connections(
             id=c.id, workspace_id=c.workspace_id,
             hex_a_q=c.hex_a_q, hex_a_r=c.hex_a_r,
             hex_b_q=c.hex_b_q, hex_b_r=c.hex_b_r,
-            direction=c.direction, auto_created=c.auto_created,
+            auto_created=c.auto_created,
             created_by=c.created_by, created_at=c.created_at,
         ).model_dump()
         for c in result.scalars().all()
@@ -596,7 +595,7 @@ async def get_topology(
         edges=[
             TopologyEdgeInfo(
                 a_q=e.a_q, a_r=e.a_r, b_q=e.b_q, b_r=e.b_r,
-                direction=e.direction, auto_created=e.auto_created,
+                auto_created=e.auto_created,
             )
             for e in topo.edges
         ],

@@ -17,22 +17,12 @@ interface TopologyNode {
   color?: string
 }
 
-interface TopologyEdge {
-  a_q: number
-  a_r: number
-  b_q: number
-  b_r: number
-  direction: string
-  auto_created?: boolean
-}
-
 const props = defineProps<{
   agents: AgentBrief[]
   blackboardContent: string
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
-  topologyEdges?: TopologyEdge[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -127,20 +117,6 @@ const humanNodes = computed(() =>
       const { x, y } = axialToWorld(n.hex_q, n.hex_r)
       return { ...n, px: x * SCALE, py: y * SCALE, color: (n.extra?.display_color as string) || '#f59e0b' }
     })
-)
-
-const connectionLines = computed(() =>
-  (props.topologyEdges || []).map((e, idx) => {
-    const from = axialToWorld(e.a_q, e.a_r)
-    const to = axialToWorld(e.b_q, e.b_r)
-    return {
-      id: `${e.a_q},${e.a_r}-${e.b_q},${e.b_r}-${idx}`,
-      x1: from.x * SCALE,
-      y1: from.y * SCALE,
-      x2: to.x * SCALE,
-      y2: to.y * SCALE,
-    }
-  })
 )
 
 const CORRIDOR_RADIUS = HEX_RADIUS * 0.65
@@ -326,14 +302,6 @@ const emptyHexes = computed(() => {
           {{ agent.display_name || agent.name }}
         </text>
       </g>
-
-      <!-- Connection lines -->
-      <line
-        v-for="conn in connectionLines"
-        :key="'conn-' + conn.id"
-        :x1="conn.x1" :y1="conn.y1" :x2="conn.x2" :y2="conn.y2"
-        stroke="#06b6d4" stroke-width="2" opacity="0.4"
-      />
 
       <!-- Corridor hexes -->
       <g

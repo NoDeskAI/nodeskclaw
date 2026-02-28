@@ -84,7 +84,6 @@ export interface ConnectionInfo {
   hex_a_r: number
   hex_b_q: number
   hex_b_r: number
-  direction: string
   auto_created: boolean
   created_by: string | null
   created_at: string
@@ -104,7 +103,6 @@ export interface TopologyEdge {
   a_r: number
   b_q: number
   b_r: number
-  direction: string
   auto_created: boolean
 }
 

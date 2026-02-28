@@ -43,7 +43,6 @@ class TopologyEdge:
     a_r: int
     b_q: int
     b_r: int
-    direction: str
     auto_created: bool
 
 
@@ -203,7 +202,7 @@ async def get_topology(workspace_id: str, db: AsyncSession) -> Topology:
         )
     )
     edges = [
-        TopologyEdge(c.hex_a_q, c.hex_a_r, c.hex_b_q, c.hex_b_r, "both", c.auto_created)
+        TopologyEdge(c.hex_a_q, c.hex_a_r, c.hex_b_q, c.hex_b_r, c.auto_created)
         for c in conns_q.scalars().all()
     ]
 

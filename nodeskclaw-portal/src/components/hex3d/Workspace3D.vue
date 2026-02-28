@@ -8,7 +8,7 @@ import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import AgentHex3D from './AgentHex3D.vue'
 import Blackboard3D from './Blackboard3D.vue'
-import type { AgentBrief, TopologyNode, TopologyEdge } from '@/stores/workspace'
+import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -20,7 +20,6 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
-  topologyEdges?: TopologyEdge[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -307,66 +306,6 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   return group
 }
 
-const connectionMeshes: (THREE.Mesh | THREE.Line)[] = []
-
-function createConnectionLines(edges: TopologyEdge[]) {
-  for (const obj of connectionMeshes) {
-    scene.remove(obj)
-    obj.geometry.dispose()
-    ;(obj.material as THREE.Material).dispose()
-  }
-  connectionMeshes.length = 0
-
-  const pathWidth = HEX_SIZE * 0.3
-  const pathY = 0.015
-
-  for (const edge of edges) {
-    const a = axialToWorld(edge.a_q, edge.a_r)
-    const b = axialToWorld(edge.b_q, edge.b_r)
-
-    const dx = b.x - a.x
-    const dz = b.y - a.y
-    const len = Math.sqrt(dx * dx + dz * dz)
-    if (len < 0.001) continue
-
-    const nx = dx / len
-    const nz = dz / len
-    const px = -nz * pathWidth / 2
-    const pz = nx * pathWidth / 2
-
-    const inset = HEX_SIZE * 0.55
-    const sx = a.x + nx * inset
-    const sz = a.y + nz * inset
-    const ex = b.x - nx * inset
-    const ez = b.y - nz * inset
-
-    const vertices = new Float32Array([
-      sx + px, pathY, sz + pz,
-      sx - px, pathY, sz - pz,
-      ex - px, pathY, ez - pz,
-      ex + px, pathY, ez + pz,
-    ])
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-    geo.setIndex([0, 1, 2, 0, 2, 3])
-    geo.computeVertexNormals()
-
-    const color = 0x38bdf8
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x162640,
-      emissive: new THREE.Color(color),
-      emissiveIntensity: 0.1,
-      metalness: 0.2,
-      roughness: 0.8,
-      transparent: true,
-      opacity: 0.45,
-      side: THREE.DoubleSide,
-    })
-    const strip = new THREE.Mesh(geo, mat)
-    scene.add(strip)
-    connectionMeshes.push(strip)
-  }
-}
 
 const GRID_RANGE = 8
 const EMPTY_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.05, 6)
@@ -420,8 +359,6 @@ function syncScene() {
     hexMeshes.set(`human:${node.entity_id}`, group)
   }
 
-  createConnectionLines(props.topologyEdges || [])
-
   const occupied = new Set<string>()
   occupied.add('0:0')
   for (const agent of props.agents) {
@@ -444,7 +381,7 @@ function syncScene() {
   }
 }
 
-watch([() => props.agents, () => props.topologyNodes, () => props.topologyEdges], syncScene, { deep: true, immediate: true })
+watch([() => props.agents, () => props.topologyNodes], syncScene, { deep: true, immediate: true })
 
 // Hover + selection animation
 const clock = new THREE.Clock()
@@ -568,10 +505,6 @@ onUnmounted(() => {
   EMPTY_HEX_GEO.dispose()
   CORRIDOR_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
-  for (const obj of connectionMeshes) {
-    obj.geometry.dispose()
-    ;(obj.material as THREE.Material).dispose()
-  }
 })
 
 defineExpose({
