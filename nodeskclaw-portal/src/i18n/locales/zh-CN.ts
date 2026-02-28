@@ -402,6 +402,7 @@ const zhCN = {
       org_admin_required: "仅限组织管理员操作",
       org_member_required: "您不是该组织的成员",
       missing_tenant_key: "当前用户没有关联飞书租户，无法使用飞书开通组织",
+      slug_already_taken: "该企业标识符已被使用，请更换一个",
     },
     workspace: {
       not_found: "工作区不存在",

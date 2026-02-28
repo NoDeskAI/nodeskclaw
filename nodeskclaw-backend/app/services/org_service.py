@@ -63,7 +63,10 @@ async def create_org(body: OrgCreate, creator: User, db: AsyncSession) -> OrgInf
         select(Organization).where(Organization.slug == body.slug, not_deleted(Organization))
     )
     if exists.scalar_one_or_none():
-        raise ConflictError(f"slug '{body.slug}' 已被使用")
+        raise ConflictError(
+            f"企业标识符 '{body.slug}' 已被使用",
+            message_key="errors.org.slug_already_taken",
+        )
 
     org = Organization(name=body.name, slug=body.slug, plan=body.plan)
     db.add(org)
@@ -132,7 +135,10 @@ async def oauth_org_setup(
         select(Organization).where(Organization.slug == body.slug, not_deleted(Organization))
     )
     if slug_exists.scalar_one_or_none():
-        raise ConflictError(f"slug '{body.slug}' 已被使用")
+        raise ConflictError(
+            f"企业标识符 '{body.slug}' 已被使用",
+            message_key="errors.org.slug_already_taken",
+        )
 
     org = Organization(name=body.name, slug=body.slug)
     db.add(org)

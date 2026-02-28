@@ -133,6 +133,7 @@ const enUS = {
       super_admin_org_required: "Super admin must choose an organization first",
       org_admin_required: "Organization admin permission is required",
       org_member_required: "You are not a member of this organization",
+      slug_already_taken: "This organization slug is already taken, please choose another",
     },
     workspace: {
       not_found: "Workspace does not exist",

@@ -133,6 +133,7 @@ const zhCN = {
       super_admin_org_required: "超管需先选择要操作的组织",
       org_admin_required: "仅限组织管理员操作",
       org_member_required: "您不是该组织的成员",
+      slug_already_taken: "该企业标识符已被使用，请更换一个",
     },
     workspace: {
       not_found: "工作区不存在",

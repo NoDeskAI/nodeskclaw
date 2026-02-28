@@ -402,6 +402,7 @@ const enUS = {
       org_admin_required: "Organization admin permission is required",
       org_member_required: "You are not a member of this organization",
       missing_tenant_key: "No Feishu tenant associated with your account",
+      slug_already_taken: "This organization slug is already taken, please choose another",
     },
     workspace: {
       not_found: "Workspace does not exist",
