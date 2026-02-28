@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.llm import LlmConfigItem
+
 
 class DeployRequest(BaseModel):
     cluster_id: str
@@ -23,6 +25,7 @@ class DeployRequest(BaseModel):
     storage_class: str = "nas-subpath"
     storage_size: str = "80Gi"
     advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
+    llm_configs: list[LlmConfigItem] | None = None
 
     @field_validator("storage_size")
     @classmethod

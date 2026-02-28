@@ -294,6 +294,38 @@ async def deploy_instance(
     await db.commit()
     await db.refresh(instance)
 
+    if req.llm_configs:
+        from app.models.base import not_deleted
+        from app.models.user_llm_config import UserLlmConfig
+
+        existing_result = await db.execute(
+            select(UserLlmConfig).where(
+                UserLlmConfig.user_id == user.id,
+                UserLlmConfig.org_id == org_id,
+                not_deleted(UserLlmConfig),
+            )
+        )
+        existing_map = {c.provider: c for c in existing_result.scalars().all()}
+
+        for item in req.llm_configs:
+            existing = existing_map.get(item.provider)
+            if existing:
+                existing.key_source = item.key_source
+                existing.selected_models = item.selected_models
+            else:
+                db.add(UserLlmConfig(
+                    user_id=user.id,
+                    org_id=org_id,
+                    provider=item.provider,
+                    key_source=item.key_source,
+                    selected_models=item.selected_models,
+                ))
+        await db.commit()
+        logger.info(
+            "已保存用户 LLM 配置: user=%s org=%s providers=%s",
+            user.id, org_id, [c.provider for c in req.llm_configs],
+        )
+
     # 创建部署记录
     max_rev = await db.execute(
         select(func.coalesce(func.max(DeployRecord.revision), 0)).where(
