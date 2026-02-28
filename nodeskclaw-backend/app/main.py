@@ -97,10 +97,17 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 storage_class 列")
 
-        # 迁移 3: 将 instances.storage_size 默认值改为 80Gi
-        await conn.execute(text(
-            "ALTER TABLE instances ALTER COLUMN storage_size SET DEFAULT '80Gi'"
+        # 迁移 3: 将 instances.storage_size 默认值改为 80Gi（条件执行，避免滚动更新锁竞争）
+        _def_check = await conn.execute(text(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'storage_size'"
         ))
+        _def_row = _def_check.first()
+        if _def_row and "'80Gi'" not in str(_def_row[0] or ""):
+            await conn.execute(text(
+                "ALTER TABLE instances ALTER COLUMN storage_size SET DEFAULT '80Gi'"
+            ))
+            logger.info("自动迁移：已将 instances.storage_size 默认值改为 80Gi")
 
         # 迁移 4: 将 instances.name 的 unique 约束替换为 partial unique index（兼容软删除）
         # 旧约束 instances_name_key 不兼容软删除，已删除的记录会阻止同名重建
