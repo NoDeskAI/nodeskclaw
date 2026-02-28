@@ -82,6 +82,7 @@ class LlmConfigItem(BaseModel):
 class UserLlmConfigUpdate(BaseModel):
     org_id: str
     configs: list[LlmConfigItem]
+    instance_id: str | None = None
 
 
 class UserLlmConfigInfo(BaseModel):

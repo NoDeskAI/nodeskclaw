@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -77,6 +77,9 @@ class Instance(BaseModel):
 
     # Advanced config (JSON)
     advanced_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # LLM provider 白名单 (实例级隔离)
+    llm_providers: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Pending config (JSON) -- 两步操作模式: 保存到 DB 但尚未 apply 到 K8s
     pending_config: Mapped[str | None] = mapped_column(Text, nullable=True)

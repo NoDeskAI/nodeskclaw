@@ -254,6 +254,7 @@ async function handleSave() {
     // 2. Save LLM configs
     await api.put('/users/me/llm-configs', {
       org_id: orgId,
+      instance_id: instanceId.value,
       configs: providerConfigs.value.map(c => ({
         provider: c.provider,
         key_source: c.keySource,

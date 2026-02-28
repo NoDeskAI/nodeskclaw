@@ -399,8 +399,39 @@ async def update_user_llm_configs(
                 selected_models=item.selected_models,
             ))
 
-    for provider in old_providers - new_providers:
-        old_map[provider].soft_delete()
+    if body.instance_id:
+        inst_q = await db.execute(
+            select(Instance).where(
+                Instance.id == body.instance_id,
+                Instance.created_by == current_user.id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+        target_instance = inst_q.scalar_one_or_none()
+        if target_instance:
+            target_instance.llm_providers = [c.provider for c in body.configs]
+
+        other_inst_q = await db.execute(
+            select(Instance).where(
+                Instance.created_by == current_user.id,
+                Instance.org_id == body.org_id,
+                Instance.deleted_at.is_(None),
+                Instance.id != body.instance_id,
+                Instance.llm_providers.isnot(None),
+            )
+        )
+        other_instances = other_inst_q.scalars().all()
+        referenced: set[str] = set()
+        for inst in other_instances:
+            if inst.llm_providers:
+                referenced.update(inst.llm_providers)
+
+        for provider in old_providers - new_providers:
+            if provider not in referenced:
+                old_map[provider].soft_delete()
+    else:
+        for provider in old_providers - new_providers:
+            old_map[provider].soft_delete()
 
     await db.commit()
 

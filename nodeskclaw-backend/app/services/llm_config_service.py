@@ -314,6 +314,10 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
     )
     configs = list(configs_result.scalars().all())
 
+    if instance.llm_providers:
+        allowed = set(instance.llm_providers)
+        configs = [c for c in configs if c.provider in allowed]
+
     if not configs:
         logger.info("实例 %s 无 LLM 配置，跳过写入", instance.name)
         return

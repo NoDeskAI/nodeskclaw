@@ -284,6 +284,7 @@ async def deploy_instance(
         wp_api_key=f"nodeskclaw-wp-{_secrets.token_hex(32)}",
         env_vars=_json.dumps(env_vars),
         advanced_config=_json.dumps(req.advanced_config) if req.advanced_config else None,
+        llm_providers=[c.provider for c in req.llm_configs] if req.llm_configs else None,
         storage_class=req.storage_class,
         storage_size=req.storage_size,
         status=InstanceStatus.deploying,

@@ -952,6 +952,18 @@ async def lifespan(app: FastAPI):
             await db.commit()
             logger.info("自动迁移：已为组织 %s 创建默认工作区并迁移 %d 个实例", org.name, idx)
 
+    # ── 迁移 10: instances 表添加 llm_providers (实例级 LLM 配置隔离) ──
+    async with engine.begin() as conn:
+        col = (await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name='instances' AND column_name='llm_providers'"
+        ))).first()
+        if col is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN llm_providers JSONB"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 llm_providers 列")
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。
