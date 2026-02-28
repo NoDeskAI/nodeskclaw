@@ -22,7 +22,8 @@ _sms_codes: dict[str, tuple[str, float]] = {}
 
 
 async def oauth_login(
-    provider_name: str, code: str, db: AsyncSession, redirect_uri: str | None = None
+    provider_name: str, code: str, db: AsyncSession,
+    redirect_uri: str | None = None, client_id: str | None = None,
 ) -> LoginResponse:
     """
     通用 OAuth 登录：
@@ -36,7 +37,7 @@ async def oauth_login(
     from app.models.org_oauth_binding import OrgOAuthBinding
 
     provider = get_provider(provider_name)
-    oauth_info = await provider.exchange_code(code, redirect_uri)
+    oauth_info = await provider.exchange_code(code, redirect_uri, client_id=client_id)
 
     conn_result = await db.execute(
         select(UserOAuthConnection)
@@ -139,9 +140,11 @@ async def oauth_login(
     )
 
 
-async def feishu_login(code: str, db: AsyncSession, redirect_uri: str | None = None) -> LoginResponse:
+async def feishu_login(
+    code: str, db: AsyncSession, redirect_uri: str | None = None, client_id: str | None = None,
+) -> LoginResponse:
     """向后兼容别名。"""
-    return await oauth_login("feishu", code, db, redirect_uri)
+    return await oauth_login("feishu", code, db, redirect_uri, client_id=client_id)
 
 
 async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenResponse:

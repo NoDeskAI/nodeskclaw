@@ -20,27 +20,26 @@ class FeishuProvider(OAuthProvider):
     def name(self) -> str:
         return "feishu"
 
-    def _resolve_credentials(self, redirect_uri: str | None) -> tuple[str, str, str]:
-        """根据 redirect_uri 来源域名选择 Admin 或 Portal 飞书应用凭据。
+    def _resolve_credentials(
+        self, redirect_uri: str | None, client_id: str | None = None
+    ) -> tuple[str, str, str]:
+        """按前端传入的 client_id 显式匹配飞书应用凭据。
 
-        默认使用 Admin 凭据，仅当 redirect_uri 明确匹配已知 Portal 域名时才切换。
-        这样 localhost 等开发环境不会被误判为 Portal。
+        admin 就是 admin，portal 就是 portal，不做域名猜测。
         """
         actual_uri = redirect_uri or settings.FEISHU_REDIRECT_URI
-        if settings.FEISHU_APP_ID_PORTAL and redirect_uri:
-            admin_origin = urlparse(settings.FEISHU_REDIRECT_URI).netloc
-            portal_origins = {
-                urlparse(o).netloc
-                for o in settings.CORS_ORIGINS
-                if urlparse(o).netloc and urlparse(o).netloc != admin_origin
-            }
-            req_origin = urlparse(redirect_uri).netloc
-            if req_origin in portal_origins:
+        if client_id:
+            if client_id == settings.FEISHU_APP_ID:
+                return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET, actual_uri
+            if settings.FEISHU_APP_ID_PORTAL and client_id == settings.FEISHU_APP_ID_PORTAL:
                 return settings.FEISHU_APP_ID_PORTAL, settings.FEISHU_APP_SECRET_PORTAL, actual_uri
+            logger.warning("未知的飞书 client_id: %s，回退到 Admin 凭据", client_id)
         return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET, actual_uri
 
-    async def exchange_code(self, code: str, redirect_uri: str | None = None) -> OAuthUserInfo:
-        app_id, app_secret, actual_redirect_uri = self._resolve_credentials(redirect_uri)
+    async def exchange_code(
+        self, code: str, redirect_uri: str | None = None, client_id: str | None = None
+    ) -> OAuthUserInfo:
+        app_id, app_secret, actual_redirect_uri = self._resolve_credentials(redirect_uri, client_id)
         logger.info("飞书 OAuth: 使用 app_id=%s..., redirect=%s", app_id[:12], actual_redirect_uri)
 
         async with httpx.AsyncClient(timeout=10) as client:

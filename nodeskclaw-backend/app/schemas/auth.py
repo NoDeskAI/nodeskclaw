@@ -9,11 +9,13 @@ class OAuthCallbackRequest(BaseModel):
     provider: str
     code: str
     redirect_uri: str | None = None
+    client_id: str | None = None
 
 
 class FeishuCallbackRequest(BaseModel):
     code: str
     redirect_uri: str | None = None
+    client_id: str | None = None
 
 
 class EmailRegisterRequest(BaseModel):

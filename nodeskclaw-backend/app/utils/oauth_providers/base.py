@@ -26,6 +26,8 @@ class OAuthProvider(ABC):
         ...
 
     @abstractmethod
-    async def exchange_code(self, code: str, redirect_uri: str | None = None) -> OAuthUserInfo:
+    async def exchange_code(
+        self, code: str, redirect_uri: str | None = None, client_id: str | None = None
+    ) -> OAuthUserInfo:
         """Exchange an authorization code for user info."""
         ...
