@@ -343,6 +343,7 @@ async def list_provider_models(
 @router.get("/users/me/llm-configs", response_model=ApiResponse[list[UserLlmConfigInfo]])
 async def get_user_llm_configs(
     org_id: str = Query(...),
+    instance_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -353,7 +354,20 @@ async def get_user_llm_configs(
             not_deleted(UserLlmConfig),
         )
     )
-    configs = result.scalars().all()
+    configs = list(result.scalars().all())
+
+    if instance_id:
+        inst_result = await db.execute(
+            select(Instance).where(
+                Instance.id == instance_id,
+                Instance.created_by == current_user.id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+        instance = inst_result.scalar_one_or_none()
+        if instance and instance.llm_providers:
+            allowed = set(instance.llm_providers)
+            configs = [c for c in configs if c.provider in allowed]
 
     return ApiResponse(data=[
         UserLlmConfigInfo(

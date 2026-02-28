@@ -81,7 +81,7 @@ async function loadAll() {
       api.get('/users/me/llm-keys'),
     ]
     if (orgId) {
-      requests.push(api.get(`/users/me/llm-configs?org_id=${orgId}`))
+      requests.push(api.get(`/users/me/llm-configs?org_id=${orgId}&instance_id=${instanceId.value}`))
     }
 
     const results = await Promise.allSettled(requests)
