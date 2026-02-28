@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
+const apiTarget = process.env.API_PROXY_TARGET || 'http://localhost:8000'
+
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
@@ -12,8 +14,14 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/stream': 'http://localhost:8000',
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+      '/stream': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
     },
   },
 })
