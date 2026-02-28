@@ -22,10 +22,14 @@ class Settings(BaseSettings):
     # ── Encryption (AES-256-GCM for KubeConfig) ─────────
     ENCRYPTION_KEY: str = "change-me-32-bytes-base64-key__="
 
-    # ── 飞书 SSO ────────────────────────────────────────
+    # ── 飞书 SSO（Admin 应用） ────────────────────────────
     FEISHU_APP_ID: str = ""
     FEISHU_APP_SECRET: str = ""
     FEISHU_REDIRECT_URI: str = ""
+
+    # ── 飞书 SSO（Portal 应用，可选） ─────────────────────
+    FEISHU_APP_ID_PORTAL: str = ""
+    FEISHU_APP_SECRET_PORTAL: str = ""
 
     # ── 火山云 ──────────────────────────────────────────
     VKE_SUBNET_ID: str = ""

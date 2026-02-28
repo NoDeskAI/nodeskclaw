@@ -1,6 +1,7 @@
 """Feishu (Lark) OAuth provider implementation."""
 
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
@@ -19,16 +20,27 @@ class FeishuProvider(OAuthProvider):
     def name(self) -> str:
         return "feishu"
 
+    def _resolve_credentials(self, redirect_uri: str | None) -> tuple[str, str, str]:
+        """根据 redirect_uri 来源域名选择 Admin 或 Portal 飞书应用凭据。"""
+        actual_uri = redirect_uri or settings.FEISHU_REDIRECT_URI
+        if settings.FEISHU_APP_ID_PORTAL and redirect_uri:
+            admin_origin = urlparse(settings.FEISHU_REDIRECT_URI).netloc
+            req_origin = urlparse(redirect_uri).netloc
+            if req_origin and req_origin != admin_origin:
+                return settings.FEISHU_APP_ID_PORTAL, settings.FEISHU_APP_SECRET_PORTAL, actual_uri
+        return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET, actual_uri
+
     async def exchange_code(self, code: str, redirect_uri: str | None = None) -> OAuthUserInfo:
-        actual_redirect_uri = redirect_uri or settings.FEISHU_REDIRECT_URI
+        app_id, app_secret, actual_redirect_uri = self._resolve_credentials(redirect_uri)
+        logger.info("飞书 OAuth: 使用 app_id=%s..., redirect=%s", app_id[:12], actual_redirect_uri)
 
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 FEISHU_USER_TOKEN_URL,
                 json={
                     "grant_type": "authorization_code",
-                    "client_id": settings.FEISHU_APP_ID,
-                    "client_secret": settings.FEISHU_APP_SECRET,
+                    "client_id": app_id,
+                    "client_secret": app_secret,
                     "code": code,
                     "redirect_uri": actual_redirect_uri,
                 },
