@@ -39,6 +39,9 @@ def _extract_proxy_token(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
+    api_key = request.headers.get("x-api-key", "").strip()
+    if api_key:
+        return api_key
     return None
 
 

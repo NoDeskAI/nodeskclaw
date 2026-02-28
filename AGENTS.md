@@ -11,7 +11,7 @@ NoDeskClaw 是 OpenClaw 实例可视化管理系统，通过 Web 界面管理 K8
 | 后端 | Python 3.12 + FastAPI + SQLAlchemy + PostgreSQL |
 | 管理前端 | Vue 3 + Vite + TypeScript + Tailwind CSS + shadcn-vue |
 | 用户门户 | Vue 3 + Vite + TypeScript + Tailwind CSS + Three.js |
-| LLM Proxy | Go |
+| LLM Proxy | Python 3.12 + FastAPI |
 | 部署 | K8s + Docker（目标架构 linux/amd64） |
 
 ## 目录结构
@@ -21,7 +21,7 @@ NoDeskClaw/
 ├── nodeskclaw-backend/           # 后端 API 服务（Python 3.12 + FastAPI）
 ├── nodeskclaw-frontend/          # 管理后台前端（Vue 3）
 ├── nodeskclaw-portal/            # 用户门户前端（Vue 3 + Three.js）
-├── nodeskclaw-llm-proxy/         # LLM 代理服务（Go）
+├── nodeskclaw-llm-proxy/         # LLM 代理服务（Python 3.12 + FastAPI）
 ├── nodeskclaw-artifacts/         # 镜像构建 & 部署制品
 ├── openclaw/                     # OpenClaw 源码副本
 ├── openclaw-channel-nodeskclaw/   # Channel 插件
