@@ -1,6 +1,6 @@
 # NoDeskClaw Backend
 
-NoDeskClaw 管理平台后端服务，基于 FastAPI 构建，提供集群管理、实例部署、飞书 SSO 登录、镜像仓库管理等 API。
+NoDeskClaw 管理平台后端服务，基于 FastAPI 构建，提供集群管理、实例部署、OAuth SSO 登录（飞书等可扩展）、镜像仓库管理等 API。
 
 ## 技术栈
 
@@ -19,7 +19,7 @@ nodeskclaw-backend/
 │   ├── main.py              # FastAPI 入口，lifespan 管理
 │   ├── api/                  # 路由层
 │   │   ├── router.py         # 路由聚合
-│   │   ├── auth.py           # 飞书 SSO 登录
+│   │   ├── auth.py           # OAuth 登录、回调、token 刷新
 │   │   ├── clusters.py       # 集群 CRUD
 │   │   ├── deploy.py         # 部署操作
 │   │   ├── events.py         # SSE 事件推送
@@ -36,6 +36,8 @@ nodeskclaw-backend/
 │   │   └── security.py       # JWT 签发 / 验证
 │   ├── models/               # SQLAlchemy ORM 模型
 │   │   ├── user.py           # 用户
+│   │   ├── oauth_connection.py   # 用户 OAuth 关联（provider, provider_user_id, provider_tenant_id）
+│   │   ├── org_oauth_binding.py  # 组织 OAuth 租户关联（provider, provider_tenant_id）
 │   │   ├── cluster.py        # 集群
 │   │   ├── instance.py       # 实例
 │   │   ├── deploy_record.py  # 部署记录
@@ -47,7 +49,7 @@ nodeskclaw-backend/
 │   │   └── system_config.py  # 系统配置（键值对）
 │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   ├── services/             # 业务逻辑层
-│   │   ├── auth_service.py       # 飞书 SSO 逻辑
+│   │   ├── auth_service.py       # OAuth 登录逻辑（provider 可扩展）
 │   │   ├── cluster_service.py    # 集群管理
 │   │   ├── deploy_service.py     # 部署编排
 │   │   ├── instance_service.py   # 实例操作
@@ -66,7 +68,11 @@ nodeskclaw-backend/
 │   │       ├── event_bus.py      # K8s 事件 → SSE
 │   │       └── resource_builder.py # K8s YAML 资源构建
 │   └── utils/
-│       └── feishu.py         # 飞书 API 工具函数
+│       ├── feishu.py             # 飞书 API 工具函数（兼容旧逻辑）
+│       └── oauth_providers/      # OAuth 提供方注册（可扩展）
+│           ├── base.py           # OAuthProvider 基类
+│           ├── registry.py       # 提供方注册与获取
+│           └── feishu.py         # 飞书 OAuth 实现
 ├── pyproject.toml            # 项目依赖定义
 ├── uv.lock                   # 锁定依赖版本
 ├── Dockerfile                # 生产镜像构建
@@ -79,7 +85,10 @@ nodeskclaw-backend/
 | 前缀 | 模块 | 说明 |
 |------|------|------|
 | `/api/v1/health` | 系统 | 健康检查 |
-| `/api/v1/auth` | 认证 | 飞书 SSO 登录、token 刷新 |
+| `/api/v1/auth` | 认证 | OAuth 登录、token 刷新 |
+| `/api/v1/auth/oauth/callback` | 认证 | OAuth 登录回调（通用，支持 provider 参数） |
+| `/api/v1/orgs` | 组织 | 组织 CRUD、成员管理 |
+| `/api/v1/orgs/oauth-setup` | 组织 | 组织 OAuth 设置（通用，通过 OAuth 租户绑定组织） |
 | `/api/v1/clusters` | 集群 | 集群 CRUD、KubeConfig 管理 |
 | `/api/v1/deploy` | 部署 | 创建部署、YAML 预览 |
 | `/api/v1/instances` | 实例 | 实例列表、详情、日志、删除 |
@@ -146,9 +155,11 @@ cp .env.example .env
 | `DATABASE_URL` | PostgreSQL 连接串，格式 `postgresql+asyncpg://user:pass@host:5432/dbname` |
 | `JWT_SECRET` | JWT 签名密钥，生产环境务必替换 |
 | `ENCRYPTION_KEY` | KubeConfig AES 加密密钥（32 字节 base64） |
-| `FEISHU_APP_ID` | 飞书应用 App ID |
-| `FEISHU_APP_SECRET` | 飞书应用 App Secret |
+| `FEISHU_APP_ID` | 飞书 OAuth 提供方 App ID |
+| `FEISHU_APP_SECRET` | 飞书 OAuth 提供方 App Secret |
 | `FEISHU_REDIRECT_URI` | 飞书 OAuth 回调地址 |
+
+未来接入其他 OAuth 提供方（如钉钉、企业微信等）时，需在配置中新增对应 `*_APP_ID`、`*_APP_SECRET` 等变量。
 
 可选项：
 
@@ -196,6 +207,15 @@ logs/
 ## 数据库
 
 使用火山云 RDS PostgreSQL，首次启动时通过 `Base.metadata.create_all` 自动建表，无需手动迁移。
+
+### OAuth 相关表（重构后）
+
+| 表名 | 说明 |
+|------|------|
+| `user_oauth_connections` | 用户与 OAuth 提供方的关联（provider、provider_user_id、provider_tenant_id） |
+| `org_oauth_bindings` | 组织与 OAuth 租户的关联（provider、provider_tenant_id） |
+
+原先的 `users.feishu_uid`、`organizations.feishu_tenant_key` 等字段已移除，统一迁移至上述表。
 
 ### 默认基因/基因组初始化
 
