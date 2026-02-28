@@ -22,7 +22,9 @@ LABEL org.opencontainers.image.description="OpenClaw AI Agent 平台 - NoDeskCla
 # ---------- slim 镜像缺少的依赖 ----------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
+    git config --global url."https://github.com/".insteadOf git@github.com:
 
 # ---------- 全局安装 OpenClaw ----------
 RUN npm install -g openclaw@${OPENCLAW_VERSION} && \
