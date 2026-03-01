@@ -9,17 +9,15 @@ from app.models.base import BaseModel
 
 
 class OrgRole(str, Enum):
-    viewer = "viewer"
     member = "member"
     operator = "operator"
     admin = "admin"
 
 
-ROLE_LEVEL: dict["OrgRole", int] = {
-    OrgRole.viewer: 10,
-    OrgRole.member: 20,
-    OrgRole.operator: 30,
-    OrgRole.admin: 40,
+ADMIN_ROLE_LEVEL: dict[str, int] = {
+    "member": 10,
+    "operator": 20,
+    "admin": 30,
 }
 
 

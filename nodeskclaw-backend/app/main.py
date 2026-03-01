@@ -846,6 +846,31 @@ async def lifespan(app: FastAPI):
 
         # 默认基因/基因组改为一次性 SQL 回填；启动流程不再自动写入
 
+    # ── 迁移 23: 为 super_admin 用户创建 AdminMembership 记录 ──
+    async with async_session_factory() as db:
+        from app.models.admin_membership import AdminMembership
+        from app.models.user import User
+
+        super_admins = await db.execute(
+            select(User).where(
+                User.is_super_admin.is_(True),
+                User.current_org_id.isnot(None),
+                User.deleted_at.is_(None),
+            )
+        )
+        for u in super_admins.scalars().all():
+            existing = await db.execute(
+                select(AdminMembership).where(
+                    AdminMembership.user_id == u.id,
+                    AdminMembership.org_id == u.current_org_id,
+                    AdminMembership.deleted_at.is_(None),
+                )
+            )
+            if existing.scalar_one_or_none() is None:
+                db.add(AdminMembership(user_id=u.id, org_id=u.current_org_id, role="admin"))
+                logger.info("自动迁移：为超管用户 %s 创建 AdminMembership(admin)", u.name)
+        await db.commit()
+
     # 预热 K8s 连接池：从 DB 加载所有已连接集群
     async with async_session_factory() as db:
         result = await db.execute(

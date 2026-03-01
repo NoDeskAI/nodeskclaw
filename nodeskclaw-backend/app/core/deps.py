@@ -219,20 +219,20 @@ async def require_org_member(
 # ── 管理平台 RBAC（admin 路由前缀专用） ──────────────────────
 
 def require_org_role(min_role: str):
-    """工厂函数：生成要求当前用户在其组织中至少拥有 min_role 的依赖。
+    """工厂函数：生成要求当前用户在 admin_memberships 中至少拥有 min_role 的依赖。
 
     用于 admin_router 的 include_router(dependencies=[...])，
     super_admin 自动放行。返回 (user, org)。
     """
-    from app.models.org_membership import ROLE_LEVEL, OrgRole
+    from app.models.org_membership import ADMIN_ROLE_LEVEL
 
-    min_level = ROLE_LEVEL[OrgRole(min_role)]
+    min_level = ADMIN_ROLE_LEVEL[min_role]
 
     async def _dependency(
         db: AsyncSession = Depends(get_db),
         user=Depends(_get_current_user_dep()),
     ):
-        from app.models.org_membership import OrgMembership
+        from app.models.admin_membership import AdminMembership
         from app.models.organization import Organization
 
         target_org_id = user.current_org_id
@@ -259,25 +259,25 @@ def require_org_role(min_role: str):
             )
 
         result = await db.execute(
-            select(OrgMembership).where(
-                OrgMembership.user_id == user.id,
-                OrgMembership.org_id == target_org_id,
-                OrgMembership.deleted_at.is_(None),
+            select(AdminMembership).where(
+                AdminMembership.user_id == user.id,
+                AdminMembership.org_id == target_org_id,
+                AdminMembership.deleted_at.is_(None),
             )
         )
-        membership = result.scalar_one_or_none()
+        admin_membership = result.scalar_one_or_none()
 
-        if membership is None:
+        if admin_membership is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
-                    "error_code": 40312,
-                    "message_key": "errors.org.org_member_required",
-                    "message": "您不是该组织的成员",
+                    "error_code": 40314,
+                    "message_key": "errors.org.no_admin_access",
+                    "message": "您没有管理平台访问权限",
                 },
             )
 
-        user_level = ROLE_LEVEL.get(OrgRole(membership.role), 0)
+        user_level = ADMIN_ROLE_LEVEL.get(admin_membership.role, 0)
         if user_level < min_level:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

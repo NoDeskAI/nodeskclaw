@@ -87,7 +87,7 @@ nodeskclaw-backend/
 API 路由同时挂载在两个前缀下：
 
 - **`/api/v1/...`** — Portal（用户门户）使用，仅做登录/组织成员基础检查
-- **`/api/v1/admin/...`** — 管理平台（nodeskclaw-frontend）使用，通过 `require_org_role(min_role)` 注入角色检查
+- **`/api/v1/admin/...`** — 管理平台（nodeskclaw-frontend）使用，通过 `require_org_role(min_role)` 检查 `admin_memberships` 表
 
 两个前缀使用同一套路由处理函数，不重复业务逻辑。管理前端 axios 的 baseURL 为 `/api/v1/admin`。
 
@@ -113,16 +113,24 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
 | `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
 
-### RBAC 角色体系
+### RBAC 双表职责分离
 
-| 角色 | 层级值 | 管理平台含义 |
-|------|--------|-------------|
-| viewer | 10 | 无权限（新用户默认），显示"请联系管理员"页面 |
-| member | 20 | 只读：Dashboard、实例详情/日志/监控/事件 |
-| operator | 30 | 运维操作：部署、重启、扩缩容、配置变更 |
-| admin | 40 | 完全权限：集群管理、系统设置、基因运营、成员角色分配 |
+管理平台和 Portal 的角色完全独立，由两张表管理：
 
-`is_super_admin` 绕过所有组织级权限。Portal 不检查角色级别，viewer 也能正常使用 Portal。
+| 表 | 用途 | 谁写 | 谁读 |
+|----|------|------|------|
+| `org_memberships` | Portal 组织角色（admin/member） | OAuth 登录自动创建 | Portal |
+| `admin_memberships` | 管理平台角色（member/operator/admin） | 管理员手动添加 | Admin |
+
+管理平台角色层级（`admin_memberships.role`）：
+
+| 角色 | 层级值 | 含义 |
+|------|--------|------|
+| member | 10 | 只读：Dashboard、实例详情/日志/监控/事件 |
+| operator | 20 | 运维操作：部署、重启、扩缩容、配置变更 |
+| admin | 30 | 完全权限：集群管理、系统设置、基因运营、成员管理 |
+
+`is_super_admin` 绕过所有管理平台权限检查。无 `AdminMembership` 记录的用户无法访问管理平台。
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 

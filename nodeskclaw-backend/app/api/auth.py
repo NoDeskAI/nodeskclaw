@@ -90,21 +90,19 @@ async def me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取当前用户信息（含当前组织角色）。"""
-    from app.models.org_membership import OrgMembership
+    """获取当前用户信息（含管理平台角色）。"""
+    from app.models.admin_membership import AdminMembership
 
     info = UserInfo.model_validate(current_user)
     if current_user.current_org_id:
         result = await db.execute(
-            select(OrgMembership.role).where(
-                OrgMembership.user_id == current_user.id,
-                OrgMembership.org_id == current_user.current_org_id,
-                OrgMembership.deleted_at.is_(None),
+            select(AdminMembership.role).where(
+                AdminMembership.user_id == current_user.id,
+                AdminMembership.org_id == current_user.current_org_id,
+                AdminMembership.deleted_at.is_(None),
             )
         )
-        org_role = result.scalar_one_or_none()
-        if org_role:
-            info.org_role = org_role
+        info.org_role = result.scalar_one_or_none()
     return ApiResponse(data=info)
 
 

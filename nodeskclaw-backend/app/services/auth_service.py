@@ -115,7 +115,7 @@ async def oauth_login(
                 )
             )
             if existing_membership.scalar_one_or_none() is None:
-                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.viewer))
+                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.member))
             user.current_org_id = binding.org_id
         else:
             needs_org_setup = True
@@ -202,21 +202,19 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 
 async def _build_user_info(user: User, db: AsyncSession) -> UserInfo:
-    """构建包含 org_role 的 UserInfo。"""
-    from app.models.org_membership import OrgMembership
+    """构建包含 org_role（管理平台角色）的 UserInfo。"""
+    from app.models.admin_membership import AdminMembership
 
     info = UserInfo.model_validate(user)
     if user.current_org_id:
         result = await db.execute(
-            select(OrgMembership.role).where(
-                OrgMembership.user_id == user.id,
-                OrgMembership.org_id == user.current_org_id,
-                OrgMembership.deleted_at.is_(None),
+            select(AdminMembership.role).where(
+                AdminMembership.user_id == user.id,
+                AdminMembership.org_id == user.current_org_id,
+                AdminMembership.deleted_at.is_(None),
             )
         )
-        org_role = result.scalar_one_or_none()
-        if org_role:
-            info.org_role = org_role
+        info.org_role = result.scalar_one_or_none()
     return info
 
 
@@ -274,7 +272,7 @@ async def register_with_email(
     default_org = org_result.scalar_one_or_none()
     if default_org:
         await db.flush()
-        membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.viewer)
+        membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.member)
         db.add(membership)
         user.current_org_id = default_org.id
 
@@ -415,7 +413,7 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
         default_org = org_result.scalar_one_or_none()
         if default_org:
             await db.flush()
-            membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.viewer)
+            membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.member)
             db.add(membership)
             user.current_org_id = default_org.id
 

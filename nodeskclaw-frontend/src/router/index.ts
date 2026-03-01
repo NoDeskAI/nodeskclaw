@@ -26,7 +26,6 @@ const routes: RouteRecordRaw[] = [
     path: '/no-access',
     name: 'NoAccess',
     component: () => import('@/views/NoAccess.vue'),
-    meta: { minRole: 'viewer' },
   },
   {
     path: '/',
@@ -171,7 +170,12 @@ router.beforeEach(async (to, _from, next) => {
     return next('/login')
   }
 
-  const { canAccessRoute } = usePermissions()
+  const { canAccessRoute, hasAdminAccess } = usePermissions()
+
+  if (to.path !== '/no-access' && !hasAdminAccess.value) {
+    return next('/no-access')
+  }
+
   const minRole = to.meta.minRole
   if (minRole && !canAccessRoute(minRole)) {
     return next('/no-access')
