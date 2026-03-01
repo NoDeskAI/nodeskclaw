@@ -22,6 +22,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3-selection": "^3.0.0",
+    "d3-transition": "^3.0.1",
     "d3-zoom": "^3.0.0",
     "lucide-vue-next": "^0.563.0",
     "marked": "^17.0.3",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@types/d3-selection": "^3.0.11",
+    "@types/d3-transition": "^3.0.9",
     "@types/d3-zoom": "^3.0.8",
     "@types/node": "^24.10.1",
     "@types/three": "^0.182.0",

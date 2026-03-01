@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, ref, type Ref } from 'vue'
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import { select } from 'd3-selection'
+import 'd3-transition'
 
 export interface SvgTransform {
   x: number
