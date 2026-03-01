@@ -18,7 +18,7 @@ const DIR_UNIT_VECTORS: [number, number][] = AXIAL_DIRS.map(([dq, dr]) => {
 })
 
 const railStripGeo = new THREE.BoxGeometry(RAIL_STRIP_WIDTH, STRIP_HEIGHT, ARM_LENGTH)
-const junctionGeo = new THREE.RingGeometry(JUNCTION_RADIUS * 0.6, JUNCTION_RADIUS, 12)
+const junctionGeo = new THREE.CircleGeometry(JUNCTION_RADIUS, 16)
 const raycastGeo = new THREE.CylinderGeometry(CORRIDOR_RADIUS, CORRIDOR_RADIUS, 0.01, 6)
 
 const allSharedGeos: THREE.BufferGeometry[] = [railStripGeo, junctionGeo, raycastGeo]
