@@ -1,0 +1,77 @@
+name: 构建 OpenClaw 镜像
+
+on:
+  workflow_dispatch:
+    inputs:
+      openclaw_version:
+        description: 'OpenClaw 版本号（如 2026.2.26），留空则使用 Dockerfile 中的默认版本'
+        required: false
+        type: string
+
+env:
+  CR_REGISTRY: nodesk-center-cn-beijing.cr.volces.com
+  CR_IMAGE: nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-openclaw-base
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [ -n "${{ inputs.openclaw_version }}" ]; then
+            VERSION="${{ inputs.openclaw_version }}"
+          else
+            VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' nodeskclaw-artifacts/openclaw-image/Dockerfile)
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "使用版本: ${VERSION}"
+
+      - name: 验证版本存在
+        run: |
+          NPM_INFO=$(npm view "openclaw@${{ steps.version.outputs.version }}" version 2>/dev/null || true)
+          if [ -z "${NPM_INFO}" ]; then
+            echo "::error::openclaw@${{ steps.version.outputs.version }} 在 npm 上不存在"
+            exit 1
+          fi
+          echo "已确认: openclaw@${{ steps.version.outputs.version }} 存在"
+
+      - name: Login to Volcengine CR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CR_REGISTRY }}
+          username: ${{ secrets.VOLCENGINE_CR_USERNAME }}
+          password: ${{ secrets.VOLCENGINE_CR_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: nodeskclaw-artifacts/openclaw-image
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            OPENCLAW_VERSION=${{ steps.version.outputs.version }}
+            IMAGE_VERSION=${{ steps.version.outputs.tag }}
+          tags: |
+            ${{ env.CR_IMAGE }}:${{ steps.version.outputs.tag }}
+            ${{ env.CR_IMAGE }}:latest
+
+      - name: 输出构建结果
+        run: |
+          echo "## 构建完成" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 项目 | 值 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-----|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| OpenClaw 版本 | \`${{ steps.version.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 镜像 Tag | \`${{ steps.version.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 镜像 | \`${{ env.CR_IMAGE }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 平台 | \`linux/amd64\` |" >> "$GITHUB_STEP_SUMMARY"

@@ -7,10 +7,12 @@ NoDeskClaw 部署到 K8s 的制品仓库 -- 存放 Docker 镜像构建文件和�
 ```
 nodeskclaw-artifacts/
 ├── openclaw-image/              # OpenClaw 定制镜像
-│   ├── Dockerfile               # 基于 node:24-bookworm-slim，npm 全局安装 openclaw
+│   ├── Dockerfile               # 基于 node:22-bookworm-slim，npm 全局安装 openclaw
 │   ├── docker-entrypoint.sh     # 容器启动脚本（配置生成 + 凭证注入 + 前台启动）
 │   ├── init-container.sh        # Init Container 脚本（PVC 数据初始化 + 版本升级）
-│   └── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
+│   ├── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
+│   ├── build-and-push.sh        # 一键构建推送脚本（支持版本参数、npm 校验）
+│   └── check-update.sh          # 版本检测脚本（查询 npm 最新稳定版、自动更新 Dockerfile）
 ├── ingress-controller/          # Nginx Ingress Controller 部署清单
 │   ├── deploy.yaml              # 完整 K8s 资源（Namespace、RBAC、Deployment、Service）
 │   ├── tls-secret.yaml          # 通配符 TLS 证书 Secret 模板
@@ -25,31 +27,46 @@ nodeskclaw-artifacts/
 
 NoDeskClaw 管理的 OpenClaw 实例运行的 Docker 镜像。不从源码构建，而是通过 `npm install -g openclaw` 安装发布版本。
 
-### 构建
+### 版本检查
 
 ```bash
 cd nodeskclaw-artifacts/openclaw-image
 
-docker build \
-  --build-arg NODE_VERSION=24 \
-  --build-arg OPENCLAW_VERSION=1.0.0 \
-  --build-arg IMAGE_VERSION=v1.0.0 \
-  -t cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0 \
-  .
+# 检查是否有新版本
+./check-update.sh
+
+# 检查并自动更新 Dockerfile
+./check-update.sh --update
 ```
+
+### 构建推送
+
+```bash
+cd nodeskclaw-artifacts/openclaw-image
+
+# 使用 Dockerfile 中的默认版本构建并推送
+./build-and-push.sh
+
+# 指定版本
+./build-and-push.sh --version 2026.2.26
+
+# 仅构建不推送
+./build-and-push.sh --build-only
+```
+
+脚本自动完成：npm 版本校验 → `docker build --platform linux/amd64` → 打 `v{version}` + `latest` tag → 推送 → 验证。
+
+也可以通过 GitHub Actions 手动触发构建工作流（见 `.github/workflows/build-openclaw-image.yml`）。
 
 | 构建参数 | 说明 | 默认值 |
 |----------|------|--------|
-| `NODE_VERSION` | Node.js 大版本 | `24` |
-| `OPENCLAW_VERSION` | openclaw npm 包版本 | `1.0.0` |
-| `IMAGE_VERSION` | 镜像 Tag 版本标记 | `v1.0.0` |
+| `NODE_VERSION` | Node.js 大版本 | `22` |
+| `OPENCLAW_VERSION` | openclaw npm 包版本 | `2026.2.26` |
+| `IMAGE_VERSION` | 镜像 Tag 版本标记 | `v2026.2.26` |
 
-### 推送到火山云 CR
+### 版本自动检测
 
-```bash
-docker login cr-cn-beijing.volces.com -u <access_key>
-docker push cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
-```
+项目配置了 GitHub Actions 定时工作流（`.github/workflows/check-openclaw-update.yml`），每天自动检查 npm 上是否有新的 OpenClaw 稳定版本。发现新版本时自动创建 PR，人工审核后合并。
 
 ### 镜像内文件说明
 
@@ -58,6 +75,8 @@ docker push cr-cn-beijing.volces.com/nodeskclaw/openclaw:v1.0.0
 | `docker-entrypoint.sh` | 容器启动入口。检查 `OPENCLAW_FORCE_RECONFIG` 决定是否从模板重建配置，注入凭证，然后 `exec openclaw gateway` 前台运行 |
 | `init-container.sh` | K8s Init Container 执行。首次部署时将 `/root/.openclaw` 模板拷贝到 PVC；版本升级时合并内置插件、更新版本标记 |
 | `openclaw.json.template` | 配置模板，包含 `${OPENCLAW_GATEWAY_PORT}` 等占位符，由 entrypoint 用 `envsubst` 替换生成 `openclaw.json` |
+| `build-and-push.sh` | 一键构建推送脚本。支持 `--version` 指定版本、`--build-only` 仅构建、npm 版本校验、自动打 tag |
+| `check-update.sh` | 版本检测脚本。查询 npm 最新稳定版（过滤 beta/rc），支持 `--update` 自动更新 Dockerfile |
 
 ### 关键环境变量
 

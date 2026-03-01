@@ -1,0 +1,89 @@
+name: 检测 OpenClaw 版本更新
+
+on:
+  schedule:
+    # 每天 UTC 08:00（北京时间 16:00）
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 读取当前版本
+        id: current
+        run: |
+          VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' nodeskclaw-artifacts/openclaw-image/Dockerfile)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "当前版本: ${VERSION}"
+
+      - name: 查询 npm 最新稳定版
+        id: latest
+        run: |
+          LATEST=$(npm view openclaw versions --json 2>/dev/null | node -e "
+            const versions = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const stable = versions.filter(v => /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(v));
+            if (stable.length > 0) console.log(stable[stable.length - 1]);
+          ")
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "最新稳定版: ${LATEST}"
+
+      - name: 对比版本
+        id: compare
+        run: |
+          if [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "已是最新版本，无需更新"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "发现新版本: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: 更新 Dockerfile
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          sed -i "s/ARG OPENCLAW_VERSION=${CURRENT}/ARG OPENCLAW_VERSION=${LATEST}/" nodeskclaw-artifacts/openclaw-image/Dockerfile
+          sed -i "s/ARG IMAGE_VERSION=v${CURRENT}/ARG IMAGE_VERSION=v${LATEST}/" nodeskclaw-artifacts/openclaw-image/Dockerfile
+          echo "Dockerfile 已更新"
+          grep -E 'ARG (OPENCLAW_VERSION|IMAGE_VERSION)=' nodeskclaw-artifacts/openclaw-image/Dockerfile
+
+      - name: 创建 Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/openclaw-${{ steps.latest.outputs.version }}
+          commit-message: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
+          title: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
+          body: |
+            ## OpenClaw 版本更新
+
+            | 项目 | 值 |
+            |------|-----|
+            | 当前版本 | `${{ steps.current.outputs.version }}` |
+            | 最新版本 | `${{ steps.latest.outputs.version }}` |
+            | Release | https://github.com/openclaw/openclaw/releases/tag/v${{ steps.latest.outputs.version }} |
+
+            ---
+
+            **此 PR 由 GitHub Actions 自动创建。**
+
+            合并后请手动触发 [镜像构建工作流](../actions/workflows/build-openclaw-image.yml) 来构建并推送新镜像。
+          labels: |
+            dependencies
+            openclaw
