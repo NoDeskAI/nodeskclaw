@@ -58,9 +58,15 @@
 
 #### 2.1.2 机器人角色（ClaudeMon）
 
-源文件：`entities/ClaudeMon.ts`
+源文件：`entities/ClaudeMon.ts`（完整场景版）、`components/hex3d/ClaudeMon.ts`（六角格工作区版，已实现）
 
 赛博金属机器人风格，默认角色。由 17+ 个部件组成，具有更丰富的细节和动画。
+
+六角格工作区版已在 `nodeskclaw-portal/src/components/hex3d/ClaudeMon.ts` 实现：
+- 按本节规格用 Three.js 基础几何体拼装完整机器人（头部/身体/手臂/附属共 20+ 部件）
+- 几何体模块级共享，材质按状态颜色创建（accent 材质随 Agent 状态动态切换）
+- 整体缩放 0.65x，站在扁平六棱柱底座（高度 0.08）上
+- 支持 5 种动画状态：idle（浮动）、working（锤击）、thinking（托腮+思考气泡）、error（抖动）、disconnected（静止灰色）
 
 **头部组件**
 
