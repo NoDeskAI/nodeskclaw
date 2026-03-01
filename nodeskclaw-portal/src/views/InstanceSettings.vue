@@ -6,7 +6,7 @@ import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import api from '@/services/api'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
-const instanceOrgId = inject<Ref<string | null>>('instanceOrgId')!
+const instanceOrgId = inject<Ref<string | null>>('instanceOrgId')!  // kept for model catalog requests
 
 const loading = ref(true)
 const saving = ref(false)
@@ -73,26 +73,16 @@ async function loadAll() {
   nfsError.value = ''
   successMsg.value = ''
 
-  const orgId = instanceOrgId.value
-
   try {
-    const requests: Promise<any>[] = [
-      api.get(`/instances/${instanceId.value}/openclaw-providers`),
+    const [configsResult, keysResult] = await Promise.allSettled([
+      api.get(`/instances/${instanceId.value}/llm-configs`),
       api.get('/users/me/llm-keys'),
-    ]
-    if (orgId) {
-      requests.push(api.get(`/users/me/llm-configs?org_id=${orgId}&instance_id=${instanceId.value}`))
-    }
+    ])
 
-    const results = await Promise.allSettled(requests)
-
-    // NFS providers
-    const nfsResult = results[0]
-    if (nfsResult.status === 'fulfilled') {
-      const data = nfsResult.value.data.data
-      dataSource.value = data.data_source ?? ''
+    if (configsResult.status === 'fulfilled') {
+      dataSource.value = 'pod'
     } else {
-      const e = nfsResult.reason
+      const e = configsResult.reason
       const status = e?.response?.status
       const msg = e?.response?.data?.message || ''
       if (status === 503 && (msg.includes('NFS') || msg.includes('nfs') || msg.includes('mount') || msg.includes('挂载'))) {
@@ -100,45 +90,24 @@ async function loadAll() {
       }
     }
 
-    // Personal keys
-    if (results[1].status === 'fulfilled') {
-      personalKeys.value = results[1].value.data.data ?? []
+    if (keysResult.status === 'fulfilled') {
+      personalKeys.value = keysResult.value.data.data ?? []
     }
 
-    // User LLM configs (DB)
-    const dbConfigs: { provider: string; key_source: string }[] = []
-    if (results[2]?.status === 'fulfilled') {
-      dbConfigs.push(...(results[2].value.data.data ?? []))
-    }
+    const podConfigs: { provider: string; key_source: string; selected_models?: any[]; personal_key_masked?: string }[] =
+      configsResult.status === 'fulfilled' ? (configsResult.value.data.data ?? []) : []
 
-    // Build editable provider configs from DB configs
     const configs: ProviderConfig[] = []
-    for (const c of dbConfigs) {
+    for (const c of podConfigs) {
       const pk = personalKeyForProvider(c.provider)
       configs.push({
         provider: c.provider,
         keySource: (c.key_source === 'org' || c.key_source === 'personal') ? c.key_source : 'org',
         personalKeyNew: '',
-        personalKeyMasked: pk?.api_key_masked ?? '',
+        personalKeyMasked: pk?.api_key_masked ?? c.personal_key_masked ?? '',
         hasExistingPersonalKey: !!pk,
-        selectedModel: ((c as any).selected_models ?? [])[0] ?? null,
+        selectedModel: (c.selected_models ?? [])[0] ?? null,
       })
-    }
-
-    // If DB has no configs but NFS has providers, populate from NFS
-    if (configs.length === 0 && nfsResult.status === 'fulfilled') {
-      const nfsProviders = nfsResult.value.data.data?.providers ?? []
-      for (const np of nfsProviders) {
-        const pk = personalKeyForProvider(np.provider)
-        configs.push({
-          provider: np.provider,
-          keySource: np.key_source === 'org' ? 'org' : 'personal',
-          personalKeyNew: '',
-          personalKeyMasked: pk?.api_key_masked ?? np.api_key_masked ?? '',
-          hasExistingPersonalKey: !!pk,
-          selectedModel: null,
-        })
-      }
     }
 
     providerConfigs.value = configs
@@ -225,12 +194,6 @@ async function handleSave() {
     return
   }
 
-  const orgId = instanceOrgId.value
-  if (!orgId) {
-    error.value = '实例未关联组织，无法保存配置'
-    return
-  }
-
   saving.value = true
   error.value = ''
   successMsg.value = ''
@@ -251,10 +214,8 @@ async function handleSave() {
       }
     }
 
-    // 2. Save LLM configs
-    await api.put('/users/me/llm-configs', {
-      org_id: orgId,
-      instance_id: instanceId.value,
+    // 2. Write configs directly to Pod file
+    await api.put(`/instances/${instanceId.value}/llm-configs`, {
       configs: providerConfigs.value.map(c => ({
         provider: c.provider,
         key_source: c.keySource,
@@ -262,7 +223,7 @@ async function handleSave() {
       })),
     })
 
-    // 3. Restart OpenClaw (needs longer timeout: waits for pod ready)
+    // 3. Restart OpenClaw
     restarting.value = true
     const res = await api.post(`/instances/${instanceId.value}/restart-openclaw`, null, { timeout: 120000 })
     const result = res.data.data
@@ -278,7 +239,6 @@ async function handleSave() {
     }
 
     dirty.value = false
-    // Refresh personal keys list
     const pkRes = await api.get('/users/me/llm-keys')
     personalKeys.value = pkRes.data.data ?? []
   } catch (e: any) {
@@ -289,7 +249,7 @@ async function handleSave() {
   }
 }
 
-watch(instanceOrgId, (val) => {
+watch(() => instanceId.value, (val) => {
   if (val) loadAll()
 }, { immediate: true })
 </script>

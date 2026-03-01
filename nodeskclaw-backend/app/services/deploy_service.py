@@ -122,8 +122,8 @@ async def cancel_deploy(deploy_id: str) -> str:
         "deploy_progress",
         DeployProgress(
             deploy_id=deploy_id,
-            step=len(DEPLOY_STEPS),
-            total_steps=len(DEPLOY_STEPS),
+            step=len(DEPLOY_STEPS_BASE),
+            total_steps=len(DEPLOY_STEPS_BASE),
             current_step="已取消",
             status="failed",
             message=f"部署已取消{'，命名空间已清理' if ns_cleaned else ''}",
@@ -134,7 +134,7 @@ async def cancel_deploy(deploy_id: str) -> str:
     return "已取消" + ("，命名空间已清理" if ns_cleaned else "")
 
 
-DEPLOY_STEPS = [
+DEPLOY_STEPS_BASE = [
     "预检",
     "创建命名空间",
     "创建 ConfigMap",
@@ -211,6 +211,7 @@ class _DeployContext:
     ingress_class: str = "nginx"
     proxy_endpoint: str | None = None
     org_id: str | None = None
+    has_llm_configs: bool = False
 
 
 async def deploy_instance(
@@ -370,6 +371,7 @@ async def deploy_instance(
         ingress_class=cluster.ingress_class,
         proxy_endpoint=cluster.proxy_endpoint,
         org_id=org_id,
+        has_llm_configs=bool(req.llm_configs),
     )
 
 
@@ -381,22 +383,27 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     from app.core.deps import async_session_factory
     from app.services.config_service import get_config
 
-    total = len(DEPLOY_STEPS)
+    steps = list(DEPLOY_STEPS_BASE)
+    if ctx.has_llm_configs:
+        steps.append("应用实例配置")
+    total = len(steps)
 
     try:
-        await _execute_deploy_inner(ctx, async_session_factory, get_config, total)
+        await _execute_deploy_inner(ctx, async_session_factory, get_config, total, steps)
     finally:
         _unregister_deploy_task(ctx.record_id)
 
 
-async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -> None:
+async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, steps) -> None:
     """实际的部署管道逻辑（拆出来方便 finally 注销任务）。"""
+
+    first_event = True
 
     def _publish(
         step: int, step_name: str, status: str = "in_progress",
         message: str | None = None, logs: list[str] | None = None,
     ):
-        # 进行中的步骤不应该达到 100%，留给 success 状态
+        nonlocal first_event
         if status in ("success", "failed"):
             pct = round(step / total * 100, 1)
         else:
@@ -412,16 +419,17 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 message=message,
                 percent=pct,
                 logs=logs,
+                step_names=steps if first_event else None,
             ).model_dump(),
         )
+        first_event = False
 
-    # 等待前端 SSE 订阅建立连接（给前端足够时间发起 /progress SSE 请求）
     await asyncio.sleep(0.3)
 
     async with async_session_factory() as db:
         try:
             # Step 1: 预检（同步阶段已完成，标记通过）
-            _publish(1, DEPLOY_STEPS[0])
+            _publish(1, steps[0])
 
             # 获取 K8s 客户端
             api_client = await k8s_manager.get_or_create(ctx.cluster_id, ctx.kubeconfig_encrypted)
@@ -430,7 +438,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             labels = build_labels(ctx.name, ctx.instance_id, ctx.image_version)
 
             # Step 2: 创建命名空间 + ResourceQuota
-            _publish(2, DEPLOY_STEPS[1])
+            _publish(2, steps[1])
             ns_labels = {"nodeskclaw.io/org-id": ctx.org_id} if ctx.org_id else None
             await k8s.ensure_namespace(ctx.namespace, extra_labels=ns_labels)
             rq = build_resource_quota(
@@ -441,20 +449,20 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             await k8s.create_or_skip(k8s.core.create_namespaced_resource_quota, ctx.namespace, rq)
 
             # Step 3: 创建 ConfigMap
-            _publish(3, DEPLOY_STEPS[2])
+            _publish(3, steps[2])
             if ctx.env_vars:
                 cm = build_configmap(f"{ctx.name}-config", ctx.namespace, ctx.env_vars, labels)
                 await k8s.create_or_skip(k8s.core.create_namespaced_config_map, ctx.namespace, cm)
 
             # Step 4: 创建 PVC（使用实例指定的 StorageClass）
-            _publish(4, DEPLOY_STEPS[3])
+            _publish(4, steps[3])
             pvc_name = f"{ctx.name}-root-data"
             logger.info("使用 StorageClass: %s, 存储大小: %s", ctx.storage_class, ctx.storage_size)
             pvc = build_pvc(pvc_name, ctx.namespace, ctx.storage_size, ctx.storage_class, labels)
             await k8s.create_or_skip(k8s.core.create_namespaced_persistent_volume_claim, ctx.namespace, pvc)
 
             # Step 5: 创建 Deployment（含镜像拉取凭据）
-            _publish(5, DEPLOY_STEPS[4])
+            _publish(5, steps[4])
             image_registry = await get_config("image_registry", db) or "openclaw"
             image = f"{image_registry}:{ctx.image_version}"
 
@@ -496,12 +504,12 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             )
 
             # Step 6: 创建 Service（固定 ClusterIP）
-            _publish(6, DEPLOY_STEPS[5])
+            _publish(6, steps[5])
             svc = build_service(ctx.name, ctx.namespace, labels)
             await k8s.create_or_skip(k8s.core.create_namespaced_service, ctx.namespace, svc)
 
             # Step 7: 创建 Ingress（自动子域名路由）
-            _publish(7, DEPLOY_STEPS[6])
+            _publish(7, steps[6])
             ingress_base_domain = await get_config("ingress_base_domain", db)
             subdomain_suffix = await get_config("ingress_subdomain_suffix", db)
             tls_secret_name = await get_config("tls_secret_name", db)
@@ -549,7 +557,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 logger.warning("未配置 ingress_base_domain，跳过 Ingress 创建")
 
             # Step 8: 配置网络策略（多租户隔离）
-            _publish(8, DEPLOY_STEPS[7])
+            _publish(8, steps[7])
             peer_namespaces = []
             if ctx.advanced_config and ctx.advanced_config.get("network", {}).get("peers"):
                 peer_ids = ctx.advanced_config["network"]["peers"]
@@ -574,7 +582,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                 )
 
             # Step 9: 等待 Deployment 就绪（最多 300 秒）
-            _publish(9, DEPLOY_STEPS[8], logs=["开始等待 Pod 就绪..."])
+            _publish(9, steps[8], logs=["开始等待 Pod 就绪..."])
             dep_status: dict = {"ready_replicas": 0, "available_replicas": 0}
             deployment_ready = False
             label_selector = f"app.kubernetes.io/name={ctx.name}"
@@ -633,7 +641,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
                     diag_lines.append(f"已等待 {elapsed}s / 300s")
                     # 同时写入后端日志文件，方便事后排查
                     logger.info("[%s] 等待就绪诊断:\n  %s", ctx.name, "\n  ".join(diag_lines))
-                    _publish(9, DEPLOY_STEPS[8], logs=diag_lines)
+                    _publish(9, steps[8], logs=diag_lines)
 
                 await asyncio.sleep(2)
 
@@ -643,25 +651,31 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total) -
             instance = inst_result.scalar_one()
 
             if deployment_ready:
-                # 标记成功
                 record.status = DeployStatus.success
                 record.finished_at = datetime.now(timezone.utc)
                 instance.status = InstanceStatus.running
                 instance.available_replicas = dep_status.get("available_replicas", 0)
                 await db.commit()
 
-                # 注入 gateway 配置 + LLM provider 配置到 openclaw.json
                 from app.services.llm_config_service import (
                     ensure_openclaw_gateway_config,
                     sync_openclaw_llm_config,
                 )
                 llm_sync_warning = ""
-                await ensure_openclaw_gateway_config(instance, db)
-                try:
-                    await sync_openclaw_llm_config(instance, db)
-                except Exception as e:
-                    logger.warning("部署后同步 LLM 配置失败（非致命）: %s", e)
-                    llm_sync_warning = "（LLM 配置注入失败，请在管理后台手动同步）"
+
+                if ctx.has_llm_configs:
+                    config_step = len(DEPLOY_STEPS_BASE) + 1
+                    _publish(config_step, "应用实例配置")
+                    try:
+                        await ensure_openclaw_gateway_config(instance, db)
+                        await sync_openclaw_llm_config(instance, db)
+                        _publish(config_step, "应用实例配置", status="success")
+                    except Exception as e:
+                        logger.warning("部署后应用实例配置失败（非致命）: %s", e)
+                        llm_sync_warning = "（LLM 配置注入失败，请在管理后台手动同步）"
+                        _publish(config_step, "应用实例配置", status="failed", message=str(e))
+                else:
+                    await ensure_openclaw_gateway_config(instance, db)
 
                 success_msg = f"部署成功{llm_sync_warning}"
                 _publish(total, "完成", status="success", message=success_msg)

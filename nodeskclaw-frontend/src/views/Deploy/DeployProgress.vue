@@ -17,8 +17,7 @@ const router = useRouter()
 const deployId = route.params.deployId as string
 const instanceName = (route.query.name as string) || ''
 
-// 后端 DEPLOY_STEPS 的 9 个步骤名称（硬编码，与后端保持一致）
-const STEP_NAMES = [
+const FALLBACK_STEP_NAMES = [
   '预检',
   '创建命名空间',
   '创建 ConfigMap',
@@ -36,27 +35,37 @@ interface StepItem {
   name: string
   status: StepStatus
   message?: string
-  logs: string[]       // 该步骤的日志行
-  expanded: boolean    // 是否展开日志
+  logs: string[]
+  expanded: boolean
 }
 
-const steps = ref<StepItem[]>(
-  STEP_NAMES.map((name) => ({ name, status: 'pending', logs: [], expanded: false })),
-)
+const steps = ref<StepItem[]>([])
+const stepsInitialized = ref(false)
 const finalStatus = ref<'in_progress' | 'success' | 'failed'>('in_progress')
 const finalMessage = ref('')
 const percent = ref(0)
 
-// SSE 控制
 let abortCtrl: AbortController | null = null
 let sseTimeout: ReturnType<typeof setTimeout> | null = null
+
+function initSteps(names: string[]) {
+  steps.value = names.map((name) => ({ name, status: 'pending', logs: [], expanded: false }))
+  stepsInitialized.value = true
+}
+
+function ensureStepExists(stepIndex: number, stepName: string) {
+  while (steps.value.length < stepIndex) {
+    steps.value.push({ name: stepName, status: 'pending', logs: [], expanded: false })
+  }
+}
 
 function toggleLogs(idx: number) {
   steps.value[idx].expanded = !steps.value[idx].expanded
 }
 
 function updateSteps(stepIndex: number, status: string, message?: string, logs?: string[]) {
-  // 已完成的步骤（收起日志）
+  ensureStepExists(stepIndex, '')
+
   for (let i = 0; i < stepIndex - 1 && i < steps.value.length; i++) {
     if (steps.value[i].status !== 'completed') {
       steps.value[i].status = 'completed'
@@ -65,7 +74,6 @@ function updateSteps(stepIndex: number, status: string, message?: string, logs?:
   }
 
   if (status === 'success') {
-    // 全部完成
     for (const s of steps.value) {
       s.status = 'completed'
       s.expanded = false
@@ -73,7 +81,6 @@ function updateSteps(stepIndex: number, status: string, message?: string, logs?:
     finalStatus.value = 'success'
     finalMessage.value = message || '部署成功'
   } else if (status === 'failed') {
-    // 当前步骤标记失败（展开显示日志）
     if (stepIndex - 1 >= 0 && stepIndex - 1 < steps.value.length) {
       const s = steps.value[stepIndex - 1]
       s.status = 'failed'
@@ -84,7 +91,6 @@ function updateSteps(stepIndex: number, status: string, message?: string, logs?:
     finalStatus.value = 'failed'
     finalMessage.value = message || '部署失败'
   } else {
-    // in_progress：当前步骤进行中（自动展开日志）
     if (stepIndex - 1 >= 0 && stepIndex - 1 < steps.value.length) {
       const s = steps.value[stepIndex - 1]
       s.status = 'in_progress'
@@ -98,7 +104,6 @@ function subscribeSSE() {
   const token = localStorage.getItem('token')
   abortCtrl = new AbortController()
 
-  // 6 分钟超时（后端最多等 300s + 前段步骤时间）
   sseTimeout = setTimeout(() => {
     abortCtrl?.abort()
     if (finalStatus.value === 'in_progress') {
@@ -115,6 +120,12 @@ function subscribeSSE() {
       if (ev.event === 'deploy_progress') {
         const data = JSON.parse(ev.data)
         percent.value = data.percent ?? 0
+
+        if (!stepsInitialized.value) {
+          const names: string[] = data.step_names ?? FALLBACK_STEP_NAMES
+          initSteps(names)
+        }
+
         updateSteps(data.step, data.status, data.message, data.logs)
 
         if (data.status === 'success' || data.status === 'failed') {
@@ -128,7 +139,6 @@ function subscribeSSE() {
       console.warn('SSE 连接异常，将自动重试', err)
     },
   }).catch((e) => {
-    // abort 引起的错误忽略
     if (e instanceof DOMException && e.name === 'AbortError') return
   })
 }

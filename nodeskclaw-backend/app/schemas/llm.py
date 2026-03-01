@@ -129,3 +129,22 @@ class OpenClawProviderEntry(BaseModel):
 class OpenClawConfigResponse(BaseModel):
     data_source: str
     providers: list[OpenClawProviderEntry]
+
+
+# ── Instance LLM Config (per-instance, direct Pod file) ─
+
+class InstanceLlmConfigEntry(BaseModel):
+    provider: str
+    key_source: str
+    selected_models: list[dict] | None = None
+    personal_key_masked: str | None = None
+
+
+class InstanceLlmConfigItem(BaseModel):
+    provider: str
+    key_source: str = Field(..., pattern=r"^(org|personal)$")
+    selected_models: list[dict] | None = None
+
+
+class InstanceLlmConfigUpdate(BaseModel):
+    configs: list[InstanceLlmConfigItem]

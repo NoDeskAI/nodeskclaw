@@ -19,7 +19,9 @@ from app.models.user_llm_key import UserLlmKey
 from app.schemas.common import ApiResponse
 from app.schemas.llm import (
     AvailableLlmKey,
+    InstanceLlmConfigEntry,
     InstanceLlmConfigInfo,
+    InstanceLlmConfigUpdate,
     LlmConfigUpdateResult,
     OpenClawConfigResponse,
     OrgLlmKeyCreate,
@@ -472,6 +474,58 @@ async def update_user_llm_configs(
 # ══════════════════════════════════════════════════════════
 # Instance LLM Config (read-only)
 # ══════════════════════════════════════════════════════════
+
+@router.get("/instances/{instance_id}/llm-configs", response_model=ApiResponse[list[InstanceLlmConfigEntry]])
+async def get_instance_llm_configs(
+    instance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, Instance.deleted_at.is_(None))
+    )
+    instance = result.scalar_one_or_none()
+    if instance is None:
+        raise NotFoundError("实例不存在")
+
+    from app.services.llm_config_service import read_instance_llm_configs
+    entries = await read_instance_llm_configs(instance, db, current_user.id)
+    return ApiResponse(data=[InstanceLlmConfigEntry(**e) for e in entries])
+
+
+@router.put("/instances/{instance_id}/llm-configs", response_model=ApiResponse)
+async def update_instance_llm_configs(
+    instance_id: str,
+    body: InstanceLlmConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, Instance.deleted_at.is_(None))
+    )
+    instance = result.scalar_one_or_none()
+    if instance is None:
+        raise NotFoundError("实例不存在")
+
+    if instance.status != InstanceStatus.running:
+        raise NotFoundError("实例未运行，无法写入配置")
+
+    for cfg in body.configs:
+        if cfg.key_source == "personal":
+            pk_result = await db.execute(
+                select(UserLlmKey).where(
+                    UserLlmKey.user_id == current_user.id,
+                    UserLlmKey.provider == cfg.provider,
+                    not_deleted(UserLlmKey),
+                )
+            )
+            if pk_result.scalar_one_or_none() is None:
+                raise NotFoundError(f"{cfg.provider} 的个人 Key 不存在，请先配置")
+
+    from app.services.llm_config_service import write_instance_llm_configs
+    await write_instance_llm_configs(instance, db, body.configs, current_user.id)
+    return ApiResponse(message="配置已写入")
+
 
 @router.post("/instances/{instance_id}/restart-openclaw", response_model=ApiResponse[dict])
 async def restart_openclaw(

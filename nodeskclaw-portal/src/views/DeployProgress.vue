@@ -14,19 +14,29 @@ const deployId = route.params.deployId as string
 const instanceName = (route.query.name as string) || ''
 const instanceId = (route.query.instanceId as string) || ''
 
-const PORTAL_STEPS = [
+const PORTAL_STEPS_BASE = [
   '预检查',
   '创建相关前置资源',
   '部署实例',
   '等待就绪',
 ]
 
-// 后端 9 步 → Portal 4 步的映射（后端 step 从 1 开始）
+function buildPortalSteps(backendStepNames: string[]): string[] {
+  const portal = [...PORTAL_STEPS_BASE]
+  if (backendStepNames.length > 9) {
+    for (const name of backendStepNames.slice(9)) {
+      portal.push(name)
+    }
+  }
+  return portal
+}
+
 function backendStepToPortalIndex(backendStep: number): number {
-  if (backendStep <= 1) return 0          // 预检
-  if (backendStep <= 4) return 1          // 命名空间 / ConfigMap / PVC
-  if (backendStep <= 8) return 2          // Deployment / Service / Ingress / NetworkPolicy
-  return 3                                // 等待就绪
+  if (backendStep <= 1) return 0
+  if (backendStep <= 4) return 1
+  if (backendStep <= 8) return 2
+  if (backendStep === 9) return 3
+  return 3 + (backendStep - 9)
 }
 
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
@@ -39,9 +49,8 @@ interface StepItem {
   expanded: boolean
 }
 
-const steps = ref<StepItem[]>(
-  PORTAL_STEPS.map((name) => ({ name, status: 'pending', logs: [], expanded: false })),
-)
+const steps = ref<StepItem[]>([])
+const stepsInitialized = ref(false)
 const finalStatus = ref<'in_progress' | 'success' | 'failed'>('in_progress')
 const finalMessage = ref('')
 const percent = ref(0)
@@ -49,11 +58,16 @@ const percent = ref(0)
 let abortCtrl: AbortController | null = null
 let sseTimeout: ReturnType<typeof setTimeout> | null = null
 
+function initPortalSteps(backendStepNames: string[]) {
+  const portalNames = buildPortalSteps(backendStepNames)
+  steps.value = portalNames.map((name) => ({ name, status: 'pending', logs: [], expanded: false }))
+  stepsInitialized.value = true
+}
+
 function toggleLogs(idx: number) {
   steps.value[idx].expanded = !steps.value[idx].expanded
 }
 
-// Portal 只展示关键摘要，过滤掉 K8s 内部细节（Pod 名、Node/IP、Event、Condition 等）
 function sanitizeLogs(lines: string[]): string[] {
   const result: string[] = []
   for (const line of lines) {
@@ -83,7 +97,6 @@ function sanitizeLogs(lines: string[]): string[] {
       result.push('实例状态获取中...')
       continue
     }
-    // Event / Deployment condition / 其他内部信息 → 丢弃
   }
   return result
 }
@@ -92,7 +105,7 @@ function updateSteps(backendStep: number, status: string, message?: string, logs
   const portalIdx = backendStepToPortalIndex(backendStep)
 
   for (let i = 0; i < portalIdx; i++) {
-    if (steps.value[i].status !== 'completed') {
+    if (steps.value[i] && steps.value[i].status !== 'completed') {
       steps.value[i].status = 'completed'
       steps.value[i].expanded = false
     }
@@ -121,8 +134,8 @@ function updateSteps(backendStep: number, status: string, message?: string, logs
     const s = steps.value[portalIdx]
     if (s) {
       if (s.status !== 'in_progress') s.status = 'in_progress'
-      // "等待就绪"步骤后端每 10s 推送完整快照，用替换而非追加
-      if (portalIdx === 3 && filtered.length) {
+      const waitingIdx = backendStepToPortalIndex(9)
+      if (portalIdx === waitingIdx && filtered.length) {
         s.logs = filtered
       } else if (filtered.length) {
         s.logs.push(...filtered)
@@ -152,6 +165,16 @@ function subscribeSSE() {
       if (ev.event === 'deploy_progress') {
         const data = JSON.parse(ev.data)
         percent.value = data.percent ?? 0
+
+        if (!stepsInitialized.value) {
+          const backendNames: string[] = data.step_names ?? [
+            '预检', '创建命名空间', '创建 ConfigMap', '创建 PVC',
+            '创建 Deployment', '创建 Service', '创建 Ingress（自动路由）',
+            '配置网络策略', '等待 Deployment 就绪',
+          ]
+          initPortalSteps(backendNames)
+        }
+
         updateSteps(data.step, data.status, data.message, data.logs)
 
         if (data.status === 'success' || data.status === 'failed') {

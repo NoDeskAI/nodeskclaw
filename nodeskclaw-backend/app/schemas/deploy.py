@@ -65,6 +65,7 @@ class DeployProgress(BaseModel):
     message: str | None = None
     percent: float = 0.0
     logs: list[str] | None = None  # 当前步骤的诊断日志行
+    step_names: list[str] | None = None  # 仅首次事件携带完整步骤名列表
 
 
 class DeployRecordInfo(BaseModel):

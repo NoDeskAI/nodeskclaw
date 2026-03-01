@@ -57,13 +57,16 @@ def _k8s_name(instance: Instance) -> str:
 
 
 def _build_providers_config(
-    configs: list[UserLlmConfig],
+    configs: list,
     wp_api_key: str,
     user_keys: dict[str, UserLlmKey],
     *,
     use_external_proxy: bool = False,
 ) -> dict:
     """Build the models.providers section for openclaw.json.
+
+    configs: objects with .provider, .key_source, .selected_models
+    (UserLlmConfig ORM or InstanceLlmConfigItem schema both work)
 
     org  key_source  -> proxy URL + wp_api_key
     personal key_source -> provider base URL + user's real API key
@@ -297,6 +300,139 @@ async def read_openclaw_providers(
         ))
 
     return OpenClawConfigResponse(data_source="nfs", providers=entries)
+
+
+def _from_openclaw_models(models: list[dict]) -> list[dict]:
+    """Convert OpenClaw models array back to stored format (camelCase -> snake_case)."""
+    result = []
+    for m in models:
+        item: dict = {"id": m["id"], "name": m.get("name", m["id"])}
+        if m.get("contextWindow"):
+            item["context_window"] = m["contextWindow"]
+        if m.get("maxTokens"):
+            item["max_tokens"] = m["maxTokens"]
+        result.append(item)
+    return result
+
+
+async def read_instance_llm_configs(
+    instance: Instance, db: AsyncSession, current_user_id: str,
+) -> list[dict]:
+    """Read LLM provider configs directly from Pod's openclaw.json.
+
+    Returns a list of dicts suitable for InstanceLlmConfigEntry.
+    """
+    async with remote_fs(instance, db) as fs:
+        try:
+            raw_json = await _read_config_file(fs)
+        except ValueError as e:
+            logger.warning("read_instance_llm_configs: parse error: %s", e)
+            raw_json = None
+
+    if not raw_json:
+        return []
+
+    pod_providers: dict = raw_json.get("models", {}).get("providers", {})
+    if not pod_providers:
+        return []
+
+    proxy_hosts = [
+        h for h in (
+            (settings.LLM_PROXY_INTERNAL_URL or "").rstrip("/"),
+            (settings.LLM_PROXY_URL or "").rstrip("/"),
+        ) if h
+    ]
+
+    user_keys_result = await db.execute(
+        select(UserLlmKey).where(
+            UserLlmKey.user_id == current_user_id,
+            not_deleted(UserLlmKey),
+        )
+    )
+    user_keys = {k.provider: k for k in user_keys_result.scalars().all()}
+
+    entries: list[dict] = []
+    for provider, prov_cfg in pod_providers.items():
+        base_url = prov_cfg.get("baseUrl", "")
+        is_proxy = any(h in base_url for h in proxy_hosts)
+        key_source = "org" if is_proxy else "personal"
+
+        models_raw = prov_cfg.get("models", [])
+        selected_models = _from_openclaw_models(models_raw) if models_raw else None
+
+        personal_key_masked: str | None = None
+        if key_source == "personal":
+            uk = user_keys.get(provider)
+            if uk:
+                personal_key_masked = _mask_key(uk.api_key)
+
+        entries.append({
+            "provider": provider,
+            "key_source": key_source,
+            "selected_models": selected_models,
+            "personal_key_masked": personal_key_masked,
+        })
+
+    return entries
+
+
+async def write_instance_llm_configs(
+    instance: Instance, db: AsyncSession, configs: list, current_user_id: str,
+) -> None:
+    """Write LLM provider configs directly to Pod's openclaw.json.
+
+    configs: list of InstanceLlmConfigItem (or anything with .provider, .key_source, .selected_models)
+    """
+    wp_api_key = instance.wp_api_key or ""
+
+    personal_providers = [c.provider for c in configs if c.key_source == "personal"]
+    user_keys: dict[str, UserLlmKey] = {}
+    if personal_providers:
+        uk_result = await db.execute(
+            select(UserLlmKey).where(
+                UserLlmKey.user_id == current_user_id,
+                UserLlmKey.provider.in_(personal_providers),
+                not_deleted(UserLlmKey),
+            )
+        )
+        user_keys = {k.provider: k for k in uk_result.scalars().all()}
+
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id)
+    )
+    cluster = cluster_result.scalar_one_or_none()
+    use_external = bool(cluster and cluster.proxy_endpoint)
+
+    providers = _build_providers_config(
+        configs, wp_api_key, user_keys, use_external_proxy=use_external,
+    )
+
+    async with remote_fs(instance, db) as fs:
+        try:
+            existing_json = await _read_config_file(fs)
+        except ValueError as e:
+            logger.error("openclaw.json parse error, aborting write: %s", e)
+            raise AppException(
+                code=50001,
+                message=f"openclaw.json parse error: {e}",
+                status_code=500,
+            ) from e
+
+        if existing_json is None:
+            existing_json = {}
+
+        if "models" not in existing_json:
+            existing_json["models"] = {}
+        existing_json["models"]["providers"] = providers
+
+        _ensure_gateway_config(existing_json, instance)
+        _set_default_agent_model(existing_json, providers)
+        await _write_config_file(fs, existing_json)
+
+    logger.info(
+        "write_instance_llm_configs: instance=%s providers=%s",
+        instance.name, list(providers.keys()),
+    )
 
 
 async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None:
@@ -644,13 +780,11 @@ async def deploy_learning_channel_plugin(
 
 
 async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
-    """Update openclaw.json and restart OpenClaw.
+    """Restart OpenClaw (config is assumed to be already written by the caller).
 
     Strategy: try graceful SIGTERM first; if exec fails (pod crashed / not ready),
     fall back to Deployment rolling restart.
     """
-    await sync_openclaw_llm_config(instance, db)
-
     k8s = await _get_k8s_client(instance, db)
     if k8s is None:
         return {"status": "error", "message": "集群不可用"}
