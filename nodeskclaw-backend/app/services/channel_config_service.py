@@ -20,22 +20,6 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_CHANNEL_IDS = {"nodeskclaw", "learning"}
 
-NON_CHANNEL_EXTENSIONS = {
-    "copilot-proxy",
-    "device-pair",
-    "diagnostics-otel",
-    "google-gemini-cli-auth",
-    "llm-task",
-    "lobster",
-    "memory-core",
-    "memory-lancedb",
-    "minimax-portal-auth",
-    "open-prose",
-    "phone-control",
-    "qwen-portal-auth",
-    "shared",
-    "talk-voice",
-}
 
 CHANNEL_LABELS: dict[str, str] = {
     "feishu": "Feishu / 飞书",
@@ -272,10 +256,10 @@ _DISCOVER_SCRIPT = textwrap.dedent("""\
         } catch(e) {}
       }
     }
-    // Bundled extensions
+    // Bundled extensions (OpenClaw is globally installed in the Pod)
     try {
-      const pkgPath = require.resolve('openclaw/package.json');
-      scan(path.join(path.dirname(pkgPath), 'extensions'), 'bundled');
+      const globalRoot = require('child_process').execSync('npm root -g').toString().trim();
+      scan(path.join(globalRoot, 'openclaw', 'extensions'), 'bundled');
     } catch(e) {}
     // Workspace extensions
     scan('/root/.openclaw/extensions', 'workspace');
