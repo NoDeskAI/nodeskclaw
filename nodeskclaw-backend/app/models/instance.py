@@ -112,3 +112,4 @@ class Instance(BaseModel):
     organization = relationship("Organization", back_populates="instances")
     deploy_records = relationship("DeployRecord", back_populates="instance", cascade="save-update, merge")
     workspace = relationship("Workspace", foreign_keys=[workspace_id])
+    members = relationship("InstanceMember", back_populates="instance")

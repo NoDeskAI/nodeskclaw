@@ -20,6 +20,20 @@ interface InstanceInfo {
   created_by: string
   created_at: string
   updated_at: string
+  my_role: string | null
+}
+
+const roleLabels: Record<string, string> = {
+  admin: 'instanceMembers.roleAdmin',
+  editor: 'instanceMembers.roleEditor',
+  user: 'instanceMembers.roleUser',
+  viewer: 'instanceMembers.roleViewer',
+}
+
+function getRoleLabel(role: string | null): string {
+  if (!role) return '-'
+  const key = roleLabels[role]
+  return key ? t(key) : role
 }
 
 const router = useRouter()
@@ -157,6 +171,7 @@ onMounted(fetchInstances)
           <tr class="border-b border-border bg-card/60">
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableName') }}</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableStatus') }}</th>
+            <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableRole') }}</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableImageVersion') }}</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableNamespace') }}</th>
             <th class="text-left px-4 py-3 font-medium text-muted-foreground">{{ t('instanceList.tableCreatedAt') }}</th>
@@ -184,6 +199,7 @@ onMounted(fetchInstances)
                 </span>
               </span>
             </td>
+            <td class="px-4 py-3 text-muted-foreground text-xs">{{ getRoleLabel(inst.my_role) }}</td>
             <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ inst.image_version }}</td>
             <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ inst.namespace }}</td>
             <td class="px-4 py-3 text-muted-foreground">{{ formatTime(inst.created_at) }}</td>

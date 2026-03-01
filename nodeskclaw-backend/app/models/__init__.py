@@ -17,6 +17,7 @@ from app.models.gene import (  # noqa: F401
 )
 from app.models.instance import Instance  # noqa: F401
 from app.models.instance_mcp_server import InstanceMcpServer  # noqa: F401
+from app.models.instance_member import InstanceMember  # noqa: F401
 from app.models.llm_usage_log import LlmUsageLog  # noqa: F401
 from app.models.org_llm_key import OrgLlmKey  # noqa: F401
 from app.models.oauth_connection import UserOAuthConnection  # noqa: F401

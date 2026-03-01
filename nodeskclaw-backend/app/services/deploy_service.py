@@ -296,6 +296,12 @@ async def deploy_instance(
     await db.commit()
     await db.refresh(instance)
 
+    from app.models.instance_member import InstanceMember, InstanceRole
+    db.add(InstanceMember(
+        instance_id=instance.id, user_id=user.id, role=InstanceRole.admin,
+    ))
+    await db.commit()
+
     if req.llm_configs:
         from app.models.base import not_deleted
         from app.models.user_llm_config import UserLlmConfig

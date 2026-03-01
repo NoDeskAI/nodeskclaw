@@ -999,6 +999,18 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 agent_theme_color 列")
 
+    # ── 迁移 24: 为已有实例补建 InstanceMember 记录 ──
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO instance_members (id, instance_id, user_id, role, created_at, updated_at)
+            SELECT gen_random_uuid()::text, id, created_by, 'admin', now(), now()
+            FROM instances
+            WHERE deleted_at IS NULL AND created_by IS NOT NULL
+            AND id NOT IN (SELECT instance_id FROM instance_members WHERE deleted_at IS NULL)
+        """))
+        affected = conn.info.get("rowcount", 0)
+        logger.info("迁移 24：为已有实例补建 InstanceMember 记录，影响 %s 行", affected)
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

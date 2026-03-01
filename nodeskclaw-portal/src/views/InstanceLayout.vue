@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Circle, Loader2, LayoutDashboard, Brain, Dna, History, Wrench, Radio } from 'lucide-vue-next'
+import { ArrowLeft, Circle, Loader2, LayoutDashboard, Brain, Dna, History, Wrench, Radio, Users } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
@@ -15,10 +15,12 @@ interface InstanceBasic {
   name: string
   status: string
   org_id: string | null
+  my_role: string | null
 }
 
 const instance = ref<InstanceBasic | null>(null)
 const loading = ref(true)
+const myInstanceRole = computed(() => instance.value?.my_role ?? null)
 
 const statusColors: Record<string, string> = {
   running: 'text-green-400',
@@ -51,17 +53,24 @@ provide('instanceId', instanceId)
 provide('instanceOrgId', instanceOrgId)
 provide('instanceBasic', instance)
 provide('refreshInstanceBasic', fetchBasic)
+provide('myInstanceRole', myInstanceRole)
 
 onMounted(fetchBasic)
 
-const navItems = computed(() => [
-  { name: 'InstanceDetail', label: t('common.overview'), icon: LayoutDashboard },
-  { name: 'InstanceGenes', label: t('common.genes'), icon: Dna },
-  { name: 'EvolutionLog', label: t('common.evolutionLog'), icon: History },
-  { name: 'InstanceMcp', label: t('common.tools'), icon: Wrench },
-  { name: 'InstanceChannels', label: t('common.channels'), icon: Radio },
-  { name: 'InstanceSettings', label: t('common.modelConfig'), icon: Brain },
-])
+const navItems = computed(() => {
+  const items = [
+    { name: 'InstanceDetail', label: t('common.overview'), icon: LayoutDashboard },
+    { name: 'InstanceGenes', label: t('common.genes'), icon: Dna },
+    { name: 'EvolutionLog', label: t('common.evolutionLog'), icon: History },
+    { name: 'InstanceMcp', label: t('common.tools'), icon: Wrench },
+    { name: 'InstanceChannels', label: t('common.channels'), icon: Radio },
+    { name: 'InstanceSettings', label: t('common.modelConfig'), icon: Brain },
+  ]
+  if (myInstanceRole.value === 'admin') {
+    items.push({ name: 'InstanceMembers', label: t('common.members'), icon: Users })
+  }
+  return items
+})
 </script>
 
 <template>

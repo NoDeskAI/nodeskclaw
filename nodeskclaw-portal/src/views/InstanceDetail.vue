@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import api from '@/services/api'
@@ -10,6 +10,10 @@ const toast = useToast()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
 const instanceBasic = inject<Ref<{ name: string } | null>>('instanceBasic')!
 const refreshInstanceBasic = inject<() => Promise<void>>('refreshInstanceBasic')!
+const myInstanceRole = inject<Ref<string | null>>('myInstanceRole', ref(null))
+const ROLE_LEVEL: Record<string, number> = { viewer: 10, user: 20, editor: 30, admin: 40 }
+const canEdit = computed(() => (ROLE_LEVEL[myInstanceRole.value ?? ''] ?? 0) >= ROLE_LEVEL.editor)
+const canAdmin = computed(() => (ROLE_LEVEL[myInstanceRole.value ?? ''] ?? 0) >= ROLE_LEVEL.admin)
 
 interface InstanceDetail {
   id: string
@@ -265,6 +269,7 @@ async function handleDelete() {
           刷新
         </button>
         <button
+          v-if="canEdit"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="restarting"
           @click="showRestartDialog = true"
@@ -273,6 +278,7 @@ async function handleDelete() {
           {{ restarting ? '重启中...' : '重启实例' }}
         </button>
         <button
+          v-if="canAdmin"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="deleting"
           @click="showDeleteDialog = true"

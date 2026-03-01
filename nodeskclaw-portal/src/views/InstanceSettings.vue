@@ -6,7 +6,10 @@ import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import api from '@/services/api'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
-const instanceOrgId = inject<Ref<string | null>>('instanceOrgId')!  // kept for model catalog requests
+const instanceOrgId = inject<Ref<string | null>>('instanceOrgId')!
+const myInstanceRole = inject<Ref<string | null>>('myInstanceRole', ref(null))
+const ROLE_LEVEL: Record<string, number> = { viewer: 10, user: 20, editor: 30, admin: 40 }
+const canEdit = computed(() => (ROLE_LEVEL[myInstanceRole.value ?? ''] ?? 0) >= ROLE_LEVEL.editor)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -280,7 +283,7 @@ watch(() => instanceId.value, (val) => {
             刷新
           </button>
           <button
-            v-if="providerConfigs.length > 0"
+            v-if="providerConfigs.length > 0 && canEdit"
             :disabled="saving || restarting || !canSave"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors"
             :class="canSave

@@ -25,6 +25,7 @@ class InstanceInfo(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+    my_role: str | None = None
 
     model_config = {"from_attributes": True}
 
