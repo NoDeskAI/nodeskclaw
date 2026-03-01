@@ -70,6 +70,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'genes', name: 'InstanceGenes', component: () => import('@/views/InstanceGenes.vue') },
       { path: 'evolution', name: 'EvolutionLog', component: () => import('@/views/EvolutionLog.vue') },
       { path: 'mcp', name: 'InstanceMcp', component: () => import('@/views/InstanceMcp.vue') },
+      { path: 'channels', name: 'InstanceChannels', component: () => import('@/views/InstanceChannels.vue') },
       { path: 'settings', name: 'InstanceSettings', component: () => import('@/views/InstanceSettings.vue') },
     ],
   },

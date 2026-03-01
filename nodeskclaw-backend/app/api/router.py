@@ -19,6 +19,7 @@ from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
 from app.api.storage import router as storage_router
 from app.api.corridors import router as corridor_router
+from app.api.channel_configs import router as channel_config_router
 from app.api.mcp import router as mcp_router
 from app.api.trust import router as trust_router
 from app.api.webhooks import router as webhook_router
@@ -45,6 +46,7 @@ api_router.include_router(deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
 api_router.include_router(instance_read_router, prefix="/instances", tags=["实例"])
 api_router.include_router(instance_write_router, prefix="/instances", tags=["实例"])
+api_router.include_router(channel_config_router, prefix="/instances", tags=["Channel 配置"])
 api_router.include_router(mcp_router, prefix="/instances", tags=["MCP"])
 api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
@@ -69,6 +71,7 @@ admin_router.include_router(workspace_router, prefix="/workspaces", tags=["Admin
 admin_router.include_router(corridor_router, prefix="/workspaces", tags=["Admin - 过道系统"])
 admin_router.include_router(trust_router, prefix="/workspaces", tags=["Admin - 渐进式信任"])
 admin_router.include_router(template_router, prefix="/workspaces", tags=["Admin - 工作区模板"])
+admin_router.include_router(channel_config_router, prefix="/instances", tags=["Admin - Channel 配置"])
 admin_router.include_router(mcp_router, prefix="/instances", tags=["Admin - MCP"])
 
 # member 级别（只读查看）
