@@ -18,7 +18,7 @@ const sensorGeo = new THREE.BoxGeometry(0.04, 0.10, 0.06)
 const antennaRodGeo = new THREE.CylinderGeometry(0.012, 0.015, 0.08, 8)
 const antennaTipGeo = new THREE.SphereGeometry(0.025, 8, 8)
 
-const torsoGeo = new THREE.SphereGeometry(0.22, 16, 16)
+const torsoGeo = new THREE.BoxGeometry(0.34, 0.28, 0.24)
 const chestPanelGeo = new THREE.PlaneGeometry(0.14, 0.10)
 const chestLightGeo = new THREE.CircleGeometry(0.025, 16)
 const glowLineGeo = new THREE.PlaneGeometry(0.008, 0.16)
@@ -27,7 +27,7 @@ const shoulderGeo = new THREE.SphereGeometry(0.04, 8, 8)
 const armSegGeo = new THREE.CylinderGeometry(0.028, 0.032, 0.12, 8)
 const handGeo = new THREE.SphereGeometry(0.038, 8, 8)
 
-const hoverRingGeo = new THREE.RingGeometry(0.14, 0.18, 24)
+const hoverRingGeo = new THREE.RingGeometry(0.12, 0.16, 24)
 const statusRingGeo = new THREE.RingGeometry(0.28, 0.32, 32)
 
 const thoughtGeos = [
@@ -42,6 +42,11 @@ const phoneBaseGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.018, 12)
 const phoneCradleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.012, 8)
 const phoneHandsetBarGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.055, 8)
 const phoneEarpieceGeo = new THREE.SphereGeometry(0.02, 8, 6)
+
+// ---- Phone Desk Geometries ----
+
+const phoneDeskGeo = new THREE.BoxGeometry(0.14, 0.04, 0.10)
+const phoneLegGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.04, 6)
 
 // ---- Shared Structural Materials (brighter silver-blue palette) ----
 
@@ -153,7 +158,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   // ---- Head Group (rounded box monitor) ----
   const headGroup = new THREE.Group()
-  headGroup.position.y = 0.62
+  headGroup.position.y = 0.54
 
   const headShell = new THREE.Mesh(headGeo, bodyMainMat)
   headGroup.add(headShell)
@@ -204,34 +209,33 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   mainGroup.add(headGroup)
 
-  // ---- Torso (egg/capsule body) ----
+  // ---- Torso (box body matching head style) ----
   const torso = new THREE.Mesh(torsoGeo, bodyMainMat)
-  torso.position.y = 0.36
-  torso.scale.set(1, 1.3, 0.9)
+  torso.position.y = 0.34
   mainGroup.add(torso)
 
   const chestPanel = new THREE.Mesh(chestPanelGeo, chestPanelMat)
-  chestPanel.position.set(0, 0.38, 0.195)
+  chestPanel.position.set(0, 0.36, 0.121)
   mainGroup.add(chestPanel)
 
   const chestLight = new THREE.Mesh(chestLightGeo, chestLightMat)
-  chestLight.position.set(0, 0.36, 0.198)
+  chestLight.position.set(0, 0.34, 0.123)
   mainGroup.add(chestLight)
 
   // ---- Glow Lines (side accents) ----
   const glowL = new THREE.Mesh(glowLineGeo, glowLineMat1)
-  glowL.position.set(-0.20, 0.36, 0)
+  glowL.position.set(-0.18, 0.34, 0)
   glowL.rotation.y = Math.PI / 2
   mainGroup.add(glowL)
 
   const glowR = new THREE.Mesh(glowLineGeo, glowLineMat2)
-  glowR.position.set(0.20, 0.36, 0)
+  glowR.position.set(0.18, 0.34, 0)
   glowR.rotation.y = -Math.PI / 2
   mainGroup.add(glowR)
 
-  // ---- Arms (shorter, proportional to egg body) ----
+  // ---- Arms (proportional to box body) ----
   const leftArmGroup = new THREE.Group()
-  leftArmGroup.position.set(-0.24, 0.46, 0)
+  leftArmGroup.position.set(-0.19, 0.42, 0)
   leftArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
   const armL = new THREE.Mesh(armSegGeo, bodySecMat)
   armL.position.y = -0.08
@@ -243,7 +247,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   mainGroup.add(leftArmGroup)
 
   const rightArmGroup = new THREE.Group()
-  rightArmGroup.position.set(0.24, 0.46, 0)
+  rightArmGroup.position.set(0.19, 0.42, 0)
   rightArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
   const armR = new THREE.Mesh(armSegGeo, bodySecMat)
   armR.position.y = -0.08
@@ -257,7 +261,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   // ---- Hover Ring (thruster glow at bottom) ----
   const hoverRing = new THREE.Mesh(hoverRingGeo, hoverRingMat)
   hoverRing.rotation.x = -Math.PI / 2
-  hoverRing.position.y = 0.10
+  hoverRing.position.y = 0.12
   mainGroup.add(hoverRing)
 
   robot.add(mainGroup)
@@ -272,9 +276,9 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const thoughtBubbles: THREE.Mesh[] = []
   const thoughtMats: THREE.MeshBasicMaterial[] = []
   const bubblePositions = [
-    { x: 0.15, y: 1.05, z: 0.1 },
-    { x: 0.22, y: 1.15, z: 0.15 },
-    { x: 0.12, y: 1.28, z: 0.1 },
+    { x: 0.15, y: 0.95, z: 0.1 },
+    { x: 0.22, y: 1.05, z: 0.15 },
+    { x: 0.12, y: 1.18, z: 0.1 },
   ]
   for (let i = 0; i < 3; i++) {
     const mat = new THREE.MeshBasicMaterial({
@@ -303,9 +307,27 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   return robot
 }
 
-// ---- Mini Retro Phone ----
+// ---- Phone Station (desk + retro phone) ----
 
-export function createMiniPhone(themeColor: number = DEFAULT_ACCENT): THREE.Group {
+export function createPhoneStation(themeColor: number = DEFAULT_ACCENT): THREE.Group {
+  const station = new THREE.Group()
+  station.name = 'phoneStation'
+
+  const deskMat = new THREE.MeshStandardMaterial({
+    color: 0x6a5a4a, metalness: 0.3, roughness: 0.7,
+  })
+
+  const desk = new THREE.Mesh(phoneDeskGeo, deskMat)
+  desk.position.y = 0.04
+  station.add(desk)
+
+  const legOffsets: [number, number][] = [[-0.055, -0.035], [0.055, -0.035], [-0.055, 0.035], [0.055, 0.035]]
+  for (const [lx, lz] of legOffsets) {
+    const leg = new THREE.Mesh(phoneLegGeo, deskMat)
+    leg.position.set(lx, 0.0, lz)
+    station.add(leg)
+  }
+
   const phone = new THREE.Group()
   phone.name = 'miniPhone'
 
@@ -347,17 +369,27 @@ export function createMiniPhone(themeColor: number = DEFAULT_ACCENT): THREE.Grou
   earR.scale.set(1, 0.7, 1)
   phone.add(earR)
 
-  phone.userData.phoneMat = phoneMat
-  phone.userData.phoneGlowMat = phoneGlowMat
+  phone.scale.setScalar(1.8)
+  phone.position.y = 0.076
+  station.add(phone)
 
-  return phone
+  station.userData.phoneMat = phoneMat
+  station.userData.phoneGlowMat = phoneGlowMat
+  station.userData.deskMat = deskMat
+  station.userData.phoneBodyMat = phoneBodyMat
+
+  return station
 }
 
-export function disposeMiniPhone(phone: THREE.Group): void {
-  const phoneMat = phone.userData.phoneMat as THREE.MeshStandardMaterial | undefined
-  const phoneGlowMat = phone.userData.phoneGlowMat as THREE.MeshStandardMaterial | undefined
+export function disposePhoneStation(station: THREE.Group): void {
+  const phoneMat = station.userData.phoneMat as THREE.MeshStandardMaterial | undefined
+  const phoneGlowMat = station.userData.phoneGlowMat as THREE.MeshStandardMaterial | undefined
+  const deskMat = station.userData.deskMat as THREE.MeshStandardMaterial | undefined
+  const phoneBodyMat = station.userData.phoneBodyMat as THREE.MeshStandardMaterial | undefined
   phoneMat?.dispose()
   phoneGlowMat?.dispose()
+  deskMat?.dispose()
+  phoneBodyMat?.dispose()
 }
 
 // ---- Animation ----
@@ -367,15 +399,16 @@ export function animateGrabby(
   status: string,
   sseConnected: boolean,
   time: number,
+  customColor?: number,
 ): void {
   const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
   const animState = resolveAnimState(status, sseConnected)
 
-  const targetColor = sseConnected
-    ? (STATUS_ACCENT[status] ?? DEFAULT_ACCENT)
-    : DISCONNECTED_ACCENT
+  const targetColor = !sseConnected
+    ? DISCONNECTED_ACCENT
+    : (customColor ?? STATUS_ACCENT[status] ?? DEFAULT_ACCENT)
   if (robot.userData.lastAccentColor !== targetColor) {
     updateGrabbyColor(robot, targetColor)
     robot.userData.lastAccentColor = targetColor
@@ -509,6 +542,7 @@ const allSharedGeos: THREE.BufferGeometry[] = [
   shoulderGeo, armSegGeo, handGeo,
   hoverRingGeo, statusRingGeo, ...thoughtGeos,
   phoneBaseGeo, phoneCradleGeo, phoneHandsetBarGeo, phoneEarpieceGeo,
+  phoneDeskGeo, phoneLegGeo,
 ]
 
 const allSharedMats: THREE.Material[] = [

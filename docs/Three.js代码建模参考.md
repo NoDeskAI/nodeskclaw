@@ -92,7 +92,7 @@
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 躯干 | `SphereGeometry` | 半径 0.22, scale(1, 1.3, 0.9) | `0x7a8a9a` | 蛋形/胶囊身体（替代旧版圆柱） |
+| 躯干 | `BoxGeometry` | 0.34 x 0.28 x 0.24 | `0x7a8a9a` | 方块体，与方块头统一风格 |
 | 胸部面板 | `PlaneGeometry` | 0.14 x 0.10 | `0x2a3a4e` | 半透明 opacity 0.8 |
 | 胸灯 | `CircleGeometry` | 半径 0.025 | accent 色 | 脉冲发光状态指示 |
 | 发光线条 (x2) | `PlaneGeometry` | 0.008 x 0.16 | accent 色半透明 | 身体两侧科技线条 |
@@ -109,15 +109,24 @@
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 悬浮环 | `RingGeometry` | 内径 0.14, 外径 0.18 | accent 色半透明 | 底部悬浮推进器光环（替代旧版腿脚） |
+| 悬浮环 | `RingGeometry` | 内径 0.12, 外径 0.16 | accent 色半透明 | 底部悬浮推进器光环，匹配方块体宽度 |
 | 状态环 | `RingGeometry` | 内径 0.28, 外径 0.32 | 随状态变化 | 地面旋转光环 |
 | 思考气泡 (x3) | `CircleGeometry` | 半径 0.04 / 0.06 / 0.09, 6 段 | accent 色 | 六角形气泡，科技风 |
 
-#### 2.1.2a 迷你复古电话（Channel 指示物）
+#### 2.1.2a 电话工位（Channel 指示物）
 
-源文件：`components/hex3d/Grabby.ts` 中的 `createMiniPhone()` 函数
+源文件：`components/hex3d/Grabby.ts` 中的 `createPhoneStation()` 函数
 
-当 Agent 的 SSE 连接活跃（`sse_connected === true`）时，在工位底座右前方显示一个迷你复古电话，表示该 Agent 的 channel 处于活跃状态。
+当 Agent 的 SSE 连接活跃（`sse_connected === true`）时，在工位底座右前方显示一个带小桌子的迷你复古电话，表示该 Agent 的 channel 处于活跃状态。
+
+**小桌子**
+
+| 部件 | 几何体 | 参数 | 颜色 | 说明 |
+|---|---|---|---|---|
+| 桌面 | `BoxGeometry` | 0.14 x 0.04 x 0.10 | `0x6a5a4a`（木色） | 小方桌 |
+| 桌腿 (x4) | `CylinderGeometry` | 半径 0.008, 高 0.04 | `0x6a5a4a` | 四角细腿 |
+
+**电话（scale 1.8x，放在桌面上）**
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
@@ -126,10 +135,14 @@
 | 听筒连接杆 | `CylinderGeometry` | 半径 0.01, 高 0.055 | accent 色金属 | 横向，连接两个耳件 |
 | 听筒耳件 (x2) | `SphereGeometry` | 半径 0.02, scale(1, 0.7, 1) | accent 色发光 | 微微发光 |
 
-- 位置：`(0.45, 0.04, 0.35)` 相对于 hex group，旋转 -30 度
-- SSE 断开时 `visible = false`
+- 位置：`(0.45, 0.02, 0.35)` 相对于 hex group，旋转 -30 度
+- SSE 断开时整个 phoneStation `visible = false`
 
 **动画状态颜色**
+
+颜色优先级：断开时固定暗灰 > 用户自定义 `theme_color` > 状态色 > 默认 accent
+
+`animateGrabby(robot, status, sseConnected, time, customColor?)` 支持第 5 个可选参数 `customColor`（从 `agent.theme_color` 解析的 number），SSE 连接时优先使用。
 
 | 状态 | accent 颜色 |
 |---|---|

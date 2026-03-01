@@ -6,7 +6,7 @@ import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
-import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared, createMiniPhone, disposeMiniPhone } from './Grabby'
+import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
 import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -134,8 +134,8 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
   group.add(robot)
   group.userData.robot = robot
 
-  const phone = createMiniPhone(robotColor)
-  phone.position.set(0.45, 0.04, 0.35)
+  const phone = createPhoneStation(robotColor)
+  phone.position.set(0.45, 0.02, 0.35)
   phone.rotation.y = -Math.PI / 6
   phone.visible = agent.sse_connected
   group.add(phone)
@@ -350,7 +350,7 @@ function createEmptyHexMesh(q: number, r: number): THREE.Group {
 function syncScene() {
   for (const [, group] of hexMeshes) {
     if (group.userData.robot) disposeGrabby(group.userData.robot as THREE.Group)
-    if (group.userData.phone) disposeMiniPhone(group.userData.phone as THREE.Group)
+    if (group.userData.phone) disposePhoneStation(group.userData.phone as THREE.Group)
     scene.remove(group)
   }
   hexMeshes.clear()
@@ -499,7 +499,8 @@ addToLoop(() => {
     if (robot || phone) {
       const agent = props.agents.find(a => a.instance_id === id)
       if (agent) {
-        if (robot) animateGrabby(robot, agent.status, agent.sse_connected, t)
+        const themeNum = agent.theme_color ? parseInt(agent.theme_color.replace('#', ''), 16) : undefined
+        if (robot) animateGrabby(robot, agent.status, agent.sse_connected, t, themeNum)
         if (phone) phone.visible = agent.sse_connected
       }
     }
