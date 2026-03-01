@@ -1,0 +1,50 @@
+---
+description: K8s 多集群操作规范：上下文选择与敏感操作确认
+alwaysApply: true
+---
+
+# K8s 集群操作规范
+
+## 多集群上下文选择
+
+**本地 kubeconfig 配置了多个集群上下文，执行任何 kubectl 命令前必须确认目标集群。**
+
+### 必须做
+
+- 执行 kubectl 前先 `kubectl config get-contexts` 确认当前上下文和可用集群列表
+- 每条 kubectl 命令显式指定 `--context <context-name>`，不依赖 current-context 默认值
+- 不确定该操作哪个集群时，先问用户
+
+### 严禁
+
+- **禁止盲用 current-context**：不确认就直接跑 kubectl，可能操作到错误集群
+- **禁止 `kubectl config use-context` 切换全局上下文**：会影响用户其他终端，一律用 `--context` 参数
+- **禁止假设集群**：即使上次操作的是 A 集群，这次也要重新确认
+
+## 敏感操作确认
+
+**以下操作必须提前向用户确认目标集群和具体内容，获得明确许可后才执行：**
+
+- 删除资源：`kubectl delete`（namespace、deployment、pod、service、ingress、secret、configmap 等）
+- 扩缩容：`kubectl scale`
+- 滚动更新：`kubectl rollout restart`、`kubectl set image`
+- 执行进入容器：`kubectl exec`（写操作，如修改文件、杀进程）
+- 应用变更：`kubectl apply` / `kubectl patch`（修改现有资源）
+
+### 确认格式
+
+```
+即将对集群 [context-name] 执行以下操作：
+1. [具体操作描述]
+2. ...
+
+请确认是否执行。
+```
+
+### 无需确认的只读操作
+
+- `kubectl get`
+- `kubectl describe`
+- `kubectl logs`
+- `kubectl top`
+- `kubectl exec -- cat/ls/printenv` 等只读命令
