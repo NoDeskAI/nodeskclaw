@@ -6,7 +6,7 @@ import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
-import { createClaudeMon, animateClaudeMon, disposeClaudeMon, disposeClaudeMonShared } from './ClaudeMon'
+import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared } from './Grabby'
 import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -125,7 +125,7 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
   const edgeMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 })
   group.add(new THREE.LineSegments(AGENT_BASE_EDGE_GEO, edgeMat))
 
-  const robot = createClaudeMon(color)
+  const robot = createGrabby(color)
   robot.position.y = 0.04
   group.add(robot)
   group.userData.robot = robot
@@ -338,7 +338,7 @@ function createEmptyHexMesh(q: number, r: number): THREE.Group {
 
 function syncScene() {
   for (const [, group] of hexMeshes) {
-    if (group.userData.robot) disposeClaudeMon(group.userData.robot as THREE.Group)
+    if (group.userData.robot) disposeGrabby(group.userData.robot as THREE.Group)
     scene.remove(group)
   }
   hexMeshes.clear()
@@ -485,7 +485,7 @@ addToLoop(() => {
     const robot = group.userData.robot as THREE.Group | undefined
     if (robot) {
       const agent = props.agents.find(a => a.instance_id === id)
-      if (agent) animateClaudeMon(robot, agent.status, agent.sse_connected, t)
+      if (agent) animateGrabby(robot, agent.status, agent.sse_connected, t)
     }
   }
 
@@ -522,7 +522,7 @@ onUnmounted(() => {
   EMPTY_HEX_GEO.dispose()
   CORRIDOR_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
-  disposeClaudeMonShared()
+  disposeGrabbyShared()
 })
 
 defineExpose({

@@ -56,13 +56,13 @@
 | working（工作） | `0xfbbf24` 黄色 | 右臂锤击/打字动作，身体微弹 |
 | thinking（思考） | `0xa78bfa` 紫色 | 头部歪斜点头，右臂托腮，思考气泡浮现 |
 
-#### 2.1.2 机器人角色（ClaudeMon）
+#### 2.1.2 机器人角色（Grabby）
 
-源文件：`entities/ClaudeMon.ts`（完整场景版）、`components/hex3d/ClaudeMon.ts`（六角格工作区版，已实现）
+源文件：`entities/ClaudeMon.ts`（完整场景版，旧名 ClaudeMon）、`components/hex3d/Grabby.ts`（六角格工作区版，已实现）
 
-赛博金属机器人风格，默认角色。由 17+ 个部件组成，具有更丰富的细节和动画。
+赛博金属机器人风格，默认角色。由 17+ 个部件组成，具有更丰富的细节和动画。角色已更名为 Grabby（取自项目名 ClawBuddy 中"抓取"的语义）。
 
-六角格工作区版已在 `nodeskclaw-portal/src/components/hex3d/ClaudeMon.ts` 实现：
+六角格工作区版已在 `nodeskclaw-portal/src/components/hex3d/Grabby.ts` 实现：
 - 按本节规格用 Three.js 基础几何体拼装完整机器人（头部/身体/手臂/附属共 20+ 部件）
 - 几何体模块级共享，材质按状态颜色创建（accent 材质随 Agent 状态动态切换）
 - 整体缩放 0.65x，站在扁平六棱柱底座（高度 0.08）上

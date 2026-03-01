@@ -108,7 +108,7 @@ function resolveAnimState(status: string, sseConnected: boolean): AnimState {
 
 // ---- Per-Robot Animatable Parts ----
 
-interface ClaudeMonParts {
+interface GrabbyParts {
   mainGroup: THREE.Group
   headGroup: THREE.Group
   leftArmGroup: THREE.Group
@@ -128,9 +128,9 @@ interface ClaudeMonParts {
 
 // ---- Public API ----
 
-export function createClaudeMon(themeColor: number = DEFAULT_ACCENT): THREE.Group {
+export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const robot = new THREE.Group()
-  robot.name = 'claudemon'
+  robot.name = 'grabby'
 
   const accentMat = new THREE.MeshBasicMaterial({ color: themeColor })
   const antennaLightMat = new THREE.MeshStandardMaterial({
@@ -314,7 +314,7 @@ export function createClaudeMon(themeColor: number = DEFAULT_ACCENT): THREE.Grou
     statusRing, antennaLight: antLight, chestLight, thoughtBubbles,
     accentMat, antennaLightMat, statusRingMat, chestLightMat,
     mouthMat, glowLineMats: [glowLineMat1, glowLineMat2], thoughtMats,
-  } satisfies ClaudeMonParts
+  } satisfies GrabbyParts
 
   robot.userData.lastAccentColor = themeColor
   robot.scale.setScalar(0.65)
@@ -322,13 +322,13 @@ export function createClaudeMon(themeColor: number = DEFAULT_ACCENT): THREE.Grou
   return robot
 }
 
-export function animateClaudeMon(
+export function animateGrabby(
   robot: THREE.Group,
   status: string,
   sseConnected: boolean,
   time: number,
 ): void {
-  const parts = robot.userData.parts as ClaudeMonParts | undefined
+  const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
   const animState = resolveAnimState(status, sseConnected)
@@ -337,7 +337,7 @@ export function animateClaudeMon(
     ? (STATUS_ACCENT[status] ?? DEFAULT_ACCENT)
     : DISCONNECTED_ACCENT
   if (robot.userData.lastAccentColor !== targetColor) {
-    updateClaudeMonColor(robot, targetColor)
+    updateGrabbyColor(robot, targetColor)
     robot.userData.lastAccentColor = targetColor
   }
 
@@ -405,7 +405,7 @@ export function animateClaudeMon(
   }
 }
 
-function fadeThoughtBubbles(parts: ClaudeMonParts, show: boolean, time: number): void {
+function fadeThoughtBubbles(parts: GrabbyParts, show: boolean, time: number): void {
   for (let i = 0; i < parts.thoughtBubbles.length; i++) {
     const bubble = parts.thoughtBubbles[i]
     const mat = parts.thoughtMats[i]
@@ -420,8 +420,8 @@ function fadeThoughtBubbles(parts: ClaudeMonParts, show: boolean, time: number):
   }
 }
 
-export function updateClaudeMonColor(robot: THREE.Group, color: number): void {
-  const parts = robot.userData.parts as ClaudeMonParts | undefined
+export function updateGrabbyColor(robot: THREE.Group, color: number): void {
+  const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
   const c = new THREE.Color(color)
@@ -434,8 +434,8 @@ export function updateClaudeMonColor(robot: THREE.Group, color: number): void {
   for (const m of parts.thoughtMats) m.color.copy(c)
 }
 
-export function disposeClaudeMon(robot: THREE.Group): void {
-  const parts = robot.userData.parts as ClaudeMonParts | undefined
+export function disposeGrabby(robot: THREE.Group): void {
+  const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
   parts.accentMat.dispose()
@@ -460,7 +460,7 @@ const allSharedMats: THREE.Material[] = [
   bodyMainMat, bodySecMat, bodyTerMat, faceMaskMat, chestPanelMat, panelLineMat,
 ]
 
-export function disposeClaudeMonShared(): void {
+export function disposeGrabbyShared(): void {
   for (const g of allSharedGeos) g.dispose()
   for (const m of allSharedMats) m.dispose()
 }
