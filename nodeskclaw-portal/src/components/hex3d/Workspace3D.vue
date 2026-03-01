@@ -7,6 +7,7 @@ import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import { createGrabby, animateGrabby, updateGrabbyTheme, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
+import { createCorridorPath, disposeCorridorPath, disposeCorridorPathShared } from './CorridorPath'
 import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -239,7 +240,6 @@ function createBBLabelSprite(): THREE.Sprite {
   return sprite
 }
 
-const CORRIDOR_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.88, HEX_SIZE * 0.88, 0.03, 6)
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
 
 function createCorridorLabelSprite(name: string): THREE.Sprite {
@@ -259,40 +259,6 @@ function createCorridorLabelSprite(name: string): THREE.Sprite {
   sprite.scale.set(1.2, 0.2, 1)
   sprite.userData.baseScale = { x: 1.2, y: 0.2 }
   return sprite
-}
-
-function createCorridorHexMesh(node: TopologyNode): THREE.Group {
-  const group = new THREE.Group()
-  const { x, y } = axialToWorld(node.hex_q, node.hex_r)
-  group.position.set(x, 0.02, y)
-  const hexId = `corridor:${node.entity_id}`
-  group.userData = { hexId, isHex: true, hexQ: node.hex_q, hexR: node.hex_r }
-
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0x1a2d4a,
-    emissive: new THREE.Color(0x38bdf8),
-    emissiveIntensity: 0.08,
-    metalness: 0.3,
-    roughness: 0.7,
-    transparent: true,
-    opacity: 0.6,
-  })
-  const tile = new THREE.Mesh(CORRIDOR_HEX_GEO, mat)
-  tile.userData = { hexId, isHex: true }
-  group.add(tile)
-
-  const edgeGeo = new THREE.EdgesGeometry(CORRIDOR_HEX_GEO)
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 })
-  group.add(new THREE.LineSegments(edgeGeo, edgeMat))
-
-  if (node.display_name) {
-    const label = createCorridorLabelSprite(node.display_name)
-    label.position.set(0, 0.2, 0)
-    group.add(label)
-    labelSprites.add(label)
-  }
-
-  return group
 }
 
 function createHumanHexMesh(node: TopologyNode): THREE.Group {
@@ -347,37 +313,17 @@ function createEmptyHexMesh(q: number, r: number): THREE.Group {
 }
 
 function syncScene() {
-  for (const [, group] of hexMeshes) {
+  for (const [id, group] of hexMeshes) {
     if (group.userData.robot) disposeGrabby(group.userData.robot as THREE.Group)
     if (group.userData.phone) disposePhoneStation(group.userData.phone as THREE.Group)
+    if (id.startsWith('corridor:')) disposeCorridorPath(group)
     scene.remove(group)
   }
   hexMeshes.clear()
   labelSprites.clear()
 
-  for (const agent of props.agents) {
-    const group = createHexMesh(agent)
-    scene.add(group)
-    hexMeshes.set(agent.instance_id, group)
-  }
-
-  const bbGroup = createBlackboardMesh()
-  scene.add(bbGroup)
-  hexMeshes.set('__blackboard__', bbGroup)
-
   const corridorNodes = (props.topologyNodes || []).filter(n => n.node_type === 'corridor')
-  for (const node of corridorNodes) {
-    const group = createCorridorHexMesh(node)
-    scene.add(group)
-    hexMeshes.set(`corridor:${node.entity_id}`, group)
-  }
-
   const humanNodes = (props.topologyNodes || []).filter(n => n.node_type === 'human')
-  for (const node of humanNodes) {
-    const group = createHumanHexMesh(node)
-    scene.add(group)
-    hexMeshes.set(`human:${node.entity_id}`, group)
-  }
 
   const occupied = new Set<string>()
   occupied.add('0:0')
@@ -390,6 +336,36 @@ function syncScene() {
   for (const node of humanNodes) {
     occupied.add(`${node.hex_q}:${node.hex_r}`)
   }
+
+  for (const agent of props.agents) {
+    const group = createHexMesh(agent)
+    scene.add(group)
+    hexMeshes.set(agent.instance_id, group)
+  }
+
+  const bbGroup = createBlackboardMesh()
+  scene.add(bbGroup)
+  hexMeshes.set('__blackboard__', bbGroup)
+
+  for (const node of corridorNodes) {
+    const hexId = `corridor:${node.entity_id}`
+    const group = createCorridorPath(node.hex_q, node.hex_r, occupied, hexId)
+    if (node.display_name) {
+      const label = createCorridorLabelSprite(node.display_name)
+      label.position.set(0, 0.2, 0)
+      group.add(label)
+      labelSprites.add(label)
+    }
+    scene.add(group)
+    hexMeshes.set(hexId, group)
+  }
+
+  for (const node of humanNodes) {
+    const group = createHumanHexMesh(node)
+    scene.add(group)
+    hexMeshes.set(`human:${node.entity_id}`, group)
+  }
+
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
     for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
       if (Math.abs(q) + Math.abs(r) + Math.abs(-q - r) > GRID_RANGE * 2) continue
@@ -442,16 +418,19 @@ addToLoop(() => {
     }
 
     if (id.startsWith('corridor:')) {
-      const mesh = group.children[0] as THREE.Mesh
-      if (!mesh?.material) continue
-      const mat = mesh.material as THREE.MeshStandardMaterial
+      const railMat = group.userData.railMat as THREE.MeshStandardMaterial | undefined
+      const junctionMat = group.userData.junctionMat as THREE.MeshStandardMaterial | undefined
+      if (!railMat) continue
       const isHovered = hoveredId.value === id
       const isSelectedHex = props.selectedHex?.q === group.userData.hexQ && props.selectedHex?.r === group.userData.hexR
       const targetY = isHovered ? 0.04 : isSelectedHex ? 0.03 : 0.02
       group.position.y += (targetY - group.position.y) * 0.1
-      mat.emissive.set(0x38bdf8)
-      mat.emissiveIntensity = isSelectedHex ? 0.25 + Math.sin(t * 3) * 0.1 : isHovered ? 0.2 : 0.08
-      mat.opacity = isSelectedHex ? 0.8 : isHovered ? 0.75 : 0.6
+      railMat.emissiveIntensity = isSelectedHex ? 0.35 + Math.sin(t * 3) * 0.1 : isHovered ? 0.25 : 0.15
+      railMat.opacity = isSelectedHex ? 0.9 : isHovered ? 0.85 : 0.7
+      if (junctionMat) {
+        junctionMat.emissiveIntensity = isSelectedHex ? 0.4 + Math.sin(t * 3) * 0.1 : isHovered ? 0.3 : 0.2
+        junctionMat.opacity = isSelectedHex ? 0.95 : isHovered ? 0.9 : 0.8
+      }
       continue
     }
 
@@ -542,9 +521,9 @@ onUnmounted(() => {
   AGENT_BASE_GEO.dispose()
   AGENT_BASE_EDGE_GEO.dispose()
   EMPTY_HEX_GEO.dispose()
-  CORRIDOR_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
   disposeGrabbyShared()
+  disposeCorridorPathShared()
 })
 
 defineExpose({

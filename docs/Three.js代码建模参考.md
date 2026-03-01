@@ -155,6 +155,41 @@
 | deploying / updating 等 | `0xf97316` 橙色 |
 | disconnected | `0x555566` 暗灰 |
 
+#### 2.1.2b 走廊双轨道路径（CorridorPath）
+
+源文件：`components/hex3d/CorridorPath.ts`
+
+走廊格不再渲染完整六边形，而是根据相邻占用格子的方向画出双轨道臂，所有臂星形汇合于中心。
+
+**设计规则**
+
+- 0 个邻居：仅中心圆环标记 + 隐形射线检测目标
+- 1 个邻居：1 条臂（边缘到中心，死胡同）
+- 2 个邻居：2 条臂（自然形成通道）
+- 3+ 个邻居：N 条臂星形汇合（十字路口 / Y 形路口）
+
+**轨道臂组件**
+
+| 部件 | 几何体 | 参数 | 颜色 | 说明 |
+|---|---|---|---|---|
+| 轨道条 (x2 per arm) | `BoxGeometry` | 0.04 x 0.015 x 0.91 | `0x1a2d4a` + emissive `0x38bdf8` | 每条臂两根平行轨道条，间距 0.12 |
+| 中心汇合环 | `RingGeometry` | 内径 0.06, 外径 0.10 | `0x1a2d4a` + emissive `0x38bdf8` | 所有臂在此汇合 |
+| 射线检测目标 | `CylinderGeometry` | 半径 HEX_SIZE*0.88, 高 0.01 | 不可见 (visible: false) | 保证走廊可点击 |
+
+**尺寸参数**
+
+| 参数 | 值 | 说明 |
+|---|---|---|
+| ARM_LENGTH | 0.91 | 中心到边缘中点距离（apothem） |
+| RAIL_STRIP_WIDTH | 0.04 | 每根轨道条宽度 |
+| RAIL_GAP | 0.12 | 两条轨道内侧间距 |
+| STRIP_HEIGHT | 0.015 | 轨道条厚度 |
+| JUNCTION_RADIUS | 0.10 | 中心圆环外径 |
+
+**方向计算**
+
+6 个 axial 方向 `[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]]` 预计算为世界坐标单位向量，通过 `axialToWorld` 转换。每条臂的两根轨道条沿方向向量居中放置，沿垂直方向偏移 `(RAIL_GAP + RAIL_STRIP_WIDTH) / 2`。
+
 #### 2.1.3 子代理系统（SubagentManager）
 
 源文件：`entities/SubagentManager.ts`
