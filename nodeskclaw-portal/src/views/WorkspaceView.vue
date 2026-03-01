@@ -290,8 +290,12 @@ function onHexAction(action: string) {
       const q = selectedHex.value?.q
       const r = selectedHex.value?.r
       if (q !== undefined && r !== undefined) {
-        const { x, y } = axialToWorld(q, r)
-        workspace3dRef.value?.focusOnPosition(x, y)
+        if (activeMode.value === '3d') {
+          const { x, y } = axialToWorld(q, r)
+          workspace3dRef.value?.focusOnPosition(x, y)
+        } else {
+          workspace2dRef.value?.focusOnHex(q, r)
+        }
       }
       hexDrawerOpen.value = false
       break

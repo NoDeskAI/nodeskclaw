@@ -60,6 +60,12 @@ export function useSvgZoom(
   select(svg).call(zoomBehavior.translateBy, -dx * 80, -dy * 80)
   }
 
+  function focusOnPosition(svgX: number, svgY: number) {
+    const svg = svgRef.value
+    if (!svg || !zoomBehavior) return
+    select(svg).transition().duration(600).call(zoomBehavior.translateTo, svgX, svgY)
+  }
+
   onMounted(init)
   onUnmounted(() => {
     if (svgRef.value) {
@@ -67,5 +73,5 @@ export function useSvgZoom(
     }
   })
 
-  return { transform, transformStr, zoomIn, zoomOut, resetView, panBy }
+  return { transform, transformStr, zoomIn, zoomOut, resetView, panBy, focusOnPosition }
 }

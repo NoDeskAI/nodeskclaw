@@ -34,9 +34,14 @@ const emit = defineEmits<{
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
-const { transformStr, zoomIn, zoomOut, resetView, panBy } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
+const { transformStr, zoomIn, zoomOut, resetView, panBy, focusOnPosition } = useSvgZoom(svgRef, { minZoom: 0.3, maxZoom: 3 })
 
-defineExpose({ zoomIn, zoomOut, resetView, panBy })
+function focusOnHex(q: number, r: number) {
+  const { x, y } = axialToWorld(q, r)
+  focusOnPosition(x * SCALE, y * SCALE)
+}
+
+defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex })
 
 const hoveredId = ref<string | null>(null)
 
@@ -121,6 +126,53 @@ const humanNodes = computed(() =>
 
 const CORRIDOR_RADIUS = HEX_RADIUS * 0.65
 const HUMAN_RADIUS = HEX_RADIUS * 0.75
+
+const AXIAL_DIRS: [number, number][] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]
+const ARM_LEN_2D = HEX_SIZE * 0.88 * Math.sqrt(3) / 2 * SCALE
+const RAIL_GAP_2D = 7
+const RAIL_WIDTH_2D = 2.5
+const JUNCTION_R_2D = 4
+
+const DIR_UNITS_2D: [number, number][] = AXIAL_DIRS.map(([dq, dr]) => {
+  const { x, y } = axialToWorld(dq, dr)
+  const len = Math.sqrt(x * x + y * y)
+  return [x / len, y / len] as [number, number]
+})
+
+const HALF_GAP_2D = (RAIL_GAP_2D + RAIL_WIDTH_2D) / 2
+
+interface RailArm {
+  x1a: number; y1a: number; x2a: number; y2a: number
+  x1b: number; y1b: number; x2b: number; y2b: number
+}
+
+const corridorPaths = computed(() => {
+  const occupied = new Set<string>()
+  occupied.add('0:0')
+  for (const a of props.agents) occupied.add(`${a.hex_q}:${a.hex_r}`)
+  for (const n of corridorNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
+  for (const n of humanNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
+
+  return corridorNodes.value.map(ch => {
+    const arms: RailArm[] = []
+    for (let i = 0; i < 6; i++) {
+      const [dq, dr] = AXIAL_DIRS[i]
+      if (!occupied.has(`${ch.hex_q + dq}:${ch.hex_r + dr}`)) continue
+      const [dx, dy] = DIR_UNITS_2D[i]
+      const endX = dx * ARM_LEN_2D
+      const endY = dy * ARM_LEN_2D
+      const perpX = -dy
+      const perpY = dx
+      arms.push({
+        x1a: perpX * HALF_GAP_2D, y1a: perpY * HALF_GAP_2D,
+        x2a: endX + perpX * HALF_GAP_2D, y2a: endY + perpY * HALF_GAP_2D,
+        x1b: -perpX * HALF_GAP_2D, y1b: -perpY * HALF_GAP_2D,
+        x2b: endX - perpX * HALF_GAP_2D, y2b: endY - perpY * HALF_GAP_2D,
+      })
+    }
+    return { ...ch, arms }
+  })
+})
 
 function corridorHexPoints(cx: number, cy: number): string {
   return hexPolygonPoints(cx, cy, CORRIDOR_RADIUS)
@@ -303,9 +355,9 @@ const emptyHexes = computed(() => {
         </text>
       </g>
 
-      <!-- Corridor hexes -->
+      <!-- Corridor dual-rail paths -->
       <g
-        v-for="ch in corridorNodes"
+        v-for="ch in corridorPaths"
         :key="'corridor-' + ch.entity_id"
         class="cursor-pointer"
         :transform="`translate(${ch.px}, ${ch.py})`"
@@ -313,12 +365,20 @@ const emptyHexes = computed(() => {
       >
         <polygon
           :points="corridorHexPoints(0, 0)"
-          fill="#06b6d411"
-          stroke="#06b6d4"
-          stroke-width="1.5"
-          stroke-dasharray="6,3"
-          opacity="0.8"
+          fill="transparent"
+          stroke="none"
         />
+        <template v-for="(arm, i) in ch.arms" :key="i">
+          <line
+            :x1="arm.x1a" :y1="arm.y1a" :x2="arm.x2a" :y2="arm.y2a"
+            stroke="#06b6d4" :stroke-width="RAIL_WIDTH_2D" stroke-linecap="round" opacity="0.7"
+          />
+          <line
+            :x1="arm.x1b" :y1="arm.y1b" :x2="arm.x2b" :y2="arm.y2b"
+            stroke="#06b6d4" :stroke-width="RAIL_WIDTH_2D" stroke-linecap="round" opacity="0.7"
+          />
+        </template>
+        <circle cx="0" cy="0" :r="JUNCTION_R_2D" fill="#06b6d4" opacity="0.6" />
         <text
           v-if="ch.display_name"
           :y="-CORRIDOR_RADIUS - 6"
