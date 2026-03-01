@@ -593,8 +593,8 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     deployment_ready = True
                     break
 
-                # 每 10 秒（5 个 tick）推送一次 Pod 诊断日志
-                if tick % 5 == 4:
+                # 每 4 秒（2 个 tick）推送一次 Pod 诊断日志
+                if tick % 2 == 1:
                     diag_lines: list[str] = []
 
                     # ── Pod 状态 ──
