@@ -121,6 +121,21 @@
 | working | `0xfbbf24` 琥珀色 |
 | thinking | `0xa78bfa` 紫色 |
 
+#### 2.1.3 子代理系统（SubagentManager）
+
+源文件：`entities/SubagentManager.ts`
+
+子代理管理器不定义新的模型，而是在 Portal 工作站处生成**缩小版的角色实例**：
+
+| 属性 | 值 |
+|---|---|
+| 缩放比例 | 0.6（主角色的 60%） |
+| 初始状态 | thinking |
+| 生成位置 | Portal 工作站附近，按扇形散开避免重叠 |
+| 颜色循环 | `0x60a5fa`（蓝）→ `0x34d399`（翠绿）→ `0xf472b6`（粉）→ `0xa78bfa`（紫）→ `0xfbbf24`（琥珀）→ `0x22d3ee`（青） |
+
+每个子代理使用独立的主题色，在任务完成后自动销毁（调用 `dispose()` 释放资源）。
+
 ---
 
 ### 2.2 工作站模型
@@ -304,6 +319,141 @@
 
 工具历史记录的悬浮显示面板。Canvas 256x160 → Sprite，按 P 键切换显示/隐藏。
 
+#### 2.3.7 等待区加载动画（Pending Zone）
+
+源文件：`scene/WorkshopScene.ts` 的 `createPendingZone`
+
+区域创建前的加载过渡动画，由旋转球点和六角线框组成：
+
+| 部件 | 几何体 | 参数 | 颜色 |
+|---|---|---|---|
+| 六角线框 | `BufferGeometry` → `Line` | 半径 10 的六角形轮廓 | `0x4ac8e8`（青色），opacity 0.5 |
+| 旋转点 (x3) | `SphereGeometry` | 半径 0.3, 分段 8x8 | `0x4ac8e8`，opacity 0.8 |
+
+动画参数：旋转速度 2 rad/s，脉冲速度 3 Hz，缩放范围 0.8 +/- 0.3，垂直浮动 +/- 0.2。3 个点沿半径 1.5 的圆均匀分布，在高度 0.5 处旋转。
+
+#### 2.3.8 世界地板（World Floor）
+
+源文件：`scene/WorkshopScene.ts` 的 `createWorldFloor`
+
+| 属性 | 值 |
+|---|---|
+| 几何体 | `PlaneGeometry` 500 x 500 |
+| 材质 | `MeshBasicMaterial`，`visible: false` |
+| 用途 | 不可见，仅用于鼠标射线检测（Raycasting），确定点击/悬浮的世界坐标 |
+
+#### 2.3.9 世界六角网格（World Hex Grid）
+
+源文件：`scene/WorkshopScene.ts` 的 `createWorldHexGrid`
+
+| 属性 | 值 |
+|---|---|
+| 几何体 | `BufferGeometry`（所有六角边合并为单个顶点数组） |
+| 渲染对象 | `LineSegments`（一次 draw call 渲染全部网格线） |
+| 材质 | `LineBasicMaterial`，颜色 `0x4ac8e8`，opacity 0.35 |
+| 范围 | 由 `gridRange` 控制（默认 20 环），轴向坐标约束为近似圆形 |
+
+性能优化：使用合并几何体（merged geometry）将数百个六角形的线段合并为单个 `LineSegments` 对象，只需一次 GPU draw call。
+
+#### 2.3.10 鼠标悬浮高亮（Hover Highlight）
+
+源文件：`scene/WorkshopScene.ts` 的 `setupHoverHighlight`
+
+| 属性 | 值 |
+|---|---|
+| 几何体 | `BufferGeometry`（7 个顶点的六角形闭合线） |
+| 渲染对象 | `Line` |
+| 材质 | `LineBasicMaterial`，颜色 `0x67e8f9`，opacity 0.6 |
+| 行为 | 跟随鼠标移动，吸附到最近的六角格中心，空闲时隐藏 |
+
+#### 2.3.11 点击脉冲波纹（Click Pulse）
+
+源文件：`scene/WorkshopScene.ts` 的 `spawnClickPulse`
+
+点击时产生的两层视觉反馈：
+
+| 层 | 几何体 | 参数 | 说明 |
+|---|---|---|---|
+| 扩散环 | `RingGeometry` | 内径 0.2, 外径 0.4 | 从点击点扩散，AdditiveBlending，0.5 秒淡出 |
+| 六角涟漪 (x N) | `BufferGeometry` → `Line` | 六角轮廓 | 从中心向外扩散最多 7 层环，强度按 0.6^n 衰减 |
+
+涟漪以 45ms 间隔逐层生成，模拟水波扩散效果。使用 AdditiveBlending + depthWrite:false 避免遮挡底层网格。
+
+#### 2.3.12 涂色六角柱（Painted Hex）
+
+源文件：`scene/WorkshopScene.ts` 的 `paintHex`
+
+绘画模式下创建的 3D 可堆叠六角柱体：
+
+| 属性 | 值 |
+|---|---|
+| 几何体 | `ExtrudeGeometry`（从六角 `Shape` 拉伸） |
+| 拉伸参数 | `depth` 随堆叠高度递增（每次 +0.5），`bevelEnabled: false` |
+| 材质 | `MeshStandardMaterial`，颜色由调色板选择，emissive 同色 intensity 0.15 |
+| 最大高度 | 100（近似无上限，供创意搭建） |
+
+可用颜色调色板：`0x22d3ee`（青）、`0x38bdf8`（天蓝）、`0x60a5fa`（蓝）、`0x818cf8`（靛蓝）、`0xa78bfa`（紫）、`0x2dd4bf`（青绿）。
+
+#### 2.3.13 堆叠特效（Stack Effect）
+
+源文件：`scene/WorkshopScene.ts` 的 `spawnStackEffect`
+
+六角柱高度增加时的一次性脉冲动画：
+
+| 属性 | 值 |
+|---|---|
+| 几何体 | `RingGeometry`，内径 0.5, 外径 1.5, 分段 6（六角形环） |
+| 材质 | `MeshBasicMaterial`，使用堆叠色，opacity 0.8 |
+| 动画 | 从堆叠高度处向外扩散并淡出 |
+
+#### 2.3.14 环境漂浮粒子（Ambient Particles）
+
+源文件：`scene/WorkshopScene.ts` 的 `createAmbientParticles`
+
+全场景的氛围装饰粒子，与区域粒子系统（2.3.2）独立：
+
+| 属性 | 值 |
+|---|---|
+| 粒子数量 | 60 |
+| 几何体 | `BufferGeometry`（Float32Array 手动管理） |
+| 材质 | `PointsMaterial`，颜色 `0x4ac8e8`，size 0.12，AdditiveBlending |
+| 运动 | 缓慢环形漂移 + 上下浮动，各粒子相位/速度/半径随机 |
+
+#### 2.3.15 文字贴片（Text Tile）
+
+源文件：`scene/WorkshopScene.ts` 的 `addTextTile` / `createTextTileSprite`
+
+用户可在任意六角格上放置的文字标签：
+
+| 属性 | 值 |
+|---|---|
+| 实现方式 | Canvas 2D → `CanvasTexture` → `SpriteMaterial` → `Sprite` |
+| Canvas 尺寸 | 动态（根据文字长度） |
+| 定位 | 吸附到六角格中心，高度随涂色六角柱自动抬升 |
+| 特效 | 深色半透明背景 + 文字阴影 |
+
+#### 2.3.16 Git 状态标签（Git Label）
+
+源文件：`scene/WorkshopScene.ts` 的 `createGitLabel`
+
+| 属性 | 值 |
+|---|---|
+| 实现方式 | Canvas 256x48 → `CanvasTexture` → `Sprite` |
+| 位置 | 区域六角平台前方边缘（y=0.15, z=2.5） |
+| 用途 | 显示该区域对应仓库的 Git 状态信息 |
+| 默认状态 | 隐藏，收到 Git 数据后显示 |
+
+#### 2.3.17 工作站上下文标签（Station Context）
+
+源文件：`scene/WorkshopScene.ts` 的 `createTextSprite`
+
+| 属性 | 值 |
+|---|---|
+| 实现方式 | Canvas 512x96 → `CanvasTexture` → `Sprite` |
+| 位置 | 工作站上方 y=2.5 |
+| 用途 | 显示当前工作站正在处理的文件名/命令等上下文信息 |
+| 文字自适应 | 字号从 28px 向下缩减直到文字宽度不超过 Canvas |
+
 ---
 
 ### 2.4 工作站布局
@@ -340,7 +490,8 @@
 | `RingGeometry` | `(innerR, outerR, thetaSeg)` | 扁环：状态环、信号波 | 状态环 inner=0.35 outer=0.4 |
 | `PlaneGeometry` | `(width, height)` | 平面：屏幕、面罩 | 面罩 0.32x0.18、屏幕 0.85x0.55 |
 | `CircleGeometry` | `(radius, segments)` | 圆形平面：镜片、灯 | 镜片 r=0.26、六角气泡 6 段 |
-| `ShapeGeometry` | `(shape)` | 自定义 2D 形状拉伸 | LED 眼睛（圆角矩形）、六角地板 |
+| `ShapeGeometry` | `(shape)` | 自定义 2D 形状平面 | LED 眼睛（圆角矩形）、六角地板 |
+| `ExtrudeGeometry` | `(shape, options)` | 2D 形状拉伸为 3D 柱体 | 涂色六角柱（depth 可堆叠） |
 | `BufferGeometry` | 手动设置顶点数据 | 自定义几何体：曲线、粒子 | 嘴巴曲线、网格线、粒子系统 |
 
 ### 材质速查
@@ -481,6 +632,24 @@ shape.lineTo(-w/2, -h/2 + r)
 shape.quadraticCurveTo(-w/2, -h/2, -w/2 + r, -h/2)
 
 const geometry = new THREE.ShapeGeometry(shape)
+```
+
+**用 ExtrudeGeometry 把 2D 形状拉伸为 3D 柱体**
+
+```typescript
+const shape = new THREE.Shape()
+for (let i = 0; i < 6; i++) {
+  const angle = (Math.PI / 3) * i - Math.PI / 2
+  const x = 10 * Math.cos(angle)
+  const y = 10 * Math.sin(angle)
+  i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y)
+}
+shape.closePath()
+
+const geometry = new THREE.ExtrudeGeometry(shape, {
+  depth: 2.0,         // 拉伸高度
+  bevelEnabled: false, // 无倒角
+})
 ```
 
 **用 AdditiveBlending 做发光粒子**
