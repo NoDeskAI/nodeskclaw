@@ -5,42 +5,39 @@ export interface ToastAction {
   onClick: () => void
 }
 
+export interface ToastOptions {
+  action?: ToastAction
+  duration?: number
+}
+
 export interface ToastItem {
   id: number
-  type: 'success' | 'error' | 'info'
   message: string
+  type: 'success' | 'error' | 'info'
   action?: ToastAction
 }
 
 const toasts = ref<ToastItem[]>([])
 let nextId = 0
 
-interface ToastOptions {
-  duration?: number
-  action?: ToastAction
-}
-
-function add(type: ToastItem['type'], message: string, opts?: ToastOptions) {
+function addToast(message: string, type: ToastItem['type'], options?: ToastOptions) {
   const id = nextId++
-  const duration = opts?.duration ?? (type === 'error' ? 6000 : 4000)
-  toasts.value.push({ id, type, message, action: opts?.action })
-  if (opts?.action) {
-    setTimeout(() => remove(id), 8000)
-  } else {
-    setTimeout(() => remove(id), duration)
-  }
+  toasts.value.push({ id, message, type, action: options?.action })
+  setTimeout(() => {
+    removeToast(id)
+  }, options?.duration ?? 3000)
 }
 
-function remove(id: number) {
+function removeToast(id: number) {
   toasts.value = toasts.value.filter(t => t.id !== id)
 }
 
 export function useToast() {
   return {
     toasts,
-    success: (msg: string, opts?: ToastOptions) => add('success', msg, opts),
-    error: (msg: string, opts?: ToastOptions) => add('error', msg, opts),
-    info: (msg: string, opts?: ToastOptions) => add('info', msg, opts),
-    remove,
+    success: (message: string, options?: ToastOptions) => addToast(message, 'success', options),
+    error: (message: string, options?: ToastOptions) => addToast(message, 'error', options),
+    info: (message: string, options?: ToastOptions) => addToast(message, 'info', options),
+    remove: removeToast,
   }
 }

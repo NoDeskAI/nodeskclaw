@@ -5,10 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { UserPlus, Loader2, Trash2, Search } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
-import { useToast } from '@/components/ui/toast/use-toast'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
-const { toast } = useToast()
+const toast = useToast()
 
 const instanceId = inject<Ref<string>>('instanceId')!
 const myRole = inject<Ref<string | null>>('myInstanceRole', ref(null))
@@ -99,14 +99,14 @@ async function addMember(userId: string) {
       user_id: userId,
       role: addRole.value,
     })
-    toast({ description: t('instanceMembers.addSuccess') })
+    toast.success(t('instanceMembers.addSuccess'))
     showAddDialog.value = false
     searchQuery.value = ''
     searchResults.value = []
     addRole.value = 'viewer'
     await fetchMembers()
   } catch (e) {
-    toast({ description: resolveApiErrorMessage(e, t('instanceMembers.addFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('instanceMembers.addFailed')))
   } finally {
     addingUserId.value = null
   }
@@ -118,7 +118,7 @@ async function updateRole(member: MemberInfo, newRole: string) {
     await api.put(`/instances/${instanceId.value}/members/${member.id}`, { role: newRole })
     member.role = newRole
   } catch (e) {
-    toast({ description: resolveApiErrorMessage(e, t('instanceMembers.updateFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('instanceMembers.updateFailed')))
   }
 }
 
@@ -127,10 +127,10 @@ async function removeMember(member: MemberInfo) {
   if (!confirm(t('instanceMembers.removeConfirm', { name }))) return
   try {
     await api.delete(`/instances/${instanceId.value}/members/${member.id}`)
-    toast({ description: t('instanceMembers.removeSuccess') })
+    toast.success(t('instanceMembers.removeSuccess'))
     await fetchMembers()
   } catch (e) {
-    toast({ description: resolveApiErrorMessage(e, t('instanceMembers.removeFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('instanceMembers.removeFailed')))
   }
 }
 
