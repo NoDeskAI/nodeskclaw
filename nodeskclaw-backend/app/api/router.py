@@ -11,7 +11,6 @@ from app.api.events import router as events_router
 from app.api.instances import (
     instance_read_router,
     instance_write_router,
-    router as instance_router,
 )
 from app.api.llm_keys import router as llm_keys_router
 from app.api.organizations import router as org_router
@@ -44,7 +43,8 @@ api_router.include_router(billing_router, prefix="/billing", tags=["计费"])
 api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
 api_router.include_router(deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
-api_router.include_router(instance_router, prefix="/instances", tags=["实例"])
+api_router.include_router(instance_read_router, prefix="/instances", tags=["实例"])
+api_router.include_router(instance_write_router, prefix="/instances", tags=["实例"])
 api_router.include_router(mcp_router, prefix="/instances", tags=["MCP"])
 api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])

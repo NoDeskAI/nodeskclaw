@@ -254,11 +254,3 @@ async def pod_logs_stream(
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-
-
-# Portal 用的完整 router，包含 read + write 全部路由。
-# 必须在所有 @decorator 路由定义之后组装，
-# 因为 FastAPI 的 include_router 在调用时复制路由。
-router = APIRouter()
-router.include_router(instance_read_router)
-router.include_router(instance_write_router)
