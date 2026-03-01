@@ -93,7 +93,11 @@ function startConfiguring(channel: AvailableChannel) {
     }
     editingConfigs.value[channel.id] = defaults
   }
+  if (!(channel.id in channelConfigs.value)) {
+    channelConfigs.value[channel.id] = {}
+  }
   expandedChannels.value.add(channel.id)
+  dirty.value = true
 }
 
 function removeChannel(channelId: string) {
