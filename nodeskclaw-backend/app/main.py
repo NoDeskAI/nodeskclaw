@@ -989,6 +989,16 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 llm_providers 列")
 
+        col = (await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'agent_theme_color'"
+        ))).first()
+        if col is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN agent_theme_color VARCHAR(7)"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 agent_theme_color 列")
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

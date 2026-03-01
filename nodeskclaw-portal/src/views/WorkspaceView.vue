@@ -265,6 +265,13 @@ function onHexAction(action: string) {
       openChannelConfig()
       hexDrawerOpen.value = false
       break
+    case 'change-agent-color':
+      if (selectedAgentId.value) {
+        pendingAgentColorId.value = selectedAgentId.value
+        showAgentColorPicker.value = true
+      }
+      hexDrawerOpen.value = false
+      break
     case 'change-color':
       if (selectedHex.value?.entityId) {
         pendingColorHexId.value = selectedHex.value.entityId
@@ -339,6 +346,17 @@ async function pickColor(color: string) {
   showColorPicker.value = false
   await store.updateHumanHexColor(workspaceId.value, hexId, color)
   pendingColorHexId.value = ''
+}
+
+const showAgentColorPicker = ref(false)
+const pendingAgentColorId = ref('')
+
+async function pickAgentColor(color: string) {
+  const agentId = pendingAgentColorId.value
+  if (!agentId) return
+  showAgentColorPicker.value = false
+  await store.updateAgentThemeColor(workspaceId.value, agentId, color)
+  pendingAgentColorId.value = ''
 }
 
 const showChannelDialog = ref(false)
@@ -887,6 +905,35 @@ function handleKeydown(e: KeyboardEvent) {
               <button
                 class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="showColorPicker = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Agent Color Picker Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showAgentColorPicker" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showAgentColorPicker = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-xs shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.changeAgentColor') }}</h3>
+            <div class="grid grid-cols-4 gap-3 justify-items-center">
+              <button
+                v-for="color in COLOR_PRESETS"
+                :key="color"
+                class="w-10 h-10 rounded-full border-2 border-transparent hover:border-foreground/40 transition-colors hover:scale-110"
+                :style="{ backgroundColor: color }"
+                @click="pickAgentColor(color)"
+              />
+            </div>
+            <div class="flex justify-end pt-2">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showAgentColorPicker = false"
               >
                 {{ t('common.cancel') }}
               </button>

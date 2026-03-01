@@ -104,6 +104,7 @@ class Instance(BaseModel):
     hex_position_q: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hex_position_r: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     agent_display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    agent_theme_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     # relationships
     cluster = relationship("Cluster", back_populates="instances")

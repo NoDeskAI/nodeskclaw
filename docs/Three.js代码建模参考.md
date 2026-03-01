@@ -56,76 +56,91 @@
 | working（工作） | `0xfbbf24` 黄色 | 右臂锤击/打字动作，身体微弹 |
 | thinking（思考） | `0xa78bfa` 紫色 | 头部歪斜点头，右臂托腮，思考气泡浮现 |
 
-#### 2.1.2 机器人角色（Grabby）
+#### 2.1.2 机器人角色（Grabby） -- 屏幕脸造型 v2
 
-源文件：`entities/ClaudeMon.ts`（完整场景版，旧名 ClaudeMon）、`components/hex3d/Grabby.ts`（六角格工作区版，已实现）
+源文件：`components/hex3d/Grabby.ts`（六角格工作区版）
 
-赛博金属机器人风格，默认角色。由 17+ 个部件组成，具有更丰富的细节和动画。角色已更名为 Grabby（取自项目名 ClawBuddy 中"抓取"的语义）。
+**设计风格**：屏幕脸机器人（Screen-Face Bot），类 Wall-E Eve 风格。圆角方块头部搭配整面发光屏幕，胶囊形蛋状身体，无腿悬浮设计。与旧版 ClaudeMon（球形头+矩形LED眼+圆柱躯干+腿脚）完全不同。
 
-六角格工作区版已在 `nodeskclaw-portal/src/components/hex3d/Grabby.ts` 实现：
-- 按本节规格用 Three.js 基础几何体拼装完整机器人（头部/身体/手臂/附属共 20+ 部件）
-- 几何体模块级共享，材质按状态颜色创建（accent 材质随 Agent 状态动态切换）
-- 整体缩放 0.65x，站在扁平六棱柱底座（高度 0.08）上
-- 支持 5 种动画状态：idle（浮动）、working（锤击）、thinking（托腮+思考气泡）、error（抖动）、disconnected（静止灰色）
+**结构色方案**（银灰蓝调，在深色背景上清晰可辨）：
+- 主体色 `bodyMainMat`: `0x7a8a9a`（中灰蓝，metalness 0.7）
+- 次要色 `bodySecMat`: `0x8a9aaa`（稍亮，metalness 0.6）
+- 点缀色 `bodyTerMat`: `0x9aaabb`（最亮，metalness 0.7）
+- 屏幕底色 `screenBackMat`: `0x1a2a3e`（深蓝黑）
+- 面板色 `chestPanelMat`: `0x2a3a4e`
+
+实现特性：
+- 几何体模块级共享，accent 材质按 Agent 状态动态切换
+- 整体缩放 0.65x，悬浮在扁平六棱柱底座（高度 0.08）上方
+- 支持 5 种动画状态：idle（浮动）、working（屏幕闪烁+手臂忙碌）、thinking（托腮+思考气泡）、error（抖动+屏幕闪红）、disconnected（静止灰色）
+- 支持每个 Agent 独立主题色（`theme_color`，后端持久化）
 
 **头部组件**
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 头壳 | `SphereGeometry` | 半径 0.28, 分段 32x32, scale(1, 0.9, 0.85) | `0x2a3a4a`（深蓝灰） | 略扁的椭球，metalness 0.7 |
-| 面罩 | `PlaneGeometry` | 0.32 x 0.18 | `0x1a1a2e`（深紫黑） | 半透明 opacity 0.9，作为 LED 眼睛的底板 |
-| 面罩边框 | `RingGeometry` | 内径 0.17, 外径 0.19, scale(1, 0.6, 1) | `0x67e8f9`（青色） | 发光边缘效果 |
-| LED 眼睛 (x2) | `ShapeGeometry` | 圆角矩形 0.032 x 0.045, 圆角 0.012 | `0x67e8f9`（青色） | 自定义 Shape，竖长方形带圆角 |
-| 嘴巴 | `Line` (QuadraticBezierCurve3) | 宽 0.08, 10 段曲线 | `0x67e8f9`（青色） | 微笑弧线 |
-| 面板线 | `RingGeometry` | 内径 0.27, 外径 0.275, 半圆 | `0x1a2a3a` | 头部装饰线条 |
-| 耳朵 (x2) | `CylinderGeometry` | 半径 0.06, 高 0.04 | `0x3a4a5a` | 圆柱形"扬声器" |
+| 头壳 | `BoxGeometry` | 0.38 x 0.30 x 0.28 | `0x7a8a9a`（银灰蓝） | 圆角方块外壳，像显示器 |
+| 屏幕底板 | `PlaneGeometry` | 0.34 x 0.26 | accent 色半透明 | 屏幕边框发光 |
+| 屏幕 | `PlaneGeometry` | 0.32 x 0.24 | accent 色低透明度 | 主屏幕面板，working 时闪烁 |
+| 圆形眼睛 (x2) | `CircleGeometry` | 半径 0.035 | accent 色 | 圆形眼睛（非矩形LED） |
+| 嘴巴 | `Line` (QuadraticBezierCurve3) | 宽 0.07 | accent 色 | 微笑弧线 |
+| 传感器 (x2) | `BoxGeometry` | 0.04 x 0.10 x 0.06 | `0x8a9aaa` | 头部两侧小方块（替代旧版圆盘耳） |
+| 双天线杆 (x2) | `CylinderGeometry` | 上径 0.012, 下径 0.015, 高 0.08 | `0x9aaabb` | 头顶左右各一根 |
+| 双天线灯 (x2) | `SphereGeometry` | 半径 0.025 | accent 色发光 | 天线顶端脉冲灯 |
 
 **身体组件**
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 躯干 | `CylinderGeometry` | 上径 0.18, 下径 0.22, 高 0.3 | `0x2a3a4a` | 梯形圆柱，metalness 0.65 |
-| 胸部面板 | `PlaneGeometry` | 0.16 x 0.12 | `0x1a1a2e` | 半透明 opacity 0.8 |
-| 胸灯 | `CircleGeometry` | 半径 0.03 | `0xa78bfa`（紫色） | 脉冲发光状态指示 |
-| 腰带 | `TorusGeometry` | 主半径 0.2, 管半径 0.02 | `0x4a5a6a` | metalness 0.7 |
-| 腿 (x2) | `CylinderGeometry` | 上径 0.06, 下径 0.07, 高 0.15 | `0x3a4a5a` | 粗短机器人腿 |
-| 脚 (x2) | `SphereGeometry` | 半径 0.07, scale(1.2, 0.5, 1.3) | `0x2a3a4a` | 压扁的椭球 |
+| 躯干 | `SphereGeometry` | 半径 0.22, scale(1, 1.3, 0.9) | `0x7a8a9a` | 蛋形/胶囊身体（替代旧版圆柱） |
+| 胸部面板 | `PlaneGeometry` | 0.14 x 0.10 | `0x2a3a4e` | 半透明 opacity 0.8 |
+| 胸灯 | `CircleGeometry` | 半径 0.025 | accent 色 | 脉冲发光状态指示 |
+| 发光线条 (x2) | `PlaneGeometry` | 0.008 x 0.16 | accent 色半透明 | 身体两侧科技线条 |
 
 **肢体组件**
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 肩关节 (x2) | `SphereGeometry` | 半径 0.05 | `0x4a5a6a` | metalness 0.7 |
-| 臂段 (x2) | `CylinderGeometry` | 上径 0.035, 下径 0.04, 高 0.15 | `0x3a4a5a` | metalness 0.6 |
-| 手 (x2) | `SphereGeometry` | 半径 0.045 | `0x4a5a6a` | 圆形"夹爪" |
+| 肩关节 (x2) | `SphereGeometry` | 半径 0.04 | `0x9aaabb` | metalness 0.7 |
+| 臂段 (x2) | `CylinderGeometry` | 上径 0.028, 下径 0.032, 高 0.12 | `0x8a9aaa` | 比旧版更短 |
+| 手 (x2) | `SphereGeometry` | 半径 0.038, scale(1.1, 0.7, 1.1) | `0x9aaabb` | 扁椭球手掌 |
 
-**附属组件**
+**底部与附属**
 
 | 部件 | 几何体 | 参数 | 颜色 | 说明 |
 |---|---|---|---|---|
-| 天线底座 | `CylinderGeometry` | 上径 0.03, 下径 0.04, 高 0.04 | `0x3a4a5a` | - |
-| 天线杆 | `CylinderGeometry` | 上径 0.015, 下径 0.02, 高 0.12 | `0x4a5a6a` | - |
-| 天线顶灯 | `SphereGeometry` | 半径 0.035 | `0x67e8f9`（青色） | 脉冲发光 |
-| 发光线条 (x2) | `PlaneGeometry` | 0.01 x 0.2 | `0x67e8f9`（青色） | 身体两侧的科技线条 |
-| 状态环 | `RingGeometry` | 内径 0.28, 外径 0.32 | 随状态变化 | 脚下旋转光环 |
-| 思考气泡 (x3) | `CircleGeometry` | 半径 0.04 / 0.06 / 0.09, 6 段 | `0x67e8f9`（青色） | 六角形气泡，科技风 |
+| 悬浮环 | `RingGeometry` | 内径 0.14, 外径 0.18 | accent 色半透明 | 底部悬浮推进器光环（替代旧版腿脚） |
+| 状态环 | `RingGeometry` | 内径 0.28, 外径 0.32 | 随状态变化 | 地面旋转光环 |
+| 思考气泡 (x3) | `CircleGeometry` | 半径 0.04 / 0.06 / 0.09, 6 段 | accent 色 | 六角形气泡，科技风 |
 
-**动画系统**
+#### 2.1.2a 迷你复古电话（Channel 指示物）
 
-机器人角色拥有独立的动画管理系统（`IdleBehaviorManager`、`WorkingBehaviorManager`），支持：
-- 基础四态动画（idle / walking / working / thinking）
-- 多种 idle 随机行为（环顾四周、眨眼、跳跃等）
-- 工作站特定的 working 动画（每个站点不同的操作动作）
-- 缓动函数支持（easeInOut / easeOut / bounce / elastic 等）
+源文件：`components/hex3d/Grabby.ts` 中的 `createMiniPhone()` 函数
+
+当 Agent 的 SSE 连接活跃（`sse_connected === true`）时，在工位底座右前方显示一个迷你复古电话，表示该 Agent 的 channel 处于活跃状态。
+
+| 部件 | 几何体 | 参数 | 颜色 | 说明 |
+|---|---|---|---|---|
+| 底座 | `CylinderGeometry` | 半径 0.05, 高 0.018 | `0x8a9aaa`（银灰） | 扁圆盘 |
+| 话筒支架 (x2) | `CylinderGeometry` | 半径 0.015, 高 0.012 | `0x8a9aaa` | 竖直搁架 |
+| 听筒连接杆 | `CylinderGeometry` | 半径 0.01, 高 0.055 | accent 色金属 | 横向，连接两个耳件 |
+| 听筒耳件 (x2) | `SphereGeometry` | 半径 0.02, scale(1, 0.7, 1) | accent 色发光 | 微微发光 |
+
+- 位置：`(0.45, 0.04, 0.35)` 相对于 hex group，旋转 -30 度
+- SSE 断开时 `visible = false`
 
 **动画状态颜色**
 
-| 状态 | 状态环/天线/眼睛颜色 |
+| 状态 | accent 颜色 |
 |---|---|
-| idle | `0x4ade80` 绿色 |
-| walking | `0x60a5fa` 蓝色 |
-| working | `0xfbbf24` 琥珀色 |
+| running / active | `0x4ade80` 绿色 |
+| learning | `0x60a5fa` 蓝色 |
 | thinking | `0xa78bfa` 紫色 |
+| pending | `0xfbbf24` 琥珀色 |
+| idle | `0x8b8b9e` 灰色 |
+| error / failed | `0xf87171` 红色 |
+| deploying / updating 等 | `0xf97316` 橙色 |
+| disconnected | `0x555566` 暗灰 |
 
 #### 2.1.3 子代理系统（SubagentManager）
 

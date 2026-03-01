@@ -12,6 +12,7 @@ export interface AgentBrief {
   hex_q: number
   hex_r: number
   sse_connected: boolean
+  theme_color: string | null
 }
 
 export interface WorkspaceListItem {
@@ -208,6 +209,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (currentWorkspace.value?.id === workspaceId) {
       await fetchWorkspace(workspaceId)
     }
+  }
+
+  async function updateAgentThemeColor(workspaceId: string, instanceId: string, color: string) {
+    await updateAgent(workspaceId, instanceId, { theme_color: color })
   }
 
   // ── Blackboard ────────────────────────────────────
@@ -791,6 +796,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     addAgent,
     removeAgent,
     updateAgent,
+    updateAgentThemeColor,
     fetchBlackboard,
     updateBlackboard,
     fetchMembers,

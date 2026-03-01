@@ -216,6 +216,7 @@ const enUS = {
     noAvailableMembers: "No available members. Please add members in settings first.",
     goToSettings: "Go to Settings",
     selectColor: "Select Color",
+    changeAgentColor: "Theme Color",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",

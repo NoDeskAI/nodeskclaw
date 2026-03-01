@@ -48,6 +48,7 @@ def _agent_brief(inst: Instance) -> AgentBrief:
         hex_q=inst.hex_position_q,
         hex_r=inst.hex_position_r,
         sse_connected=inst.id in sse_listener_manager.healthy_instances,
+        theme_color=inst.agent_theme_color,
     )
 
 
@@ -275,6 +276,8 @@ async def update_agent(
 
     if data.display_name is not None:
         inst.agent_display_name = data.display_name
+    if data.theme_color is not None:
+        inst.agent_theme_color = data.theme_color
 
     position_changed = False
     old_q, old_r = inst.hex_position_q, inst.hex_position_r

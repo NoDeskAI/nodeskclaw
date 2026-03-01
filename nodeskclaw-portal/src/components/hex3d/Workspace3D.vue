@@ -6,7 +6,7 @@ import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
-import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared } from './Grabby'
+import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared, createMiniPhone, disposeMiniPhone } from './Grabby'
 import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -108,6 +108,10 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
 
   const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
   const color = agent.sse_connected ? baseColor : DISCONNECTED_COLOR
+  const themeHex = agent.theme_color
+    ? parseInt(agent.theme_color.replace('#', ''), 16)
+    : null
+  const robotColor = themeHex ?? color
 
   const baseMat = new THREE.MeshStandardMaterial({
     color,
@@ -125,10 +129,17 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
   const edgeMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 })
   group.add(new THREE.LineSegments(AGENT_BASE_EDGE_GEO, edgeMat))
 
-  const robot = createGrabby(color)
+  const robot = createGrabby(robotColor)
   robot.position.y = 0.04
   group.add(robot)
   group.userData.robot = robot
+
+  const phone = createMiniPhone(robotColor)
+  phone.position.set(0.45, 0.04, 0.35)
+  phone.rotation.y = -Math.PI / 6
+  phone.visible = agent.sse_connected
+  group.add(phone)
+  group.userData.phone = phone
 
   return group
 }
@@ -339,6 +350,7 @@ function createEmptyHexMesh(q: number, r: number): THREE.Group {
 function syncScene() {
   for (const [, group] of hexMeshes) {
     if (group.userData.robot) disposeGrabby(group.userData.robot as THREE.Group)
+    if (group.userData.phone) disposeMiniPhone(group.userData.phone as THREE.Group)
     scene.remove(group)
   }
   hexMeshes.clear()
@@ -483,9 +495,13 @@ addToLoop(() => {
     }
 
     const robot = group.userData.robot as THREE.Group | undefined
-    if (robot) {
+    const phone = group.userData.phone as THREE.Group | undefined
+    if (robot || phone) {
       const agent = props.agents.find(a => a.instance_id === id)
-      if (agent) animateGrabby(robot, agent.status, agent.sse_connected, t)
+      if (agent) {
+        if (robot) animateGrabby(robot, agent.status, agent.sse_connected, t)
+        if (phone) phone.visible = agent.sse_connected
+      }
     }
   }
 

@@ -21,7 +21,7 @@ const emit = defineEmits<{
 
 const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
-  agent: { c: 'open-chat', d: 'view-detail', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
+  agent: { c: 'open-chat', d: 'view-detail', p: 'change-agent-color', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
   corridor: { r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
   human: { s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
   blackboard: { e: 'view-blackboard' },
@@ -134,6 +134,14 @@ onUnmounted(() => {
             <ExternalLink class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.viewDetail') }}</span>
             <kbd class="kbd-hint">D</kbd>
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'change-agent-color')"
+          >
+            <Palette class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.changeAgentColor') }}</span>
+            <kbd class="kbd-hint">P</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"

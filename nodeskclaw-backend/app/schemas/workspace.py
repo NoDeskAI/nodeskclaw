@@ -30,6 +30,7 @@ class AgentBrief(BaseModel):
     hex_q: int
     hex_r: int
     sse_connected: bool = False
+    theme_color: str | None = None
 
 
 class WorkspaceInfo(BaseModel):
@@ -88,6 +89,7 @@ class UpdateAgentRequest(BaseModel):
     display_name: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
+    theme_color: str | None = None
 
 
 # ── Workspace Members (RBAC) ────────────────────────

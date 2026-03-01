@@ -2,78 +2,66 @@ import * as THREE from 'three'
 
 // ---- Shared Geometries (one per module, reused across all robots) ----
 
-const headShellGeo = new THREE.SphereGeometry(0.28, 16, 16)
-const faceMaskGeo = new THREE.PlaneGeometry(0.32, 0.18)
-const maskBorderGeo = new THREE.RingGeometry(0.17, 0.19, 32)
-
-const ledEyeGeo = (() => {
-  const w = 0.032, h = 0.045, r = 0.012
-  const s = new THREE.Shape()
-  s.moveTo(-w / 2 + r, -h / 2)
-  s.lineTo(w / 2 - r, -h / 2)
-  s.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r)
-  s.lineTo(w / 2, h / 2 - r)
-  s.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2)
-  s.lineTo(-w / 2 + r, h / 2)
-  s.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r)
-  s.lineTo(-w / 2, -h / 2 + r)
-  s.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2)
-  return new THREE.ShapeGeometry(s)
-})()
-
+const headGeo = new THREE.BoxGeometry(0.38, 0.30, 0.28)
+const screenGeo = new THREE.PlaneGeometry(0.32, 0.24)
+const screenBorderGeo = new THREE.PlaneGeometry(0.34, 0.26)
+const eyeGeo = new THREE.CircleGeometry(0.035, 16)
 const mouthGeo = (() => {
   const curve = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(-0.04, 0, 0),
-    new THREE.Vector3(0, -0.02, 0),
-    new THREE.Vector3(0.04, 0, 0),
+    new THREE.Vector3(-0.035, 0, 0),
+    new THREE.Vector3(0, -0.015, 0),
+    new THREE.Vector3(0.035, 0, 0),
   )
   return new THREE.BufferGeometry().setFromPoints(curve.getPoints(10))
 })()
+const sensorGeo = new THREE.BoxGeometry(0.04, 0.10, 0.06)
+const antennaRodGeo = new THREE.CylinderGeometry(0.012, 0.015, 0.08, 8)
+const antennaTipGeo = new THREE.SphereGeometry(0.025, 8, 8)
 
-const panelLineGeo = new THREE.RingGeometry(0.27, 0.275, 32, 1, 0, Math.PI)
-const earGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 12)
-const torsoGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.3, 12)
-const chestPanelGeo = new THREE.PlaneGeometry(0.16, 0.12)
-const chestLightGeo = new THREE.CircleGeometry(0.03, 16)
-const beltGeo = new THREE.TorusGeometry(0.2, 0.02, 8, 24)
-const legGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.15, 8)
-const footGeo = new THREE.SphereGeometry(0.07, 12, 8)
-const shoulderGeo = new THREE.SphereGeometry(0.05, 8, 8)
-const armSegGeo = new THREE.CylinderGeometry(0.035, 0.04, 0.15, 8)
-const handGeo = new THREE.SphereGeometry(0.045, 8, 8)
-const antennaBaseGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.04, 8)
-const antennaRodGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.12, 8)
-const antennaLightGeo = new THREE.SphereGeometry(0.035, 12, 8)
-const glowLineGeo = new THREE.PlaneGeometry(0.01, 0.2)
+const torsoGeo = new THREE.SphereGeometry(0.22, 16, 16)
+const chestPanelGeo = new THREE.PlaneGeometry(0.14, 0.10)
+const chestLightGeo = new THREE.CircleGeometry(0.025, 16)
+const glowLineGeo = new THREE.PlaneGeometry(0.008, 0.16)
+
+const shoulderGeo = new THREE.SphereGeometry(0.04, 8, 8)
+const armSegGeo = new THREE.CylinderGeometry(0.028, 0.032, 0.12, 8)
+const handGeo = new THREE.SphereGeometry(0.038, 8, 8)
+
+const hoverRingGeo = new THREE.RingGeometry(0.14, 0.18, 24)
 const statusRingGeo = new THREE.RingGeometry(0.28, 0.32, 32)
+
 const thoughtGeos = [
   new THREE.CircleGeometry(0.04, 6),
   new THREE.CircleGeometry(0.06, 6),
   new THREE.CircleGeometry(0.09, 6),
 ]
 
-// ---- Shared Structural Materials (opaque, same for all robots) ----
+// ---- Mini Phone Geometries ----
+
+const phoneBaseGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.018, 12)
+const phoneCradleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.012, 8)
+const phoneHandsetBarGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.055, 8)
+const phoneEarpieceGeo = new THREE.SphereGeometry(0.02, 8, 6)
+
+// ---- Shared Structural Materials (brighter silver-blue palette) ----
 
 const bodyMainMat = new THREE.MeshStandardMaterial({
-  color: 0x2a3a4a, metalness: 0.7, roughness: 0.3,
+  color: 0x7a8a9a, metalness: 0.7, roughness: 0.3,
 })
 const bodySecMat = new THREE.MeshStandardMaterial({
-  color: 0x3a4a5a, metalness: 0.6, roughness: 0.4,
+  color: 0x8a9aaa, metalness: 0.6, roughness: 0.4,
 })
 const bodyTerMat = new THREE.MeshStandardMaterial({
-  color: 0x4a5a6a, metalness: 0.7, roughness: 0.3,
+  color: 0x9aaabb, metalness: 0.7, roughness: 0.3,
 })
-const faceMaskMat = new THREE.MeshStandardMaterial({
-  color: 0x1a1a2e, transparent: true, opacity: 0.9,
+const screenBackMat = new THREE.MeshStandardMaterial({
+  color: 0x1a2a3e, transparent: true, opacity: 0.95,
 })
 const chestPanelMat = new THREE.MeshStandardMaterial({
-  color: 0x1a1a2e, transparent: true, opacity: 0.8,
-})
-const panelLineMat = new THREE.MeshBasicMaterial({
-  color: 0x1a2a3a, side: THREE.DoubleSide,
+  color: 0x2a3a4e, transparent: true, opacity: 0.8,
 })
 
-// ---- Status → Accent Color ----
+// ---- Status -> Accent Color ----
 
 const STATUS_ACCENT: Record<string, number> = {
   running: 0x4ade80, active: 0x4ade80,
@@ -114,12 +102,14 @@ interface GrabbyParts {
   leftArmGroup: THREE.Group
   rightArmGroup: THREE.Group
   statusRing: THREE.Mesh
-  antennaLight: THREE.Mesh
-  chestLight: THREE.Mesh
+  hoverRing: THREE.Mesh
   thoughtBubbles: THREE.Mesh[]
+  screenMat: THREE.MeshBasicMaterial
+  screenBorderMat: THREE.MeshBasicMaterial
   accentMat: THREE.MeshBasicMaterial
-  antennaLightMat: THREE.MeshStandardMaterial
+  antennaTipMat: THREE.MeshStandardMaterial
   statusRingMat: THREE.MeshBasicMaterial
+  hoverRingMat: THREE.MeshBasicMaterial
   chestLightMat: THREE.MeshBasicMaterial
   mouthMat: THREE.LineBasicMaterial
   glowLineMats: THREE.MeshBasicMaterial[]
@@ -132,8 +122,14 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const robot = new THREE.Group()
   robot.name = 'grabby'
 
+  const screenMat = new THREE.MeshBasicMaterial({
+    color: themeColor, transparent: true, opacity: 0.15,
+  })
+  const screenBorderMat = new THREE.MeshBasicMaterial({
+    color: themeColor, transparent: true, opacity: 0.3,
+  })
   const accentMat = new THREE.MeshBasicMaterial({ color: themeColor })
-  const antennaLightMat = new THREE.MeshStandardMaterial({
+  const antennaTipMat = new THREE.MeshStandardMaterial({
     color: themeColor,
     emissive: new THREE.Color(themeColor),
     emissiveIntensity: 0.8,
@@ -141,8 +137,11 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const statusRingMat = new THREE.MeshBasicMaterial({
     color: themeColor, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
   })
+  const hoverRingMat = new THREE.MeshBasicMaterial({
+    color: themeColor, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
+  })
   const chestLightMat = new THREE.MeshBasicMaterial({
-    color: 0xa78bfa, transparent: true, opacity: 0.8,
+    color: themeColor, transparent: true, opacity: 0.8,
   })
   const glowLineMat1 = new THREE.MeshBasicMaterial({
     color: themeColor, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
@@ -152,137 +151,118 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   const mainGroup = new THREE.Group()
 
-  // ---- Head Group ----
+  // ---- Head Group (rounded box monitor) ----
   const headGroup = new THREE.Group()
-  headGroup.position.y = 0.68
+  headGroup.position.y = 0.62
 
-  const headShell = new THREE.Mesh(headShellGeo, bodyMainMat)
-  headShell.scale.set(1, 0.9, 0.85)
+  const headShell = new THREE.Mesh(headGeo, bodyMainMat)
   headGroup.add(headShell)
 
-  const faceMask = new THREE.Mesh(faceMaskGeo, faceMaskMat)
-  faceMask.position.set(0, 0, 0.24)
-  headGroup.add(faceMask)
+  const scrBorder = new THREE.Mesh(screenBorderGeo, screenBorderMat)
+  scrBorder.position.set(0, 0, 0.141)
+  headGroup.add(scrBorder)
 
-  const maskBorder = new THREE.Mesh(maskBorderGeo, accentMat)
-  maskBorder.position.set(0, 0, 0.241)
-  maskBorder.scale.set(1, 0.6, 1)
-  headGroup.add(maskBorder)
+  const screen = new THREE.Mesh(screenGeo, screenMat)
+  screen.position.set(0, 0, 0.142)
+  headGroup.add(screen)
 
-  const eyeL = new THREE.Mesh(ledEyeGeo, accentMat)
-  eyeL.position.set(-0.06, 0.01, 0.242)
+  const eyeL = new THREE.Mesh(eyeGeo, accentMat)
+  eyeL.position.set(-0.065, 0.03, 0.143)
   headGroup.add(eyeL)
 
-  const eyeR = new THREE.Mesh(ledEyeGeo, accentMat)
-  eyeR.position.set(0.06, 0.01, 0.242)
+  const eyeR = new THREE.Mesh(eyeGeo, accentMat)
+  eyeR.position.set(0.065, 0.03, 0.143)
   headGroup.add(eyeR)
 
   const mouth = new THREE.Line(mouthGeo, mouthMat)
-  mouth.position.set(0, -0.05, 0.242)
+  mouth.position.set(0, -0.04, 0.143)
   headGroup.add(mouth)
 
-  const pLine = new THREE.Mesh(panelLineGeo, panelLineMat)
-  pLine.rotation.x = Math.PI / 2
-  headGroup.add(pLine)
+  const sensorL = new THREE.Mesh(sensorGeo, bodySecMat)
+  sensorL.position.set(-0.21, 0, 0)
+  headGroup.add(sensorL)
 
-  const earL = new THREE.Mesh(earGeo, bodySecMat)
-  earL.position.set(-0.28, 0, 0)
-  earL.rotation.z = Math.PI / 2
-  headGroup.add(earL)
+  const sensorR = new THREE.Mesh(sensorGeo, bodySecMat)
+  sensorR.position.set(0.21, 0, 0)
+  headGroup.add(sensorR)
 
-  const earR = new THREE.Mesh(earGeo, bodySecMat)
-  earR.position.set(0.28, 0, 0)
-  earR.rotation.z = Math.PI / 2
-  headGroup.add(earR)
+  const antRodL = new THREE.Mesh(antennaRodGeo, bodyTerMat)
+  antRodL.position.set(-0.08, 0.19, 0)
+  headGroup.add(antRodL)
 
-  const antBase = new THREE.Mesh(antennaBaseGeo, bodySecMat)
-  antBase.position.y = 0.28
-  headGroup.add(antBase)
+  const antTipL = new THREE.Mesh(antennaTipGeo, antennaTipMat)
+  antTipL.position.set(-0.08, 0.25, 0)
+  headGroup.add(antTipL)
 
-  const antRod = new THREE.Mesh(antennaRodGeo, bodyTerMat)
-  antRod.position.y = 0.36
-  headGroup.add(antRod)
+  const antRodR = new THREE.Mesh(antennaRodGeo, bodyTerMat)
+  antRodR.position.set(0.08, 0.19, 0)
+  headGroup.add(antRodR)
 
-  const antLight = new THREE.Mesh(antennaLightGeo, antennaLightMat)
-  antLight.position.y = 0.44
-  headGroup.add(antLight)
+  const antTipR = new THREE.Mesh(antennaTipGeo, antennaTipMat)
+  antTipR.position.set(0.08, 0.25, 0)
+  headGroup.add(antTipR)
 
   mainGroup.add(headGroup)
 
-  // ---- Torso ----
+  // ---- Torso (egg/capsule body) ----
   const torso = new THREE.Mesh(torsoGeo, bodyMainMat)
-  torso.position.y = 0.40
+  torso.position.y = 0.36
+  torso.scale.set(1, 1.3, 0.9)
   mainGroup.add(torso)
 
   const chestPanel = new THREE.Mesh(chestPanelGeo, chestPanelMat)
-  chestPanel.position.set(0, 0.43, 0.19)
+  chestPanel.position.set(0, 0.38, 0.195)
   mainGroup.add(chestPanel)
 
   const chestLight = new THREE.Mesh(chestLightGeo, chestLightMat)
-  chestLight.position.set(0, 0.40, 0.20)
+  chestLight.position.set(0, 0.36, 0.198)
   mainGroup.add(chestLight)
 
-  const belt = new THREE.Mesh(beltGeo, bodyTerMat)
-  belt.position.y = 0.25
-  belt.rotation.x = Math.PI / 2
-  mainGroup.add(belt)
-
-  // ---- Legs & Feet ----
-  const legL = new THREE.Mesh(legGeo, bodySecMat)
-  legL.position.set(-0.10, 0.14, 0)
-  mainGroup.add(legL)
-
-  const legR = new THREE.Mesh(legGeo, bodySecMat)
-  legR.position.set(0.10, 0.14, 0)
-  mainGroup.add(legR)
-
-  const footL = new THREE.Mesh(footGeo, bodyMainMat)
-  footL.position.set(-0.10, 0.04, 0)
-  footL.scale.set(1.2, 0.5, 1.3)
-  mainGroup.add(footL)
-
-  const footR = new THREE.Mesh(footGeo, bodyMainMat)
-  footR.position.set(0.10, 0.04, 0)
-  footR.scale.set(1.2, 0.5, 1.3)
-  mainGroup.add(footR)
-
-  // ---- Glow Lines ----
+  // ---- Glow Lines (side accents) ----
   const glowL = new THREE.Mesh(glowLineGeo, glowLineMat1)
-  glowL.position.set(-0.21, 0.40, 0)
+  glowL.position.set(-0.20, 0.36, 0)
   glowL.rotation.y = Math.PI / 2
   mainGroup.add(glowL)
 
   const glowR = new THREE.Mesh(glowLineGeo, glowLineMat2)
-  glowR.position.set(0.21, 0.40, 0)
+  glowR.position.set(0.20, 0.36, 0)
   glowR.rotation.y = -Math.PI / 2
   mainGroup.add(glowR)
 
-  // ---- Arms ----
+  // ---- Arms (shorter, proportional to egg body) ----
   const leftArmGroup = new THREE.Group()
-  leftArmGroup.position.set(-0.25, 0.52, 0)
+  leftArmGroup.position.set(-0.24, 0.46, 0)
   leftArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
   const armL = new THREE.Mesh(armSegGeo, bodySecMat)
-  armL.position.y = -0.10
+  armL.position.y = -0.08
   leftArmGroup.add(armL)
   const handL = new THREE.Mesh(handGeo, bodyTerMat)
-  handL.position.y = -0.20
+  handL.position.y = -0.16
+  handL.scale.set(1.1, 0.7, 1.1)
   leftArmGroup.add(handL)
   mainGroup.add(leftArmGroup)
 
   const rightArmGroup = new THREE.Group()
-  rightArmGroup.position.set(0.25, 0.52, 0)
+  rightArmGroup.position.set(0.24, 0.46, 0)
   rightArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
   const armR = new THREE.Mesh(armSegGeo, bodySecMat)
-  armR.position.y = -0.10
+  armR.position.y = -0.08
   rightArmGroup.add(armR)
   const handR = new THREE.Mesh(handGeo, bodyTerMat)
-  handR.position.y = -0.20
+  handR.position.y = -0.16
+  handR.scale.set(1.1, 0.7, 1.1)
   rightArmGroup.add(handR)
   mainGroup.add(rightArmGroup)
 
+  // ---- Hover Ring (thruster glow at bottom) ----
+  const hoverRing = new THREE.Mesh(hoverRingGeo, hoverRingMat)
+  hoverRing.rotation.x = -Math.PI / 2
+  hoverRing.position.y = 0.10
+  mainGroup.add(hoverRing)
+
   robot.add(mainGroup)
 
-  // ---- Status Ring (stays on ground, not inside mainGroup) ----
+  // ---- Status Ring (stays on ground) ----
   const statusRing = new THREE.Mesh(statusRingGeo, statusRingMat)
   statusRing.rotation.x = -Math.PI / 2
   statusRing.position.y = 0.01
@@ -292,9 +272,9 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const thoughtBubbles: THREE.Mesh[] = []
   const thoughtMats: THREE.MeshBasicMaterial[] = []
   const bubblePositions = [
-    { x: 0.15, y: 1.15, z: 0.1 },
-    { x: 0.22, y: 1.25, z: 0.15 },
-    { x: 0.12, y: 1.38, z: 0.1 },
+    { x: 0.15, y: 1.05, z: 0.1 },
+    { x: 0.22, y: 1.15, z: 0.15 },
+    { x: 0.12, y: 1.28, z: 0.1 },
   ]
   for (let i = 0; i < 3; i++) {
     const mat = new THREE.MeshBasicMaterial({
@@ -311,8 +291,9 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   robot.userData.parts = {
     mainGroup, headGroup, leftArmGroup, rightArmGroup,
-    statusRing, antennaLight: antLight, chestLight, thoughtBubbles,
-    accentMat, antennaLightMat, statusRingMat, chestLightMat,
+    statusRing, hoverRing, thoughtBubbles,
+    screenMat, screenBorderMat, accentMat, antennaTipMat,
+    statusRingMat, hoverRingMat, chestLightMat,
     mouthMat, glowLineMats: [glowLineMat1, glowLineMat2], thoughtMats,
   } satisfies GrabbyParts
 
@@ -321,6 +302,65 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   return robot
 }
+
+// ---- Mini Retro Phone ----
+
+export function createMiniPhone(themeColor: number = DEFAULT_ACCENT): THREE.Group {
+  const phone = new THREE.Group()
+  phone.name = 'miniPhone'
+
+  const phoneMat = new THREE.MeshStandardMaterial({
+    color: themeColor, metalness: 0.5, roughness: 0.4,
+  })
+  const phoneBodyMat = new THREE.MeshStandardMaterial({
+    color: 0x8a9aaa, metalness: 0.6, roughness: 0.3,
+  })
+  const phoneGlowMat = new THREE.MeshStandardMaterial({
+    color: themeColor,
+    emissive: new THREE.Color(themeColor),
+    emissiveIntensity: 0.5,
+  })
+
+  const base = new THREE.Mesh(phoneBaseGeo, phoneBodyMat)
+  phone.add(base)
+
+  const cradleL = new THREE.Mesh(phoneCradleGeo, phoneBodyMat)
+  cradleL.position.set(-0.02, 0.015, 0)
+  phone.add(cradleL)
+
+  const cradleR = new THREE.Mesh(phoneCradleGeo, phoneBodyMat)
+  cradleR.position.set(0.02, 0.015, 0)
+  phone.add(cradleR)
+
+  const handsetBar = new THREE.Mesh(phoneHandsetBarGeo, phoneMat)
+  handsetBar.position.set(0, 0.028, 0)
+  handsetBar.rotation.z = Math.PI / 2
+  phone.add(handsetBar)
+
+  const earL = new THREE.Mesh(phoneEarpieceGeo, phoneGlowMat)
+  earL.position.set(-0.032, 0.028, 0)
+  earL.scale.set(1, 0.7, 1)
+  phone.add(earL)
+
+  const earR = new THREE.Mesh(phoneEarpieceGeo, phoneGlowMat)
+  earR.position.set(0.032, 0.028, 0)
+  earR.scale.set(1, 0.7, 1)
+  phone.add(earR)
+
+  phone.userData.phoneMat = phoneMat
+  phone.userData.phoneGlowMat = phoneGlowMat
+
+  return phone
+}
+
+export function disposeMiniPhone(phone: THREE.Group): void {
+  const phoneMat = phone.userData.phoneMat as THREE.MeshStandardMaterial | undefined
+  const phoneGlowMat = phone.userData.phoneGlowMat as THREE.MeshStandardMaterial | undefined
+  phoneMat?.dispose()
+  phoneGlowMat?.dispose()
+}
+
+// ---- Animation ----
 
 export function animateGrabby(
   robot: THREE.Group,
@@ -343,12 +383,17 @@ export function animateGrabby(
 
   if (animState !== 'disconnected') {
     parts.statusRing.rotation.z += animState === 'working' ? 0.03 : 0.015
-    parts.antennaLightMat.emissiveIntensity = 0.5 + Math.sin(time * 3) * 0.3
+    parts.antennaTipMat.emissiveIntensity = 0.5 + Math.sin(time * 3) * 0.3
     parts.chestLightMat.opacity = 0.6 + Math.sin(time * 2) * 0.3
+    parts.hoverRingMat.opacity = 0.2 + Math.sin(time * 2.5) * 0.1
+    parts.screenMat.opacity = 0.12 + Math.sin(time * 1.5) * 0.05
   } else {
-    parts.antennaLightMat.emissiveIntensity = 0.1
+    parts.antennaTipMat.emissiveIntensity = 0.1
     parts.chestLightMat.opacity = 0.2
     parts.statusRingMat.opacity = 0.2
+    parts.hoverRingMat.opacity = 0.1
+    parts.screenMat.opacity = 0.05
+    parts.screenBorderMat.opacity = 0.1
   }
 
   switch (animState) {
@@ -369,6 +414,7 @@ export function animateGrabby(
       parts.rightArmGroup.rotation.z *= 0.92
       parts.leftArmGroup.rotation.x = Math.sin(time * 2) * 0.08
       parts.headGroup.rotation.z *= 0.92
+      parts.screenMat.opacity = 0.1 + Math.abs(Math.sin(time * 4)) * 0.15
       fadeThoughtBubbles(parts, false, time)
       break
 
@@ -390,6 +436,7 @@ export function animateGrabby(
       parts.rightArmGroup.rotation.z *= 0.9
       parts.headGroup.rotation.z *= 0.9
       parts.statusRingMat.opacity = 0.3 + Math.sin(time * 8) * 0.3
+      parts.screenMat.opacity = Math.sin(time * 8) > 0 ? 0.2 : 0.05
       fadeThoughtBubbles(parts, false, time)
       break
 
@@ -425,10 +472,14 @@ export function updateGrabbyColor(robot: THREE.Group, color: number): void {
   if (!parts) return
 
   const c = new THREE.Color(color)
+  parts.screenMat.color.copy(c)
+  parts.screenBorderMat.color.copy(c)
   parts.accentMat.color.copy(c)
-  parts.antennaLightMat.color.copy(c)
-  parts.antennaLightMat.emissive.copy(c)
+  parts.antennaTipMat.color.copy(c)
+  parts.antennaTipMat.emissive.copy(c)
   parts.statusRingMat.color.copy(c)
+  parts.hoverRingMat.color.copy(c)
+  parts.chestLightMat.color.copy(c)
   parts.mouthMat.color.copy(c)
   for (const m of parts.glowLineMats) m.color.copy(c)
   for (const m of parts.thoughtMats) m.color.copy(c)
@@ -438,9 +489,12 @@ export function disposeGrabby(robot: THREE.Group): void {
   const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
+  parts.screenMat.dispose()
+  parts.screenBorderMat.dispose()
   parts.accentMat.dispose()
-  parts.antennaLightMat.dispose()
+  parts.antennaTipMat.dispose()
   parts.statusRingMat.dispose()
+  parts.hoverRingMat.dispose()
   parts.chestLightMat.dispose()
   parts.mouthMat.dispose()
   for (const m of parts.glowLineMats) m.dispose()
@@ -449,15 +503,16 @@ export function disposeGrabby(robot: THREE.Group): void {
 }
 
 const allSharedGeos: THREE.BufferGeometry[] = [
-  headShellGeo, faceMaskGeo, maskBorderGeo, ledEyeGeo, mouthGeo,
-  panelLineGeo, earGeo, torsoGeo, chestPanelGeo, chestLightGeo,
-  beltGeo, legGeo, footGeo, shoulderGeo, armSegGeo, handGeo,
-  antennaBaseGeo, antennaRodGeo, antennaLightGeo, glowLineGeo,
-  statusRingGeo, ...thoughtGeos,
+  headGeo, screenGeo, screenBorderGeo, eyeGeo, mouthGeo,
+  sensorGeo, antennaRodGeo, antennaTipGeo,
+  torsoGeo, chestPanelGeo, chestLightGeo, glowLineGeo,
+  shoulderGeo, armSegGeo, handGeo,
+  hoverRingGeo, statusRingGeo, ...thoughtGeos,
+  phoneBaseGeo, phoneCradleGeo, phoneHandsetBarGeo, phoneEarpieceGeo,
 ]
 
 const allSharedMats: THREE.Material[] = [
-  bodyMainMat, bodySecMat, bodyTerMat, faceMaskMat, chestPanelMat, panelLineMat,
+  bodyMainMat, bodySecMat, bodyTerMat, screenBackMat, chestPanelMat,
 ]
 
 export function disposeGrabbyShared(): void {
