@@ -383,6 +383,16 @@ async def write_channel_configs(
 
         existing_channels = config.get("channels", {})
 
+        for cid, new_cfg in channel_configs.items():
+            if not isinstance(new_cfg, dict):
+                continue
+            old_cfg = existing_channels.get(cid)
+            if not isinstance(old_cfg, dict):
+                continue
+            for k, v in new_cfg.items():
+                if isinstance(v, str) and "***" in v and k in old_cfg:
+                    new_cfg[k] = old_cfg[k]
+
         system_configs = {
             cid: cfg for cid, cfg in existing_channels.items()
             if cid in SYSTEM_CHANNEL_IDS
