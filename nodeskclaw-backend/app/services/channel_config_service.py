@@ -391,6 +391,17 @@ async def write_channel_configs(
         merged = {**system_configs, **channel_configs}
 
         config["channels"] = merged
+
+        plugins = config.setdefault("plugins", {})
+        entries = plugins.setdefault("entries", {})
+        old_user_channels = {
+            cid for cid in existing_channels if cid not in SYSTEM_CHANNEL_IDS
+        }
+        for cid in channel_configs:
+            entries[cid] = {"enabled": True}
+        for cid in old_user_channels - set(channel_configs):
+            entries[cid] = {"enabled": False}
+
         await _write_config_file(fs, config)
 
     logger.info("已写入 Channel 配置: instance=%s channels=%s",
