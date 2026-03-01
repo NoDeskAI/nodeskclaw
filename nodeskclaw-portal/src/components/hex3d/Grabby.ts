@@ -109,6 +109,9 @@ interface GrabbyParts {
   statusRing: THREE.Mesh
   hoverRing: THREE.Mesh
   thoughtBubbles: THREE.Mesh[]
+  bodyMainMatInst: THREE.MeshStandardMaterial
+  bodySecMatInst: THREE.MeshStandardMaterial
+  bodyTerMatInst: THREE.MeshStandardMaterial
   screenMat: THREE.MeshBasicMaterial
   screenBorderMat: THREE.MeshBasicMaterial
   accentMat: THREE.MeshBasicMaterial
@@ -121,38 +124,60 @@ interface GrabbyParts {
   thoughtMats: THREE.MeshBasicMaterial[]
 }
 
+function applyBodyTheme(
+  main: THREE.MeshStandardMaterial,
+  sec: THREE.MeshStandardMaterial,
+  ter: THREE.MeshStandardMaterial,
+  color: number,
+): void {
+  const c = new THREE.Color(color)
+  const hsl = { h: 0, s: 0, l: 0 }
+  c.getHSL(hsl)
+  main.color.setHSL(hsl.h, hsl.s, hsl.l)
+  sec.color.setHSL(hsl.h, hsl.s * 0.9, Math.min(hsl.l + 0.08, 1))
+  ter.color.setHSL(hsl.h, hsl.s * 0.8, Math.min(hsl.l + 0.15, 1))
+}
+
 // ---- Public API ----
 
-export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
+export function createGrabby(bodyTheme?: number): THREE.Group {
   const robot = new THREE.Group()
   robot.name = 'grabby'
 
+  const robotBodyMain = bodyMainMat.clone()
+  const robotBodySec = bodySecMat.clone()
+  const robotBodyTer = bodyTerMat.clone()
+  if (bodyTheme !== undefined) {
+    applyBodyTheme(robotBodyMain, robotBodySec, robotBodyTer, bodyTheme)
+  }
+
+  const accent = DEFAULT_ACCENT
   const screenMat = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.15,
+    color: accent, transparent: true, opacity: 0.15,
   })
   const screenBorderMat = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.3,
+    color: accent, transparent: true, opacity: 0.3,
   })
-  const accentMat = new THREE.MeshBasicMaterial({ color: themeColor })
+  const accentMat = new THREE.MeshBasicMaterial({ color: accent })
   const antennaTipMat = new THREE.MeshStandardMaterial({
-    color: themeColor,
-    emissive: new THREE.Color(themeColor),
+    color: accent,
+    emissive: new THREE.Color(accent),
     emissiveIntensity: 0.8,
   })
   const statusRingMat = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
+    color: accent, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
   })
   const hoverRingMat = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
+    color: accent, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
   })
   const chestLightMat = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.8,
+    color: accent, transparent: true, opacity: 0.8,
   })
   const glowLineMat1 = new THREE.MeshBasicMaterial({
-    color: themeColor, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+    color: accent, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
   })
   const glowLineMat2 = glowLineMat1.clone()
-  const mouthMat = new THREE.LineBasicMaterial({ color: themeColor })
+  const mouthMat = new THREE.LineBasicMaterial({ color: accent })
 
   const mainGroup = new THREE.Group()
 
@@ -160,7 +185,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   const headGroup = new THREE.Group()
   headGroup.position.y = 0.54
 
-  const headShell = new THREE.Mesh(headGeo, bodyMainMat)
+  const headShell = new THREE.Mesh(headGeo, robotBodyMain)
   headGroup.add(headShell)
 
   const scrBorder = new THREE.Mesh(screenBorderGeo, screenBorderMat)
@@ -183,15 +208,15 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   mouth.position.set(0, -0.04, 0.143)
   headGroup.add(mouth)
 
-  const sensorL = new THREE.Mesh(sensorGeo, bodySecMat)
+  const sensorL = new THREE.Mesh(sensorGeo, robotBodySec)
   sensorL.position.set(-0.21, 0, 0)
   headGroup.add(sensorL)
 
-  const sensorR = new THREE.Mesh(sensorGeo, bodySecMat)
+  const sensorR = new THREE.Mesh(sensorGeo, robotBodySec)
   sensorR.position.set(0.21, 0, 0)
   headGroup.add(sensorR)
 
-  const antRodL = new THREE.Mesh(antennaRodGeo, bodyTerMat)
+  const antRodL = new THREE.Mesh(antennaRodGeo, robotBodyTer)
   antRodL.position.set(-0.08, 0.19, 0)
   headGroup.add(antRodL)
 
@@ -199,7 +224,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   antTipL.position.set(-0.08, 0.25, 0)
   headGroup.add(antTipL)
 
-  const antRodR = new THREE.Mesh(antennaRodGeo, bodyTerMat)
+  const antRodR = new THREE.Mesh(antennaRodGeo, robotBodyTer)
   antRodR.position.set(0.08, 0.19, 0)
   headGroup.add(antRodR)
 
@@ -210,7 +235,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   mainGroup.add(headGroup)
 
   // ---- Torso (box body matching head style) ----
-  const torso = new THREE.Mesh(torsoGeo, bodyMainMat)
+  const torso = new THREE.Mesh(torsoGeo, robotBodyMain)
   torso.position.y = 0.34
   mainGroup.add(torso)
 
@@ -236,11 +261,11 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   // ---- Arms (proportional to box body) ----
   const leftArmGroup = new THREE.Group()
   leftArmGroup.position.set(-0.19, 0.42, 0)
-  leftArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
-  const armL = new THREE.Mesh(armSegGeo, bodySecMat)
+  leftArmGroup.add(new THREE.Mesh(shoulderGeo, robotBodyTer))
+  const armL = new THREE.Mesh(armSegGeo, robotBodySec)
   armL.position.y = -0.08
   leftArmGroup.add(armL)
-  const handL = new THREE.Mesh(handGeo, bodyTerMat)
+  const handL = new THREE.Mesh(handGeo, robotBodyTer)
   handL.position.y = -0.16
   handL.scale.set(1.1, 0.7, 1.1)
   leftArmGroup.add(handL)
@@ -248,11 +273,11 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
 
   const rightArmGroup = new THREE.Group()
   rightArmGroup.position.set(0.19, 0.42, 0)
-  rightArmGroup.add(new THREE.Mesh(shoulderGeo, bodyTerMat))
-  const armR = new THREE.Mesh(armSegGeo, bodySecMat)
+  rightArmGroup.add(new THREE.Mesh(shoulderGeo, robotBodyTer))
+  const armR = new THREE.Mesh(armSegGeo, robotBodySec)
   armR.position.y = -0.08
   rightArmGroup.add(armR)
-  const handR = new THREE.Mesh(handGeo, bodyTerMat)
+  const handR = new THREE.Mesh(handGeo, robotBodyTer)
   handR.position.y = -0.16
   handR.scale.set(1.1, 0.7, 1.1)
   rightArmGroup.add(handR)
@@ -282,7 +307,7 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   ]
   for (let i = 0; i < 3; i++) {
     const mat = new THREE.MeshBasicMaterial({
-      color: themeColor, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      color: accent, transparent: true, opacity: 0, side: THREE.DoubleSide,
     })
     const bubble = new THREE.Mesh(thoughtGeos[i], mat)
     bubble.position.set(bubblePositions[i].x, bubblePositions[i].y, bubblePositions[i].z)
@@ -296,12 +321,13 @@ export function createGrabby(themeColor: number = DEFAULT_ACCENT): THREE.Group {
   robot.userData.parts = {
     mainGroup, headGroup, leftArmGroup, rightArmGroup,
     statusRing, hoverRing, thoughtBubbles,
+    bodyMainMatInst: robotBodyMain, bodySecMatInst: robotBodySec, bodyTerMatInst: robotBodyTer,
     screenMat, screenBorderMat, accentMat, antennaTipMat,
     statusRingMat, hoverRingMat, chestLightMat,
     mouthMat, glowLineMats: [glowLineMat1, glowLineMat2], thoughtMats,
   } satisfies GrabbyParts
 
-  robot.userData.lastAccentColor = themeColor
+  robot.userData.lastAccentColor = accent
   robot.scale.setScalar(0.65)
 
   return robot
@@ -399,16 +425,15 @@ export function animateGrabby(
   status: string,
   sseConnected: boolean,
   time: number,
-  customColor?: number,
 ): void {
   const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
   const animState = resolveAnimState(status, sseConnected)
 
-  const targetColor = !sseConnected
-    ? DISCONNECTED_ACCENT
-    : (customColor ?? STATUS_ACCENT[status] ?? DEFAULT_ACCENT)
+  const targetColor = sseConnected
+    ? (STATUS_ACCENT[status] ?? DEFAULT_ACCENT)
+    : DISCONNECTED_ACCENT
   if (robot.userData.lastAccentColor !== targetColor) {
     updateGrabbyColor(robot, targetColor)
     robot.userData.lastAccentColor = targetColor
@@ -518,10 +543,19 @@ export function updateGrabbyColor(robot: THREE.Group, color: number): void {
   for (const m of parts.thoughtMats) m.color.copy(c)
 }
 
+export function updateGrabbyTheme(robot: THREE.Group, color: number): void {
+  const parts = robot.userData.parts as GrabbyParts | undefined
+  if (!parts) return
+  applyBodyTheme(parts.bodyMainMatInst, parts.bodySecMatInst, parts.bodyTerMatInst, color)
+}
+
 export function disposeGrabby(robot: THREE.Group): void {
   const parts = robot.userData.parts as GrabbyParts | undefined
   if (!parts) return
 
+  parts.bodyMainMatInst.dispose()
+  parts.bodySecMatInst.dispose()
+  parts.bodyTerMatInst.dispose()
   parts.screenMat.dispose()
   parts.screenBorderMat.dispose()
   parts.accentMat.dispose()

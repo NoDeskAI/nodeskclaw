@@ -6,7 +6,7 @@ import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
-import { createGrabby, animateGrabby, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
+import { createGrabby, animateGrabby, updateGrabbyTheme, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
 import type { AgentBrief, TopologyNode } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -108,10 +108,9 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
 
   const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
   const color = agent.sse_connected ? baseColor : DISCONNECTED_COLOR
-  const themeHex = agent.theme_color
+  const bodyTheme = agent.theme_color
     ? parseInt(agent.theme_color.replace('#', ''), 16)
-    : null
-  const robotColor = themeHex ?? color
+    : undefined
 
   const baseMat = new THREE.MeshStandardMaterial({
     color,
@@ -129,12 +128,12 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
   const edgeMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 })
   group.add(new THREE.LineSegments(AGENT_BASE_EDGE_GEO, edgeMat))
 
-  const robot = createGrabby(robotColor)
+  const robot = createGrabby(bodyTheme)
   robot.position.y = 0.04
   group.add(robot)
   group.userData.robot = robot
 
-  const phone = createPhoneStation(robotColor)
+  const phone = createPhoneStation(color)
   phone.position.set(0.45, 0.02, 0.35)
   phone.rotation.y = -Math.PI / 6
   phone.visible = agent.sse_connected
@@ -499,8 +498,14 @@ addToLoop(() => {
     if (robot || phone) {
       const agent = props.agents.find(a => a.instance_id === id)
       if (agent) {
-        const themeNum = agent.theme_color ? parseInt(agent.theme_color.replace('#', ''), 16) : undefined
-        if (robot) animateGrabby(robot, agent.status, agent.sse_connected, t, themeNum)
+        if (robot) {
+          animateGrabby(robot, agent.status, agent.sse_connected, t)
+          const newTheme = agent.theme_color ?? null
+          if (robot.userData.lastBodyTheme !== newTheme) {
+            if (newTheme) updateGrabbyTheme(robot, parseInt(newTheme.replace('#', ''), 16))
+            robot.userData.lastBodyTheme = newTheme
+          }
+        }
         if (phone) phone.visible = agent.sse_connected
       }
     }
