@@ -140,6 +140,7 @@ const DIR_UNITS_2D: [number, number][] = AXIAL_DIRS.map(([dq, dr]) => {
 })
 
 const HALF_GAP_2D = (RAIL_GAP_2D + RAIL_WIDTH_2D) / 2
+const START_OFFSET_2D = JUNCTION_R_2D + 2
 
 interface RailArm {
   x1a: number; y1a: number; x2a: number; y2a: number
@@ -164,10 +165,14 @@ const corridorPaths = computed(() => {
       const perpX = -dy
       const perpY = dx
       arms.push({
-        x1a: perpX * HALF_GAP_2D, y1a: perpY * HALF_GAP_2D,
-        x2a: endX + perpX * HALF_GAP_2D, y2a: endY + perpY * HALF_GAP_2D,
-        x1b: -perpX * HALF_GAP_2D, y1b: -perpY * HALF_GAP_2D,
-        x2b: endX - perpX * HALF_GAP_2D, y2b: endY - perpY * HALF_GAP_2D,
+        x1a: dx * START_OFFSET_2D + perpX * HALF_GAP_2D,
+        y1a: dy * START_OFFSET_2D + perpY * HALF_GAP_2D,
+        x2a: endX + perpX * HALF_GAP_2D,
+        y2a: endY + perpY * HALF_GAP_2D,
+        x1b: dx * START_OFFSET_2D - perpX * HALF_GAP_2D,
+        y1b: dy * START_OFFSET_2D - perpY * HALF_GAP_2D,
+        x2b: endX - perpX * HALF_GAP_2D,
+        y2b: endY - perpY * HALF_GAP_2D,
       })
     }
     return { ...ch, arms }
