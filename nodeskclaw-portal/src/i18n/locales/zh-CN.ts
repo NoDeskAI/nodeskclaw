@@ -218,6 +218,7 @@ const zhCN = {
     goToSettings: "前往设置",
     selectColor: "选择颜色",
     changeAgentColor: "主题色",
+    focusHex: "聚焦",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",

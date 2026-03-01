@@ -286,6 +286,16 @@ function onHexAction(action: string) {
         hexDrawerOpen.value = false
       }
       break
+    case 'focus-hex': {
+      const q = selectedHex.value?.q
+      const r = selectedHex.value?.r
+      if (q !== undefined && r !== undefined) {
+        const { x, y } = axialToWorld(q, r)
+        workspace3dRef.value?.focusOnPosition(x, y)
+      }
+      hexDrawerOpen.value = false
+      break
+    }
   }
 }
 

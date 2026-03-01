@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Settings, Move, PenSquare } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Settings, Move, PenSquare, Crosshair } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -21,10 +21,10 @@ const emit = defineEmits<{
 
 const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
-  agent: { c: 'open-chat', d: 'view-detail', p: 'change-agent-color', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
-  corridor: { r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
-  human: { s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
-  blackboard: { e: 'view-blackboard' },
+  agent: { f: 'focus-hex', c: 'open-chat', d: 'view-detail', p: 'change-agent-color', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
+  corridor: { f: 'focus-hex', r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
+  human: { f: 'focus-hex', s: 'view-channel', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
+  blackboard: { f: 'focus-hex', e: 'view-blackboard' },
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -121,6 +121,14 @@ onUnmounted(() => {
         <template v-else-if="hexType === 'agent'">
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'focus-hex')"
+          >
+            <Crosshair class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.focusHex') }}</span>
+            <kbd class="kbd-hint">F</kbd>
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'open-chat')"
           >
             <MessageSquare class="w-4 h-4 text-primary" />
@@ -165,6 +173,14 @@ onUnmounted(() => {
         <template v-else-if="hexType === 'corridor'">
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'focus-hex')"
+          >
+            <Crosshair class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.focusHex') }}</span>
+            <kbd class="kbd-hint">F</kbd>
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'rename-corridor')"
           >
             <PenSquare class="w-4 h-4 text-cyan-400" />
@@ -191,6 +207,14 @@ onUnmounted(() => {
 
         <!-- Human hex actions -->
         <template v-else-if="hexType === 'human'">
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'focus-hex')"
+          >
+            <Crosshair class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.focusHex') }}</span>
+            <kbd class="kbd-hint">F</kbd>
+          </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'view-channel')"
@@ -227,6 +251,14 @@ onUnmounted(() => {
 
         <!-- Blackboard actions -->
         <template v-else>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'focus-hex')"
+          >
+            <Crosshair class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.focusHex') }}</span>
+            <kbd class="kbd-hint">F</kbd>
+          </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'view-blackboard')"

@@ -218,6 +218,7 @@ const enUS = {
     goToSettings: "Go to Settings",
     selectColor: "Select Color",
     changeAgentColor: "Theme Color",
+    focusHex: "Focus",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",
