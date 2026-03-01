@@ -23,10 +23,16 @@ from app.services.k8s.k8s_client import K8sClient
 
 logger = logging.getLogger(__name__)
 
+instance_read_router = APIRouter()
+instance_write_router = APIRouter()
+
+# Portal 用的完整 router，包含 read + write 全部路由
 router = APIRouter()
+router.include_router(instance_read_router)
+router.include_router(instance_write_router)
 
 
-@router.get("/check-slug", response_model=ApiResponse[dict])
+@instance_read_router.get("/check-slug", response_model=ApiResponse[dict])
 async def check_slug(
     slug: str = Query(..., min_length=1),
     org_id: str | None = Query(None),
@@ -44,7 +50,7 @@ async def check_slug(
     return ApiResponse(data=data)
 
 
-@router.get("/check-name", response_model=ApiResponse[dict], deprecated=True)
+@instance_read_router.get("/check-name", response_model=ApiResponse[dict], deprecated=True)
 async def check_name(
     name: str = Query(..., min_length=1),
     cluster_id: str = Query(...),
@@ -72,7 +78,7 @@ async def check_name(
     return ApiResponse(data={"conflict": False, "reason": ""})
 
 
-@router.get("", response_model=ApiResponse[list[InstanceInfo]])
+@instance_read_router.get("", response_model=ApiResponse[list[InstanceInfo]])
 async def list_instances(
     cluster_id: str | None = Query(None),
     org_id: str | None = Query(None),
@@ -88,7 +94,7 @@ async def list_instances(
     return ApiResponse(data=data)
 
 
-@router.get("/{instance_id}", response_model=ApiResponse[InstanceDetail])
+@instance_read_router.get("/{instance_id}", response_model=ApiResponse[InstanceDetail])
 async def get_instance(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -99,7 +105,7 @@ async def get_instance(
     return ApiResponse(data=data)
 
 
-@router.delete("/{instance_id}", response_model=ApiResponse)
+@instance_write_router.delete("/{instance_id}", response_model=ApiResponse)
 async def delete_instance(
     instance_id: str,
     delete_k8s: bool = Query(True),
@@ -115,7 +121,7 @@ class ScaleBody(BaseModel):
     replicas: int
 
 
-@router.post("/{instance_id}/scale", response_model=ApiResponse)
+@instance_write_router.post("/{instance_id}/scale", response_model=ApiResponse)
 async def scale_instance(
     instance_id: str,
     body: ScaleBody,
@@ -127,7 +133,7 @@ async def scale_instance(
     return ApiResponse(message=f"已扩缩容至 {body.replicas} 副本")
 
 
-@router.post("/{instance_id}/restart", response_model=ApiResponse)
+@instance_write_router.post("/{instance_id}/restart", response_model=ApiResponse)
 async def restart_instance(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -139,7 +145,7 @@ async def restart_instance(
     return ApiResponse(message="已触发重启，实例将在数秒后恢复")
 
 
-@router.get("/{instance_id}/history", response_model=ApiResponse[list[DeployRecordInfo]])
+@instance_read_router.get("/{instance_id}/history", response_model=ApiResponse[list[DeployRecordInfo]])
 async def deploy_history(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -150,7 +156,7 @@ async def deploy_history(
     return ApiResponse(data=data)
 
 
-@router.put("/{instance_id}/config", response_model=ApiResponse[InstanceInfo])
+@instance_write_router.put("/{instance_id}/config", response_model=ApiResponse[InstanceInfo])
 async def save_config(
     instance_id: str,
     body: UpdateConfigRequest,
@@ -162,7 +168,7 @@ async def save_config(
     return ApiResponse(data=data)
 
 
-@router.post("/{instance_id}/apply", response_model=ApiResponse[InstanceInfo])
+@instance_write_router.post("/{instance_id}/apply", response_model=ApiResponse[InstanceInfo])
 async def apply_config(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -177,7 +183,7 @@ class RollbackBody(BaseModel):
     target_revision: int
 
 
-@router.post("/{instance_id}/rollback", response_model=ApiResponse[InstanceInfo])
+@instance_write_router.post("/{instance_id}/rollback", response_model=ApiResponse[InstanceInfo])
 async def rollback_instance(
     instance_id: str,
     body: RollbackBody,
@@ -191,7 +197,7 @@ async def rollback_instance(
     return ApiResponse(data=data)
 
 
-@router.post("/{instance_id}/sync-token", response_model=ApiResponse[dict])
+@instance_write_router.post("/{instance_id}/sync-token", response_model=ApiResponse[dict])
 async def sync_token(
     instance_id: str,
     db: AsyncSession = Depends(get_db),
@@ -202,7 +208,7 @@ async def sync_token(
     return ApiResponse(data={"token": token})
 
 
-@router.get("/{instance_id}/pods/{pod_name}/logs", response_model=ApiResponse[str])
+@instance_read_router.get("/{instance_id}/pods/{pod_name}/logs", response_model=ApiResponse[str])
 async def pod_logs(
     instance_id: str,
     pod_name: str,
@@ -216,7 +222,7 @@ async def pod_logs(
     return ApiResponse(data=data)
 
 
-@router.get("/{instance_id}/pods/{pod_name}/logs/stream")
+@instance_read_router.get("/{instance_id}/pods/{pod_name}/logs/stream")
 async def pod_logs_stream(
     instance_id: str,
     pod_name: str,

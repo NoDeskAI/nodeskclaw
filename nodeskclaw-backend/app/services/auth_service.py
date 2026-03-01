@@ -115,7 +115,7 @@ async def oauth_login(
                 )
             )
             if existing_membership.scalar_one_or_none() is None:
-                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.member))
+                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.viewer))
             user.current_org_id = binding.org_id
         else:
             needs_org_setup = True
@@ -131,10 +131,11 @@ async def oauth_login(
     )
     user = refreshed.scalar_one()
 
+    user_info = await _build_user_info(user, db)
     return LoginResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
-        user=UserInfo.model_validate(user),
+        user=user_info,
         needs_org_setup=needs_org_setup,
         provider=oauth_info.provider,
     )
@@ -200,11 +201,31 @@ def _verify_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(dk.hex(), stored_dk)
 
 
-def _issue_tokens(user: User) -> LoginResponse:
+async def _build_user_info(user: User, db: AsyncSession) -> UserInfo:
+    """构建包含 org_role 的 UserInfo。"""
+    from app.models.org_membership import OrgMembership
+
+    info = UserInfo.model_validate(user)
+    if user.current_org_id:
+        result = await db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.user_id == user.id,
+                OrgMembership.org_id == user.current_org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )
+        org_role = result.scalar_one_or_none()
+        if org_role:
+            info.org_role = org_role
+    return info
+
+
+async def _issue_tokens(user: User, db: AsyncSession) -> LoginResponse:
+    user_info = await _build_user_info(user, db)
     return LoginResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
-        user=UserInfo.model_validate(user),
+        user=user_info,
     )
 
 
@@ -253,7 +274,7 @@ async def register_with_email(
     default_org = org_result.scalar_one_or_none()
     if default_org:
         await db.flush()
-        membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.member)
+        membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.viewer)
         db.add(membership)
         user.current_org_id = default_org.id
 
@@ -265,7 +286,7 @@ async def register_with_email(
     )
     user = refreshed.scalar_one()
     logger.info("邮箱注册: %s", email)
-    return _issue_tokens(user)
+    return await _issue_tokens(user, db)
 
 
 async def login_with_email(email: str, password: str, db: AsyncSession) -> LoginResponse:
@@ -304,7 +325,7 @@ async def login_with_email(email: str, password: str, db: AsyncSession) -> Login
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
-    return _issue_tokens(user)
+    return await _issue_tokens(user, db)
 
 
 # ── 手机验证码登录 ───────────────────────────────────────
@@ -394,7 +415,7 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
         default_org = org_result.scalar_one_or_none()
         if default_org:
             await db.flush()
-            membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.member)
+            membership = OrgMembership(user_id=user.id, org_id=default_org.id, role=OrgRole.viewer)
             db.add(membership)
             user.current_org_id = default_org.id
 
@@ -416,4 +437,4 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
     )
     user = refreshed.scalar_one()
     logger.info("手机登录: %s", phone)
-    return _issue_tokens(user)
+    return await _issue_tokens(user, db)

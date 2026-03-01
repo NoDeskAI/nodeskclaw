@@ -9,8 +9,18 @@ from app.models.base import BaseModel
 
 
 class OrgRole(str, Enum):
-    admin = "admin"    # 组织管理员：管理成员、查看所有实例
-    member = "member"  # 普通成员：创建和管理自己的实例
+    viewer = "viewer"
+    member = "member"
+    operator = "operator"
+    admin = "admin"
+
+
+ROLE_LEVEL: dict["OrgRole", int] = {
+    OrgRole.viewer: 10,
+    OrgRole.member: 20,
+    OrgRole.operator: 30,
+    OrgRole.admin: 40,
+}
 
 
 class OrgMembership(BaseModel):

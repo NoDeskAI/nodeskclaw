@@ -5,6 +5,7 @@ const zhCN = {
     events: "事件",
     clusters: "集群",
     geneOps: "基因运营",
+    members: "成员管理",
     settings: "设置",
     platform: "平台管理",
     organizations: "组织管理",
@@ -164,6 +165,23 @@ const zhCN = {
     ingressClassDesc: "Ingress 控制器类型",
     ingressClassUpdated: "Ingress Class 已更新",
     ingressClassUpdateFailed: "Ingress Class 更新失败",
+  },
+  members: {
+    title: "成员管理",
+    description: "管理当前组织的成员角色。新用户通过飞书登录后默认为 Viewer（无权限），需由管理员手动分配角色。",
+    role_viewer: "Viewer（无权限）",
+    role_member: "Member（只读）",
+    role_operator: "Operator（运维）",
+    role_admin: "Admin（管理员）",
+    role_updated: "角色已更新",
+    role_update_failed: "角色更新失败",
+    empty: "暂无成员",
+    loading: "加载中...",
+  },
+  no_access: {
+    title: "暂无访问权限",
+    description: "您的账号尚未被分配管理权限。请联系组织管理员为您分配角色后，刷新页面重试。",
+    logout: "退出登录",
   },
 } as const
 

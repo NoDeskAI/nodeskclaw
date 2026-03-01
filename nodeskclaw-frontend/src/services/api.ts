@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { getCurrentLocale } from '@/i18n'
 
-export const API_BASE = '/api/v1'
+export const API_BASE = '/api/v1/admin'
 
 const api = axios.create({
   baseURL: API_BASE,

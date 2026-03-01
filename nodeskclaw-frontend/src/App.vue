@@ -10,6 +10,7 @@ import { useClusterStore } from '@/stores/cluster'
 import { useOrgStore } from '@/stores/org'
 import { useGlobalSSE } from '@/composables/useGlobalSSE'
 import { useTokenAlert } from '@/composables/useTokenAlert'
+import { usePermissions } from '@/composables/usePermissions'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import {
@@ -36,6 +37,7 @@ const clusterStore = useClusterStore()
 const orgStore = useOrgStore()
 const { sseConnected, sseConnecting, clusterConnected, startGlobalSSE, stopGlobalSSE } = useGlobalSSE()
 const { tokenWarning, startTokenAlert, stopTokenAlert } = useTokenAlert()
+const { canAccessRoute } = usePermissions()
 const locale = ref(getCurrentLocale())
 const activeClusterId = computed(() => clusterStore.currentCluster?.id ?? clusterStore.currentClusterId)
 
@@ -91,16 +93,18 @@ interface NavItem {
   label: string
   icon: Component
   path: string
+  minRole?: string
 }
 
 const mainNavItems = computed<NavItem[]>(() => [
-  { label: t('nav.dashboard'), icon: LayoutGrid, path: '/' },
-  { label: t('nav.instances'), icon: Box, path: '/instances' },
-  { label: t('nav.events'), icon: Activity, path: '/events' },
-  { label: t('nav.clusters'), icon: Server, path: '/cluster' },
-  { label: t('nav.geneOps'), icon: Dna, path: '/gene' },
-  { label: t('nav.settings'), icon: Settings, path: '/settings' },
-])
+  { label: t('nav.dashboard'), icon: LayoutGrid, path: '/', minRole: 'member' },
+  { label: t('nav.instances'), icon: Box, path: '/instances', minRole: 'member' },
+  { label: t('nav.events'), icon: Activity, path: '/events', minRole: 'member' },
+  { label: t('nav.clusters'), icon: Server, path: '/cluster', minRole: 'admin' },
+  { label: t('nav.geneOps'), icon: Dna, path: '/gene', minRole: 'admin' },
+  { label: t('nav.members'), icon: Users, path: '/members', minRole: 'admin' },
+  { label: t('nav.settings'), icon: Settings, path: '/settings', minRole: 'admin' },
+].filter(item => canAccessRoute(item.minRole)))
 
 const platformNavItems = computed<NavItem[]>(() => {
   if (!isSuperAdmin.value) return []

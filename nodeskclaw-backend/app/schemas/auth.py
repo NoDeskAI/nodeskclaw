@@ -74,6 +74,7 @@ class UserInfo(BaseModel):
     is_active: bool = True
     is_super_admin: bool = False
     current_org_id: str | None = None
+    org_role: str | None = None
     last_login_at: datetime | None = None
     oauth_connections: list[OAuthConnectionInfo] = []
 

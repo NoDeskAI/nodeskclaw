@@ -86,9 +86,26 @@ async def refresh(body: RefreshTokenRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/me", response_model=ApiResponse[UserInfo])
-async def me(current_user: User = Depends(get_current_user)):
-    """获取当前用户信息。"""
-    return ApiResponse(data=UserInfo.model_validate(current_user))
+async def me(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前用户信息（含当前组织角色）。"""
+    from app.models.org_membership import OrgMembership
+
+    info = UserInfo.model_validate(current_user)
+    if current_user.current_org_id:
+        result = await db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.user_id == current_user.id,
+                OrgMembership.org_id == current_user.current_org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )
+        org_role = result.scalar_one_or_none()
+        if org_role:
+            info.org_role = org_role
+    return ApiResponse(data=info)
 
 
 @router.post("/logout", response_model=ApiResponse)

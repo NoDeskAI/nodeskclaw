@@ -82,6 +82,17 @@ nodeskclaw-backend/
 
 ## API 概览
 
+### 双前缀路由架构
+
+API 路由同时挂载在两个前缀下：
+
+- **`/api/v1/...`** — Portal（用户门户）使用，仅做登录/组织成员基础检查
+- **`/api/v1/admin/...`** — 管理平台（nodeskclaw-frontend）使用，通过 `require_org_role(min_role)` 注入角色检查
+
+两个前缀使用同一套路由处理函数，不重复业务逻辑。管理前端 axios 的 baseURL 为 `/api/v1/admin`。
+
+### 路由列表（/api/v1 公共前缀）
+
 | 前缀 | 模块 | 说明 |
 |------|------|------|
 | `/api/v1/health` | 系统 | 健康检查 |
@@ -101,6 +112,17 @@ nodeskclaw-backend/
 | `/api/v1/workspaces/{ws}/events?token=` | SSE | 实时事件流（query param JWT 认证） |
 | `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
 | `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
+
+### RBAC 角色体系
+
+| 角色 | 层级值 | 管理平台含义 |
+|------|--------|-------------|
+| viewer | 10 | 无权限（新用户默认），显示"请联系管理员"页面 |
+| member | 20 | 只读：Dashboard、实例详情/日志/监控/事件 |
+| operator | 30 | 运维操作：部署、重启、扩缩容、配置变更 |
+| admin | 40 | 完全权限：集群管理、系统设置、基因运营、成员角色分配 |
+
+`is_super_admin` 绕过所有组织级权限。Portal 不检查角色级别，viewer 也能正常使用 Portal。
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 

@@ -16,6 +16,7 @@ export interface UserInfo {
   role: string
   is_super_admin: boolean
   current_org_id: string | null
+  org_role: string | null
   last_login_at: string | null
   oauth_connections: OAuthConnectionInfo[]
 }

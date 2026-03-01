@@ -5,6 +5,7 @@ const enUS = {
     events: "Events",
     clusters: "Clusters",
     geneOps: "Gene Operations",
+    members: "Members",
     settings: "Settings",
     platform: "Platform",
     organizations: "Organizations",
@@ -164,6 +165,23 @@ const enUS = {
     ingressClassDesc: "Ingress controller type",
     ingressClassUpdated: "Ingress Class updated",
     ingressClassUpdateFailed: "Failed to update Ingress Class",
+  },
+  members: {
+    title: "Members",
+    description: "Manage organization member roles. New users who sign in via Feishu are assigned the Viewer role (no access) by default and must be granted a role by an admin.",
+    role_viewer: "Viewer (No Access)",
+    role_member: "Member (Read Only)",
+    role_operator: "Operator",
+    role_admin: "Admin",
+    role_updated: "Role updated",
+    role_update_failed: "Failed to update role",
+    empty: "No members",
+    loading: "Loading...",
+  },
+  no_access: {
+    title: "No Access",
+    description: "Your account has not been granted management permissions. Please contact your organization admin to assign a role, then refresh the page.",
+    logout: "Sign Out",
   },
 } as const
 

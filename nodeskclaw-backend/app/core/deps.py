@@ -214,3 +214,87 @@ async def require_org_member(
     )
     org = result.scalar_one_or_none()
     return user, org
+
+
+# ── 管理平台 RBAC（admin 路由前缀专用） ──────────────────────
+
+def require_org_role(min_role: str):
+    """工厂函数：生成要求当前用户在其组织中至少拥有 min_role 的依赖。
+
+    用于 admin_router 的 include_router(dependencies=[...])，
+    super_admin 自动放行。返回 (user, org)。
+    """
+    from app.models.org_membership import ROLE_LEVEL, OrgRole
+
+    min_level = ROLE_LEVEL[OrgRole(min_role)]
+
+    async def _dependency(
+        db: AsyncSession = Depends(get_db),
+        user=Depends(_get_current_user_dep()),
+    ):
+        from app.models.org_membership import OrgMembership
+        from app.models.organization import Organization
+
+        target_org_id = user.current_org_id
+
+        if user.is_super_admin and target_org_id:
+            result = await db.execute(
+                select(Organization).where(
+                    Organization.id == target_org_id,
+                    Organization.deleted_at.is_(None),
+                )
+            )
+            org = result.scalar_one_or_none()
+            if org:
+                return user, org
+
+        if target_org_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_code": 40010,
+                    "message_key": "errors.org.user_has_no_org",
+                    "message": "用户未加入任何组织",
+                },
+            )
+
+        result = await db.execute(
+            select(OrgMembership).where(
+                OrgMembership.user_id == user.id,
+                OrgMembership.org_id == target_org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )
+        membership = result.scalar_one_or_none()
+
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error_code": 40312,
+                    "message_key": "errors.org.org_member_required",
+                    "message": "您不是该组织的成员",
+                },
+            )
+
+        user_level = ROLE_LEVEL.get(OrgRole(membership.role), 0)
+        if user_level < min_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error_code": 40313,
+                    "message_key": "errors.org.insufficient_role",
+                    "message": f"需要 {min_role} 及以上角色",
+                },
+            )
+
+        result = await db.execute(
+            select(Organization).where(
+                Organization.id == target_org_id,
+                Organization.deleted_at.is_(None),
+            )
+        )
+        org = result.scalar_one_or_none()
+        return user, org
+
+    return _dependency
