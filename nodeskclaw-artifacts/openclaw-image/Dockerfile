@@ -7,7 +7,7 @@
 
 ARG NODE_VERSION=22
 
-FROM node:${NODE_VERSION}-bookworm-slim
+FROM internet-cn-beijing.cr.volces.com/library/node:${NODE_VERSION}-bookworm-slim
 
 # ---------- 构建参数 ----------
 ARG OPENCLAW_VERSION=2026.2.26

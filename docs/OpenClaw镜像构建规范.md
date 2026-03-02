@@ -111,13 +111,13 @@ GitHub Actions 定时检测 npm 新版本
 
 ### 3.3 Dockerfile 结构
 
-基础镜像直接用 `node:{version}-bookworm-slim`，自带 Node.js，无需 nvm。
+基础镜像通过火山云 Docker Hub 代理拉取 `internet-cn-beijing.cr.volces.com/library/node:{version}-bookworm-slim`，自带 Node.js，无需 nvm。使用火山云代理可加速基础镜像拉取，并使推送到同区域 CR 时复用已有层缓存。
 
 **Stage 1: build** — 安装 OpenClaw + 预置用户数据目录
 
 | 步骤 | 说明 |
 |------|------|
-| 基础镜像 | `node:${NODE_VERSION}-bookworm-slim` |
+| 基础镜像 | `internet-cn-beijing.cr.volces.com/library/node:${NODE_VERSION}-bookworm-slim` |
 | 系统依赖 | `curl`, `git`, `ca-certificates`, `jq`, `procps`, `gettext-base`（envsubst） |
 | 全局安装 | `npm install -g openclaw@${OPENCLAW_VERSION}` |
 | 预置目录 | 在 `/root/.openclaw/` 下创建完整子目录结构 |
