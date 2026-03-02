@@ -1183,6 +1183,9 @@ function handleKeydown(e: KeyboardEvent) {
               <p class="text-xs text-muted-foreground">
                 {{ channelMode === 'webhook' ? t('channel.webhookHint') : t('channel.websocketHint') }}
               </p>
+              <p class="text-xs text-muted-foreground/70">
+                {{ t('channel.privateChatHint') }}
+              </p>
             </div>
 
             <div class="flex justify-end gap-3 pt-2">

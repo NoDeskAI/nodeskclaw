@@ -27,7 +27,12 @@ async def _handle_message_event(
     sender_open_id: str,
     content: str,
 ) -> None:
-    """Core message routing — shared between webhook and ws modes."""
+    """Core message routing — shared between webhook and ws modes.
+
+    Matching priority:
+    1. chat_id → HumanHex.channel_config.chat_id  (group chat)
+    2. sender_open_id → user_oauth_connections → HumanHex.user_id  (private chat)
+    """
     from sqlalchemy import select
 
     from app.core.deps import async_session_factory
@@ -35,25 +40,49 @@ async def _handle_message_event(
     from app.models.corridor import HumanHex
     from app.services import workspace_message_service as msg_service
 
-    if not chat_id or not content:
+    if not content:
         return
 
     async with async_session_factory() as db:
-        result = await db.execute(
-            select(HumanHex).where(
-                HumanHex.channel_type == "feishu",
-                not_deleted(HumanHex),
+        target_hex: HumanHex | None = None
+
+        if chat_id:
+            result = await db.execute(
+                select(HumanHex).where(
+                    HumanHex.channel_type == "feishu",
+                    not_deleted(HumanHex),
+                )
             )
-        )
-        target_hex = None
-        for hh in result.scalars().all():
-            cfg = hh.channel_config or {}
-            if cfg.get("chat_id") == chat_id:
-                target_hex = hh
-                break
+            for hh in result.scalars().all():
+                cfg = hh.channel_config or {}
+                if cfg.get("chat_id") == chat_id:
+                    target_hex = hh
+                    break
+
+        if not target_hex and sender_open_id:
+            from app.models.oauth_connection import UserOAuthConnection
+            oauth_q = await db.execute(
+                select(UserOAuthConnection.user_id).where(
+                    UserOAuthConnection.provider == "feishu",
+                    UserOAuthConnection.provider_user_id == sender_open_id,
+                    not_deleted(UserOAuthConnection),
+                )
+            )
+            user_id = oauth_q.scalar_one_or_none()
+            if user_id:
+                hh_q = await db.execute(
+                    select(HumanHex).where(
+                        HumanHex.user_id == user_id,
+                        not_deleted(HumanHex),
+                    ).order_by(HumanHex.created_at.desc())
+                )
+                target_hex = hh_q.scalars().first()
 
         if not target_hex:
-            logger.warning("Feishu WS: no human hex for chat_id=%s", chat_id)
+            logger.warning(
+                "Feishu message: no human hex for chat_id=%s open_id=%s",
+                chat_id, sender_open_id,
+            )
             return
 
         workspace_id = target_hex.workspace_id

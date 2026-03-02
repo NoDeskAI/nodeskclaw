@@ -446,6 +446,7 @@ const zhCN = {
     appSecret: "App Secret（应用密钥）",
     webhookHint: "Webhook 模式：通过飞书应用中配置的事件回调地址接收消息。",
     websocketHint: "WebSocket 模式：后端保持长连接主动接收消息，需要提供 App ID 和 App Secret。",
+    privateChatHint: "如果用户已通过飞书登录，私聊通知将自动生效，无需额外配置。群聊模式为可选的高级配置。",
   },
   enterpriseFiles: {
     title: "企业空间",

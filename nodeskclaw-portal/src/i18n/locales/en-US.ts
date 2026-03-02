@@ -446,6 +446,7 @@ const enUS = {
     appSecret: "App Secret",
     webhookHint: "Webhook mode: messages are received via the event callback URL configured in the Feishu app.",
     websocketHint: "WebSocket mode: the backend maintains a persistent connection. Requires App ID and App Secret.",
+    privateChatHint: "If the user has signed in via Feishu, private chat notifications are enabled automatically. Group chat mode is an optional advanced configuration.",
   },
   enterpriseFiles: {
     title: "Enterprise Files",

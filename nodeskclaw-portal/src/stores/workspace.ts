@@ -575,6 +575,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       })
     }
 
+    const humanNotifyEvents = [
+      'human:message_delivered', 'human:message_received',
+    ]
+    for (const eventName of humanNotifyEvents) {
+      eventSource.addEventListener(eventName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          externalCallback?.(eventName, data)
+        } catch { /* ignore */ }
+      })
+    }
+
     eventSource.onerror = () => {
       setTimeout(() => {
         if (eventSource?.readyState === EventSource.CLOSED) {
