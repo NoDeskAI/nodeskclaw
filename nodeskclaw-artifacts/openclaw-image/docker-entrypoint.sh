@@ -83,9 +83,13 @@ if [ -f "${CONFIG_FILE}" ]; then
       c.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true;
       changed = true;
     }
+    if (c.gateway?.controlUi && !c.gateway.controlUi.dangerouslyDisableDeviceAuth) {
+      c.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+      changed = true;
+    }
     if (changed) {
       fs.writeFileSync(f, JSON.stringify(c, null, 2));
-      console.log('[entrypoint] 已补全 controlUi.dangerouslyAllowHostHeaderOriginFallback');
+      console.log('[entrypoint] 已补全 controlUi 配置');
     }
   "
 fi

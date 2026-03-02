@@ -100,7 +100,8 @@ GitHub Actions 定时检测 npm 新版本
 │   ├── canvas/                          ← Web 控制台前端
 │   ├── devices/                         ← 设备连接状态
 │   ├── identity/                        ← bot 身份配置
-│   └── cron/                            ← 定时任务配置
+│   ├── cron/                            ← 定时任务配置
+│   └── skills/                          ← 自定义 Skills（NoDeskClaw 注入）
 │
 ├── .openclaw-version                    ← 镜像版本标记（Init Container 用）
 ├── .bashrc                              ← Shell 配置
@@ -185,8 +186,9 @@ K8s 相关配置：
 | 配置 | 值 | 说明 |
 |------|-----|------|
 | `terminationGracePeriodSeconds` | `30` | 发 SIGTERM 后等 30 秒，超时 SIGKILL |
-| `livenessProbe` | `exec: ["openclaw", "health"]` | 进程存活检测（通过 WebSocket RPC） |
-| `readinessProbe` | `exec: ["openclaw", "health"]` | 就绪检测（同上） |
+| `startupProbe` | `httpGet: /healthz` (port 18789) | 启动检测（2026.3.x+ 内置 HTTP 健康端点，旧版走 SPA fallback 同样返回 200） |
+| `livenessProbe` | `httpGet: /healthz` (port 18789) | 进程存活检测 |
+| `readinessProbe` | `httpGet: /readyz` (port 18789) | 就绪检测 |
 
 ---
 
@@ -448,7 +450,7 @@ GitHub Actions 仅负责版本检测和 PR 创建，不执行镜像构建推送�
 | # | 问题 | 状态 |
 |---|------|------|
 | 1 | ~~OpenClaw gateway 实际监听端口是多少？~~ | ✅ **18789**（`DEFAULT_GATEWAY_PORT`，通过 `OPENCLAW_GATEWAY_PORT` 覆盖） |
-| 2 | ~~OpenClaw 是否有 HTTP 健康检查端点？~~ | ✅ **没有 HTTP 端点**，健康检查通过 WebSocket RPC `health` 方法，K8s 用 exec probe: `openclaw health` |
+| 2 | ~~OpenClaw 是否有 HTTP 健康检查端点？~~ | ✅ **2026.3.x+ 新增** `/healthz`（liveness）、`/readyz`（readiness）HTTP 端点，旧版通过 SPA fallback 返回 200 兼容 |
 | 3 | ~~`openclaw-gateway` 前台运行的正确命令是什么？~~ | ✅ `exec openclaw gateway`（官方 Dockerfile 用 `node openclaw.mjs gateway --allow-unconfigured`） |
 | 4 | ~~`openclaw.json` 的完整 schema~~ | ✅ 源码 `src/config/zod-schema.ts`（`OpenClawSchema`），类型 `src/config/types.openclaw.ts`，已在 4.2 节摘录核心字段 |
 | 5 | ~~OpenClaw 是否需要外部数据库/Redis？~~ | ✅ **不需要**，仅用本地 SQLite（`node:sqlite` + `sqlite-vec`），数据在 `~/.openclaw/memory/` |

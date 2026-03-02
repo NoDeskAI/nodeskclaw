@@ -42,7 +42,8 @@ RUN mkdir -p /root/.openclaw/agents/main/sessions \
              /root/.openclaw/canvas \
              /root/.openclaw/devices \
              /root/.openclaw/identity \
-             /root/.openclaw/cron
+             /root/.openclaw/cron \
+             /root/.openclaw/skills
 
 # ---------- 配置模板 ----------
 COPY openclaw.json.template /root/.openclaw/openclaw.json.template
@@ -57,6 +58,6 @@ RUN chmod +x /docker-entrypoint.sh /init-container.sh
 
 # ---------- 运行配置 ----------
 WORKDIR /root
-EXPOSE 18789
+EXPOSE 18789 9721
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
