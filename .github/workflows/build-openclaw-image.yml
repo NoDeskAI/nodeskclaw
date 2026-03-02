@@ -58,6 +58,8 @@ jobs:
           context: nodeskclaw-artifacts/openclaw-image
           push: true
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             OPENCLAW_VERSION=${{ steps.version.outputs.version }}
             IMAGE_VERSION=${{ steps.version.outputs.tag }}
