@@ -78,7 +78,6 @@ docker build --platform linux/amd64 \
   --build-arg HTTP_PROXY= \
   --build-arg HTTPS_PROXY= \
   -t "${REGISTRY}:${IMAGE_TAG}" \
-  -t "${REGISTRY}:latest" \
   "${SCRIPT_DIR}"
 
 echo ""
@@ -93,19 +92,17 @@ fi
 if [ "${BUILD_ONLY}" = true ]; then
   echo ""
   echo "仅构建模式，跳过推送"
-  echo "如需推送，运行: docker push ${REGISTRY}:${IMAGE_TAG} && docker push ${REGISTRY}:latest"
+  echo "如需推送，运行: docker push ${REGISTRY}:${IMAGE_TAG}"
   exit 0
 fi
 
 echo ""
 echo "推送镜像..."
 docker push "${REGISTRY}:${IMAGE_TAG}"
-docker push "${REGISTRY}:latest"
 
 echo ""
 echo "=========================================="
 echo "  完成"
 echo "=========================================="
 echo "  ${REGISTRY}:${IMAGE_TAG}"
-echo "  ${REGISTRY}:latest"
 echo "=========================================="
