@@ -753,6 +753,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           user_id: (n.extra?.user_id as string) || '',
           hex_q: n.hex_q,
           hex_r: n.hex_r,
+          display_name: n.display_name || null,
           display_color: (n.extra?.display_color as string) || '#f59e0b',
           channel_type: (n.extra?.channel_type as string) || null,
           channel_config: (n.extra?.channel_config as Record<string, unknown>) || null,

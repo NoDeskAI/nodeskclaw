@@ -45,6 +45,8 @@ function focusOnHex(q: number, r: number) {
   focusOnPosition(x * SCALE, y * SCALE)
 }
 
+const SCALE = 60
+
 const storeNodes = computed(() => (props.topologyNodes || []) as StoreTopologyNode[])
 const storeEdges = computed(() => props.topologyEdges || [] as TopologyEdge[])
 const { findPath, findReachableEndpoints } = useTopologyBFS(storeNodes, storeEdges)
@@ -84,7 +86,6 @@ defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex, triggerMessageFlow
 
 const hoveredId = ref<string | null>(null)
 
-const SCALE = 60
 const HEX_RADIUS = HEX_SIZE * SCALE * 0.85
 const BB_RADIUS = HEX_RADIUS * 1.15
 const GRID_RANGE = 8
