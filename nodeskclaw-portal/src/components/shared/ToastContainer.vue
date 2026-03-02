@@ -21,7 +21,7 @@ const colorMap: Record<string, string> = {
 
 <template>
   <Teleport to="body">
-    <div class="fixed top-4 right-4 z-9999 flex flex-col gap-2 pointer-events-none">
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-9999 flex flex-col items-center gap-2 pointer-events-none">
       <TransitionGroup name="toast">
         <div
           v-for="t in toasts"
@@ -63,11 +63,11 @@ const colorMap: Record<string, string> = {
 }
 .toast-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateY(-100%);
 }
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateY(-100%);
 }
 .toast-move {
   transition: transform 0.3s ease;
