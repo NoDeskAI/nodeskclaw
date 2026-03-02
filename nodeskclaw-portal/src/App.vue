@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
-import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, User } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User } from 'lucide-vue-next'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
@@ -122,6 +122,17 @@ function onLocaleChange(value: string) {
             >
               <FlaskConical class="w-4 h-4 inline mr-1.5" />
               {{ t('common.geneMarket') }}
+            </button>
+            <button
+              v-if="authStore.user?.portal_org_role === 'admin'"
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
+                route.path.startsWith('/enterprise-files') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+              ]"
+              @click="router.push('/enterprise-files')"
+            >
+              <FolderOpen class="w-4 h-4 inline mr-1.5" />
+              {{ t('enterpriseFiles.title') }}
             </button>
           </nav>
         </div>

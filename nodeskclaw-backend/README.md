@@ -63,6 +63,7 @@ nodeskclaw-backend/
 │   │   ├── sse_listener.py               # OpenClaw 实例 SSE 长连接（按 Ingress 域名）
 │   │   ├── llm_config_service.py # OpenClaw LLM 配置 + 系统 Channel plugin 分发
 │   │   ├── channel_config_service.py # Channel 发现、配置读写、Schema 注册、自定义部署
+│   │   ├── enterprise_file_service.py # 企业空间文件浏览（PodFS 只读）
 │   │   ├── summary_job.py        # 自动摘要生成
 │   │   └── k8s/                  # K8s 相关
 │   │       ├── client_manager.py # K8s 连接池管理
@@ -119,6 +120,10 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/workspaces/{ws}/events?token=` | SSE | 实时事件流（query param JWT 认证） |
 | `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
 | `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
+| `/api/v1/enterprise-files/agents` | 企业空间 | 列出可浏览的 Agent 实例 |
+| `/api/v1/enterprise-files/agents/{id}/files` | 企业空间 | 列出 Agent 目录文件（query: path） |
+| `/api/v1/enterprise-files/agents/{id}/files/content` | 企业空间 | 读取文件内容（仅文本） |
+| `/api/v1/enterprise-files/agents/{id}/files/download` | 企业空间 | 下载文件 |
 
 ### RBAC 双表职责分离
 

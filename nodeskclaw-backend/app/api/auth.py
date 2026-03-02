@@ -90,8 +90,9 @@ async def me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取当前用户信息（含管理平台角色）。"""
+    """获取当前用户信息（含管理平台角色和组织成员角色）。"""
     from app.models.admin_membership import AdminMembership
+    from app.models.org_membership import OrgMembership
 
     info = UserInfo.model_validate(current_user)
     if current_user.current_org_id:
@@ -103,6 +104,15 @@ async def me(
             )
         )
         info.org_role = result.scalar_one_or_none()
+
+        result = await db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.user_id == current_user.id,
+                OrgMembership.org_id == current_user.current_org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )
+        info.portal_org_role = result.scalar_one_or_none()
     return ApiResponse(data=info)
 
 

@@ -202,8 +202,9 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 
 async def _build_user_info(user: User, db: AsyncSession) -> UserInfo:
-    """构建包含 org_role（管理平台角色）的 UserInfo。"""
+    """构建包含 org_role（管理平台角色）和 portal_org_role（组织成员角色）的 UserInfo。"""
     from app.models.admin_membership import AdminMembership
+    from app.models.org_membership import OrgMembership
 
     info = UserInfo.model_validate(user)
     if user.current_org_id:
@@ -215,6 +216,15 @@ async def _build_user_info(user: User, db: AsyncSession) -> UserInfo:
             )
         )
         info.org_role = result.scalar_one_or_none()
+
+        result = await db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.user_id == user.id,
+                OrgMembership.org_id == user.current_org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )
+        info.portal_org_role = result.scalar_one_or_none()
     return info
 
 

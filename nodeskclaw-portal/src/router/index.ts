@@ -106,6 +106,17 @@ const routes: RouteRecordRaw[] = [
     name: 'GenomeDetail',
     component: () => import('@/views/GenomeDetail.vue'),
   },
+  // Enterprise files
+  {
+    path: '/enterprise-files',
+    name: 'EnterpriseFiles',
+    component: () => import('@/views/EnterpriseFiles.vue'),
+  },
+  {
+    path: '/enterprise-files/:instanceId',
+    name: 'EnterpriseFileBrowser',
+    component: () => import('@/views/EnterpriseFileBrowser.vue'),
+  },
   // Legacy redirects
   {
     path: '/create',
