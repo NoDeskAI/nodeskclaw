@@ -412,9 +412,9 @@ docker push nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-opencla
 
 ---
 
-## 七、GitHub Actions 自动化
+## 七、自动化与构建方式
 
-### 7.1 版本检测工作流
+### 7.1 版本检测工作流（GitHub Actions）
 
 文件：`.github/workflows/check-openclaw-update.yml`
 
@@ -422,20 +422,24 @@ docker push nodesk-center-cn-beijing.cr.volces.com/base-image/nodeskclaw-opencla
 - **逻辑**：查询 npm 最新稳定版 → 对比 Dockerfile → 版本不同时自动创建 PR
 - **不自动合并**：PR 创建后等人工审核
 
-### 7.2 镜像构建推送工作流
+### 7.2 镜像构建推送
 
-文件：`.github/workflows/build-openclaw-image.yml`
+镜像构建在火山云侧完成（持续交付流水线或本地脚本），推送走火山云内网，避免跨地域传输瓶颈。
 
-- **触发**：仅手动触发（`workflow_dispatch`），需输入 `openclaw_version`
-- **逻辑**：验证 npm 版本 → 登录火山云 CR → 构建 linux/amd64 → 推送 `v{version}` + `latest`
+**本地构建推送**（推荐）：
 
-### 7.3 GitHub Secrets 配置
+```bash
+cd nodeskclaw-artifacts/openclaw-image
+./build-and-push.sh --version 2026.2.26
+```
 
-| Secret | 说明 |
-|--------|------|
-| `VOLCENGINE_CR_REGISTRY` | 镜像仓库地址（如 `nodesk-center-cn-beijing.cr.volces.com`） |
-| `VOLCENGINE_CR_USERNAME` | 仓库用户名 |
-| `VOLCENGINE_CR_PASSWORD` | 仓库密码 |
+**火山云持续交付**（可选自动化）：
+
+在火山引擎持续交付控制台创建流水线，连接 GitHub 代码源，配置镜像构建步骤，通过 Webhook 或手动触发。
+
+### 7.3 构建架构说明
+
+GitHub Actions 仅负责版本检测和 PR 创建，不执行镜像构建推送。原因：GitHub Actions runner 位于海外，推送镜像到火山云 CR（北京）存在跨太平洋网络瓶颈，构建超时不可靠。
 
 ---
 
