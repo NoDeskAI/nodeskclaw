@@ -213,6 +213,7 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest, 
     if has_topo:
         await _notify_topology_status(workspace_id, inst, connected)
 
+    await _broadcast_join_message(workspace_id, inst)
     _fire_task(_send_welcome_message(workspace_id, inst))
 
     return _agent_brief(inst)
@@ -401,20 +402,20 @@ async def _notify_topology_status(
 
 
 WELCOME_MESSAGE = "你好！你刚刚加入了工作区，请向大家介绍一下你自己：你叫什么名字、你的能力和专长是什么。"
-WELCOME_DELAY_SECONDS = 20
+WELCOME_READY_TIMEOUT = 120
+WELCOME_POLL_INTERVAL = 3
+WELCOME_FALLBACK_DELAY = 10
 
 
-async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
-    """Wait for the instance to be ready, then trigger Agent self-introduction."""
+async def _broadcast_join_message(workspace_id: str, inst: Instance) -> None:
+    """Record and broadcast the 'joined workspace' system message immediately."""
+    from app.api.workspaces import broadcast_event
+    from app.core.deps import async_session_factory
+    from app.services import workspace_message_service as msg_service
+
     agent_name = inst.agent_display_name or inst.name
 
-    await asyncio.sleep(WELCOME_DELAY_SECONDS)
-
     try:
-        from app.api.workspaces import broadcast_event
-        from app.core.deps import async_session_factory
-        from app.services import workspace_message_service as msg_service
-
         async with async_session_factory() as db:
             await msg_service.record_message(
                 db,
@@ -431,7 +432,35 @@ async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
             "instance_id": inst.id,
             "content": f"{agent_name} 已加入工作区",
         })
+    except Exception as e:
+        logger.warning("广播加入消息失败（非致命）: instance=%s error=%s", inst.name, e)
 
+
+async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
+    """Wait for the instance to be ready, then trigger Agent self-introduction."""
+    agent_name = inst.agent_display_name or inst.name
+
+    from app.services.sse_listener import sse_listener_manager
+    has_sse_task = inst.id in sse_listener_manager.connected_instances
+
+    if has_sse_task:
+        elapsed = 0
+        while elapsed < WELCOME_READY_TIMEOUT:
+            if inst.id in sse_listener_manager.healthy_instances:
+                break
+            await asyncio.sleep(WELCOME_POLL_INTERVAL)
+            elapsed += WELCOME_POLL_INTERVAL
+        else:
+            logger.warning(
+                "Agent %s 在 %ds 内未就绪，放弃自我介绍",
+                agent_name, WELCOME_READY_TIMEOUT,
+            )
+            return
+        await asyncio.sleep(3)
+    else:
+        await asyncio.sleep(WELCOME_FALLBACK_DELAY)
+
+    try:
         from app.services.collaboration_service import _invoke_target_agent
         await _invoke_target_agent(
             workspace_id=workspace_id,

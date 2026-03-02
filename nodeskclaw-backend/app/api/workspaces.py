@@ -781,6 +781,16 @@ async def _stream_agent_response(
                 },
                 json={"model": "gpt-4", "messages": messages, "stream": True},
             ) as resp:
+                if resp.status_code != 200:
+                    logger.error(
+                        "Agent %s API returned %d, expected 200",
+                        agent_name, resp.status_code,
+                    )
+                    broadcast_event(workspace_id, "agent:done", {
+                        "instance_id": instance_id,
+                        "agent_name": agent_name,
+                    })
+                    return
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue

@@ -193,8 +193,8 @@ async def _invoke_target_agent(
     source_name: str,
     message: str,
     depth: int,
-) -> None:
-    """Invoke a target agent with a collaboration message."""
+) -> bool:
+    """Invoke a target agent with a collaboration message. Returns True on success."""
     import httpx
 
     from app.api.workspaces import broadcast_event
@@ -235,7 +235,7 @@ async def _invoke_target_agent(
 
     if not base_url or not token:
         logger.warning("Target agent %s missing connection info", agent_name)
-        return
+        return False
 
     broadcast_event(workspace_id, "agent:typing", {
         "instance_id": instance_id,
@@ -261,6 +261,16 @@ async def _invoke_target_agent(
                 },
                 json={"model": "gpt-4", "messages": messages_payload, "stream": True},
             ) as resp:
+                if resp.status_code != 200:
+                    logger.error(
+                        "Target agent %s API returned %d, expected 200",
+                        agent_name, resp.status_code,
+                    )
+                    broadcast_event(workspace_id, "agent:done", {
+                        "instance_id": instance_id,
+                        "agent_name": agent_name,
+                    })
+                    return False
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -286,7 +296,7 @@ async def _invoke_target_agent(
                                     "instance_id": instance_id,
                                     "agent_name": agent_name,
                                 })
-                                return
+                                return True
                             broadcast_event(workspace_id, "agent:chunk", {
                                 "instance_id": instance_id,
                                 "agent_name": agent_name,
@@ -306,7 +316,7 @@ async def _invoke_target_agent(
             "agent_name": agent_name,
             "error": str(e),
         })
-        return
+        return False
 
     if not flushed and buffer:
         if msg_service.is_no_reply(buffer.strip()):
@@ -314,7 +324,7 @@ async def _invoke_target_agent(
                 "instance_id": instance_id,
                 "agent_name": agent_name,
             })
-            return
+            return True
         broadcast_event(workspace_id, "agent:chunk", {
             "instance_id": instance_id,
             "agent_name": agent_name,
@@ -344,6 +354,8 @@ async def _invoke_target_agent(
             "instance_id": instance_id,
             "agent_name": agent_name,
         })
+
+    return True
 
 
 async def send_system_message_to_agents(
