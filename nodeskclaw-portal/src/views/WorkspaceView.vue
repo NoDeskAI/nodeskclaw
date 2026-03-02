@@ -409,7 +409,7 @@ async function handleRenameAgent() {
   try {
     await store.updateAgent(workspaceId.value, renameAgentInstanceId.value, {
       display_name: renameAgentDisplayName.value.trim(),
-      label: renameAgentLabel.value.trim() || null,
+      label: renameAgentLabel.value.trim(),
     })
     toast.success(t('hexAction.agentRenamed'))
     showRenameAgentDialog.value = false
