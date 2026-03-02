@@ -530,14 +530,14 @@ onUnmounted(() => {
                 <div
                   v-for="gene in genes"
                   :key="gene.id"
-                  class="p-4 rounded-xl border border-border bg-background hover:border-primary/30 transition cursor-pointer relative"
+                  class="p-4 rounded-xl border border-border bg-background hover:border-primary/30 transition cursor-pointer relative overflow-hidden"
                   @click="openGeneDetail(gene.id)"
                 >
                   <div
                     v-if="isInstalled(gene.slug)"
-                    class="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500 font-medium"
+                    class="absolute top-0 right-0 w-6 h-6 bg-green-500 rounded-bl-lg flex items-center justify-center"
                   >
-                    {{ t('geneMarketDialog.alreadyLearned') }}
+                    <Check class="w-3 h-3 text-white" />
                   </div>
                   <div class="flex items-start gap-3 mb-2">
                     <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -852,10 +852,14 @@ onUnmounted(() => {
                   <button
                     v-for="slug in detailGenome.gene_slugs"
                     :key="slug"
-                    :class="['shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px', activeGenomeGeneTab === slug ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border']"
+                    :class="['shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px inline-flex items-center gap-1', activeGenomeGeneTab === slug ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border']"
                     @click="activeGenomeGeneTab = slug"
                   >
                     {{ genomeGeneMap[slug]?.name ?? slug }}
+                    <Check
+                      v-if="genomeGeneMap[slug]?.slug && isInstalled(genomeGeneMap[slug]!.slug)"
+                      class="w-3.5 h-3.5 text-green-500"
+                    />
                   </button>
                 </div>
                 <div class="rounded-b-xl border border-t-0 border-border bg-background p-6">
