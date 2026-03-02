@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin, Focus, Minimize } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -41,11 +41,60 @@ const humanSeatCount = computed(() =>
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
 const chatOpen = ref(false)
-watch(chatOpen, (v) => store.setChatVisible(v))
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
+const focusMode = ref(false)
 const selectedAgentId = ref<string | null>(null)
 const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !== 'hidden')
+
+const CHAT_MIN_RATIO = 0.191
+const CHAT_MAX_RATIO = 0.618
+const CHAT_STORAGE_KEY = 'workspace-chat-width'
+
+function clampChatWidth(px: number): number {
+  const vw = window.innerWidth
+  return Math.round(Math.min(Math.max(px, vw * CHAT_MIN_RATIO), vw * CHAT_MAX_RATIO))
+}
+
+const chatWidth = ref(clampChatWidth(
+  Number(localStorage.getItem(CHAT_STORAGE_KEY)) || 400,
+))
+
+const isDraggingChat = ref(false)
+
+function onResizeHandlePointerDown(e: PointerEvent) {
+  e.preventDefault()
+  isDraggingChat.value = true
+  const onMove = (ev: PointerEvent) => {
+    chatWidth.value = clampChatWidth(window.innerWidth - ev.clientX)
+  }
+  const onUp = () => {
+    isDraggingChat.value = false
+    localStorage.setItem(CHAT_STORAGE_KEY, String(chatWidth.value))
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
+
+function onWindowResize() {
+  if (chatOpen.value) {
+    chatWidth.value = clampChatWidth(chatWidth.value)
+  }
+}
+
+function toggleFocusMode() {
+  focusMode.value = !focusMode.value
+  if (focusMode.value && !chatOpen.value) {
+    chatOpen.value = true
+  }
+}
+
+watch(chatOpen, (v) => {
+  store.setChatVisible(v)
+  if (!v) focusMode.value = false
+})
 
 interface SelectedHex {
   q: number
@@ -120,6 +169,7 @@ onMounted(async () => {
 
   store.connectSSE(workspaceId.value)
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('resize', onWindowResize)
 
   const focusAgentId = route.query.focus_agent as string | undefined
   if (focusAgentId) {
@@ -136,6 +186,7 @@ onMounted(async () => {
 onUnmounted(() => {
   store.disconnectSSE()
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', onWindowResize)
 })
 
 watch(workspaceId, async (newId, oldId) => {
@@ -587,7 +638,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden bg-background">
+  <div class="flex flex-col h-screen overflow-hidden bg-background" :class="{ 'drag-no-select': isDraggingChat }">
     <!-- Toolbar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-border bg-background/80 backdrop-blur-sm shrink-0 z-10">
       <div class="flex items-center gap-3">
@@ -704,8 +755,8 @@ function handleKeydown(e: KeyboardEvent) {
 
     <!-- Main: Hex Grid + Chat Sidebar -->
     <div class="flex-1 flex min-h-0">
-      <!-- Hex Grid -->
-      <div class="flex-1 relative min-h-0 min-w-0 overflow-hidden" @click="onCanvasAreaClick">
+      <!-- Hex Grid (hidden in focus mode) -->
+      <div v-show="!focusMode" class="flex-1 relative min-h-0 min-w-0 overflow-hidden" @click="onCanvasAreaClick">
         <!-- 3D mode -->
         <div
           ref="threeRef"
@@ -804,29 +855,62 @@ function handleKeydown(e: KeyboardEvent) {
         </div>
       </div>
 
+      <!-- Embedded Blackboard (focus mode only) -->
+      <div v-if="focusMode && chatOpen" class="flex-1 flex flex-col min-h-0 min-w-0 bg-card">
+        <BlackboardOverlay
+          :open="true"
+          :workspace-id="workspaceId"
+          embedded
+          @close="focusMode = false"
+        />
+      </div>
+
       <!-- Chat Sidebar -->
       <Transition name="chat-slide">
         <div
           v-if="chatOpen"
-          class="w-[400px] border-l border-border flex flex-col shrink-0 bg-card"
+          class="border-l border-border flex shrink-0 bg-card relative"
+          :style="{ width: chatWidth + 'px' }"
         >
-          <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
-            <div class="flex items-center gap-2">
-              <MessageSquare class="w-4 h-4 text-primary" />
-              <span class="text-sm font-medium">{{ ws?.name || 'Workspace' }}</span>
-              <span class="text-xs text-muted-foreground">{{ t('workspaceView.groupChat') }}</span>
-            </div>
-            <button
-              class="p-1 rounded hover:bg-muted transition-colors"
-              @click="chatOpen = false"
-            >
-              <X class="w-4 h-4" />
-            </button>
+          <!-- Resize handle -->
+          <div
+            class="absolute left-0 top-0 bottom-0 w-1 z-10 cursor-col-resize group"
+            @pointerdown="onResizeHandlePointerDown"
+          >
+            <div
+              class="absolute inset-y-0 left-0 w-1 transition-colors"
+              :class="isDraggingChat ? 'bg-primary' : 'group-hover:bg-primary/50'"
+            />
           </div>
-          <ChatPanel
-            :workspace-id="workspaceId"
-            class="flex-1 min-h-0"
-          />
+          <div class="flex flex-col flex-1 min-w-0">
+            <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+              <div class="flex items-center gap-2">
+                <MessageSquare class="w-4 h-4 text-primary" />
+                <span class="text-sm font-medium">{{ ws?.name || 'Workspace' }}</span>
+                <span class="text-xs text-muted-foreground">{{ t('workspaceView.groupChat') }}</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button
+                  class="p-1 rounded hover:bg-muted transition-colors"
+                  :title="focusMode ? t('workspaceView.exitFocus') : t('workspaceView.enterFocus')"
+                  @click="toggleFocusMode"
+                >
+                  <Minimize v-if="focusMode" class="w-4 h-4" />
+                  <Focus v-else class="w-4 h-4" />
+                </button>
+                <button
+                  class="p-1 rounded hover:bg-muted transition-colors"
+                  @click="chatOpen = false"
+                >
+                  <X class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <ChatPanel
+              :workspace-id="workspaceId"
+              class="flex-1 min-h-0"
+            />
+          </div>
         </div>
       </Transition>
     </div>
@@ -846,6 +930,7 @@ function handleKeydown(e: KeyboardEvent) {
       :agent-info="hexAgentInfo"
       :entity-info="selectedHex?.entityId ? { id: selectedHex.entityId, name: hexEntityName } : undefined"
       :chat-sidebar-open="chatOpen"
+      :chat-sidebar-width="chatWidth"
       @close="closeHexDrawer"
       @action="onHexAction"
     />
@@ -1133,8 +1218,11 @@ function handleKeydown(e: KeyboardEvent) {
 }
 .chat-slide-enter-from,
 .chat-slide-leave-to {
-  width: 0 !important;
+  width: 0px !important;
   opacity: 0;
+}
+.drag-no-select {
+  user-select: none;
 }
 .fade-enter-active,
 .fade-leave-active {

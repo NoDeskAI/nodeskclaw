@@ -158,6 +158,8 @@ const enUS = {
     bbOnline: "Online",
     bbHumans: "Humans",
     bbHumanSeats: "Human Seats",
+    enterFocus: "Focus mode (Blackboard + Chat)",
+    exitFocus: "Exit focus mode",
   },
   workspaceSettings: {
     title: "Workspace Settings",

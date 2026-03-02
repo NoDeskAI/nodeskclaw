@@ -5,14 +5,15 @@ import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette
 
 const { t } = useI18n()
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   hexType: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human'
   hexPosition: { q: number, r: number }
   agentInfo?: { id: string, name: string }
   entityInfo?: { id: string, name?: string }
   chatSidebarOpen?: boolean
-}>()
+  chatSidebarWidth?: number
+}>(), { chatSidebarWidth: 400 })
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -60,7 +61,7 @@ onUnmounted(() => {
     <div
       v-if="open"
       class="fixed bottom-0 -translate-x-1/2 z-40 w-60 bg-card border border-border shadow-2xl rounded-t-xl transition-[left] duration-300"
-      :style="{ left: chatSidebarOpen ? 'calc(50% - 200px)' : '50%' }"
+      :style="{ left: chatSidebarOpen ? `calc(50% - ${chatSidebarWidth / 2}px)` : '50%' }"
     >
       <div class="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
         <span class="text-sm font-medium text-foreground">
