@@ -173,7 +173,7 @@ class PodFS:
             result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
                 ["bash", "-c",
-                 f"if stat -c '%s\\t%Y' '/root/{path}' 2>/dev/null; then "
+                 f"if stat -c '%s|%Y' '/root/{path}' 2>/dev/null; then "
                  f"file -bi '/root/{path}' 2>/dev/null || echo 'application/octet-stream'; "
                  f"else echo '__NOT_FOUND__'; fi"],
                 container=self._container,
@@ -187,7 +187,7 @@ class PodFS:
         lines = result.strip().splitlines()
         if len(lines) < 1:
             return None
-        stat_parts = lines[0].split("\t")
+        stat_parts = lines[0].split("|")
         if len(stat_parts) < 2:
             return None
         mime = lines[1].strip().split(";")[0] if len(lines) > 1 else "application/octet-stream"
