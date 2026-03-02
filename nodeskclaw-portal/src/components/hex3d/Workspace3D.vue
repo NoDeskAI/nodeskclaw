@@ -242,6 +242,32 @@ function createBBLabelSprite(): THREE.Sprite {
 
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
 
+function createAgentLabelSprite(name: string, label?: string | null): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  const hasLabel = !!label
+  canvas.width = 256
+  canvas.height = hasLabel ? 56 : 36
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = 'transparent'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.font = 'bold 16px sans-serif'
+  ctx.fillStyle = '#e2e8f0'
+  ctx.textAlign = 'center'
+  ctx.fillText(name.slice(0, 16), 128, 18)
+  if (hasLabel) {
+    ctx.font = '12px sans-serif'
+    ctx.fillStyle = '#94a3b8'
+    ctx.fillText(label!.slice(0, 20), 128, 40)
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(mat)
+  const sy = hasLabel ? 0.28 : 0.18
+  sprite.scale.set(1.2, sy, 1)
+  sprite.userData.baseScale = { x: 1.2, y: sy }
+  return sprite
+}
+
 function createCorridorLabelSprite(name: string): THREE.Sprite {
   const canvas = document.createElement('canvas')
   canvas.width = 256
@@ -339,6 +365,11 @@ function syncScene() {
 
   for (const agent of props.agents) {
     const group = createHexMesh(agent)
+    const agentName = agent.display_name || agent.name
+    const agentLabel = createAgentLabelSprite(agentName, agent.label)
+    agentLabel.position.set(0, 0.65, 0)
+    group.add(agentLabel)
+    labelSprites.add(agentLabel)
     scene.add(group)
     hexMeshes.set(agent.instance_id, group)
   }

@@ -219,6 +219,13 @@ const enUS = {
     selectColor: "Select Color",
     changeAgentColor: "Theme Color",
     focusHex: "Focus",
+    renameAgent: "Rename",
+    renameAgentTitle: "Rename Agent",
+    agentDisplayNameLabel: "Display Name",
+    agentDisplayNamePlaceholder: "Enter display name",
+    agentLabelFieldLabel: "Label",
+    agentLabelPlaceholder: "Enter label describing what this Agent does",
+    agentRenamed: "Agent renamed",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",

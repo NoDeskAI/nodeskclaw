@@ -999,6 +999,16 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 agent_theme_color 列")
 
+        col = (await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'agent_label'"
+        ))).first()
+        if col is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN agent_label VARCHAR(128)"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 agent_label 列")
+
     # ── 迁移 24: 为已有实例补建 InstanceMember 记录 ──
     async with engine.begin() as conn:
         await conn.execute(text("""

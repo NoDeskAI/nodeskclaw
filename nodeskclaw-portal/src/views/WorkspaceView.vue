@@ -254,6 +254,9 @@ function onHexAction(action: string) {
     case 'rename-corridor':
       openRenameDialog()
       break
+    case 'rename-agent':
+      openRenameAgentDialog()
+      break
     case 'remove-corridor':
       if (selectedHex.value?.entityId) {
         store.deleteCorridorHex(workspaceId.value, selectedHex.value.entityId)
@@ -331,6 +334,38 @@ async function handleRenameCorridor() {
     showRenameDialog.value = false
   } finally {
     renameSaving.value = false
+  }
+}
+
+const showRenameAgentDialog = ref(false)
+const renameAgentDisplayName = ref('')
+const renameAgentLabel = ref('')
+const renameAgentSaving = ref(false)
+const renameAgentInstanceId = ref('')
+
+function openRenameAgentDialog() {
+  if (!selectedHex.value?.agentId) return
+  const agent = agents.value.find(a => a.instance_id === selectedHex.value!.agentId)
+  if (!agent) return
+  renameAgentInstanceId.value = agent.instance_id
+  renameAgentDisplayName.value = agent.display_name || agent.name
+  renameAgentLabel.value = agent.label || ''
+  showRenameAgentDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameAgent() {
+  if (!renameAgentInstanceId.value) return
+  renameAgentSaving.value = true
+  try {
+    await store.updateAgent(workspaceId.value, renameAgentInstanceId.value, {
+      display_name: renameAgentDisplayName.value.trim(),
+      label: renameAgentLabel.value.trim() || null,
+    })
+    toast.success(t('hexAction.agentRenamed'))
+    showRenameAgentDialog.value = false
+  } finally {
+    renameAgentSaving.value = false
   }
 }
 
@@ -842,6 +877,55 @@ function handleKeydown(e: KeyboardEvent) {
                 @click="handleRenameCorridor"
               >
                 {{ renameSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Rename Agent Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameAgentDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameAgentDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameAgentTitle') }}</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('hexAction.agentDisplayNameLabel') }}</label>
+                <input
+                  v-model="renameAgentDisplayName"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  :placeholder="t('hexAction.agentDisplayNamePlaceholder')"
+                  @keydown.enter="handleRenameAgent"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('hexAction.agentLabelFieldLabel') }}</label>
+                <input
+                  v-model="renameAgentLabel"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  :placeholder="t('hexAction.agentLabelPlaceholder')"
+                  @keydown.enter="handleRenameAgent"
+                />
+              </div>
+            </div>
+            <div class="flex justify-end gap-3">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameAgentDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameAgentSaving"
+                @click="handleRenameAgent"
+              >
+                {{ renameAgentSaving ? t('common.saving') : t('common.save') }}
               </button>
             </div>
           </div>

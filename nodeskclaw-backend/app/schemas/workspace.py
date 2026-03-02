@@ -25,6 +25,7 @@ class AgentBrief(BaseModel):
     instance_id: str
     name: str
     display_name: str | None = None
+    label: str | None = None
     slug: str | None = None
     status: str
     hex_q: int
@@ -87,6 +88,7 @@ class AddAgentRequest(BaseModel):
 
 class UpdateAgentRequest(BaseModel):
     display_name: str | None = None
+    label: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
     theme_color: str | None = None

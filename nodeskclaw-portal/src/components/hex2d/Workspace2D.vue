@@ -350,13 +350,22 @@ const emptyHexes = computed(() => {
           {{ agent.sse_connected ? agent.status : 'disconnected' }}
         </text>
         <text
-          y="0"
+          :y="agent.label ? -4 : 0"
           text-anchor="middle"
           :fill="agent.sse_connected ? 'white' : '#9ca3af'"
           font-size="11"
           font-weight="500"
         >
           {{ agent.display_name || agent.name }}
+        </text>
+        <text
+          v-if="agent.label"
+          y="10"
+          text-anchor="middle"
+          fill="#9ca3af"
+          font-size="8"
+        >
+          {{ agent.label }}
         </text>
       </g>
 

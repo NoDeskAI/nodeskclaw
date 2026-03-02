@@ -43,6 +43,7 @@ def _agent_brief(inst: Instance) -> AgentBrief:
         instance_id=inst.id,
         name=inst.name,
         display_name=inst.agent_display_name,
+        label=inst.agent_label,
         slug=inst.slug,
         status=inst.status,
         hex_q=inst.hex_position_q,
@@ -255,6 +256,7 @@ async def remove_agent(db: AsyncSession, workspace_id: str, instance_id: str) ->
     inst.hex_position_q = 0
     inst.hex_position_r = 0
     inst.agent_display_name = None
+    inst.agent_label = None
 
     await db.commit()
     return True
@@ -276,6 +278,8 @@ async def update_agent(
 
     if data.display_name is not None:
         inst.agent_display_name = data.display_name
+    if data.label is not None:
+        inst.agent_label = data.label
     if data.theme_color is not None:
         inst.agent_theme_color = data.theme_color
 

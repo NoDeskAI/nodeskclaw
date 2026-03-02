@@ -219,6 +219,13 @@ const zhCN = {
     selectColor: "选择颜色",
     changeAgentColor: "主题色",
     focusHex: "聚焦",
+    renameAgent: "重命名",
+    renameAgentTitle: "重命名 Agent",
+    agentDisplayNameLabel: "显示名称",
+    agentDisplayNamePlaceholder: "输入显示名称",
+    agentLabelFieldLabel: "标签",
+    agentLabelPlaceholder: "输入标签，描述 Agent 的职责",
+    agentRenamed: "Agent 已重命名",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",

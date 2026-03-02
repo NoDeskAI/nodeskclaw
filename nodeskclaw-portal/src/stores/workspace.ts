@@ -7,6 +7,7 @@ export interface AgentBrief {
   instance_id: string
   name: string
   display_name: string | null
+  label: string | null
   slug: string | null
   status: string
   hex_q: number
