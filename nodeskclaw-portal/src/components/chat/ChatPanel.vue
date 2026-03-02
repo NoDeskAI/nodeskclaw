@@ -615,7 +615,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               </button>
             </div>
             <div
-              v-else
+              v-else-if="msg.sender_type !== 'agent'"
               class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap bg-primary text-primary-foreground"
             >
               <template v-for="(seg, si) in parseContent(msg.content)" :key="si">
