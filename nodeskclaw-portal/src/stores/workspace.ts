@@ -113,6 +113,12 @@ export interface TopologyInfo {
   edges: TopologyEdge[]
 }
 
+export interface MessageFlowPair {
+  sender_hex_key: string
+  receiver_hex_key: string
+  count: number
+}
+
 export interface GroupChatMessage {
   id: string
   sender_type: 'user' | 'agent' | 'system'
@@ -136,6 +142,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const corridorHexes = ref<CorridorHexInfo[]>([])
   const connections = ref<ConnectionInfo[]>([])
   const topology = ref<TopologyInfo | null>(null)
+  const messageFlowStats = ref<MessageFlowPair[]>([])
 
   // ── Workspace CRUD ────────────────────────────────
 
@@ -656,6 +663,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     } catch (e) {
       console.error('fetchTopology error:', e)
     }
+    fetchMessageFlowStats(workspaceId)
+  }
+
+  async function fetchMessageFlowStats(workspaceId: string) {
+    try {
+      const res = await api.get(`/workspaces/${workspaceId}/topology/message-flow`)
+      messageFlowStats.value = res.data.data || []
+    } catch {
+      messageFlowStats.value = []
+    }
   }
 
   async function fetchCorridorHexes(workspaceId: string) {
@@ -799,6 +816,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     topology,
     topologyNodes: computed(() => topology.value?.nodes || []),
     topologyEdges: computed(() => topology.value?.edges || []),
+    messageFlowStats,
     resetCurrentState,
     setChatVisible,
     fetchWorkspaces,

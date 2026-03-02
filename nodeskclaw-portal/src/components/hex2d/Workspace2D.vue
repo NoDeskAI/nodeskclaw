@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSvgZoom } from '@/composables/useSvgZoom'
 import { axialToWorld, hexPolygonPoints, HEX_SIZE } from '@/composables/useHexLayout'
-import type { AgentBrief } from '@/stores/workspace'
+import type { AgentBrief, MessageFlowPair } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -23,6 +23,7 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
+  messageFlowStats?: MessageFlowPair[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -187,6 +188,29 @@ function humanHexPoints(cx: number, cy: number): string {
   return hexPolygonPoints(cx, cy, HUMAN_RADIUS)
 }
 
+const heatLines = computed(() => {
+  const stats = props.messageFlowStats
+  if (!stats || stats.length === 0) return []
+  const maxCount = Math.max(...stats.map(s => s.count))
+  if (maxCount === 0) return []
+  return stats.map(s => {
+    const [sq, sr] = s.sender_hex_key.split(',').map(Number)
+    const [rq, rr] = s.receiver_hex_key.split(',').map(Number)
+    const from = axialToWorld(sq, sr)
+    const to = axialToWorld(rq, rr)
+    const ratio = s.count / maxCount
+    return {
+      key: s.sender_hex_key + '-' + s.receiver_hex_key,
+      x1: from.x * SCALE,
+      y1: from.y * SCALE,
+      x2: to.x * SCALE,
+      y2: to.y * SCALE,
+      width: 1 + 4 * ratio,
+      opacity: 0.15 + 0.45 * ratio,
+    }
+  })
+})
+
 const emptyHexes = computed(() => {
   const occupied = new Set<string>()
   occupied.add('0:0')
@@ -242,6 +266,19 @@ const emptyHexes = computed(() => {
         opacity="0.18"
         mask="url(#grid-mask)"
       />
+
+      <!-- Heatmap overlay -->
+      <g class="heat-layer" v-if="heatLines.length">
+        <line
+          v-for="hl in heatLines"
+          :key="hl.key"
+          :x1="hl.x1" :y1="hl.y1" :x2="hl.x2" :y2="hl.y2"
+          stroke="#a78bfa"
+          :stroke-width="hl.width"
+          :opacity="hl.opacity"
+          stroke-linecap="round"
+        />
+      </g>
 
       <!-- Empty hex clickable areas -->
       <g

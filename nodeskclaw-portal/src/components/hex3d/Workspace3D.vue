@@ -8,7 +8,7 @@ import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import { createGrabby, animateGrabby, updateGrabbyTheme, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
 import { createCorridorPath, disposeCorridorPath, disposeCorridorPathShared } from './CorridorPath'
-import type { AgentBrief, TopologyNode } from '@/stores/workspace'
+import type { AgentBrief, TopologyNode, MessageFlowPair } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -20,6 +20,7 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
+  messageFlowStats?: MessageFlowPair[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -78,6 +79,10 @@ scene.add(dirLight)
 // Honeycomb hex grid lines (vibecraft-style)
 const hexGridGroup = createWorldHexGrid()
 scene.add(hexGridGroup)
+
+const heatmapGroup = new THREE.Group()
+heatmapGroup.name = 'heatmapLines'
+scene.add(heatmapGroup)
 
 scene.fog = new THREE.FogExp2(0x0a0a1a, 0.04)
 scene.background = new THREE.Color(0x0a0a1a)
@@ -409,6 +414,43 @@ function syncScene() {
 }
 
 watch([() => props.agents, () => props.topologyNodes], syncScene, { deep: true, immediate: true })
+
+const heatmapMaterials: THREE.LineBasicMaterial[] = []
+
+function syncHeatmap() {
+  for (const child of [...heatmapGroup.children]) {
+    heatmapGroup.remove(child)
+    if ((child as THREE.Line).geometry) (child as THREE.Line).geometry.dispose()
+  }
+  for (const mat of heatmapMaterials) mat.dispose()
+  heatmapMaterials.length = 0
+
+  const stats = props.messageFlowStats
+  if (!stats || stats.length === 0) return
+  const maxCount = Math.max(...stats.map(s => s.count))
+  if (maxCount === 0) return
+
+  for (const s of stats) {
+    const [sq, sr] = s.sender_hex_key.split(',').map(Number)
+    const [rq, rr] = s.receiver_hex_key.split(',').map(Number)
+    const from = axialToWorld(sq, sr)
+    const to = axialToWorld(rq, rr)
+    const ratio = s.count / maxCount
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(from.x, 0.01, from.y),
+      new THREE.Vector3(to.x, 0.01, to.y),
+    ])
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xa78bfa,
+      transparent: true,
+      opacity: 0.15 + 0.45 * ratio,
+    })
+    heatmapMaterials.push(mat)
+    heatmapGroup.add(new THREE.Line(geo, mat))
+  }
+}
+
+watch(() => props.messageFlowStats, syncHeatmap, { deep: true })
 
 // Hover + selection animation
 const clock = new THREE.Clock()
