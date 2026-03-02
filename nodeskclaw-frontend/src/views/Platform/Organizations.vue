@@ -32,7 +32,15 @@ const showEdit = ref(false)
 const editingOrg = ref<OrgInfo | null>(null)
 
 const createForm = ref({ name: '', slug: '', plan: 'free' })
-const editForm = ref({ name: '', plan: '', max_instances: 0, max_storage_total: '', cluster_id: '' })
+const editForm = ref({
+  name: '', plan: '', max_instances: 0,
+  max_cpu_total: '', max_mem_total: '', max_storage_total: '',
+  cluster_id: '',
+})
+
+function stripGi(val: string): string {
+  return val.replace(/Gi$/i, '')
+}
 
 onMounted(() => {
   orgStore.fetchAllOrgs()
@@ -55,7 +63,9 @@ function openEdit(org: OrgInfo) {
     name: org.name,
     plan: org.plan,
     max_instances: org.max_instances,
-    max_storage_total: org.max_storage_total || '500Gi',
+    max_cpu_total: org.max_cpu_total || '4',
+    max_mem_total: stripGi(org.max_mem_total || '8Gi'),
+    max_storage_total: stripGi(org.max_storage_total || '500Gi'),
     cluster_id: org.cluster_id || '',
   }
   showEdit.value = true
@@ -69,8 +79,14 @@ async function handleUpdate() {
     if (editForm.value.plan !== editingOrg.value.plan) data.plan = editForm.value.plan
     if (editForm.value.max_instances !== editingOrg.value.max_instances)
       data.max_instances = editForm.value.max_instances
-    if (editForm.value.max_storage_total !== (editingOrg.value.max_storage_total || '500Gi'))
-      data.max_storage_total = editForm.value.max_storage_total
+    if (editForm.value.max_cpu_total !== (editingOrg.value.max_cpu_total || '4'))
+      data.max_cpu_total = editForm.value.max_cpu_total
+    const memGi = `${editForm.value.max_mem_total}Gi`
+    if (memGi !== (editingOrg.value.max_mem_total || '8Gi'))
+      data.max_mem_total = memGi
+    const storageGi = `${editForm.value.max_storage_total}Gi`
+    if (storageGi !== (editingOrg.value.max_storage_total || '500Gi'))
+      data.max_storage_total = storageGi
     if (editForm.value.cluster_id !== (editingOrg.value.cluster_id || ''))
       data.cluster_id = editForm.value.cluster_id || null
 
@@ -257,8 +273,25 @@ const planLabels: Record<string, string> = {
             <Input v-model.number="editForm.max_instances" type="number" />
           </div>
           <div class="space-y-2">
+            <label class="text-sm font-medium">CPU 上限</label>
+            <div class="flex items-center gap-2">
+              <Input v-model="editForm.max_cpu_total" type="number" class="flex-1" />
+              <span class="text-sm text-muted-foreground shrink-0 w-10">Core</span>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">内存上限</label>
+            <div class="flex items-center gap-2">
+              <Input v-model="editForm.max_mem_total" type="number" class="flex-1" />
+              <span class="text-sm text-muted-foreground shrink-0 w-10">Gi</span>
+            </div>
+          </div>
+          <div class="space-y-2">
             <label class="text-sm font-medium">存储上限</label>
-            <Input v-model="editForm.max_storage_total" placeholder="如 500Gi" />
+            <div class="flex items-center gap-2">
+              <Input v-model="editForm.max_storage_total" type="number" class="flex-1" />
+              <span class="text-sm text-muted-foreground shrink-0 w-10">Gi</span>
+            </div>
           </div>
         </div>
         <DialogFooter>
