@@ -16,11 +16,13 @@ class AppException(Exception):
         status_code: int = 400,
         message_key: str | None = None,
         error_code: int | None = None,
+        message_params: dict[str, str] | None = None,
     ):
         self.code = code
         self.error_code = error_code if error_code is not None else code
         self.message = message
         self.message_key = message_key
+        self.message_params = message_params
         self.status_code = status_code
 
 
@@ -35,8 +37,16 @@ class ForbiddenError(AppException):
 
 
 class BadRequestError(AppException):
-    def __init__(self, message: str = "请求参数错误", message_key: str = "errors.common.bad_request"):
-        super().__init__(code=40000, message=message, status_code=400, message_key=message_key)
+    def __init__(
+        self,
+        message: str = "请求参数错误",
+        message_key: str = "errors.common.bad_request",
+        message_params: dict[str, str] | None = None,
+    ):
+        super().__init__(
+            code=40000, message=message, status_code=400,
+            message_key=message_key, message_params=message_params,
+        )
 
 
 class ConflictError(AppException):
@@ -90,16 +100,16 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppException)
     async def app_exception_handler(_request: Request, exc: AppException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "code": exc.code,
-                "error_code": exc.error_code,
-                "message_key": exc.message_key,
-                "message": exc.message,
-                "data": None,
-            },
-        )
+        body: dict[str, Any] = {
+            "code": exc.code,
+            "error_code": exc.error_code,
+            "message_key": exc.message_key,
+            "message": exc.message,
+            "data": None,
+        }
+        if exc.message_params:
+            body["message_params"] = exc.message_params
+        return JSONResponse(status_code=exc.status_code, content=body)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:

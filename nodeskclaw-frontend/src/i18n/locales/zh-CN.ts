@@ -119,6 +119,12 @@ const zhCN = {
     system: {
       internal_error: "服务器内部错误",
     },
+    billing: {
+      instance_limit_exceeded: "实例数量已达上限（{used}/{limit}），请升级套餐或联系管理员",
+      cpu_quota_exceeded: "CPU 配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",
+      memory_quota_exceeded: "内存配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",
+      storage_quota_exceeded: "存储配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",
+    },
     auth: {
       credentials_missing: "未提供认证信息",
       token_invalid_or_expired: "Token 无效或已过期",

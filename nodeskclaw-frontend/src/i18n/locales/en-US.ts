@@ -119,6 +119,12 @@ const enUS = {
     system: {
       internal_error: "Internal server error",
     },
+    billing: {
+      instance_limit_exceeded: "Instance limit reached ({used}/{limit}). Please upgrade your plan or contact admin.",
+      cpu_quota_exceeded: "CPU quota exceeded: used {used}, requesting {requested}, limit {limit}",
+      memory_quota_exceeded: "Memory quota exceeded: used {used}, requesting {requested}, limit {limit}",
+      storage_quota_exceeded: "Storage quota exceeded: used {used}, requesting {requested}, limit {limit}",
+    },
     auth: {
       credentials_missing: "Authentication credentials are missing",
       token_invalid_or_expired: "Token is invalid or expired",

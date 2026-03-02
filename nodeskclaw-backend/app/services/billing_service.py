@@ -85,7 +85,12 @@ async def check_deploy_quota(
     if usage.instance_count >= usage.instance_limit:
         raise BadRequestError(
             f"实例数量已达上限 ({usage.instance_count}/{usage.instance_limit})，"
-            "请升级套餐或联系管理员"
+            "请升级套餐或联系管理员",
+            message_key="errors.billing.instance_limit_exceeded",
+            message_params={
+                "used": str(usage.instance_count),
+                "limit": str(usage.instance_limit),
+            },
         )
 
     req_cpu = _parse_cpu_millis(cpu_request)
@@ -94,7 +99,13 @@ async def check_deploy_quota(
     if limit_cpu > 0 and used_cpu + req_cpu > limit_cpu:
         raise BadRequestError(
             f"CPU 配额不足：已用 {usage.cpu_used}，本次需要 {cpu_request}，"
-            f"上限 {usage.cpu_limit}"
+            f"上限 {usage.cpu_limit}",
+            message_key="errors.billing.cpu_quota_exceeded",
+            message_params={
+                "used": usage.cpu_used,
+                "requested": cpu_request,
+                "limit": usage.cpu_limit,
+            },
         )
 
     req_mem = _parse_mem_mi(mem_request)
@@ -103,7 +114,13 @@ async def check_deploy_quota(
     if limit_mem > 0 and used_mem + req_mem > limit_mem:
         raise BadRequestError(
             f"内存配额不足：已用 {usage.mem_used}，本次需要 {mem_request}，"
-            f"上限 {usage.mem_limit}"
+            f"上限 {usage.mem_limit}",
+            message_key="errors.billing.memory_quota_exceeded",
+            message_params={
+                "used": usage.mem_used,
+                "requested": mem_request,
+                "limit": usage.mem_limit,
+            },
         )
 
     req_storage = _parse_storage_gi(storage_size)
@@ -112,7 +129,13 @@ async def check_deploy_quota(
     if limit_storage > 0 and used_storage + req_storage > limit_storage:
         raise BadRequestError(
             f"存储配额不足：已用 {usage.storage_used}，本次需要 {storage_size}，"
-            f"上限 {usage.storage_limit}"
+            f"上限 {usage.storage_limit}",
+            message_key="errors.billing.storage_quota_exceeded",
+            message_params={
+                "used": usage.storage_used,
+                "requested": storage_size,
+                "limit": usage.storage_limit,
+            },
         )
 
 
