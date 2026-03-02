@@ -251,6 +251,7 @@ async def remove_agent(db: AsyncSession, workspace_id: str, instance_id: str) ->
     if inst is None:
         return False
 
+    await _broadcast_leave_message(workspace_id, inst)
     await _remove_channel_plugin(inst, db)
 
     inst.workspace_id = None
@@ -434,6 +435,41 @@ async def _broadcast_join_message(workspace_id: str, inst: Instance) -> None:
         })
     except Exception as e:
         logger.warning("广播加入消息失败（非致命）: instance=%s error=%s", inst.name, e)
+
+
+async def _broadcast_leave_message(workspace_id: str, inst: Instance) -> None:
+    """Record and broadcast the 'left workspace' system message before cleanup."""
+    from app.api.workspaces import broadcast_event
+    from app.core.deps import async_session_factory
+    from app.services import workspace_message_service as msg_service
+    from datetime import datetime, timezone
+
+    agent_name = inst.agent_display_name or inst.name
+    msg_id = f"sys-leave-{inst.id[:8]}-{int(datetime.now(timezone.utc).timestamp())}"
+    content = f"{agent_name} 已退出工作区"
+
+    try:
+        async with async_session_factory() as db:
+            await msg_service.record_message(
+                db,
+                workspace_id=workspace_id,
+                sender_type="system",
+                sender_id="system",
+                sender_name="System",
+                content=content,
+                message_type="system",
+            )
+
+        broadcast_event(workspace_id, "system:info", {
+            "id": msg_id,
+            "sender_type": "system",
+            "sender_id": "system",
+            "sender_name": "System",
+            "content": content,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.warning("广播退出消息失败（非致命）: instance=%s error=%s", inst.name, e)
 
 
 async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
