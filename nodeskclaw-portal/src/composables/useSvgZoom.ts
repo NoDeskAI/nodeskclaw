@@ -56,7 +56,7 @@ export function useSvgZoom(
       const dy = e.clientY - lastY
       lastX = e.clientX
       lastY = e.clientY
-      select(svg).call(zoomBehavior.translateBy, dx, dy)
+      select(svg).call(zoomBehavior.translateBy, dx * 0.8, dy * 0.8)
     }, { signal })
 
     svg.addEventListener('pointerup', (e) => {

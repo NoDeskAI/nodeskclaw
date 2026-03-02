@@ -72,7 +72,7 @@ export function useOrbitControls(
         .normalize()
 
       const dist = camera.position.distanceTo(controls.target)
-      const sensitivity = dist * 0.002
+      const sensitivity = dist * 0.0016
 
       const offset = new THREE.Vector3()
         .addScaledVector(right, -dx * sensitivity)
