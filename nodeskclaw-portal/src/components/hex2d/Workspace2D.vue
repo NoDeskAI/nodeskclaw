@@ -212,6 +212,7 @@ const emptyHexes = computed(() => {
     class="w-full h-full"
     viewBox="-400 -300 800 600"
     preserveAspectRatio="xMidYMid meet"
+    @contextmenu.prevent
   >
     <defs>
       <radialGradient id="grid-fade" cx="50%" cy="50%" r="50%">
