@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSvgZoom } from '@/composables/useSvgZoom'
 import { axialToWorld, hexPolygonPoints, HEX_SIZE } from '@/composables/useHexLayout'
-import type { AgentBrief, MessageFlowPair } from '@/stores/workspace'
+import { useTopologyBFS } from '@/composables/useTopologyBFS'
+import { useFlowAnimation2D } from '@/composables/useFlowAnimation'
+import type { AgentBrief, MessageFlowPair, TopologyNode as StoreTopologyNode, TopologyEdge } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -23,6 +25,7 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
+  topologyEdges?: TopologyEdge[]
   messageFlowStats?: MessageFlowPair[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
@@ -42,7 +45,42 @@ function focusOnHex(q: number, r: number) {
   focusOnPosition(x * SCALE, y * SCALE)
 }
 
-defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex })
+const storeNodes = computed(() => (props.topologyNodes || []) as StoreTopologyNode[])
+const storeEdges = computed(() => props.topologyEdges || [] as TopologyEdge[])
+const { findPath, findReachableEndpoints } = useTopologyBFS(storeNodes, storeEdges)
+const { particles, pulses, triggerFlow, getParticlePosition, dispose: disposeAnim } = useFlowAnimation2D(SCALE)
+
+function triggerMessageFlow(sourceInstanceId: string, target: string) {
+  const nodes = props.topologyNodes || []
+  const sourceNode = nodes.find(n => n.entity_id === sourceInstanceId)
+  if (!sourceNode) return
+
+  if (target.startsWith('agent:')) {
+    const targetName = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'agent' && n.display_name?.toLowerCase() === targetName.toLowerCase())
+    if (targetNode) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, targetNode.hex_q, targetNode.hex_r)
+      if (path) triggerFlow(path)
+    }
+  } else if (target.startsWith('human:')) {
+    const targetId = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'human' && n.entity_id === targetId)
+    if (targetNode) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, targetNode.hex_q, targetNode.hex_r)
+      if (path) triggerFlow(path)
+    }
+  } else if (target === 'broadcast') {
+    const endpoints = findReachableEndpoints(sourceNode.hex_q, sourceNode.hex_r)
+    for (const ep of endpoints) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, ep.q, ep.r)
+      if (path) triggerFlow(path)
+    }
+  }
+}
+
+onUnmounted(() => disposeAnim())
+
+defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex, triggerMessageFlow })
 
 const hoveredId = ref<string | null>(null)
 
@@ -466,6 +504,34 @@ const emptyHexes = computed(() => {
         </text>
       </g>
 
+      <!-- Message flow animation particles -->
+      <g class="flow-anim-layer">
+        <circle
+          v-for="p in particles"
+          :key="p.id"
+          :cx="getParticlePosition(p).x"
+          :cy="getParticlePosition(p).y"
+          r="4"
+          :fill="p.color"
+          :opacity="1 - p.progress * 0.5"
+        />
+      </g>
+
+      <!-- Hex pulse on message arrival -->
+      <g class="pulse-layer">
+        <template v-for="pulse in pulses" :key="pulse.key">
+          <circle
+            :cx="axialToWorld(Number(pulse.key.split(',')[0]), Number(pulse.key.split(',')[1])).x * SCALE"
+            :cy="axialToWorld(Number(pulse.key.split(',')[0]), Number(pulse.key.split(',')[1])).y * SCALE"
+            :r="HEX_RADIUS * 0.6"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="2"
+            class="animate-hex-pulse"
+          />
+        </template>
+      </g>
+
       <!-- Selected hex highlight for agents -->
       <g
         v-if="selectedHex && !isMovingHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
@@ -546,6 +612,14 @@ const emptyHexes = computed(() => {
 }
 .animate-move-source {
   animation: move-source-pulse 1s ease-in-out infinite;
+}
+
+@keyframes hex-pulse {
+  0% { r: 10; opacity: 0.8; }
+  100% { r: 30; opacity: 0; }
+}
+.animate-hex-pulse {
+  animation: hex-pulse 0.5s ease-out forwards;
 }
 
 .move-target-hex {

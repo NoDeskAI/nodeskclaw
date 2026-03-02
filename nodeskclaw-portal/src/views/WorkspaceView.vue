@@ -163,7 +163,7 @@ onMounted(async () => {
   await store.fetchTopology(workspaceId.value)
   await store.fetchMembers(workspaceId.value)
 
-  store.connectSSE(workspaceId.value)
+  store.connectSSE(workspaceId.value, onSSEEvent)
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', onWindowResize)
 
@@ -191,9 +191,23 @@ watch(workspaceId, async (newId, oldId) => {
     await store.fetchWorkspace(newId)
     await store.fetchBlackboard(newId)
     await store.fetchTopology(newId)
-    store.connectSSE(newId)
+    store.connectSSE(newId, onSSEEvent)
   }
 })
+
+function onSSEEvent(event: string, data: Record<string, unknown>) {
+  if (event === 'agent:collaboration') {
+    const instanceId = data.instance_id as string
+    const target = data.target as string
+    if (instanceId && target) {
+      if (activeMode.value === '2d') {
+        workspace2dRef.value?.triggerMessageFlow(instanceId, target)
+      } else {
+        workspace3dRef.value?.triggerMessageFlow(instanceId, target)
+      }
+    }
+  }
+}
 
 function toggleMode() {
   if (isTransitioning.value) return
@@ -775,6 +789,7 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topology?.nodes"
+            :topology-edges="store.topologyEdges"
             :message-flow-stats="store.messageFlowStats"
             :is-moving-hex="isMovingHex"
             :moving-hex-source="movingHexSource"
@@ -798,6 +813,7 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topologyNodes"
+            :topology-edges="store.topologyEdges"
             :message-flow-stats="store.messageFlowStats"
             :is-moving-hex="isMovingHex"
             :moving-hex-source="movingHexSource"
