@@ -11,17 +11,17 @@ const emit = defineEmits<{ (e: 'toggle'): void }>()
   >
     <button
       class="px-3 py-1 rounded-full text-xs font-medium transition-all"
-      :class="mode === '3d' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-      @click="mode !== '3d' && emit('toggle')"
-    >
-      3D
-    </button>
-    <button
-      class="px-3 py-1 rounded-full text-xs font-medium transition-all"
       :class="mode === '2d' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
       @click="mode !== '2d' && emit('toggle')"
     >
       2D
+    </button>
+    <button
+      class="px-3 py-1 rounded-full text-xs font-medium transition-all"
+      :class="mode === '3d' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+      @click="mode !== '3d' && emit('toggle')"
+    >
+      3D
     </button>
   </div>
 </template>

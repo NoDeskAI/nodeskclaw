@@ -5,7 +5,7 @@ export type ViewMode = '3d' | '2d'
 export function useViewTransition() {
   const isTransitioning = ref(false)
   const activeMode = ref<ViewMode>(
-    (localStorage.getItem('nodeskclaw_view_mode') as ViewMode) || '3d',
+    (localStorage.getItem('nodeskclaw_view_mode') as ViewMode) || '2d',
   )
 
   let currentAnimations: Animation[] = []
