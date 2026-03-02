@@ -63,6 +63,7 @@ export interface HumanHexInfo {
   user_id: string
   hex_q: number
   hex_r: number
+  display_name: string | null
   display_color: string
   channel_type: string | null
   channel_config: Record<string, unknown> | null
@@ -760,9 +761,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function createHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number, displayColor?: string) {
+  async function createHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number, displayColor?: string, displayName?: string) {
     const payload: Record<string, unknown> = { user_id: userId, hex_q: hexQ, hex_r: hexR }
     if (displayColor) payload.display_color = displayColor
+    if (displayName) payload.display_name = displayName
     await api.post(`/workspaces/${workspaceId}/human-hexes`, payload)
     await fetchTopology(workspaceId)
   }
@@ -779,6 +781,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function deleteHumanHex(workspaceId: string, hexId: string) {
     await api.delete(`/workspaces/${workspaceId}/human-hexes/${hexId}`)
+    await fetchTopology(workspaceId)
+  }
+
+  async function renameHumanHex(workspaceId: string, hexId: string, displayName: string) {
+    await api.put(`/workspaces/${workspaceId}/human-hexes/${hexId}`, { display_name: displayName })
     await fetchTopology(workspaceId)
   }
 
@@ -851,6 +858,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     createHumanHex,
     moveHumanHex,
     updateHumanHexColor,
+    renameHumanHex,
     deleteHumanHex,
     updateHumanHexChannel,
   }

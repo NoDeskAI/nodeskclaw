@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     FEISHU_APP_ID_PORTAL: str = ""
     FEISHU_APP_SECRET_PORTAL: str = ""
 
+    # ── Portal ────────────────────────────────────────────
+    PORTAL_BASE_URL: str = ""  # 用户门户基础 URL，如 https://portal-claw.nodeskai.com
+
     # ── 火山云 ──────────────────────────────────────────
     VKE_SUBNET_ID: str = ""
 

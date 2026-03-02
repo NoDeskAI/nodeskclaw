@@ -40,25 +40,31 @@ def build_workspace_message_card(
     workspace_id: str,
     agent_name: str,
     content: str,
+    human_hex_name: str = "",
     portal_base_url: str = "",
 ) -> dict:
     """Build an interactive card for delivering an Agent collaboration message."""
     truncated = content[:500] + ("..." if len(content) > 500 else "")
 
+    if human_hex_name:
+        body_md = f"**工位**: {human_hex_name}\n**来源 Agent**: {agent_name}\n\n{truncated}"
+    else:
+        body_md = f"**来源 Agent**: {agent_name}\n\n{truncated}"
+
+    if human_hex_name:
+        note_text = f"通过工位「{human_hex_name}」接收 · 直接回复将路由至相邻 Agent"
+    else:
+        note_text = "直接回复将路由至相邻 Agent"
+
     elements: list[dict] = [
         {
             "tag": "div",
-            "text": {
-                "tag": "lark_md",
-                "content": f"**Agent**: {agent_name}\n\n{truncated}",
-            },
+            "text": {"tag": "lark_md", "content": body_md},
         },
         {"tag": "hr"},
         {
             "tag": "note",
-            "elements": [
-                {"tag": "plain_text", "content": "Direct reply in Feishu will be routed to connected Agents"},
-            ],
+            "elements": [{"tag": "plain_text", "content": note_text}],
         },
     ]
 
@@ -68,7 +74,7 @@ def build_workspace_message_card(
             "actions": [
                 {
                     "tag": "button",
-                    "text": {"tag": "plain_text", "content": "Open Workspace"},
+                    "text": {"tag": "plain_text", "content": "打开工作区"},
                     "type": "default",
                     "url": f"{portal_base_url}/workspace/{workspace_id}",
                 },
@@ -78,7 +84,7 @@ def build_workspace_message_card(
     return {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": f"[{workspace_name}] Agent Message"},
+            "title": {"tag": "plain_text", "content": f"[{workspace_name}] 工位消息"},
             "template": "blue",
         },
         "elements": elements,

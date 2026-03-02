@@ -237,6 +237,8 @@ async def _deliver_to_human(
             workspace_id=workspace_id,
             agent_name=source_agent_name,
             content=message,
+            human_hex_name=human_hex.display_name or "",
+            portal_base_url=settings.PORTAL_BASE_URL,
         )
         ok = await adapter.send_card(
             receive_id=receive_id,

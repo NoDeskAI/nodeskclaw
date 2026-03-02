@@ -359,10 +359,6 @@ function onHexAction(action: string) {
         hexDrawerOpen.value = false
       }
       break
-    case 'view-channel':
-      openChannelConfig()
-      hexDrawerOpen.value = false
-      break
     case 'change-agent-color':
       if (selectedAgentId.value) {
         pendingAgentColorId.value = selectedAgentId.value
@@ -383,6 +379,9 @@ function onHexAction(action: string) {
         selectedHex.value = null
         hexDrawerOpen.value = false
       }
+      break
+    case 'rename-human':
+      openRenameHumanDialog()
       break
     case 'focus-hex': {
       const q = selectedHex.value?.q
@@ -432,6 +431,32 @@ async function handleRenameCorridor() {
   }
 }
 
+const showRenameHumanDialog = ref(false)
+const renameHumanValue = ref('')
+const renameHumanSaving = ref(false)
+const renameHumanHexId = ref('')
+
+function openRenameHumanDialog() {
+  renameHumanHexId.value = selectedHex.value?.entityId || ''
+  const node = store.topologyNodes.find((n: any) => n.entity_id === renameHumanHexId.value && n.node_type === 'human')
+  renameHumanValue.value = node?.display_name || ''
+  showRenameHumanDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameHuman() {
+  const name = renameHumanValue.value.trim()
+  if (!renameHumanHexId.value) return
+  renameHumanSaving.value = true
+  try {
+    await store.renameHumanHex(workspaceId.value, renameHumanHexId.value, name)
+    toast.success(t('hexAction.humanRenamed'))
+    showRenameHumanDialog.value = false
+  } finally {
+    renameHumanSaving.value = false
+  }
+}
+
 const showRenameAgentDialog = ref(false)
 const renameAgentDisplayName = ref('')
 const renameAgentLabel = ref('')
@@ -471,11 +496,11 @@ const pendingHumanHex = ref<{ q: number; r: number } | null>(null)
 
 const availableMembers = computed(() => store.members)
 
-async function pickMember(userId: string) {
+async function pickMember(userId: string, userName?: string) {
   const hex = pendingHumanHex.value
   if (!hex) return
   showMemberPicker.value = false
-  await store.createHumanHex(workspaceId.value, userId, hex.q, hex.r)
+  await store.createHumanHex(workspaceId.value, userId, hex.q, hex.r, undefined, userName || undefined)
   pendingHumanHex.value = null
 }
 
@@ -503,52 +528,6 @@ async function pickAgentColor(color: string) {
   showAgentColorPicker.value = false
   await store.updateAgentThemeColor(workspaceId.value, agentId, color)
   pendingAgentColorId.value = ''
-}
-
-const showChannelDialog = ref(false)
-const channelHexId = ref('')
-const channelMode = ref<'webhook' | 'websocket'>('webhook')
-const channelChatId = ref('')
-const channelAppId = ref('')
-const channelAppSecret = ref('')
-const channelSaving = ref(false)
-
-function openChannelConfig() {
-  channelHexId.value = selectedHex.value?.entityId || ''
-  const node = store.topologyNodes.find((n: any) => n.entity_id === channelHexId.value)
-  const cfg = node?.extra?.channel_config as Record<string, string> | undefined
-  if (cfg) {
-    channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
-    channelChatId.value = cfg.chat_id || ''
-    channelAppId.value = cfg.app_id || ''
-    channelAppSecret.value = cfg.app_secret || ''
-  } else {
-    channelMode.value = 'webhook'
-    channelChatId.value = ''
-    channelAppId.value = ''
-    channelAppSecret.value = ''
-  }
-  showChannelDialog.value = true
-}
-
-async function saveChannelConfig() {
-  const hexId = channelHexId.value
-  if (!hexId) return
-  channelSaving.value = true
-  try {
-    const config: Record<string, string> = {
-      chat_id: channelChatId.value,
-      mode: channelMode.value,
-    }
-    if (channelMode.value === 'websocket') {
-      config.app_id = channelAppId.value
-      config.app_secret = channelAppSecret.value
-    }
-    await store.updateHumanHexChannel(workspaceId.value, hexId, 'feishu', config)
-    showChannelDialog.value = false
-  } finally {
-    channelSaving.value = false
-  }
 }
 
 function onCanvasAreaClick() {
@@ -1057,6 +1036,40 @@ function handleKeydown(e: KeyboardEvent) {
       </Transition>
     </Teleport>
 
+    <!-- Rename Human Hex Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameHumanDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameHumanDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameHumanTitle') }}</h3>
+            <input
+              v-model="renameHumanValue"
+              type="text"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              :placeholder="t('hexAction.humanNamePlaceholder')"
+              @keydown.enter="handleRenameHuman"
+            />
+            <div class="flex justify-end gap-3">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameHumanDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameHumanSaving"
+                @click="handleRenameHuman"
+              >
+                {{ renameHumanSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Rename Agent Dialog -->
     <Teleport to="body">
       <Transition name="fade">
@@ -1127,7 +1140,7 @@ function handleKeydown(e: KeyboardEvent) {
                 v-for="member in availableMembers"
                 :key="member.user_id"
                 class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left"
-                @click="pickMember(member.user_id)"
+                @click="pickMember(member.user_id, member.user_name)"
               >
                 <div
                   v-if="member.user_avatar_url"
@@ -1207,91 +1220,6 @@ function handleKeydown(e: KeyboardEvent) {
                 @click="showAgentColorPicker = false"
               >
                 {{ t('common.cancel') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Channel Config Dialog -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showChannelDialog" class="fixed inset-0 z-50 flex items-center justify-center">
-          <div class="absolute inset-0 bg-black/50" @click="showChannelDialog = false" />
-          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-lg space-y-4">
-            <h3 class="text-sm font-semibold">{{ t('channel.configTitle') }}</h3>
-
-            <div class="space-y-3">
-              <label class="block text-xs text-muted-foreground">{{ t('channel.mode') }}</label>
-              <div class="flex gap-2">
-                <button
-                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
-                  :class="channelMode === 'webhook' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
-                  @click="channelMode = 'webhook'"
-                >
-                  Webhook
-                </button>
-                <button
-                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
-                  :class="channelMode === 'websocket' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
-                  @click="channelMode = 'websocket'"
-                >
-                  WebSocket
-                </button>
-              </div>
-
-              <div>
-                <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.chatId') }}</label>
-                <input
-                  v-model="channelChatId"
-                  type="text"
-                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="oc_xxxxx"
-                />
-              </div>
-
-              <template v-if="channelMode === 'websocket'">
-                <div>
-                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appId') }}</label>
-                  <input
-                    v-model="channelAppId"
-                    type="text"
-                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="cli_xxxxx"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appSecret') }}</label>
-                  <input
-                    v-model="channelAppSecret"
-                    type="password"
-                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </template>
-
-              <p class="text-xs text-muted-foreground">
-                {{ channelMode === 'webhook' ? t('channel.webhookHint') : t('channel.websocketHint') }}
-              </p>
-              <p class="text-xs text-muted-foreground/70">
-                {{ t('channel.privateChatHint') }}
-              </p>
-            </div>
-
-            <div class="flex justify-end gap-3 pt-2">
-              <button
-                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-                @click="showChannelDialog = false"
-              >
-                {{ t('common.cancel') }}
-              </button>
-              <button
-                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
-                :disabled="channelSaving || !channelChatId"
-                @click="saveChannelConfig"
-              >
-                {{ channelSaving ? t('common.saving') : t('common.save') }}
               </button>
             </div>
           </div>

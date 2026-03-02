@@ -50,6 +50,7 @@ class HumanHexCreate(BaseModel):
     user_id: str
     hex_q: int
     hex_r: int
+    display_name: str | None = None
     display_color: str = "#f59e0b"
     channel_type: str | None = None
     channel_config: dict | None = None
@@ -58,6 +59,7 @@ class HumanHexCreate(BaseModel):
 class HumanHexUpdate(BaseModel):
     hex_q: int | None = None
     hex_r: int | None = None
+    display_name: str | None = None
     display_color: str | None = None
     channel_type: str | None = None
     channel_config: dict | None = None
@@ -69,6 +71,7 @@ class HumanHexInfo(BaseModel):
     user_id: str
     hex_q: int
     hex_r: int
+    display_name: str | None = None
     display_color: str
     channel_type: str | None = None
     channel_config: dict | None = None

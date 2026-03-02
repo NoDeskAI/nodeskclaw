@@ -1021,6 +1021,18 @@ async def lifespan(app: FastAPI):
         affected = conn.info.get("rowcount", 0)
         logger.info("迁移 24：为已有实例补建 InstanceMember 记录，影响 %s 行", affected)
 
+    # ── 迁移 25: human_hexes 新增 display_name 列 ──
+    async with engine.begin() as conn:
+        hh_dn_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'human_hexes' AND column_name = 'display_name'"
+        ))
+        if hh_dn_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE human_hexes ADD COLUMN display_name VARCHAR(100)"
+            ))
+            logger.info("自动迁移：已为 human_hexes 表添加 display_name 列")
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

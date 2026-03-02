@@ -81,6 +81,7 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
     for hh in human_hexes_q.scalars().all():
         hex_map[(hh.hex_q, hh.hex_r)] = TopologyNode(
             hh.hex_q, hh.hex_r, "human", entity_id=hh.id,
+            display_name=hh.display_name,
             extra={"user_id": hh.user_id, "display_color": hh.display_color,
                    "channel_type": hh.channel_type, "channel_config": hh.channel_config},
         )
