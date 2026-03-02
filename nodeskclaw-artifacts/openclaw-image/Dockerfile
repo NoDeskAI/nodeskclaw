@@ -19,13 +19,15 @@ LABEL org.opencontainers.image.title="OpenClaw"
 LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
 LABEL org.opencontainers.image.description="OpenClaw AI Agent 平台 - NoDeskClaw 定制镜像"
 
-# ---------- slim 镜像缺少的依赖 + 全局安装 OpenClaw ----------
+# ---------- slim 镜像缺少的依赖（可缓存，不随版本变化）----------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git openssh-client ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
     git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
-    git config --global --add url."https://github.com/".insteadOf git@github.com: && \
-    npm install -g openclaw@${OPENCLAW_VERSION} && \
+    git config --global --add url."https://github.com/".insteadOf git@github.com:
+
+# ---------- 全局安装 OpenClaw ----------
+RUN npm install -g openclaw@${OPENCLAW_VERSION} && \
     npm cache clean --force
 
 # ---------- 预置用户数据目录结构 ----------
