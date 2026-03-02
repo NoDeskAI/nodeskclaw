@@ -89,6 +89,11 @@ function toggleFocusMode() {
   if (focusMode.value && !chatOpen.value) {
     chatOpen.value = true
   }
+  if (focusMode.value) {
+    hexDrawerOpen.value = false
+    selectedHex.value = null
+    selectedAgentId.value = null
+  }
 }
 
 watch(chatOpen, (v) => {
