@@ -160,6 +160,7 @@ const zhCN = {
     bbHumanSeats: "人类工位",
     enterFocus: "聚焦模式（黑板 + 聊天）",
     exitFocus: "退出聚焦模式",
+    focusMode: "聚焦模式",
   },
   workspaceSettings: {
     title: "工作区设置",

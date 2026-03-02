@@ -160,6 +160,7 @@ const enUS = {
     bbHumanSeats: "Human Seats",
     enterFocus: "Focus mode (Blackboard + Chat)",
     exitFocus: "Exit focus mode",
+    focusMode: "Focus Mode",
   },
   workspaceSettings: {
     title: "Workspace Settings",

@@ -86,19 +86,10 @@ function onWindowResize() {
 
 function toggleFocusMode() {
   focusMode.value = !focusMode.value
-  if (focusMode.value && !chatOpen.value) {
-    chatOpen.value = true
-  }
-  if (focusMode.value) {
-    hexDrawerOpen.value = false
-    selectedHex.value = null
-    selectedAgentId.value = null
-  }
 }
 
 watch(chatOpen, (v) => {
   store.setChatVisible(v)
-  if (!v) focusMode.value = false
 })
 
 interface SelectedHex {
@@ -608,6 +599,11 @@ function handleKeydown(e: KeyboardEvent) {
   if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
 
   if (e.key === 'Escape') {
+    if (focusMode.value) {
+      focusMode.value = false
+      e.preventDefault()
+      return
+    }
     if (isMovingHex.value) {
       cancelMoveMode()
     } else {
@@ -762,8 +758,8 @@ function handleKeydown(e: KeyboardEvent) {
 
     <!-- Main: Hex Grid + Chat Sidebar -->
     <div class="flex-1 flex min-h-0">
-      <!-- Hex Grid (hidden in focus mode) -->
-      <div v-show="!focusMode" class="flex-1 relative min-h-0 min-w-0 overflow-hidden" @click="onCanvasAreaClick">
+      <!-- Hex Grid -->
+      <div class="flex-1 relative min-h-0 min-w-0 overflow-hidden" @click="onCanvasAreaClick">
         <!-- 3D mode -->
         <div
           ref="threeRef"
@@ -860,16 +856,6 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Embedded Blackboard (focus mode only) -->
-      <div v-if="focusMode && chatOpen" class="flex-1 flex flex-col min-h-0 min-w-0 bg-card">
-        <BlackboardOverlay
-          :open="true"
-          :workspace-id="workspaceId"
-          embedded
-          @close="focusMode = false"
-        />
       </div>
 
       <!-- Chat Sidebar -->
@@ -1209,6 +1195,32 @@ function handleKeydown(e: KeyboardEvent) {
               >
                 {{ channelSaving ? t('common.saving') : t('common.save') }}
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Focus Mode Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="focusMode" class="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm">
+          <div class="flex items-center justify-between px-5 py-2.5 border-b border-border shrink-0">
+            <div class="flex items-center gap-2">
+              <MessageSquare class="w-4 h-4 text-primary" />
+              <span class="text-sm font-semibold">{{ ws?.name }}</span>
+              <span class="text-xs text-muted-foreground">{{ t('workspaceView.focusMode') }}</span>
+            </div>
+            <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="focusMode = false">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex-1 flex min-h-0">
+            <div class="flex-1 flex flex-col min-h-0 min-w-0 border-r border-border">
+              <BlackboardOverlay :open="true" :workspace-id="workspaceId" embedded @close="focusMode = false" />
+            </div>
+            <div class="flex-1 flex flex-col min-h-0 min-w-0">
+              <ChatPanel :workspace-id="workspaceId" class="flex-1 min-h-0" />
             </div>
           </div>
         </div>
