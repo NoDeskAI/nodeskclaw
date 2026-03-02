@@ -14,6 +14,7 @@ DOCKERFILE="${SCRIPT_DIR}/Dockerfile"
 
 VERSION=""
 BUILD_ONLY=false
+SKIP_VERIFY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -25,9 +26,13 @@ while [[ $# -gt 0 ]]; do
       BUILD_ONLY=true
       shift
       ;;
+    --skip-verify)
+      SKIP_VERIFY=true
+      shift
+      ;;
     *)
       echo "未知参数: $1"
-      echo "用法: $0 [--version <openclaw_version>] [--build-only]"
+      echo "用法: $0 [--version <openclaw_version>] [--build-only] [--skip-verify]"
       exit 1
       ;;
   esac
@@ -77,10 +82,13 @@ docker build --platform linux/amd64 \
   "${SCRIPT_DIR}"
 
 echo ""
-echo "构建完成，验证镜像..."
-echo "  Node.js: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" node --version)"
-echo "  OpenClaw: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" openclaw --version 2>/dev/null || echo '(需启动后验证)')"
-echo "  版本标记: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" cat /root/.openclaw-version)"
+echo "构建完成"
+if [ "${SKIP_VERIFY}" = false ]; then
+  echo "验证镜像（Apple Silicon 上较慢，可用 --skip-verify 跳过）..."
+  echo "  Node.js: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" node --version)"
+  echo "  OpenClaw: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" openclaw --version 2>/dev/null || echo '(需启动后验证)')"
+  echo "  版本标记: $(docker run --rm --platform linux/amd64 "${REGISTRY}:${IMAGE_TAG}" cat /root/.openclaw-version)"
+fi
 
 if [ "${BUILD_ONLY}" = true ]; then
   echo ""
