@@ -2,7 +2,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, GitBranch, ArrowRight } from 'lucide-vue-next'
-import api from '@/api'
+import api from '@/services/api'
 
 const { t } = useI18n()
 
