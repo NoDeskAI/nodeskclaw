@@ -32,6 +32,26 @@ def _fire_task(coro: Coroutine) -> asyncio.Task:
     return task
 
 
+_PV_CLEANUP_DELAY = 15
+_PV_CLEANUP_RETRIES = 3
+
+
+async def _deferred_pv_cleanup(k8s: K8sClient, namespace: str) -> None:
+    """Namespace 删除是异步的，等待 PVC 被回收后清理残留的 Released PV。"""
+    for attempt in range(1, _PV_CLEANUP_RETRIES + 1):
+        await asyncio.sleep(_PV_CLEANUP_DELAY)
+        try:
+            deleted = await k8s.cleanup_released_pvs(namespace)
+            if deleted:
+                logger.info("后台清理了 %d 个 Released PV (namespace=%s)", deleted, namespace)
+            return
+        except Exception as e:
+            logger.warning(
+                "后台清理 PV 第 %d 次失败 (namespace=%s): %s",
+                attempt, namespace, e,
+            )
+
+
 def _sanitize_name(name: str) -> str:
     """将实例名称清洗为 RFC 1123 格式（与 deploy_service 逻辑保持一致）。"""
     safe = _re.sub(r"[^a-z0-9-]", "-", name.lower()).strip("-")
@@ -165,11 +185,13 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
             try:
                 api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
                 k8s = K8sClient(api_client)
+                ns = instance.namespace
                 try:
-                    await k8s.core.delete_namespace(instance.namespace)
-                    logger.info("已删除命名空间 %s（实例 %s）", instance.namespace, instance.name)
+                    await k8s.core.delete_namespace(ns)
+                    logger.info("已删除命名空间 %s（实例 %s）", ns, instance.name)
                 except Exception:
-                    logger.warning("删除命名空间 %s 失败，可能已不存在", instance.namespace)
+                    logger.warning("删除命名空间 %s 失败，可能已不存在", ns)
+                _fire_task(_deferred_pv_cleanup(k8s, ns))
             except Exception as e:
                 logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
 

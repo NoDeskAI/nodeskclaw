@@ -367,6 +367,25 @@ class K8sClient:
     async def read_pv(self, name: str):
         return await self.core.read_persistent_volume(name)
 
+    async def cleanup_released_pvs(self, namespace: str) -> int:
+        """删除 claimRef 指向指定 namespace 且处于 Released 状态的 PV。"""
+        pvs = await self.core.list_persistent_volume()
+        deleted = 0
+        for pv in pvs.items:
+            ref = pv.spec.claim_ref
+            if ref and ref.namespace == namespace and pv.status.phase == "Released":
+                try:
+                    await self.core.delete_persistent_volume(pv.metadata.name)
+                    deleted += 1
+                    logger.info(
+                        "已清理 Released PV: %s (原 PVC: %s/%s)",
+                        pv.metadata.name, namespace, ref.name,
+                    )
+                except k8s_client.ApiException as e:
+                    if e.status != 404:
+                        logger.warning("清理 PV %s 失败: %s", pv.metadata.name, e.reason)
+        return deleted
+
     # ── Service / Ingress ────────────────────────────
 
     async def get_service(self, ns: str, name: str):

@@ -925,16 +925,10 @@ async def delete_openclaw_instance(k8s: K8sClient, namespace: str, name: str):
         except k8s_client.ApiException:
             pass  # 忽略 404
 
-    # 5. PVC — 默认不删除，需用户二次确认
-    # if delete_pvc:
-    #     await k8s.core.delete_namespaced_persistent_volume_claim(
-    #         name=f"{name}-root-data", namespace=namespace
-    #     )
-
-    # 6. Namespace — 删除 Namespace 会级联删除所有资源（PVC、ResourceQuota 等）
-    # 仅在用户确认后执行，默认保留（PVC 中有用户数据）
-    # if delete_namespace:
-    #     await k8s.core.delete_namespace(name=namespace)
+    # 5. Namespace — 级联删除所有资源（PVC、ResourceQuota 等）
+    await k8s.core.delete_namespace(name=namespace)
+    # 6. 后台延迟清理 Released PV（reclaimPolicy=Delete 已自动回收，此为兜底）
+    _schedule_pv_cleanup(k8s, namespace)
 ```
 
 ### 5.6 等待 Pod Ready（轮询）
