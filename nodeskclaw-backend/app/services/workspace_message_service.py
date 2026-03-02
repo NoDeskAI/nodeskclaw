@@ -61,6 +61,28 @@ async def get_recent_messages(
     return messages
 
 
+async def get_collaboration_timeline(
+    db: AsyncSession,
+    workspace_id: str,
+    limit: int = 100,
+    since: datetime | None = None,
+) -> list[WorkspaceMessage]:
+    q = (
+        select(WorkspaceMessage)
+        .where(
+            WorkspaceMessage.workspace_id == workspace_id,
+            WorkspaceMessage.message_type == "collaboration",
+            WorkspaceMessage.deleted_at.is_(None),
+        )
+    )
+    if since:
+        q = q.where(WorkspaceMessage.created_at > since)
+    result = await db.execute(q.order_by(WorkspaceMessage.created_at.desc()).limit(limit))
+    messages = list(result.scalars().all())
+    messages.reverse()
+    return messages
+
+
 async def get_agent_collaboration_messages(
     db: AsyncSession,
     workspace_id: str,

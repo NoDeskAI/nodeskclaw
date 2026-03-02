@@ -150,6 +150,8 @@ const zhCN = {
     resetView: "重置视角 (0)",
     groupChat: "群聊",
     centralBlackboardChat: "中央黑板",
+    collabFlow: "协作流",
+    allAgents: "所有 Agent",
     showShortcuts: "显示快捷键",
     shortcuts: "快捷键",
     arrowKeys: "方向键 / WASD",

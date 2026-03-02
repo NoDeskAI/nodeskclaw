@@ -150,6 +150,8 @@ const enUS = {
     resetView: "Reset view (0)",
     groupChat: "Group Chat",
     centralBlackboardChat: "Central Blackboard",
+    collabFlow: "Collab Flow",
+    allAgents: "All Agents",
     showShortcuts: "Show shortcuts",
     shortcuts: "Shortcuts",
     arrowKeys: "Arrow keys / WASD",
