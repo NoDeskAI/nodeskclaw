@@ -277,9 +277,9 @@ async def update_agent(
         return None
 
     if data.display_name is not None:
-        inst.agent_display_name = data.display_name
+        inst.agent_display_name = data.display_name or None
     if data.label is not None:
-        inst.agent_label = data.label
+        inst.agent_label = data.label or None
     if data.theme_color is not None:
         inst.agent_theme_color = data.theme_color
 

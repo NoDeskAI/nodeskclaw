@@ -398,13 +398,15 @@ const renameAgentDisplayName = ref('')
 const renameAgentLabel = ref('')
 const renameAgentSaving = ref(false)
 const renameAgentInstanceId = ref('')
+const renameAgentOriginalName = ref('')
 
 function openRenameAgentDialog() {
   if (!selectedHex.value?.agentId) return
   const agent = agents.value.find(a => a.instance_id === selectedHex.value!.agentId)
   if (!agent) return
   renameAgentInstanceId.value = agent.instance_id
-  renameAgentDisplayName.value = agent.display_name || agent.name
+  renameAgentOriginalName.value = agent.name
+  renameAgentDisplayName.value = agent.display_name || ''
   renameAgentLabel.value = agent.label || ''
   showRenameAgentDialog.value = true
   hexDrawerOpen.value = false
@@ -988,7 +990,7 @@ function handleKeydown(e: KeyboardEvent) {
                   v-model="renameAgentDisplayName"
                   type="text"
                   class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  :placeholder="t('hexAction.agentDisplayNamePlaceholder')"
+                  :placeholder="renameAgentOriginalName"
                   @keydown.enter="handleRenameAgent"
                 />
               </div>
