@@ -66,7 +66,7 @@ jobs:
         if: steps.compare.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           branch: chore/openclaw-${{ steps.latest.outputs.version }}
           commit-message: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
           title: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
@@ -83,7 +83,7 @@ jobs:
 
             **此 PR 由 GitHub Actions 自动创建。**
 
-            合并后请手动触发 [镜像构建工作流](../actions/workflows/build-openclaw-image.yml) 来构建并推送新镜像。
+            合并后请在火山云持续交付流水线中触发镜像构建，或本地执行 `build-and-push.sh` 构建并推送新镜像。
           labels: |
             dependencies
             openclaw
