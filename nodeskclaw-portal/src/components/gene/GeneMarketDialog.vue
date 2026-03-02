@@ -535,7 +535,7 @@ onUnmounted(() => {
                 >
                   <div
                     v-if="isInstalled(gene.slug)"
-                    class="absolute top-0 right-0 w-6 h-6 bg-green-500 rounded-bl-lg flex items-center justify-center"
+                    class="absolute top-0 right-0 w-6 h-6 bg-green-600 rounded-bl-lg flex items-center justify-center"
                   >
                     <Check class="w-3 h-3 text-white" />
                   </div>
