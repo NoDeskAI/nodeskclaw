@@ -1,4 +1,4 @@
-"""Enterprise file browsing service — read-only access to Agent instance files via PodFS."""
+"""Enterprise / instance file browsing service — read and write access to Agent instance files via PodFS."""
 
 import logging
 import mimetypes
@@ -79,6 +79,24 @@ async def _get_instance(instance_id: str, org_id: str, db: AsyncSession) -> Inst
     instance = result.scalar_one_or_none()
     if not instance:
         raise NotFoundError("实例不存在", "errors.instance.not_found")
+    return instance
+
+
+async def _get_running_instance(instance_id: str, db: AsyncSession) -> Instance:
+    """获取实例（不检查 org_id，权限由 API 层保证）。"""
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, not_deleted(Instance))
+    )
+    instance = result.scalar_one_or_none()
+    if not instance:
+        raise NotFoundError("实例不存在", "errors.instance.not_found")
+    if instance.status != InstanceStatus.running:
+        raise AppException(
+            code=50300,
+            message="实例未运行，无法浏览文件",
+            message_key="errors.enterprise_files.instance_not_running",
+            status_code=503,
+        )
     return instance
 
 
@@ -240,4 +258,123 @@ async def download_file(
             message="无法连接到实例",
             message_key="errors.enterprise_files.instance_not_running",
             status_code=503,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Instance-level functions (permission checked at API layer, no org_id)
+# ---------------------------------------------------------------------------
+
+
+async def list_files_for_instance(
+    instance_id: str, rel_path: str, db: AsyncSession,
+) -> dict:
+    safe_path = _validate_path(rel_path)
+    instance = await _get_running_instance(instance_id, db)
+
+    try:
+        async with remote_fs(instance, db) as fs:
+            items = await fs.list_dir(safe_path)
+    except NFSMountError:
+        raise AppException(
+            code=50300, message="无法连接到实例",
+            message_key="errors.enterprise_files.instance_not_running", status_code=503,
+        )
+
+    if items is None:
+        raise NotFoundError("目录不存在", "errors.enterprise_files.path_not_found")
+
+    filtered = _filter_blocked(items)
+    parts = safe_path.split("/")
+    return {
+        "instance_id": instance.id,
+        "instance_name": instance.agent_display_name or instance.name,
+        "path": safe_path,
+        "breadcrumb": parts,
+        "items": [
+            {
+                "name": item["name"],
+                "is_dir": item["is_dir"],
+                "size": item["size"],
+                "mime_type": _guess_mime(item["name"]) if not item["is_dir"] else None,
+                "modified_at": _ts_to_iso(item["modified_at"]),
+            }
+            for item in filtered
+        ],
+    }
+
+
+async def read_file_for_instance(
+    instance_id: str, rel_path: str, db: AsyncSession,
+) -> dict:
+    safe_path = _validate_path(rel_path)
+    instance = await _get_running_instance(instance_id, db)
+
+    try:
+        async with remote_fs(instance, db) as fs:
+            stat = await fs.file_stat(safe_path)
+            if stat is None:
+                raise NotFoundError("文件不存在", "errors.enterprise_files.path_not_found")
+
+            if stat["size"] > MAX_PREVIEW_BYTES:
+                return {
+                    "path": safe_path, "mime_type": stat["mime_type"],
+                    "size": stat["size"], "content": None, "truncated": True,
+                }
+
+            mime = stat["mime_type"]
+            if mime == "application/octet-stream":
+                mime = _guess_mime(safe_path.rsplit("/", 1)[-1])
+            if not _is_text_mime(mime):
+                return {
+                    "path": safe_path, "mime_type": mime,
+                    "size": stat["size"], "content": None, "truncated": False, "binary": True,
+                }
+
+            content = await fs.read_text(safe_path)
+            return {
+                "path": safe_path, "mime_type": mime,
+                "size": stat["size"], "content": content, "truncated": False,
+            }
+    except NFSMountError:
+        raise AppException(
+            code=50300, message="无法连接到实例",
+            message_key="errors.enterprise_files.instance_not_running", status_code=503,
+        )
+
+
+async def download_file_for_instance(
+    instance_id: str, rel_path: str, db: AsyncSession,
+) -> tuple[str, str]:
+    safe_path = _validate_path(rel_path)
+    instance = await _get_running_instance(instance_id, db)
+
+    try:
+        async with remote_fs(instance, db) as fs:
+            content = await fs.read_text(safe_path)
+            if content is None:
+                raise NotFoundError("文件不存在", "errors.enterprise_files.path_not_found")
+            filename = safe_path.rsplit("/", 1)[-1]
+            return content, filename
+    except NFSMountError:
+        raise AppException(
+            code=50300, message="无法连接到实例",
+            message_key="errors.enterprise_files.instance_not_running", status_code=503,
+        )
+
+
+async def write_file_content(
+    instance_id: str, rel_path: str, content: str, db: AsyncSession,
+) -> dict:
+    safe_path = _validate_path(rel_path)
+    instance = await _get_running_instance(instance_id, db)
+
+    try:
+        async with remote_fs(instance, db) as fs:
+            await fs.write_text(safe_path, content)
+            return {"path": safe_path, "size": len(content.encode("utf-8"))}
+    except NFSMountError:
+        raise AppException(
+            code=50300, message="无法连接到实例",
+            message_key="errors.enterprise_files.instance_not_running", status_code=503,
         )

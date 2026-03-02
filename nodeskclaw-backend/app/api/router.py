@@ -33,6 +33,7 @@ from app.api.portal.deploy import router as portal_deploy_router
 from app.api.portal.channel_configs import router as portal_channel_config_router
 from app.api.portal.mcp import router as portal_mcp_router
 from app.api.portal.enterprise_files import router as portal_enterprise_files_router
+from app.api.portal.instance_files import router as portal_instance_files_router
 
 # ── Portal 公共 API（/api/v1）──────────────────────────────
 # Portal 使用 portal/ 下的独立路由，内置实例级权限检查。
@@ -57,6 +58,7 @@ api_router.include_router(portal_instance_members_router, prefix="/instances", t
 api_router.include_router(portal_channel_config_router, prefix="/instances", tags=["Channel 配置"])
 api_router.include_router(portal_mcp_router, prefix="/instances", tags=["MCP"])
 api_router.include_router(portal_enterprise_files_router, prefix="/enterprise-files", tags=["企业空间"])
+api_router.include_router(portal_instance_files_router, prefix="/instances", tags=["实例文件"])
 api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
 api_router.include_router(settings_router, prefix="/settings", tags=["系统配置"])

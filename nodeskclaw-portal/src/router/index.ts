@@ -72,6 +72,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'mcp', name: 'InstanceMcp', component: () => import('@/views/InstanceMcp.vue') },
       { path: 'channels', name: 'InstanceChannels', component: () => import('@/views/InstanceChannels.vue') },
       { path: 'settings', name: 'InstanceSettings', component: () => import('@/views/InstanceSettings.vue') },
+      { path: 'files', name: 'InstanceFiles', component: () => import('@/views/InstanceFiles.vue') },
       { path: 'members', name: 'InstanceMembers', component: () => import('@/views/InstanceMembers.vue') },
     ],
   },

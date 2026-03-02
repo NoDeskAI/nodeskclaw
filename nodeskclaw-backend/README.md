@@ -124,6 +124,9 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/enterprise-files/agents/{id}/files` | 企业空间 | 列出 Agent 目录文件（query: path） |
 | `/api/v1/enterprise-files/agents/{id}/files/content` | 企业空间 | 读取文件内容（仅文本） |
 | `/api/v1/enterprise-files/agents/{id}/files/download` | 企业空间 | 下载文件 |
+| `/api/v1/instances/{id}/files` | 实例文件 | 列出实例目录文件（instance admin） |
+| `/api/v1/instances/{id}/files/content` | 实例文件 | 读取/写入文件内容（GET 读、PUT 写） |
+| `/api/v1/instances/{id}/files/download` | 实例文件 | 下载文件 |
 
 ### RBAC 双表职责分离
 
