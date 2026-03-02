@@ -832,6 +832,10 @@ function handleKeydown(e: KeyboardEvent) {
                 <span class="text-foreground/70">{{ t('workspaceView.panCanvas') }}</span>
               </div>
               <div class="flex justify-between gap-4">
+                <span>{{ t('workspaceView.rightDrag') }}</span>
+                <span class="text-foreground/70">{{ t('workspaceView.panCanvas') }}</span>
+              </div>
+              <div class="flex justify-between gap-4">
                 <span>+ / -</span>
                 <span class="text-foreground/70">{{ t('workspaceView.zoom') }}</span>
               </div>

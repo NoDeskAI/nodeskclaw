@@ -151,6 +151,7 @@ const zhCN = {
     showShortcuts: "显示快捷键",
     shortcuts: "快捷键",
     arrowKeys: "方向键 / WASD",
+    rightDrag: "右键拖拽",
     panCanvas: "平移画布",
     zoom: "缩放",
     resetViewShort: "重置视角",

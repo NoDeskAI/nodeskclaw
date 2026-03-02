@@ -151,6 +151,7 @@ const enUS = {
     showShortcuts: "Show shortcuts",
     shortcuts: "Shortcuts",
     arrowKeys: "Arrow keys / WASD",
+    rightDrag: "Right-click drag",
     panCanvas: "Pan canvas",
     zoom: "Zoom",
     resetViewShort: "Reset view",
