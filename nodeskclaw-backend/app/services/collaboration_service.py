@@ -59,6 +59,13 @@ async def handle_collaboration_message(
 
         source_name = source_inst.agent_display_name or source_inst.name
 
+        resolved_target_id: str | None = None
+        target_inst: Instance | None = None
+        if target.startswith("agent:"):
+            target_inst = await _find_agent_by_name(db, workspace_id, target[6:])
+            if target_inst:
+                resolved_target_id = target_inst.id
+
         await msg_service.record_message(
             db,
             workspace_id=workspace_id,
@@ -67,7 +74,7 @@ async def handle_collaboration_message(
             sender_name=source_name,
             content=text,
             message_type="collaboration",
-            target_instance_id=_extract_target_instance_id(target),
+            target_instance_id=resolved_target_id,
             depth=depth,
         )
 
@@ -80,8 +87,6 @@ async def handle_collaboration_message(
         })
 
         if target.startswith("agent:"):
-            target_name = target[6:]
-            target_inst = await _find_agent_by_name(db, workspace_id, target_name)
             if target_inst:
                 from app.services import corridor_router
                 has_topo = await corridor_router.has_any_connections(workspace_id, db)
@@ -93,13 +98,14 @@ async def handle_collaboration_message(
                         db,
                     )
                     if not can:
-                        logger.info("Corridor topology blocks %s -> %s", source_name, target_name)
+                        logger.info("Corridor topology blocks %s -> %s", source_name, target[6:])
                         return
                 _fire_task(
                     _invoke_target_agent(
                         workspace_id=workspace_id,
                         target_instance=target_inst,
                         source_name=source_name,
+                        source_instance_id=source_instance_id,
                         message=text,
                         depth=depth + 1,
                     )
@@ -122,10 +128,9 @@ async def handle_collaboration_message(
                         return
                     _fire_task(_deliver_to_human(
                         workspace_id=workspace_id,
-                        human_hex=hh,
+                        human_hex_id=hh.id,
                         source_agent_name=source_name,
                         message=text,
-                        db=db,
                     ))
         elif target == "broadcast":
             from app.services import corridor_router
@@ -145,6 +150,7 @@ async def handle_collaboration_message(
                                 workspace_id=workspace_id,
                                 target_instance=agent,
                                 source_name=source_name,
+                                source_instance_id=source_instance_id,
                                 message=text,
                                 depth=depth + 1,
                             )
@@ -156,10 +162,9 @@ async def handle_collaboration_message(
                     if hh:
                         _fire_task(_deliver_to_human(
                             workspace_id=workspace_id,
-                            human_hex=hh,
+                            human_hex_id=hh.id,
                             source_agent_name=source_name,
                             message=text,
-                            db=db,
                         ))
             else:
                 agents = await _get_workspace_agents(db, workspace_id)
@@ -170,6 +175,7 @@ async def handle_collaboration_message(
                                 workspace_id=workspace_id,
                                 target_instance=agent,
                                 source_name=source_name,
+                                source_instance_id=source_instance_id,
                                 message=text,
                                 depth=depth + 1,
                             )
@@ -182,33 +188,38 @@ async def handle_collaboration_message(
 async def _deliver_to_human(
     *,
     workspace_id: str,
-    human_hex: HumanHex,
+    human_hex_id: str,
     source_agent_name: str,
     message: str,
-    db: AsyncSession,
 ) -> None:
     """Deliver a collaboration message to a Human Hex via Feishu (or SSE fallback)."""
     from app.api.workspaces import broadcast_event
     from app.core.config import settings
 
-    ws_q = await db.execute(
-        select(Workspace.name).where(Workspace.id == workspace_id, not_deleted(Workspace))
-    )
-    workspace_name = ws_q.scalar_one_or_none() or "Unknown"
+    async with async_session_factory() as db:
+        human_hex = await _get_human_hex(db, human_hex_id)
+        if not human_hex:
+            logger.warning("Human hex not found for delivery: %s", human_hex_id)
+            return
 
-    receive_id: str | None = None
-    receive_id_type: str | None = None
+        ws_q = await db.execute(
+            select(Workspace.name).where(Workspace.id == workspace_id, not_deleted(Workspace))
+        )
+        workspace_name = ws_q.scalar_one_or_none() or "Unknown"
 
-    channel_config = human_hex.channel_config or {}
-    if human_hex.channel_type == "feishu" and channel_config.get("chat_id"):
-        receive_id = channel_config["chat_id"]
-        receive_id_type = "chat_id"
-    else:
-        from app.services.channel_adapters.feishu import get_feishu_open_id
-        open_id = await get_feishu_open_id(human_hex.user_id, db)
-        if open_id:
-            receive_id = open_id
-            receive_id_type = "open_id"
+        receive_id: str | None = None
+        receive_id_type: str | None = None
+
+        channel_config = human_hex.channel_config or {}
+        if human_hex.channel_type == "feishu" and channel_config.get("chat_id"):
+            receive_id = channel_config["chat_id"]
+            receive_id_type = "chat_id"
+        else:
+            from app.services.channel_adapters.feishu import get_feishu_open_id
+            open_id = await get_feishu_open_id(human_hex.user_id, db)
+            if open_id:
+                receive_id = open_id
+                receive_id_type = "open_id"
 
     delivered_via = "sse"
     if receive_id and receive_id_type and settings.FEISHU_APP_ID:
@@ -238,12 +249,12 @@ async def _deliver_to_human(
         else:
             logger.warning(
                 "Feishu delivery failed for human_hex=%s, falling back to SSE",
-                human_hex.id,
+                human_hex_id,
             )
 
     broadcast_event(workspace_id, "human:message_delivered", {
-        "human_hex_id": human_hex.id,
-        "user_id": human_hex.user_id,
+        "human_hex_id": human_hex_id,
+        "user_id": human_hex.user_id if human_hex else "",
         "source_agent": source_agent_name,
         "content": message[:200],
         "delivered_via": delivered_via,
@@ -302,17 +313,12 @@ async def _get_workspace_agents(db: AsyncSession, workspace_id: str) -> list[Ins
     return list(result.scalars().all())
 
 
-def _extract_target_instance_id(target: str) -> str | None:
-    if target.startswith("agent:"):
-        return target[6:]
-    return None
-
-
 async def _invoke_target_agent(
     *,
     workspace_id: str,
     target_instance: Instance,
     source_name: str,
+    source_instance_id: str,
     message: str,
     depth: int,
 ) -> bool:
@@ -469,6 +475,7 @@ async def _invoke_target_agent(
                 sender_name=agent_name,
                 content=full_response,
                 message_type="collaboration",
+                target_instance_id=source_instance_id,
                 depth=depth,
             )
     else:
