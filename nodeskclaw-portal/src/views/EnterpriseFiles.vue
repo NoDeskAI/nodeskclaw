@@ -116,7 +116,7 @@ onMounted(fetchAgents)
         :key="agent.instance_id"
         class="rounded-xl border border-border p-4 transition-colors"
         :class="agent.is_browsable
-          ? 'hover:bg-accent/50 cursor-pointer'
+          ? 'hover:border-primary cursor-pointer'
           : 'opacity-50'"
         @click="enterAgent(agent)"
       >
