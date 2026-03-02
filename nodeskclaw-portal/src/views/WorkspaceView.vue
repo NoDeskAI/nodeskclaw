@@ -12,6 +12,7 @@ import ChatPanel from '@/components/chat/ChatPanel.vue'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
+import AgentCollaborationPanel from '@/components/workspace/AgentCollaborationPanel.vue'
 import { useToast } from '@/composables/useToast'
 import { axialToWorld } from '@/composables/useHexLayout'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
@@ -41,6 +42,9 @@ const humanSeatCount = computed(() =>
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
 const chatOpen = ref(false)
+const collabPanelOpen = ref(false)
+const collabPanelAgent = ref<{ instanceId: string; name: string } | null>(null)
+const collabPanelRef = ref<InstanceType<typeof AgentCollaborationPanel> | null>(null)
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
 const focusMode = ref(false)
@@ -206,6 +210,9 @@ function onSSEEvent(event: string, data: Record<string, unknown>) {
         workspace3dRef.value?.triggerMessageFlow(instanceId, target)
       }
     }
+    if (collabPanelOpen.value && collabPanelRef.value) {
+      collabPanelRef.value.addLiveMessage(data)
+    }
   }
 }
 
@@ -251,6 +258,7 @@ function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | '
 
 function onAgentDblClick(_id: string) {
   clickHandled = true
+  collabPanelOpen.value = false
   chatOpen.value = true
 }
 
@@ -265,7 +273,19 @@ function onHexAction(action: string) {
       break
     }
     case 'open-chat':
+      collabPanelOpen.value = false
       chatOpen.value = true
+      hexDrawerOpen.value = false
+      break
+    case 'view-collaboration':
+      if (selectedHex.value?.agentId) {
+        const agent = agents.value.find(a => a.instance_id === selectedHex.value!.agentId)
+        if (agent) {
+          collabPanelAgent.value = { instanceId: agent.instance_id, name: agent.display_name || agent.name }
+          chatOpen.value = false
+          collabPanelOpen.value = true
+        }
+      }
       hexDrawerOpen.value = false
       break
     case 'view-detail':
@@ -925,6 +945,24 @@ function handleKeydown(e: KeyboardEvent) {
               class="flex-1 min-h-0"
             />
           </div>
+        </div>
+      </Transition>
+
+      <!-- Agent Collaboration Panel -->
+      <Transition name="chat-slide">
+        <div
+          v-if="collabPanelOpen && collabPanelAgent"
+          class="border-l border-border flex shrink-0 bg-card"
+          style="width: 400px"
+        >
+          <AgentCollaborationPanel
+            ref="collabPanelRef"
+            :workspace-id="workspaceId"
+            :instance-id="collabPanelAgent.instanceId"
+            :agent-name="collabPanelAgent.name"
+            class="flex-1 min-h-0"
+            @close="collabPanelOpen = false"
+          />
         </div>
       </Transition>
     </div>
