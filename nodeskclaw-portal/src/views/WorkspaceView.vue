@@ -883,8 +883,7 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
               <div class="flex items-center gap-2">
                 <MessageSquare class="w-4 h-4 text-primary" />
-                <span class="text-sm font-medium">{{ ws?.name || 'Workspace' }}</span>
-                <span class="text-xs text-muted-foreground">{{ t('workspaceView.groupChat') }}</span>
+                <span class="text-sm font-medium">{{ t('workspaceView.centralBlackboardChat') }}</span>
               </div>
               <div class="flex items-center gap-1">
                 <button

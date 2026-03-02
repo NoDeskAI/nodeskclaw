@@ -149,6 +149,7 @@ const zhCN = {
     zoomOut: "缩小 (-)",
     resetView: "重置视角 (0)",
     groupChat: "群聊",
+    centralBlackboardChat: "中央黑板",
     showShortcuts: "显示快捷键",
     shortcuts: "快捷键",
     arrowKeys: "方向键 / WASD",

@@ -149,6 +149,7 @@ const enUS = {
     zoomOut: "Zoom out (-)",
     resetView: "Reset view (0)",
     groupChat: "Group Chat",
+    centralBlackboardChat: "Central Blackboard",
     showShortcuts: "Show shortcuts",
     shortcuts: "Shortcuts",
     arrowKeys: "Arrow keys / WASD",
