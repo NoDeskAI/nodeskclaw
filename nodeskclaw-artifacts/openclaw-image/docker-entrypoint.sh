@@ -75,7 +75,9 @@ if [ -f "${CONFIG_FILE}" ]; then
   node -e "
     const fs = require('fs');
     const f = '${CONFIG_FILE}';
-    const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+    let text = fs.readFileSync(f, 'utf8');
+    text = text.replace(/^\s*\/\/.*$/gm, '');
+    const c = JSON.parse(text);
     let changed = false;
     if (c.gateway?.controlUi && !c.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback) {
       c.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true;
