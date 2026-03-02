@@ -1095,7 +1095,7 @@ Glow:    box-shadow:0 0 8px <色值>
 - **聚焦模式**：聊天面板头部新增聚焦按钮，点击后进入聚焦模式——保留顶部工具栏，主内容区域由"画布 + 聊天"切换为"中央黑板（左） + 聊天（右）"双栏布局；再次点击退出聚焦模式，恢复画布视图
 - 系统消息（如"XXX 已加入工作区"）以居中灰色气泡展示，与 user/agent 消息区分
 - 用户头像：有 `avatar_url` 时显示真实头像图片，无则回退为灰色圆圈 + User 图标
-- @ 提及 Tag 输入：输入 `@` 后弹出 Agent 列表浮动下拉，选中后以 Tag 形式内嵌在编辑器中（Bot 图标 + 名称，hover 时图标变为 x 删除按钮，hover 弹出 Popover 展示 Agent 状态/slug），Backspace 原子删除整个 Tag；消息中的 `@AgentName` 高亮渲染（用户气泡内白色半透明底、Agent 气泡内主色调底）
+- @ 提及 Tag 输入：在任意位置输入 `@` 即可弹出 Agent 列表浮动下拉（无需前置空格，适配中文无词间空格的输入习惯），选中后以 Tag 形式内嵌在编辑器中（Bot 图标 + 名称，hover 时图标变为 x 删除按钮，hover 弹出 Popover 展示 Agent 状态/slug），Backspace 原子删除整个 Tag；消息中的 `@AgentName` 高亮渲染（用户气泡内白色半透明底、Agent 气泡内主色调底）
 - / 命令 Tag 输入：输入 `/` 后弹出命令列表浮动下拉（每行末尾标注"立即执行"或"Tag"类型），支持键盘导航；立即执行型命令（`/clear`、`/status`）选中后直接执行；needsAgent 命令（如 `/remove`）选中后自动触发链式 Agent 选择，合并为单一 `/remove @AgentName` Tag
 - 输入框使用 Tiptap 富文本编辑器：内容驱动高度（min 1 行、max ~10rem），常驻细滚动条（scroll + track 底色），底部操作栏（@ 提及按钮、/ 命令按钮、发送按钮），整体圆角边框包裹；Enter 发送、Shift+Enter 换行
 - Typing 指示器安全超时 45s（兜底），收到第一个 chunk 时立即清除 typing 并展示流式消息

@@ -311,6 +311,7 @@ const editor = useEditor({
       suggestion: {
         pluginKey: AGENT_MENTION_KEY,
         char: '@',
+        allowedPrefixes: null,
         items: ({ query }: { query: string }) => {
           const q = query.toLowerCase()
           return agents.value
