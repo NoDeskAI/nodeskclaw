@@ -173,8 +173,9 @@ class PodFS:
             result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
                 ["bash", "-c",
-                 f"stat -c '%s\\t%Y' '/root/{path}' 2>/dev/null && "
-                 f"file -bi '/root/{path}' 2>/dev/null || echo '__NOT_FOUND__'"],
+                 f"if stat -c '%s\\t%Y' '/root/{path}' 2>/dev/null; then "
+                 f"file -bi '/root/{path}' 2>/dev/null || echo 'application/octet-stream'; "
+                 f"else echo '__NOT_FOUND__'; fi"],
                 container=self._container,
             )
         except Exception:

@@ -183,6 +183,8 @@ async def read_file_content(
                 }
 
             mime = stat["mime_type"]
+            if mime == "application/octet-stream":
+                mime = _guess_mime(safe_path.rsplit("/", 1)[-1])
             if not _is_text_mime(mime):
                 return {
                     "path": safe_path,
