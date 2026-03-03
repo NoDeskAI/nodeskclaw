@@ -37,6 +37,7 @@ const orgStore = useOrgStore()
 
 const K8S_NAME_MAX = 63
 const NS_PREFIX_BASE = 'nodeskclaw-'.length + 1
+const DEPLOY_NAME_MAX = 35
 
 // ── Stepper ──
 const currentStep = ref(0)
@@ -99,8 +100,14 @@ const orgPopoverOpen = ref(false)
 const selectedOrg = computed(() =>
   orgStore.orgs.find(o => o.id === form.value.org_id) ?? null
 )
-const maxSlugLen = computed(() => K8S_NAME_MAX - NS_PREFIX_BASE - (selectedOrg.value?.slug?.length ?? 9))
-const slugTooLong = computed(() => !!form.value.slug && form.value.slug.length + NS_PREFIX_BASE + (selectedOrg.value?.slug?.length ?? 9) > K8S_NAME_MAX)
+const maxSlugLen = computed(() => Math.min(
+  K8S_NAME_MAX - NS_PREFIX_BASE - (selectedOrg.value?.slug?.length ?? 9),
+  DEPLOY_NAME_MAX
+))
+const slugTooLong = computed(() => !!form.value.slug && (
+  form.value.slug.length + NS_PREFIX_BASE + (selectedOrg.value?.slug?.length ?? 9) > K8S_NAME_MAX ||
+  form.value.slug.length > DEPLOY_NAME_MAX
+))
 
 /** 根据用户邮箱前缀 + 已有实例数量生成默认实例名称（RFC 1123 格式） */
 function generateDefaultName() {

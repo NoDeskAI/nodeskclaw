@@ -18,6 +18,7 @@ const orgStore = useOrgStore()
 
 const K8S_NAME_MAX = 63
 const NS_PREFIX_BASE = 'nodeskclaw-'.length + 1
+const DEPLOY_NAME_MAX = 35
 
 const name = ref('')
 const slug = ref('')
@@ -38,8 +39,14 @@ const currentStep = ref(1)
 const nameHasEdgeSpaces = computed(() => name.value.length > 0 && name.value !== name.value.trim())
 
 const orgSlugLen = computed(() => orgStore.currentOrg?.slug?.length ?? 9)
-const maxSlugInput = computed(() => K8S_NAME_MAX - NS_PREFIX_BASE - orgSlugLen.value - 1 - randomSuffix.length)
-const slugTooLong = computed(() => fullSlug.value.length > 0 && fullSlug.value.length + NS_PREFIX_BASE + orgSlugLen.value > K8S_NAME_MAX)
+const maxSlugInput = computed(() => {
+  const nsMax = K8S_NAME_MAX - NS_PREFIX_BASE - orgSlugLen.value
+  return Math.min(nsMax, DEPLOY_NAME_MAX) - 1 - randomSuffix.length
+})
+const slugTooLong = computed(() => fullSlug.value.length > 0 && (
+  fullSlug.value.length + NS_PREFIX_BASE + orgSlugLen.value > K8S_NAME_MAX ||
+  fullSlug.value.length > DEPLOY_NAME_MAX
+))
 
 const canGoNext = computed(() =>
   !!name.value.trim() && !nameHasEdgeSpaces.value

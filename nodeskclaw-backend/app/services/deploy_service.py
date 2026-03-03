@@ -60,6 +60,7 @@ _bg_tasks: set[asyncio.Task] = set()
 _PV_CLEANUP_DELAY = 15
 _PV_CLEANUP_RETRIES = 3
 _K8S_NAME_MAX = 63
+_DEPLOY_NAME_MAX = 35
 
 
 def _truncate_slug_preserve_suffix(slug: str, max_len: int) -> str:
@@ -320,7 +321,7 @@ async def deploy_instance(
     # namespace: nodeskclaw-{org_slug}-{instance_slug}，K8s 限制 63 字符
     org_slug = org.slug if org else "default"
     ns_prefix = f"nodeskclaw-{org_slug}-"
-    max_slug_len = _K8S_NAME_MAX - len(ns_prefix)
+    max_slug_len = min(_K8S_NAME_MAX - len(ns_prefix), _DEPLOY_NAME_MAX)
     if len(slug) > max_slug_len:
         original_slug = slug
         slug = _truncate_slug_preserve_suffix(slug, max_slug_len)
