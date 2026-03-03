@@ -454,7 +454,7 @@ const renameHumanHexId = ref('')
 
 function openRenameHumanDialog() {
   renameHumanHexId.value = selectedHex.value?.entityId || ''
-  const node = store.topologyNodes.find((n: any) => n.entity_id === renameHumanHexId.value && n.node_type === 'human')
+  const node = enrichedTopologyNodes.value.find((n: any) => n.entity_id === renameHumanHexId.value && n.node_type === 'human')
   renameHumanValue.value = node?.display_name || ''
   showRenameHumanDialog.value = true
   hexDrawerOpen.value = false
