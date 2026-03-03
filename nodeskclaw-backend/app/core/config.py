@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # ── 出站代理（用于访问 OpenAI/Anthropic 等外部 API）────
     HTTPS_PROXY: str = ""
 
+    # ── GeneHub Registry ────────────────────────────────
+    GENEHUB_REGISTRY_URL: str = ""  # e.g. https://genehub-registry.nodeskai.com
+    GENEHUB_API_KEY: str = ""       # publisher-level API Key
+
     # ── CORS ─────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
