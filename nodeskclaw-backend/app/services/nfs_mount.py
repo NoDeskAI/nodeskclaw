@@ -202,31 +202,34 @@ class PodFS:
     async def scan_skills(self, skills_dir_rel: str) -> list[dict]:
         """Batch-scan all skill directories under *skills_dir_rel*.
 
-        Uses a single ``node -e`` exec to list every sub-directory, read its
-        ``SKILL.md`` content, and count the files it contains.
+        Uses a single ``bash -c`` exec with a base64-encoded Node.js script
+        to list every sub-directory, read its ``SKILL.md`` content, and count
+        the files it contains.
 
         Returns ``[{name, content, file_count}]``.
         """
-        script = (
-            "const fs=require('fs'),path=require('path');"
-            "const dir='/root/'+process.argv[1];"
-            "const r=[];"
-            "if(fs.existsSync(dir)){"
-            "for(const n of fs.readdirSync(dir).sort()){"
-            "const d=path.join(dir,n);"
-            "if(!fs.statSync(d).isDirectory())continue;"
-            "const md=path.join(d,'SKILL.md');"
-            "let c='';"
-            "if(fs.existsSync(md))c=fs.readFileSync(md,'utf8');"
-            "const fc=fs.readdirSync(d).filter(f=>fs.statSync(path.join(d,f)).isFile()).length;"
-            "r.push({name:n,content:c,file_count:fc});"
-            "}}"
-            "process.stdout.write(JSON.stringify(r));"
+        abs_dir = f"/root/{skills_dir_rel}"
+        js = (
+            'const fs=require("fs"),path=require("path");'
+            f'const dir="{abs_dir}";'
+            'const r=[];'
+            'if(fs.existsSync(dir)){'
+            'for(const n of fs.readdirSync(dir).sort()){'
+            'const d=path.join(dir,n);'
+            'if(!fs.statSync(d).isDirectory())continue;'
+            'const md=path.join(d,"SKILL.md");'
+            'let c="";'
+            'if(fs.existsSync(md))c=fs.readFileSync(md,"utf8");'
+            'const fc=fs.readdirSync(d).filter(f=>fs.statSync(path.join(d,f)).isFile()).length;'
+            'r.push({name:n,content:c,file_count:fc});'
+            '}}'
+            'process.stdout.write(JSON.stringify(r));'
         )
+        encoded = base64.b64encode(js.encode()).decode("ascii")
         try:
             result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
-                ["node", "-e", script, skills_dir_rel],
+                ["bash", "-c", f"printf '%s' '{encoded}' | base64 -d | node"],
                 container=self._container,
             )
             return json.loads(result) if result else []
