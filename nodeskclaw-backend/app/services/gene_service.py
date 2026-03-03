@@ -38,6 +38,13 @@ from app.schemas.gene import (
     UpdateGeneRequest,
     UpdateGenomeRequest,
 )
+from app.services import genehub_client
+from app.services.genehub_converter import (
+    extract_paginated_items,
+    genehub_gene_to_local,
+    genehub_genome_to_local,
+    genehub_tags_to_local,
+)
 from app.services.nfs_mount import PodFS, remote_fs
 from app.services.openclaw_session import (
     ensure_skills_discovery,
@@ -49,6 +56,66 @@ OPENCLAW_CONFIG_REL = ".openclaw/openclaw.json"
 SKILLS_DIR_REL = ".openclaw/skills"
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════
+#  GeneHub Cache Helpers
+# ═══════════════════════════════════════════════════
+
+
+async def _upsert_gene_cache(db: AsyncSession, gene_data: dict) -> Gene | None:
+    """Upsert a GeneHub gene into the local genes table as cache."""
+    slug = gene_data.get("slug")
+    if not slug:
+        return None
+    existing = await get_gene_by_slug(db, slug)
+    now = datetime.now(timezone.utc)
+    if existing:
+        existing.name = gene_data.get("name", existing.name)
+        existing.description = gene_data.get("description", existing.description)
+        existing.short_description = gene_data.get("short_description", existing.short_description)
+        existing.category = gene_data.get("category", existing.category)
+        existing.tags = _json_dumps(gene_data.get("tags")) or existing.tags
+        existing.version = gene_data.get("version", existing.version)
+        existing.manifest = _json_dumps(gene_data.get("manifest")) or existing.manifest
+        existing.install_count = gene_data.get("install_count", existing.install_count)
+        existing.avg_rating = gene_data.get("avg_rating", existing.avg_rating)
+        existing.effectiveness_score = gene_data.get("effectiveness_score", existing.effectiveness_score)
+        existing.synced_at = now
+        await db.flush()
+        return existing
+    gene = Gene(
+        name=gene_data.get("name", slug),
+        slug=slug,
+        description=gene_data.get("description"),
+        short_description=gene_data.get("short_description"),
+        category=gene_data.get("category"),
+        tags=_json_dumps(gene_data.get("tags")),
+        source=gene_data.get("source", "official"),
+        icon=gene_data.get("icon"),
+        version=gene_data.get("version", "1.0.0"),
+        manifest=_json_dumps(gene_data.get("manifest")),
+        dependencies=_json_dumps(gene_data.get("dependencies")),
+        synergies=_json_dumps(gene_data.get("synergies")),
+        install_count=gene_data.get("install_count", 0),
+        avg_rating=gene_data.get("avg_rating", 0),
+        effectiveness_score=gene_data.get("effectiveness_score", 0),
+        is_published=True,
+        review_status="approved",
+        synced_at=now,
+    )
+    db.add(gene)
+    await db.flush()
+    return gene
+
+
+async def _batch_upsert_gene_cache(genes_data: list[dict]) -> None:
+    """Upsert multiple GeneHub genes into local cache (uses own session)."""
+    from app.core.deps import async_session_factory
+    async with async_session_factory() as db:
+        for g in genes_data:
+            await _upsert_gene_cache(db, g)
+        await db.commit()
 
 _background_tasks: set[asyncio.Task] = set()
 
@@ -235,7 +302,7 @@ async def _enrich_genomes_tool_counts(db: AsyncSession, genome_dicts: list[dict]
 # ═══════════════════════════════════════════════════
 
 
-async def list_genes(
+async def _list_genes_local(
     db: AsyncSession,
     *,
     keyword: str | None = None,
@@ -274,6 +341,43 @@ async def list_genes(
     return [_gene_to_dict(g) for g in genes], total
 
 
+async def list_genes(
+    db: AsyncSession,
+    *,
+    keyword: str | None = None,
+    tag: str | None = None,
+    category: str | None = None,
+    source: str | None = None,
+    sort: str = "popularity",
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict], int]:
+    body = await genehub_client.list_genes(
+        keyword=keyword, tag=tag, category=category, sort=sort, page=page, page_size=page_size,
+    )
+    if body is not None:
+        items, total = extract_paginated_items(body)
+        slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in items])
+        converted = [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in items]
+        _fire_task(_batch_upsert_gene_cache(items))
+        return converted, total
+
+    return await _list_genes_local(
+        db, keyword=keyword, tag=tag, category=category, source=source,
+        sort=sort, page=page, page_size=page_size,
+    )
+
+
+async def _build_slug_cache_map(db: AsyncSession, slugs: list[str]) -> dict[str, dict]:
+    """Build a slug -> local gene dict map for format conversion."""
+    if not slugs:
+        return {}
+    result = await db.execute(
+        select(Gene).where(Gene.slug.in_(slugs), not_deleted(Gene))
+    )
+    return {g.slug: _gene_to_dict(g) for g in result.scalars().all()}
+
+
 async def get_gene(db: AsyncSession, gene_id: str) -> dict:
     result = await db.execute(
         select(Gene).where(Gene.id == gene_id, not_deleted(Gene))
@@ -281,7 +385,21 @@ async def get_gene(db: AsyncSession, gene_id: str) -> dict:
     gene = result.scalar_one_or_none()
     if not gene:
         raise NotFoundError("基因不存在")
+
+    hub_data = await genehub_client.get_gene(gene.slug)
+    if hub_data:
+        _fire_task(_upsert_and_commit(hub_data))
+        return genehub_gene_to_local(hub_data, _gene_to_dict(gene))
+
     return _gene_to_dict(gene)
+
+
+async def _upsert_and_commit(gene_data: dict) -> None:
+    """Helper to upsert a single gene cache entry in a background task."""
+    from app.core.deps import async_session_factory
+    async with async_session_factory() as session:
+        await _upsert_gene_cache(session, gene_data)
+        await session.commit()
 
 
 async def get_gene_by_slug(db: AsyncSession, slug: str) -> Gene | None:
@@ -326,6 +444,10 @@ async def create_gene(
 
 
 async def get_gene_tags(db: AsyncSession) -> list[TagStats]:
+    hub_tags = await genehub_client.get_gene_tags()
+    if hub_tags is not None:
+        return [TagStats(tag=t.get("tag", ""), count=t.get("count", 0)) for t in hub_tags]
+
     result = await db.execute(
         select(Gene.tags).where(not_deleted(Gene), Gene.is_published.is_(True))
     )
@@ -338,6 +460,12 @@ async def get_gene_tags(db: AsyncSession) -> list[TagStats]:
 
 
 async def get_featured_genes(db: AsyncSession, limit: int = 10) -> list[dict]:
+    hub_data = await genehub_client.get_featured_genes(limit)
+    if hub_data is not None:
+        slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in hub_data])
+        _fire_task(_batch_upsert_gene_cache(hub_data))
+        return [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in hub_data]
+
     result = await db.execute(
         select(Gene)
         .where(not_deleted(Gene), Gene.is_published.is_(True), Gene.is_featured.is_(True))
@@ -363,6 +491,12 @@ async def get_gene_synergies(db: AsyncSession, gene_id: str) -> list[dict]:
     gene_obj = gene.scalar_one_or_none()
     if not gene_obj:
         return []
+
+    hub_data = await genehub_client.get_gene_synergies(gene_obj.slug)
+    if hub_data is not None:
+        slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in hub_data])
+        _fire_task(_batch_upsert_gene_cache(hub_data))
+        return [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in hub_data]
 
     slugs = _json_loads(gene_obj.synergies) or []
     if not slugs:
@@ -404,6 +538,13 @@ async def list_genomes(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict], int]:
+    # Genomes 不做本地缓存 upsert（数据量小，NoDeskClaw 侧 genomes 由 admin 管理）
+    body = await genehub_client.list_genomes(keyword=keyword, page=page, page_size=page_size)
+    if body is not None:
+        items, total = extract_paginated_items(body)
+        converted = [genehub_genome_to_local(g) for g in items]
+        return await _enrich_genomes_tool_counts(db, converted), total
+
     base = select(Genome).where(not_deleted(Genome), Genome.is_published.is_(True))
     if keyword:
         base = base.where(Genome.name.ilike(f"%{keyword}%") | Genome.slug.ilike(f"%{keyword}%"))
@@ -424,6 +565,13 @@ async def get_genome(db: AsyncSession, genome_id: str) -> dict:
     genome = result.scalar_one_or_none()
     if not genome:
         raise NotFoundError("基因组不存在")
+
+    hub_data = await genehub_client.get_genome(genome.slug)
+    if hub_data:
+        local = _genome_to_dict(genome)
+        converted = genehub_genome_to_local(hub_data, local)
+        return (await _enrich_genomes_tool_counts(db, [converted]))[0]
+
     items = await _enrich_genomes_tool_counts(db, [_genome_to_dict(genome)])
     return items[0]
 
@@ -451,6 +599,11 @@ async def create_genome(
 
 
 async def get_featured_genomes(db: AsyncSession, limit: int = 10) -> list[dict]:
+    hub_data = await genehub_client.get_featured_genomes(limit)
+    if hub_data is not None:
+        converted = [genehub_genome_to_local(g) for g in hub_data]
+        return await _enrich_genomes_tool_counts(db, converted)
+
     result = await db.execute(
         select(Genome)
         .where(not_deleted(Genome), Genome.is_published.is_(True), Genome.is_featured.is_(True))
@@ -562,7 +715,15 @@ async def install_gene(
     from app.services.instance_service import get_instance
 
     instance = await get_instance(instance_id, db)
-    gene = await get_gene_by_slug(db, gene_slug)
+
+    hub_gene = await genehub_client.get_gene(gene_slug)
+    if hub_gene:
+        cached = await _upsert_gene_cache(db, hub_gene)
+        await db.commit()
+        gene = cached
+    else:
+        gene = await get_gene_by_slug(db, gene_slug)
+
     if not gene:
         raise NotFoundError(f"基因 '{gene_slug}' 不存在")
 
@@ -689,7 +850,8 @@ async def _direct_install(
                 return
 
             try:
-                manifest = _json_loads(gene.manifest) or {}
+                hub_manifest = await genehub_client.get_manifest(gene.slug)
+                manifest = hub_manifest or _json_loads(gene.manifest) or {}
                 skill = manifest.get("skill", {})
 
                 async with remote_fs(instance, db) as fs:
@@ -712,6 +874,8 @@ async def _direct_install(
                     details={"version": gene.version, "learning_type": "direct"},
                 )
                 await db.commit()
+
+                await genehub_client.report_install(gene.slug)
 
                 should_restart = await _finish_learning_if_done(db, instance_id, ig_id)
                 if should_restart:
@@ -748,7 +912,8 @@ async def _send_learning_task(
             logger.error("_send_learning_task: record missing ig=%s gene=%s inst=%s", ig_id, gene_id, instance_id)
             return
 
-        manifest = _json_loads(gene.manifest) or {}
+        hub_manifest = await genehub_client.get_manifest(gene.slug)
+        manifest = hub_manifest or _json_loads(gene.manifest) or {}
         skill = manifest.get("skill", {})
         learning = manifest.get("learning")
 
@@ -991,6 +1156,8 @@ async def handle_learning_callback(
     if should_restart:
         await restart_instance(instance.id, db)
 
+    await genehub_client.report_install(gene_obj.slug)
+
     if workspace_id:
         broadcast_event(workspace_id, "gene:installed", {
             "instance_id": instance.id,
@@ -1166,8 +1333,13 @@ async def log_effectiveness(
                 "gene_slug": gene.slug,
                 "metric_type": metric_type,
             })
+        _fire_task(_report_effectiveness_to_genehub(gene.slug, metric_type, value))
 
     return {"logged": True}
+
+
+async def _report_effectiveness_to_genehub(slug: str, metric_type: str, value: float) -> None:
+    await genehub_client.report_effectiveness(slug, metric_type, value)
 
 
 async def _recalc_effectiveness_score(db: AsyncSession, gene_id: str) -> None:
@@ -1391,7 +1563,33 @@ async def handle_creation_callback(
             "gene_name": gene.name,
         })
 
+    _fire_task(_push_created_gene_to_genehub(gene_manifest, gene.slug, gene.name, gene_desc, meta))
+
     return {"status": "created", "gene_id": gene.id, "slug": gene.slug}
+
+
+async def _push_created_gene_to_genehub(
+    manifest: dict, slug: str, name: str, description: str, meta: dict,
+) -> None:
+    """Best-effort push of an Agent-created gene to GeneHub."""
+    full_manifest = {
+        "slug": slug,
+        "name": name,
+        "version": "1.0.0",
+        "description": description,
+        "short_description": (description[:256] if description else ""),
+        "category": meta.get("suggested_category", "skill"),
+        "tags": meta.get("suggested_tags", []),
+        "icon": meta.get("icon"),
+        "author": {"type": "agent", "name": "nodeskclaw"},
+        "compatibility": [{"product": "openclaw", "min_version": "1.0.0"}],
+        **manifest,
+    }
+    result = await genehub_client.publish_gene(full_manifest)
+    if result:
+        logger.info("Agent-created gene %s pushed to GeneHub", slug)
+    else:
+        logger.warning("Failed to push agent-created gene %s to GeneHub", slug)
 
 
 async def review_gene(db: AsyncSession, gene_id: str, action: str, reason: str | None = None) -> dict:

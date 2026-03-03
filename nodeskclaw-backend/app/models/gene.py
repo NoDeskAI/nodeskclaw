@@ -104,6 +104,10 @@ class Gene(BaseModel):
     review_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    synced_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_by: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )

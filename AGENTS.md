@@ -215,6 +215,36 @@ refactor(frontend): SSE 流 baseURL 统一走配置常量
 
 代码和文档必须在同一次操作中同步完成。
 
+## GeneHub 集成
+
+NoDeskClaw 后端通过 GeneHub Registry 实现基因市场数据代理和标准学习协议。
+
+### 配置
+
+在 `.env` 中设置以下环境变量（留空则全部走本地数据库）：
+
+```
+GENEHUB_REGISTRY_URL=https://genehub.nodeskai.com
+GENEHUB_API_KEY=<publisher-level API Key>
+```
+
+### 关键文件
+
+| 文件 | 说明 |
+|------|------|
+| `app/services/genehub_client.py` | GeneHub Registry HTTP 客户端，所有方法失败返回 None |
+| `app/services/genehub_converter.py` | GeneHub 响应格式转换为 NoDeskClaw 前端格式 |
+| `app/services/gene_service.py` | 市场查询/学习引擎/缓存降级的核心业务逻辑 |
+
+### 架构要点
+
+- **GeneHub 优先，本地 fallback**：市场查询先调 GeneHub，成功则转换格式 + upsert 缓存；失败 fallback 到本地 `genes` 表
+- **Manifest 从 GeneHub 拉取**：`install_gene` / `_direct_install` / `_send_learning_task` 优先使用 GeneHub manifest
+- **安装上报**：安装成功后调 `report_install(slug)` 通知 GeneHub
+- **Agent 创造推送**：`handle_creation_callback` 成功后将基因推送到 GeneHub
+- **效能数据同步**：`log_effectiveness` 同时上报到 GeneHub
+- **向后兼容**：`GENEHUB_REGISTRY_URL` 为空时所有行为与集成前完全一致
+
 ## 工具脚本
 
 ### Git 统计脚本（scripts/git_stats/）
