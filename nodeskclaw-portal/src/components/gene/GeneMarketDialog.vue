@@ -35,6 +35,7 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps<{
   modelValue: boolean
   instanceId: string
+  installedSkillNames?: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -73,22 +74,17 @@ const sortOptions = ['popularity', 'rating', 'effectiveness', 'newest']
 
 // ── Installed gene tracking ─────────────────────
 
-const installedGeneSlugs = ref<Set<string>>(new Set())
+const localInstalledSlugs = ref<Set<string>>(new Set())
 
-async function loadInstalledGenes() {
-  try {
-    const res = await api.get(`/instances/${props.instanceId}/genes`)
-    const items = res.data.data || []
-    installedGeneSlugs.value = new Set(
-      items.map((g: { gene?: { slug?: string } }) => g.gene?.slug).filter(Boolean),
-    )
-  } catch {
-    installedGeneSlugs.value = new Set()
-  }
-}
+const installedSlugs = computed(() => {
+  const base = props.installedSkillNames ?? new Set<string>()
+  const merged = new Set(base)
+  for (const slug of localInstalledSlugs.value) merged.add(slug)
+  return merged
+})
 
 function isInstalled(slug: string): boolean {
-  return installedGeneSlugs.value.has(slug)
+  return installedSlugs.value.has(slug)
 }
 
 // ── Data loading ────────────────────────────────
@@ -227,7 +223,7 @@ async function handleInstallGene(slug: string) {
   installing.value = true
   try {
     await store.installGene(props.instanceId, slug)
-    installedGeneSlugs.value.add(slug)
+    localInstalledSlugs.value.add(slug)
     toast.success(t('geneMarketDialog.learnSuccess'))
     emit('installed')
   } catch {
@@ -241,7 +237,6 @@ async function handleApplyGenome(genomeId: string) {
   installing.value = true
   try {
     await store.applyGenome(props.instanceId, genomeId)
-    await loadInstalledGenes()
     toast.success(t('geneMarketDialog.genomeApplySuccess'))
     emit('installed')
   } catch {
@@ -392,7 +387,8 @@ watch(() => props.modelValue, async (open) => {
     selectedCategory.value = null
     sortBy.value = 'popularity'
     page.value = 1
-    await Promise.all([loadInstalledGenes(), loadTags()])
+    localInstalledSlugs.value = new Set()
+    await loadTags()
     await loadData()
   }
 })

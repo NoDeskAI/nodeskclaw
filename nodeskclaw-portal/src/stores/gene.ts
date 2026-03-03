@@ -58,6 +58,19 @@ export interface InstanceGeneItem {
   gene?: GeneItem
 }
 
+export interface InstanceSkillItem {
+  type: 'hub' | 'emerged'
+  skill_name: string
+  name: string
+  description: string
+  file_count: number
+  content_preview?: string
+  full_content?: string
+  frontmatter?: Record<string, unknown>
+  gene?: GeneItem
+  instance_gene?: InstanceGeneItem
+}
+
 export interface GeneStats {
   total_genes: number
   total_installs: number
@@ -86,6 +99,7 @@ export const useGeneStore = defineStore('gene', () => {
   const currentGene = ref<GeneItem | null>(null)
   const currentGenome = ref<GenomeItem | null>(null)
   const instanceGenes = ref<InstanceGeneItem[]>([])
+  const instanceSkills = ref<InstanceSkillItem[]>([])
   const geneStats = ref<GeneStats | null>(null)
   const loading = ref(false)
   const totalGenes = ref(0)
@@ -233,6 +247,19 @@ export const useGeneStore = defineStore('gene', () => {
     }
   }
 
+  async function fetchInstanceSkills(instanceId: string) {
+    loading.value = true
+    try {
+      const res = await api.get(`/instances/${instanceId}/skills`)
+      instanceSkills.value = res.data.data || []
+    } catch (e) {
+      console.error('fetchInstanceSkills error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function installGene(instanceId: string, geneSlug: string) {
     const res = await api.post(`/instances/${instanceId}/genes/install`, { gene_slug: geneSlug })
     return res.data.data
@@ -321,6 +348,7 @@ export const useGeneStore = defineStore('gene', () => {
     currentGene,
     currentGenome,
     instanceGenes,
+    instanceSkills,
     geneStats,
     loading,
     totalGenes,
@@ -342,6 +370,7 @@ export const useGeneStore = defineStore('gene', () => {
     rateGenome,
 
     fetchInstanceGenes,
+    fetchInstanceSkills,
     installGene,
     uninstallGene,
     applyGenome,
