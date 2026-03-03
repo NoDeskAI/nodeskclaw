@@ -29,6 +29,7 @@ from app.schemas.corridor import (
     TopologyNodeInfo,
 )
 from app.services import corridor_router
+from app.services import workspace_member_service as wm_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,6 +110,7 @@ async def create_corridor_hex(
 ):
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     if await _is_hex_occupied(workspace_id, body.hex_q, body.hex_r, db):
         raise HTTPException(400, "hex position already occupied")
 
@@ -159,8 +161,9 @@ async def list_corridor_hexes(
     workspace_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_member(workspace_id, user, db)
     result = await db.execute(
         select(CorridorHex).where(
             CorridorHex.workspace_id == workspace_id,
@@ -184,8 +187,9 @@ async def update_corridor_hex(
     workspace_id: str, hex_id: str, body: CorridorHexUpdate,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     result = await db.execute(
         select(CorridorHex).where(
             CorridorHex.id == hex_id,
@@ -248,8 +252,9 @@ async def delete_corridor_hex(
     workspace_id: str, hex_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     result = await db.execute(
         select(CorridorHex).where(
             CorridorHex.id == hex_id,
@@ -303,6 +308,7 @@ async def create_connection(
 ):
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     if not is_adjacent(body.hex_a_q, body.hex_a_r, body.hex_b_q, body.hex_b_r):
         raise HTTPException(400, "hexes must be adjacent")
     if not await _is_hex_occupied(workspace_id, body.hex_a_q, body.hex_a_r, db):
@@ -363,8 +369,9 @@ async def list_connections(
     workspace_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_member(workspace_id, user, db)
     result = await db.execute(
         select(HexConnection).where(
             HexConnection.workspace_id == workspace_id,
@@ -389,8 +396,9 @@ async def delete_connection(
     workspace_id: str, conn_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     result = await db.execute(
         select(HexConnection).where(
             HexConnection.id == conn_id,
@@ -427,8 +435,9 @@ async def create_human_hex(
     workspace_id: str, body: HumanHexCreate,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     member_q = await db.execute(
         select(WorkspaceMember.id).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -482,8 +491,9 @@ async def update_human_hex(
     workspace_id: str, hex_id: str, body: HumanHexUpdate,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     result = await db.execute(
         select(HumanHex).where(
             HumanHex.id == hex_id,
@@ -548,8 +558,9 @@ async def delete_human_hex(
     workspace_id: str, hex_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
     result = await db.execute(
         select(HumanHex).where(
             HumanHex.id == hex_id,
@@ -586,8 +597,9 @@ async def get_topology(
     workspace_id: str,
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_member(workspace_id, user, db)
     topo = await corridor_router.get_topology(workspace_id, db)
     return _ok(TopologyInfo(
         nodes=[
@@ -613,8 +625,9 @@ async def get_topology_health(
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
     """Return topology health: islands, single points of failure, message flow stats."""
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_member(workspace_id, user, db)
     islands = await corridor_router.detect_islands(workspace_id, db)
     spof = await corridor_router.detect_single_points_of_failure(workspace_id, db)
     flow = await corridor_router.get_message_flow_stats(workspace_id, db)
@@ -634,8 +647,9 @@ async def get_topology_message_flow(
     org_ctx=Depends(get_current_org), db: AsyncSession = Depends(get_db),
 ):
     """Return message count per sender-receiver hex pair from workspace_messages."""
-    _, org = org_ctx
+    user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
+    await wm_service.check_workspace_member(workspace_id, user, db)
     flow = await corridor_router.get_message_flow_stats(workspace_id, db)
     return _ok([
         {"sender_hex_key": p.sender_hex_key, "receiver_hex_key": p.receiver_hex_key, "count": p.count}

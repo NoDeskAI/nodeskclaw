@@ -169,6 +169,7 @@ onMounted(async () => {
   store.resetCurrentState()
 
   await store.fetchWorkspace(workspaceId.value)
+  await store.fetchMyPermissions(workspaceId.value)
   await store.fetchBlackboard(workspaceId.value)
   await store.fetchTopology(workspaceId.value)
   await store.fetchMembers(workspaceId.value)
@@ -199,6 +200,7 @@ watch(workspaceId, async (newId, oldId) => {
   if (newId && newId !== oldId) {
     store.resetCurrentState()
     await store.fetchWorkspace(newId)
+    await store.fetchMyPermissions(newId)
     await store.fetchBlackboard(newId)
     await store.fetchTopology(newId)
     store.connectSSE(newId, onSSEEvent)
@@ -762,6 +764,7 @@ function handleKeydown(e: KeyboardEvent) {
           </span>
         </button>
         <button
+          v-if="store.hasPermission('manage_settings')"
           class="p-1.5 rounded-lg hover:bg-muted transition-colors"
           @click="router.push(`/workspace/${workspaceId}/settings`)"
         >
@@ -953,6 +956,7 @@ function handleKeydown(e: KeyboardEvent) {
             <ChatPanel
               v-if="chatSidebarTab === 'blackboard'"
               :workspace-id="workspaceId"
+              :can-send="store.hasPermission('send_chat')"
               class="flex-1 min-h-0"
             />
             <CollaborationTimeline
@@ -990,6 +994,7 @@ function handleKeydown(e: KeyboardEvent) {
     <BlackboardOverlay
       :open="bbOpen"
       :workspace-id="workspaceId"
+      :can-edit="store.hasPermission('edit_blackboard')"
       @close="bbOpen = false"
     />
 
@@ -1255,10 +1260,10 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
           <div class="flex-1 flex min-h-0">
             <div class="flex-1 flex flex-col min-h-0 min-w-0 border-r border-border">
-              <BlackboardOverlay :open="true" :workspace-id="workspaceId" embedded @close="focusMode = false" />
+              <BlackboardOverlay :open="true" :workspace-id="workspaceId" :can-edit="store.hasPermission('edit_blackboard')" embedded @close="focusMode = false" />
             </div>
             <div class="flex-1 flex flex-col min-h-0 min-w-0">
-              <ChatPanel :workspace-id="workspaceId" class="flex-1 min-h-0" />
+              <ChatPanel :workspace-id="workspaceId" :can-send="store.hasPermission('send_chat')" class="flex-1 min-h-0" />
             </div>
           </div>
         </div>

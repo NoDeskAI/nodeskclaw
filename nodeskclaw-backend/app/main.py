@@ -1060,6 +1060,32 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 human_hexes 表添加 display_name 列")
 
+    # ── 迁移 26: workspace_members 新增 is_admin / permissions 列 + 数据迁移 ──
+    async with engine.begin() as conn:
+        wm_admin_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'workspace_members' AND column_name = 'is_admin'"
+        ))
+        if wm_admin_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE workspace_members "
+                "ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT false, "
+                "ADD COLUMN permissions JSON NOT NULL DEFAULT '[]'"
+            ))
+            await conn.execute(text(
+                "UPDATE workspace_members SET is_admin = true WHERE role = 'owner' AND deleted_at IS NULL"
+            ))
+            await conn.execute(text(
+                "UPDATE workspace_members SET permissions = "
+                "'[\"manage_settings\",\"manage_agents\",\"edit_blackboard\",\"send_chat\",\"edit_topology\"]' "
+                "WHERE role = 'editor' AND deleted_at IS NULL"
+            ))
+            await conn.execute(text(
+                "UPDATE workspace_members SET permissions = '[\"send_chat\"]' "
+                "WHERE role = 'viewer' AND deleted_at IS NULL"
+            ))
+            logger.info("自动迁移：已为 workspace_members 表添加 is_admin/permissions 列并迁移数据")
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

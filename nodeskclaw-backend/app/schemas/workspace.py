@@ -102,16 +102,20 @@ class WorkspaceMemberInfo(BaseModel):
     user_email: str | None = None
     user_avatar_url: str | None = None
     role: str
+    is_admin: bool = False
+    permissions: list[str] = []
     created_at: datetime
 
 
 class WorkspaceMemberAdd(BaseModel):
     user_id: str
-    role: str = "editor"
+    permissions: list[str] = []
+    is_admin: bool = False
 
 
 class WorkspaceMemberUpdate(BaseModel):
-    role: str
+    permissions: list[str] | None = None
+    is_admin: bool | None = None
 
 
 # ── Chat ─────────────────────────────────────────────

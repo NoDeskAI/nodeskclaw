@@ -70,7 +70,7 @@ async def create_workspace(db: AsyncSession, org_id: str, user_id: str, data: Wo
     bb = Blackboard(workspace_id=ws.id)
     db.add(bb)
 
-    member = WorkspaceMember(workspace_id=ws.id, user_id=user_id, role=WorkspaceRole.owner)
+    member = WorkspaceMember(workspace_id=ws.id, user_id=user_id, role=WorkspaceRole.owner, is_admin=True)
     db.add(member)
 
     await db.commit()
@@ -82,13 +82,33 @@ async def create_workspace(db: AsyncSession, org_id: str, user_id: str, data: Wo
     )
 
 
-async def list_workspaces(db: AsyncSession, org_id: str) -> list[WorkspaceListItem]:
-    result = await db.execute(
-        select(Workspace).where(
-            Workspace.org_id == org_id,
-            Workspace.deleted_at.is_(None),
-        ).order_by(Workspace.created_at.desc())
+async def list_workspaces(
+    db: AsyncSession, org_id: str, user_id: str | None = None,
+) -> list[WorkspaceListItem]:
+    from app.models.org_membership import OrgMembership, OrgRole
+
+    stmt = select(Workspace).where(
+        Workspace.org_id == org_id,
+        Workspace.deleted_at.is_(None),
     )
+
+    if user_id:
+        is_org_admin = (await db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.user_id == user_id,
+                OrgMembership.org_id == org_id,
+                OrgMembership.deleted_at.is_(None),
+            )
+        )).scalar_one_or_none()
+
+        if is_org_admin != OrgRole.admin:
+            member_ws_ids = select(WorkspaceMember.workspace_id).where(
+                WorkspaceMember.user_id == user_id,
+                WorkspaceMember.deleted_at.is_(None),
+            )
+            stmt = stmt.where(Workspace.id.in_(member_ws_ids))
+
+    result = await db.execute(stmt.order_by(Workspace.created_at.desc()))
     workspaces = result.scalars().all()
 
     items = []
@@ -591,15 +611,23 @@ async def list_workspace_members(db: AsyncSession, workspace_id: str) -> list[Wo
         members.append(WorkspaceMemberInfo(
             user_id=user.id, user_name=user.name,
             user_email=user.email, user_avatar_url=user.avatar_url,
-            role=wm.role, created_at=wm.created_at,
+            role=wm.role, is_admin=wm.is_admin,
+            permissions=wm.permissions or [],
+            created_at=wm.created_at,
         ))
     return members
 
 
 async def add_workspace_member(
-    db: AsyncSession, workspace_id: str, user_id: str, role: str = "editor",
+    db: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    permissions: list[str] | None = None,
+    is_admin: bool = False,
 ) -> WorkspaceMemberInfo:
     from app.models.user import User
+    from app.models.workspace_member import WORKSPACE_PERMISSIONS
+
     existing = await db.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -610,7 +638,14 @@ async def add_workspace_member(
     if existing.scalar_one_or_none():
         raise ValueError("用户已是工作区成员")
 
-    wm = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role)
+    perms = [p for p in (permissions or []) if p in WORKSPACE_PERMISSIONS]
+    wm = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=user_id,
+        role="editor",
+        is_admin=is_admin,
+        permissions=perms,
+    )
     db.add(wm)
     await db.commit()
 
@@ -619,12 +654,41 @@ async def add_workspace_member(
     return WorkspaceMemberInfo(
         user_id=user.id, user_name=user.name,
         user_email=user.email, user_avatar_url=user.avatar_url,
-        role=wm.role, created_at=wm.created_at,
+        role=wm.role, is_admin=wm.is_admin,
+        permissions=wm.permissions or [],
+        created_at=wm.created_at,
     )
 
 
-async def update_workspace_member_role(
-    db: AsyncSession, workspace_id: str, user_id: str, role: str,
+async def update_workspace_member_permissions(
+    db: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    permissions: list[str] | None = None,
+    is_admin: bool | None = None,
+) -> bool:
+    from app.models.workspace_member import WORKSPACE_PERMISSIONS
+
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user_id,
+            WorkspaceMember.deleted_at.is_(None),
+        )
+    )
+    wm = result.scalar_one_or_none()
+    if wm is None:
+        return False
+    if permissions is not None:
+        wm.permissions = [p for p in permissions if p in WORKSPACE_PERMISSIONS]
+    if is_admin is not None:
+        wm.is_admin = is_admin
+    await db.commit()
+    return True
+
+
+async def remove_workspace_member(
+    db: AsyncSession, workspace_id: str, user_id: str, operator_name: str = "",
 ) -> bool:
     result = await db.execute(
         select(WorkspaceMember).where(
@@ -636,22 +700,35 @@ async def update_workspace_member_role(
     wm = result.scalar_one_or_none()
     if wm is None:
         return False
-    wm.role = role
-    await db.commit()
-    return True
 
-
-async def remove_workspace_member(db: AsyncSession, workspace_id: str, user_id: str) -> bool:
-    result = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-            WorkspaceMember.deleted_at.is_(None),
+    from app.models.corridor import HumanHex
+    from app.models.base import not_deleted
+    hh_result = await db.execute(
+        select(HumanHex).where(
+            HumanHex.workspace_id == workspace_id,
+            HumanHex.user_id == user_id,
+            not_deleted(HumanHex),
         )
     )
-    wm = result.scalar_one_or_none()
-    if wm is None:
-        return False
+    human_hexes = list(hh_result.scalars().all())
+
+    if human_hexes and operator_name:
+        try:
+            from app.services.collaboration_service import deliver_to_human
+            await deliver_to_human(
+                workspace_id=workspace_id,
+                human_hex_id=human_hexes[0].id,
+                source_name="System",
+                message=f"你已被 {operator_name} 移出工作区",
+            )
+        except Exception as e:
+            logger.warning("发送移除通知失败（非致命）: %s", e)
+
+    from app.api.workspaces import broadcast_event
+    for hh in human_hexes:
+        hh.soft_delete()
+        broadcast_event(workspace_id, "human:hex_removed", {"hex_id": hh.id})
+
     wm.soft_delete()
     await db.commit()
     return True

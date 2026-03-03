@@ -30,6 +30,7 @@ from app.schemas.workspace import (
 )
 from app.services import workspace_service
 from app.services import workspace_message_service as msg_service
+from app.services import workspace_member_service as wm_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -90,7 +91,7 @@ async def list_workspaces(
     db: AsyncSession = Depends(get_db),
 ):
     user, org = org_ctx
-    items = await workspace_service.list_workspaces(db, org.id)
+    items = await workspace_service.list_workspaces(db, org.id, user_id=user.id)
     return _ok([i.model_dump(mode="json") for i in items])
 
 
@@ -100,6 +101,7 @@ async def get_workspace(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_member(workspace_id, user, db)
     ws = await workspace_service.get_workspace(db, workspace_id)
     if ws is None:
         raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
@@ -113,6 +115,7 @@ async def update_workspace(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
     ws = await workspace_service.update_workspace(db, workspace_id, data)
     if ws is None:
         raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
@@ -125,6 +128,7 @@ async def delete_workspace(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "delete_workspace", db)
     try:
         ok = await workspace_service.delete_workspace(db, workspace_id)
     except ValueError as e:
@@ -143,6 +147,7 @@ async def add_agent(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     try:
         agent = await workspace_service.add_agent(db, workspace_id, data, user.id)
     except ValueError as e:
@@ -158,6 +163,7 @@ async def update_agent(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     agent = await workspace_service.update_agent(db, workspace_id, instance_id, data)
     if agent is None:
         raise _error(404, 40431, "errors.workspace.agent_not_found", "Agent 不存在")
@@ -171,6 +177,7 @@ async def remove_agent(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     ok = await workspace_service.remove_agent(db, workspace_id, instance_id)
     if not ok:
         raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该工作区中")
@@ -185,6 +192,7 @@ async def get_blackboard(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_member(workspace_id, user, db)
     bb = await workspace_service.get_blackboard(db, workspace_id)
     if bb is None:
         raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
@@ -198,6 +206,7 @@ async def update_blackboard(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
     bb = await workspace_service.update_blackboard(db, workspace_id, data)
     if bb is None:
         raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
@@ -211,6 +220,7 @@ async def patch_blackboard_section(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
     bb = await workspace_service.patch_blackboard_section(db, workspace_id, data)
     if bb is None:
         raise _error(404, 40433, "errors.workspace.blackboard_not_found", "黑板不存在")
@@ -225,6 +235,7 @@ async def list_schedules(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_member(workspace_id, user, db)
     from app.models.workspace_schedule import WorkspaceSchedule
     from app.services.schedule_runner import PRESET_TEMPLATES
     result = await db.execute(
@@ -249,6 +260,7 @@ async def create_schedule(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
     import uuid
     from app.models.workspace_schedule import WorkspaceSchedule
     schedule = WorkspaceSchedule(
@@ -275,6 +287,7 @@ async def update_schedule(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
     from app.models.workspace_schedule import WorkspaceSchedule
     result = await db.execute(
         sa_select(WorkspaceSchedule).where(
@@ -299,6 +312,7 @@ async def delete_schedule(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
     from app.models.workspace_schedule import WorkspaceSchedule
     result = await db.execute(
         sa_select(WorkspaceSchedule).where(
@@ -323,6 +337,7 @@ async def list_members(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_member(workspace_id, user, db)
     members = await workspace_service.list_workspace_members(db, workspace_id)
     return _ok([m.model_dump(mode="json") for m in members])
 
@@ -334,9 +349,12 @@ async def add_member(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_members", db)
     try:
         member = await workspace_service.add_workspace_member(
-            db, workspace_id, data.user_id, data.role,
+            db, workspace_id, data.user_id,
+            permissions=data.permissions,
+            is_admin=data.is_admin,
         )
     except ValueError as e:
         raise _error(400, 40032, "errors.workspace.add_member_invalid", str(e))
@@ -351,7 +369,12 @@ async def update_member(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
-    ok = await workspace_service.update_workspace_member_role(db, workspace_id, user_id, data.role)
+    await wm_service.check_workspace_access(workspace_id, user, "manage_members", db)
+    ok = await workspace_service.update_workspace_member_permissions(
+        db, workspace_id, user_id,
+        permissions=data.permissions,
+        is_admin=data.is_admin,
+    )
     if not ok:
         raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
     return _ok(message="已更新")
@@ -364,10 +387,38 @@ async def remove_member(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_dep()),
 ):
-    ok = await workspace_service.remove_workspace_member(db, workspace_id, user_id)
+    await wm_service.check_workspace_access(workspace_id, user, "manage_members", db)
+    ok = await workspace_service.remove_workspace_member(
+        db, workspace_id, user_id, operator_name=user.name,
+    )
     if not ok:
         raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
     return _ok(message="已移除")
+
+
+# ── Permissions ──────────────────────────────────────
+
+@router.get("/{workspace_id}/my-permissions")
+async def get_my_permissions(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    perms = await wm_service.get_my_permissions(workspace_id, user, db)
+    return _ok(perms)
+
+
+@router.get("/{workspace_id}/search-users")
+async def search_users(
+    workspace_id: str,
+    q: str = Query(default=""),
+    org_ctx=Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, org = org_ctx
+    await wm_service.check_workspace_access(workspace_id, user, "manage_members", db)
+    results = await wm_service.search_org_users(workspace_id, org.id, q, db)
+    return _ok(results)
 
 
 # ── Group Chat (Broadcast) ───────────────────────────
@@ -380,6 +431,7 @@ async def workspace_chat(
     user=Depends(_get_current_user_dep()),
 ):
     """Workspace-level group chat: broadcast user message to all agents."""
+    await wm_service.check_workspace_access(workspace_id, user, "send_chat", db)
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     if ws_info is None:
         raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
@@ -489,6 +541,7 @@ async def post_system_message(
     user=Depends(_get_current_user_dep()),
 ):
     """Persist a system message (slash command result, etc.) without triggering agent responses."""
+    await wm_service.check_workspace_access(workspace_id, user, "send_chat", db)
     msg = await msg_service.record_message(
         db,
         workspace_id=workspace_id,
@@ -518,6 +571,7 @@ async def list_workspace_messages(
     user=Depends(_get_current_user_dep()),
 ):
     """List recent workspace messages for chat history."""
+    await wm_service.check_workspace_member(workspace_id, user, db)
     messages = await msg_service.get_recent_messages(db, workspace_id, limit)
     return _ok([
         {
@@ -543,6 +597,7 @@ async def list_collaboration_timeline(
     user=Depends(_get_current_user_dep()),
 ):
     """List all collaboration messages in a workspace as a timeline."""
+    await wm_service.check_workspace_member(workspace_id, user, db)
     from datetime import datetime as dt
     since_dt = dt.fromisoformat(since) if since else None
     messages = await msg_service.get_collaboration_timeline(
@@ -574,6 +629,7 @@ async def list_agent_collaboration_messages(
     user=Depends(_get_current_user_dep()),
 ):
     """List collaboration messages sent to or from a specific agent."""
+    await wm_service.check_workspace_member(workspace_id, user, db)
     messages = await msg_service.get_agent_collaboration_messages(
         db, workspace_id, instance_id, limit,
     )
@@ -605,6 +661,7 @@ async def agent_chat(
     user=Depends(_get_current_user_dep()),
 ):
     """Single-agent chat (deprecated, use workspace_chat instead)."""
+    await wm_service.check_workspace_access(workspace_id, user, "send_chat", db)
     result = await db.execute(
         sa_select(Instance).where(
             Instance.id == instance_id,
@@ -711,8 +768,10 @@ def _broadcast_system_info(workspace_id: str, content: str) -> None:
 @router.get("/{workspace_id}/events")
 async def workspace_events(
     workspace_id: str,
+    db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_from_query_dep()),
 ):
+    await wm_service.check_workspace_member(workspace_id, user, db)
     queue: asyncio.Queue = asyncio.Queue()
     if workspace_id not in _workspace_queues:
         _workspace_queues[workspace_id] = set()

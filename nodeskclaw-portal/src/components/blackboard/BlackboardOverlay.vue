@@ -9,7 +9,8 @@ const props = withDefaults(defineProps<{
   open: boolean
   workspaceId: string
   embedded?: boolean
-}>(), { embedded: false })
+  canEdit?: boolean
+}>(), { embedded: false, canEdit: true })
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 

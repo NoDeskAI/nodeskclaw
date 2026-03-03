@@ -18,9 +18,12 @@ import { SlashCommand } from './extensions/slashCommand'
 
 marked.setOptions({ breaks: true, gfm: true })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   workspaceId: string
-}>()
+  canSend?: boolean
+}>(), {
+  canSend: true,
+})
 
 const { t } = useI18n()
 const store = useWorkspaceStore()
@@ -701,7 +704,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
       </Transition>
 
       <!-- Tiptap editor container -->
-      <div class="rounded-lg border border-border bg-muted overflow-hidden focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-colors">
+      <div v-if="canSend" class="rounded-lg border border-border bg-muted overflow-hidden focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-colors">
         <EditorContent :editor="editor" class="tiptap-editor" />
         <div class="flex items-center justify-between px-2 pb-1.5">
           <div class="flex items-center gap-0.5">
