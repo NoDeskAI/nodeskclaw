@@ -140,6 +140,7 @@ watch(isRegister, () => { error.value = '' })
             <PawPrint class="w-6 h-6 text-primary" />
           </div>
           <span class="text-xl font-bold tracking-tight">NoDeskClaw</span>
+          <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
         </div>
 
         <h1 class="text-4xl xl:text-5xl font-bold leading-tight mb-4">
@@ -179,7 +180,10 @@ watch(isRegister, () => { error.value = '' })
           <div class="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
             <PawPrint class="w-7 h-7 text-primary" />
           </div>
-          <span class="text-xl font-bold">NoDeskClaw</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xl font-bold">NoDeskClaw</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
+          </div>
         </div>
 
         <!-- 标题 -->

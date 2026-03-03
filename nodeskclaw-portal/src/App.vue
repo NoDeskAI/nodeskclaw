@@ -71,6 +71,7 @@ function onLocaleChange(value: string) {
           <div class="flex items-center gap-2 cursor-pointer" @click="router.push('/')">
             <PawPrint class="w-5 h-5 text-primary" />
             <span class="font-bold text-base">NoDeskClaw</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
           </div>
           <nav v-if="!isSetupPage" class="flex items-center gap-1">
             <button

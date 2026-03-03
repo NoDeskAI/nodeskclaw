@@ -482,7 +482,7 @@ onMounted(async () => {
       </CardHeader>
       <CardContent>
         <div class="text-sm text-muted-foreground space-y-1">
-          <p>NoDeskClaw v0.1.0</p>
+          <p>NoDeskClaw v0.1.0-beta</p>
           <p>One-click deploy, full control.</p>
         </div>
       </CardContent>

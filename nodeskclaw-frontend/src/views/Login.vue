@@ -26,6 +26,7 @@ function handleOAuthLogin(provider: string) {
         <div class="flex items-center justify-center gap-2 mb-4">
           <PawPrint class="w-8 h-8 text-primary" />
           <span class="text-2xl font-bold">NoDeskClaw</span>
+          <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
         </div>
         <CardTitle class="text-lg font-normal text-muted-foreground">
           One-click deploy, full control.
