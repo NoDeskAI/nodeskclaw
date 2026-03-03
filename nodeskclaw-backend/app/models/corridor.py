@@ -1,6 +1,6 @@
 """Corridor system models — CorridorHex + HexConnection + HumanHex for workspace topology."""
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -22,7 +22,8 @@ def ordered_pair(q1: int, r1: int, q2: int, r2: int) -> tuple[int, int, int, int
 class CorridorHex(BaseModel):
     __tablename__ = "corridor_hexes"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "hex_q", "hex_r", name="uq_corridor_hex_pos"),
+        Index("uq_corridor_hex_pos", "workspace_id", "hex_q", "hex_r",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
     )
 
     workspace_id: Mapped[str] = mapped_column(
@@ -39,7 +40,8 @@ class CorridorHex(BaseModel):
 class HumanHex(BaseModel):
     __tablename__ = "human_hexes"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "hex_q", "hex_r", name="uq_human_hex_pos"),
+        Index("uq_human_hex_pos", "workspace_id", "hex_q", "hex_r",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
     )
 
     workspace_id: Mapped[str] = mapped_column(
@@ -63,10 +65,8 @@ class HumanHex(BaseModel):
 class HexConnection(BaseModel):
     __tablename__ = "hex_connections"
     __table_args__ = (
-        UniqueConstraint(
-            "workspace_id", "hex_a_q", "hex_a_r", "hex_b_q", "hex_b_r",
-            name="uq_hex_connection_pair",
-        ),
+        Index("uq_hex_connection_pair", "workspace_id", "hex_a_q", "hex_a_r", "hex_b_q", "hex_b_r",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
     )
 
     workspace_id: Mapped[str] = mapped_column(

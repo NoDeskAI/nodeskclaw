@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -26,10 +26,8 @@ INSTANCE_ROLE_LEVEL: dict[str, int] = {
 class InstanceMember(BaseModel):
     __tablename__ = "instance_members"
     __table_args__ = (
-        UniqueConstraint(
-            "instance_id", "user_id",
-            name="uq_instance_member_active",
-        ),
+        Index("uq_instance_member_active", "instance_id", "user_id",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
         Index("ix_instance_member_instance", "instance_id"),
         Index("ix_instance_member_user", "user_id"),
     )

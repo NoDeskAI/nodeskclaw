@@ -350,11 +350,27 @@ docker build -t my-image:latest .
 - 所有数据库查询必须过滤已删除记录：`Model.deleted_at.is_(None)`
 - 级联删除场景（如删除集群时其下实例和部署记录）需手动级联设置子记录的 `deleted_at`
 
+### 唯一约束必须用 Partial Unique Index
+
+**所有需要唯一性保证的字段组合，必须使用 `Index(..., unique=True, postgresql_where=text("deleted_at IS NULL"))`，严禁使用 `UniqueConstraint`。**
+
+普通 `UniqueConstraint` 覆盖全表（含软删除记录），导致"删除后重新创建"时 INSERT 触发 `IntegrityError` → 500。Partial Unique Index 只对 `deleted_at IS NULL` 的活跃记录生效，软删除记录不参与唯一性检查。
+
+```python
+# 正确
+Index("uq_xxx", "col_a", "col_b",
+      unique=True, postgresql_where=text("deleted_at IS NULL"))
+
+# 错误 — 会导致软删除后同键位无法新建
+UniqueConstraint("col_a", "col_b", name="uq_xxx")
+```
+
 ### 严禁
 
 - **禁止 `db.delete()`**：不允许调用 SQLAlchemy 的物理删除方法
 - **禁止 `DELETE FROM`**：不允许原生 SQL 物理删除
 - **禁止遗漏过滤**：新增查询必须包含 `deleted_at.is_(None)` 条件，否则会查到已删除的数据
+- **禁止使用 `UniqueConstraint`**：所有唯一约束必须用 Partial Unique Index（见上）
 
 ## 导入完整性规则
 

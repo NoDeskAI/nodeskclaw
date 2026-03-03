@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -24,7 +24,8 @@ ADMIN_ROLE_LEVEL: dict[str, int] = {
 class OrgMembership(BaseModel):
     __tablename__ = "org_memberships"
     __table_args__ = (
-        UniqueConstraint("user_id", "org_id", name="uq_org_membership"),
+        Index("uq_org_membership", "user_id", "org_id",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
     )
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)

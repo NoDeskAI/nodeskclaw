@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSON
 
@@ -18,7 +18,8 @@ class WorkspaceRole(str, Enum):
 class WorkspaceMember(BaseModel):
     __tablename__ = "workspace_members"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "user_id", name="uq_workspace_member"),
+        Index("uq_workspace_member", "workspace_id", "user_id",
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
     )
 
     workspace_id: Mapped[str] = mapped_column(

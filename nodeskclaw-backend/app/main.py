@@ -725,6 +725,33 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE users DROP COLUMN feishu_tenant_key"))
             logger.info("自动迁移：已删除 users.feishu_tenant_key 列")
 
+        # ── 迁移 24: UniqueConstraint → Partial Unique Index（软删除兼容） ──
+        _soft_delete_constraints = [
+            ("uq_corridor_hex_pos", "corridor_hexes", "(workspace_id, hex_q, hex_r)"),
+            ("uq_human_hex_pos", "human_hexes", "(workspace_id, hex_q, hex_r)"),
+            ("uq_hex_connection_pair", "hex_connections",
+             "(workspace_id, hex_a_q, hex_a_r, hex_b_q, hex_b_r)"),
+            ("uq_workspace_member", "workspace_members", "(workspace_id, user_id)"),
+            ("uq_instance_member_active", "instance_members", "(instance_id, user_id)"),
+            ("uq_admin_membership", "admin_memberships", "(user_id, org_id)"),
+            ("uq_org_membership", "org_memberships", "(user_id, org_id)"),
+            ("uq_oauth_provider_user", "user_oauth_connections", "(provider, provider_user_id)"),
+            ("uq_oauth_provider_tenant", "org_oauth_bindings", "(provider, provider_tenant_id)"),
+        ]
+        for _con_name, _tbl, _cols in _soft_delete_constraints:
+            _old = await conn.execute(text(
+                "SELECT 1 FROM pg_constraint WHERE conname = :name"
+            ), {"name": _con_name})
+            if _old.first() is not None:
+                await conn.execute(text(f"ALTER TABLE {_tbl} DROP CONSTRAINT {_con_name}"))
+                await conn.execute(text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {_con_name} "
+                    f"ON {_tbl} {_cols} WHERE deleted_at IS NULL"
+                ))
+                logger.info(
+                    "自动迁移：%s.%s 唯一约束已替换为 partial unique index", _tbl, _con_name,
+                )
+
     # ── 迁移 5e: 种子数据（默认组织 + 套餐 + 数据归属） ──
     async with async_session_factory() as db:
         from app.models.org_membership import OrgMembership, OrgRole
