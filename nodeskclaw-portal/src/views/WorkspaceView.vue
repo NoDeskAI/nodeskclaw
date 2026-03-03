@@ -41,6 +41,16 @@ const humanSeatCount = computed(() =>
   store.topologyNodes.filter((n: any) => n.node_type === 'human').length,
 )
 
+const enrichedTopologyNodes = computed(() =>
+  store.topologyNodes.map((n: any) => {
+    if (n.node_type !== 'human' || n.display_name) return n
+    const userId = n.extra?.user_id as string | undefined
+    if (!userId) return n
+    const member = store.members.find((m: any) => m.user_id === userId)
+    return member ? { ...n, display_name: member.user_name } : n
+  }),
+)
+
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
 const chatOpen = ref(false)
@@ -832,7 +842,7 @@ function handleKeydown(e: KeyboardEvent) {
             :blackboard-content="store.blackboard?.content || ''"
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
-            :topology-nodes="store.topologyNodes"
+            :topology-nodes="enrichedTopologyNodes"
             :topology-edges="store.topologyEdges"
             :message-flow-stats="store.messageFlowStats"
             :is-moving-hex="isMovingHex"
