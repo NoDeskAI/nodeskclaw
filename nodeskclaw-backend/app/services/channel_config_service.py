@@ -412,7 +412,17 @@ async def write_channel_configs(
         for cid in old_user_channels - set(channel_configs):
             entries[cid] = {"enabled": False}
 
-        await _write_config_file(fs, config)
+        try:
+            await _write_config_file(fs, config)
+        except AppException:
+            raise
+        except Exception as e:
+            logger.error("写入 Channel 配置失败: %s", e)
+            raise AppException(
+                code=50200, status_code=502,
+                message="Channel 配置写入失败，实例可能正在重启中，请稍后重试",
+                message_key="errors.channel.config_write_failed",
+            )
 
     logger.info("已写入 Channel 配置: instance=%s channels=%s",
                 instance.name, list(channel_configs.keys()))

@@ -24,8 +24,8 @@ CHUNK_SIZE = 98_000
 
 
 class NFSMountError(AppException):
-    def __init__(self, message: str = "远程文件操作失败"):
-        super().__init__(code=50300, message=message, status_code=503)
+    def __init__(self, message: str = "远程文件操作失败", message_key: str | None = None):
+        super().__init__(code=50300, message=message, status_code=503, message_key=message_key)
 
 
 class PodFS:
@@ -216,14 +216,23 @@ def _k8s_name(instance: Instance) -> str:
 async def _find_running_pod(
     k8s: K8sClient, instance: Instance,
 ) -> tuple[str, str]:
-    """Return (pod_name, container_name) for the first Running pod."""
+    """Return (pod_name, container_name) for the first Running & Ready pod."""
     container = _k8s_name(instance)
     label_selector = f"app.kubernetes.io/name={container}"
     pods = await k8s.list_pods(instance.namespace, label_selector)
     running = [p for p in pods if p["phase"] == "Running"]
     if not running:
         raise NFSMountError("实例无运行中的 Pod，无法同步文件")
-    return running[0]["name"], container
+    ready = [
+        p for p in running
+        if any(c.get("ready") for c in p.get("containers", []))
+    ]
+    if not ready:
+        raise NFSMountError(
+            "实例正在启动中，请稍后重试",
+            message_key="errors.instance.pod_not_ready",
+        )
+    return ready[0]["name"], container
 
 
 @asynccontextmanager
