@@ -50,7 +50,7 @@ function handleOAuthLogin(provider: string) {
     const clientId = import.meta.env.VITE_FEISHU_APP_ID || ''
     const redirectUri = encodeURIComponent(window.location.origin + `/login/callback/${provider}`)
     const state = Math.random().toString(36).substring(2)
-    window.location.href = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`
+    window.location.href = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}&scope=contact:user.email:readonly`
   }
 }
 
