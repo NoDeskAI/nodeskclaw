@@ -450,9 +450,11 @@ const emptyHexes = computed(() => {
       <g
         v-for="ch in corridorPaths"
         :key="'corridor-' + ch.entity_id"
-        class="cursor-pointer"
-        :transform="`translate(${ch.px}, ${ch.py})`"
+        class="cursor-pointer transition-transform"
+        :transform="`translate(${ch.px}, ${ch.py}) ${hoveredId === 'corridor-' + ch.entity_id ? 'scale(1.06)' : ''}`"
         @click.stop="emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.entity_id })"
+        @pointerenter="hoveredId = 'corridor-' + ch.entity_id"
+        @pointerleave="hoveredId = null"
       >
         <polygon
           :points="corridorHexPoints(0, 0)"
@@ -486,9 +488,11 @@ const emptyHexes = computed(() => {
       <g
         v-for="hh in humanNodes"
         :key="'human-' + hh.entity_id"
-        class="cursor-pointer"
-        :transform="`translate(${hh.px}, ${hh.py})`"
+        class="cursor-pointer transition-transform"
+        :transform="`translate(${hh.px}, ${hh.py}) ${hoveredId === 'human-' + hh.entity_id ? 'scale(1.06)' : ''}`"
         @click.stop="emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', entityId: hh.entity_id })"
+        @pointerenter="hoveredId = 'human-' + hh.entity_id"
+        @pointerleave="hoveredId = null"
       >
         <polygon
           :points="humanHexPoints(0, 0)"
