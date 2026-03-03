@@ -501,10 +501,7 @@ const emptyHexes = computed(() => {
           stroke-width="2"
           opacity="0.9"
         />
-        <text y="-4" text-anchor="middle" :fill="hh.color || '#f59e0b'" font-size="14">
-          &#9775;
-        </text>
-        <text y="12" text-anchor="middle" fill="#d4d4d8" font-size="8" font-weight="500">
+        <text y="4" text-anchor="middle" :fill="hh.color || '#f59e0b'" font-size="10" font-weight="500">
           {{ hh.display_name || 'Human' }}
         </text>
       </g>
