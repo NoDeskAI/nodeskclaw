@@ -717,23 +717,23 @@ function handleKeydown(e: KeyboardEvent) {
         <div class="flex items-center gap-3 text-xs text-muted-foreground">
           <span class="flex items-center gap-1">
             <ListChecks class="w-3.5 h-3.5" />
-            {{ t('workspaceView.bbTasks') }} {{ bbTaskCount }}
+            <span class="hidden xl:inline">{{ t('workspaceView.bbTasks') }}</span> {{ bbTaskCount }}
           </span>
           <span class="flex items-center gap-1" :class="bbBlockedCount > 0 ? 'text-amber-500' : ''">
             <AlertTriangle class="w-3.5 h-3.5" />
-            {{ t('workspaceView.bbBlocked') }} {{ bbBlockedCount }}
+            <span class="hidden xl:inline">{{ t('workspaceView.bbBlocked') }}</span> {{ bbBlockedCount }}
           </span>
           <span class="flex items-center gap-1" :class="bbOnlineCount > 0 ? 'text-green-500' : ''">
             <Wifi class="w-3.5 h-3.5" />
-            {{ t('workspaceView.bbOnline') }} {{ bbOnlineCount }}
+            <span class="hidden xl:inline">{{ t('workspaceView.bbOnline') }}</span> {{ bbOnlineCount }}
           </span>
           <span class="flex items-center gap-1">
             <Users class="w-3.5 h-3.5" />
-            {{ t('workspaceView.bbHumans') }} {{ humanCount }}
+            <span class="hidden xl:inline">{{ t('workspaceView.bbHumans') }}</span> {{ humanCount }}
           </span>
           <span class="flex items-center gap-1">
             <MapPin class="w-3.5 h-3.5" />
-            {{ t('workspaceView.bbHumanSeats') }} {{ humanSeatCount }}
+            <span class="hidden xl:inline">{{ t('workspaceView.bbHumanSeats') }}</span> {{ humanSeatCount }}
           </span>
         </div>
       </div>
