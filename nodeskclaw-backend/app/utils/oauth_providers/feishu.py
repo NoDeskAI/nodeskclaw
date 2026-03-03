@@ -12,6 +12,52 @@ logger = logging.getLogger(__name__)
 
 FEISHU_USER_TOKEN_URL = "https://open.feishu.cn/open-apis/authen/v2/oauth/token"
 FEISHU_USER_INFO_URL = "https://open.feishu.cn/open-apis/authen/v1/user_info"
+FEISHU_TENANT_TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+FEISHU_CONTACT_USER_URL = "https://open.feishu.cn/open-apis/contact/v3/users"
+
+
+async def _get_tenant_access_token(app_id: str, app_secret: str) -> str | None:
+    """通过 app_id/app_secret 获取 tenant_access_token。"""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                FEISHU_TENANT_TOKEN_URL,
+                json={"app_id": app_id, "app_secret": app_secret},
+            )
+            data = resp.json()
+            if data.get("code") == 0:
+                return data.get("tenant_access_token")
+            logger.warning("获取 tenant_access_token 失败: %s", data)
+    except Exception:
+        logger.exception("获取 tenant_access_token 异常")
+    return None
+
+
+async def _fetch_email_via_contact(
+    tenant_token: str, user_id: str, user_id_type: str = "user_id",
+) -> str | None:
+    """authen/v1/user_info 对部分用户不返回 email，
+    用 contact/v3/users 通讯录 API 做回退查询。
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{FEISHU_CONTACT_USER_URL}/{user_id}",
+                params={"user_id_type": user_id_type},
+                headers={"Authorization": f"Bearer {tenant_token}"},
+            )
+            data = resp.json()
+            if data.get("code") == 0:
+                user_data = data.get("data", {}).get("user", {})
+                email = user_data.get("email") or user_data.get("enterprise_email")
+                if email:
+                    logger.info("通讯录 API 补取到邮箱: %s", email)
+                    return email
+            else:
+                logger.warning("通讯录 API 查询失败: %s", data)
+    except Exception:
+        logger.exception("通讯录 API 查询异常")
+    return None
 
 
 class FeishuProvider(OAuthProvider):
@@ -73,11 +119,19 @@ class FeishuProvider(OAuthProvider):
                 raise ValueError(f"获取飞书用户信息失败: {info_data.get('msg')}")
 
             user = info_data["data"]
+            email = user.get("email") or user.get("enterprise_email") or ""
+
+            if not email and user.get("user_id"):
+                logger.info("user_info 未返回邮箱，尝试通讯录 API 补取 (user_id=%s)", user["user_id"])
+                tenant_token = await _get_tenant_access_token(app_id, app_secret)
+                if tenant_token:
+                    email = await _fetch_email_via_contact(tenant_token, user["user_id"]) or ""
+
             return OAuthUserInfo(
                 provider="feishu",
                 provider_user_id=user.get("open_id", ""),
                 provider_tenant_id=user.get("tenant_key"),
                 name=user.get("name", ""),
-                email=user.get("email") or user.get("enterprise_email"),
+                email=email or None,
                 avatar_url=user.get("avatar_url") or user.get("avatar_big") or user.get("avatar_middle"),
             )
