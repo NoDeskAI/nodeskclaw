@@ -59,6 +59,39 @@ def _unregister_deploy_task(deploy_id: str) -> None:
 _bg_tasks: set[asyncio.Task] = set()
 _PV_CLEANUP_DELAY = 15
 _PV_CLEANUP_RETRIES = 3
+_K8S_NAME_MAX = 63
+
+
+def _truncate_slug_preserve_suffix(slug: str, max_len: int) -> str:
+    """截断 slug 使其不超过 max_len，保留末尾随机后缀段，只截断前面的拼音部分。
+
+    Portal slug 格式: {pinyin-part}-{random_suffix_6chars}
+    Admin slug 格式:  {pinyin-part}
+    """
+    if len(slug) <= max_len:
+        return slug
+
+    last_dash = slug.rfind("-")
+    suffix = ""
+    prefix_part = slug
+
+    if last_dash > 0:
+        tail = slug[last_dash + 1:]
+        if len(tail) <= 8:
+            suffix = slug[last_dash:]
+            prefix_part = slug[:last_dash]
+
+    available = max_len - len(suffix)
+    if available < 4:
+        return slug[:max_len].rstrip("-")
+
+    truncated = prefix_part[:available]
+    inner_dash = truncated.rfind("-")
+    if inner_dash > available // 2:
+        truncated = truncated[:inner_dash]
+    truncated = truncated.rstrip("-")
+
+    return truncated + suffix
 
 
 def _schedule_pv_cleanup(k8s: K8sClient, namespace: str) -> None:
@@ -284,9 +317,16 @@ async def deploy_instance(
         slug = _re.sub(r"[^a-z0-9-]", "-", req.name.lower()).strip("-")
         slug = _re.sub(r"-{2,}", "-", slug) or "instance"
 
-    # namespace: nodeskclaw-{org_slug}-{instance_slug}
+    # namespace: nodeskclaw-{org_slug}-{instance_slug}，K8s 限制 63 字符
     org_slug = org.slug if org else "default"
-    namespace = req.namespace or f"nodeskclaw-{org_slug}-{slug}"
+    ns_prefix = f"nodeskclaw-{org_slug}-"
+    max_slug_len = _K8S_NAME_MAX - len(ns_prefix)
+    if len(slug) > max_slug_len:
+        original_slug = slug
+        slug = _truncate_slug_preserve_suffix(slug, max_slug_len)
+        logger.info("slug 截断: %s -> %s (max_slug_len=%d)", original_slug, slug, max_slug_len)
+
+    namespace = req.namespace or f"{ns_prefix}{slug}"
 
     # 自动注入 OPENCLAW_GATEWAY_TOKEN（用户未提供时自动生成）
     env_vars = dict(req.env_vars) if req.env_vars else {}

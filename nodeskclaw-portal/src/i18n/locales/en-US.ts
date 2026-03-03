@@ -671,6 +671,11 @@ const enUS = {
       status_503: "Service unavailable",
     },
   },
+  validation: {
+    instance: {
+      slug_too_long: "Slug too long, generated namespace would exceed 63-character limit",
+    },
+  },
 } as const
 
 export default enUS

@@ -8,9 +8,16 @@ import { pinyin } from 'pinyin-pro'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const orgStore = useOrgStore()
+
+const K8S_NAME_MAX = 63
+const NS_PREFIX_BASE = 'nodeskclaw-'.length + 1
 
 const name = ref('')
 const slug = ref('')
@@ -30,9 +37,13 @@ const currentStep = ref(1)
 
 const nameHasEdgeSpaces = computed(() => name.value.length > 0 && name.value !== name.value.trim())
 
+const orgSlugLen = computed(() => orgStore.currentOrg?.slug?.length ?? 9)
+const maxSlugInput = computed(() => K8S_NAME_MAX - NS_PREFIX_BASE - orgSlugLen.value - 1 - randomSuffix.length)
+const slugTooLong = computed(() => fullSlug.value.length > 0 && fullSlug.value.length + NS_PREFIX_BASE + orgSlugLen.value > K8S_NAME_MAX)
+
 const canGoNext = computed(() =>
   !!name.value.trim() && !nameHasEdgeSpaces.value
-  && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
+  && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
   && !!selectedImage.value && clusters.value.length > 0
 )
 
@@ -155,7 +166,7 @@ function selectImage(tag: string) {
   imageDropdownOpen.value = false
 }
 
-function toSlug(input: string): string {
+function toSlug(input: string, maxLen?: number): string {
   const segments = input.match(/[\u4e00-\u9fa5]+|[^\u4e00-\u9fa5]+/g) || []
   const parts: string[] = []
   for (const seg of segments) {
@@ -165,7 +176,7 @@ function toSlug(input: string): string {
       parts.push(seg.trim())
     }
   }
-  return parts
+  let result = parts
     .filter(Boolean)
     .join('-')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
@@ -174,6 +185,13 @@ function toSlug(input: string): string {
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-|-$/g, '')
+  if (maxLen && maxLen > 0 && result.length > maxLen) {
+    result = result.slice(0, maxLen)
+    const lastDash = result.lastIndexOf('-')
+    if (lastDash > maxLen / 2) result = result.slice(0, lastDash)
+    result = result.replace(/-+$/, '')
+  }
+  return result
 }
 
 const slugValid = computed(() => /^[a-z][a-z0-9-]*[a-z0-9]$/.test(slug.value) && slug.value.length >= 2)
@@ -204,7 +222,7 @@ function debouncedSlugCheck() {
 
 watch(name, (val) => {
   if (!slugManuallyEdited.value) {
-    slug.value = toSlug(val)
+    slug.value = toSlug(val, maxSlugInput.value)
     debouncedSlugCheck()
   }
 })
@@ -236,7 +254,7 @@ const llmReady = computed(() => {
 })
 
 const canDeploy = computed(() =>
-  !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value
+  !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
   && !!selectedImage.value && clusters.value.length > 0 && !deploying.value
   && llmReady.value
 )
@@ -398,6 +416,10 @@ async function handleDeploy() {
             <p v-else-if="slug && !slugValid" class="text-xs text-destructive flex items-center gap-1">
               <AlertCircle class="w-3 h-3" />
               须以小写字母开头，仅含小写字母、数字和连字符，至少 2 个字符
+            </p>
+            <p v-else-if="slugTooLong" class="text-xs text-destructive flex items-center gap-1">
+              <AlertCircle class="w-3 h-3" />
+              {{ t('validation.instance.slug_too_long') }}
             </p>
             <p v-else class="text-xs text-muted-foreground">
               根据名称自动生成，也可手动修改

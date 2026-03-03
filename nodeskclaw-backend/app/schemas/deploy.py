@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.llm import LlmConfigItem
 
@@ -10,7 +10,7 @@ from app.schemas.llm import LlmConfigItem
 class DeployRequest(BaseModel):
     cluster_id: str
     name: str
-    slug: str | None = None  # auto-generated from name if not provided
+    slug: str | None = Field(None, max_length=63)
     namespace: str | None = None  # auto-generated if not provided
     org_id: str | None = None  # 管理端显式传入；Portal 不传时 fallback 到 current_user
     image_version: str

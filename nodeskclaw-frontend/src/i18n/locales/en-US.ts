@@ -196,6 +196,11 @@ const enUS = {
     description: "Your account has not been granted management permissions. Please contact your organization admin to assign a role, then refresh the page.",
     logout: "Sign Out",
   },
+  validation: {
+    instance: {
+      slug_too_long: "Slug too long, generated namespace would exceed 63-character limit",
+    },
+  },
 } as const
 
 export default enUS

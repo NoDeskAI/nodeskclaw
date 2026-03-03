@@ -671,6 +671,11 @@ const zhCN = {
       status_503: "服务暂时不可用",
     },
   },
+  validation: {
+    instance: {
+      slug_too_long: "标识过长，生成的命名空间将超过 63 字符限制",
+    },
+  },
 } as const
 
 export default zhCN

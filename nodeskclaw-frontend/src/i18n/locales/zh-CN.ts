@@ -196,6 +196,11 @@ const zhCN = {
     description: "您的账号尚未被分配管理权限。请联系组织管理员为您分配角色后，刷新页面重试。",
     logout: "退出登录",
   },
+  validation: {
+    instance: {
+      slug_too_long: "标识过长，生成的命名空间将超过 63 字符限制",
+    },
+  },
 } as const
 
 export default zhCN
