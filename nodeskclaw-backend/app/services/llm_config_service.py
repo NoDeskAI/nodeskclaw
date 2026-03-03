@@ -156,6 +156,8 @@ def _ensure_gateway_config(config: dict, instance: Instance) -> None:
     - gateway.auth.token: shared secret for Control UI WebSocket auth
     - gateway.trustedProxies: Ingress Controller IPs for header forwarding
     - gateway.controlUi.allowInsecureAuth: bypass device pairing for non-localhost
+    - gateway.controlUi.dangerouslyDisableDeviceAuth: skip device identity pairing
+    - gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback: version-aware preserve
     """
     if "gateway" not in config:
         config["gateway"] = {}
@@ -169,7 +171,11 @@ def _ensure_gateway_config(config: dict, instance: Instance) -> None:
     if "trustedProxies" not in gw:
         gw["trustedProxies"] = list(TRUSTED_PROXY_CIDRS)
 
-    gw.setdefault("controlUi", {})["allowInsecureAuth"] = True
+    control_ui = gw.setdefault("controlUi", {})
+    control_ui["allowInsecureAuth"] = True
+    control_ui["dangerouslyDisableDeviceAuth"] = True
+    if "dangerouslyAllowHostHeaderOriginFallback" in control_ui:
+        control_ui["dangerouslyAllowHostHeaderOriginFallback"] = True
 
 
 def _set_default_agent_model(config: dict, providers: dict) -> None:

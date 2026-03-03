@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin, Focus, Minimize } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useViewTransition } from '@/composables/useViewTransition'
 import Workspace3D from '@/components/hex3d/Workspace3D.vue'
@@ -12,6 +12,8 @@ import ChatPanel from '@/components/chat/ChatPanel.vue'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
+import AgentCollaborationPanel from '@/components/workspace/AgentCollaborationPanel.vue'
+import CollaborationTimeline from '@/components/workspace/CollaborationTimeline.vue'
 import { useToast } from '@/composables/useToast'
 import { axialToWorld } from '@/composables/useHexLayout'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
@@ -41,11 +43,61 @@ const humanSeatCount = computed(() =>
 const { activeMode, isTransitioning, transitionTo2D, transitionTo3D } = useViewTransition()
 
 const chatOpen = ref(false)
-watch(chatOpen, (v) => store.setChatVisible(v))
+const chatSidebarTab = ref<'blackboard' | 'collab-flow'>('blackboard')
+const collabTimelineRef = ref<InstanceType<typeof CollaborationTimeline> | null>(null)
+const collabPanelOpen = ref(false)
+const collabPanelAgent = ref<{ instanceId: string; name: string } | null>(null)
+const collabPanelRef = ref<InstanceType<typeof AgentCollaborationPanel> | null>(null)
 const bbOpen = ref(false)
 const isFullscreen = ref(false)
+const focusMode = ref(false)
 const selectedAgentId = ref<string | null>(null)
 const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !== 'hidden')
+
+const CHAT_MIN_RATIO = 0.191
+const CHAT_MAX_RATIO = 0.618
+const CHAT_STORAGE_KEY = 'workspace-chat-width'
+
+function clampChatWidth(px: number): number {
+  const vw = window.innerWidth
+  return Math.round(Math.min(Math.max(px, vw * CHAT_MIN_RATIO), vw * CHAT_MAX_RATIO))
+}
+
+const chatWidth = ref(clampChatWidth(
+  Number(localStorage.getItem(CHAT_STORAGE_KEY)) || 400,
+))
+
+const isDraggingChat = ref(false)
+
+function onResizeHandlePointerDown(e: PointerEvent) {
+  e.preventDefault()
+  isDraggingChat.value = true
+  const onMove = (ev: PointerEvent) => {
+    chatWidth.value = clampChatWidth(window.innerWidth - ev.clientX)
+  }
+  const onUp = () => {
+    isDraggingChat.value = false
+    localStorage.setItem(CHAT_STORAGE_KEY, String(chatWidth.value))
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
+
+function onWindowResize() {
+  if (chatOpen.value) {
+    chatWidth.value = clampChatWidth(chatWidth.value)
+  }
+}
+
+function toggleFocusMode() {
+  focusMode.value = !focusMode.value
+}
+
+watch(chatOpen, (v) => {
+  store.setChatVisible(v)
+})
 
 interface SelectedHex {
   q: number
@@ -118,8 +170,9 @@ onMounted(async () => {
   await store.fetchTopology(workspaceId.value)
   await store.fetchMembers(workspaceId.value)
 
-  store.connectSSE(workspaceId.value)
+  store.connectSSE(workspaceId.value, onSSEEvent)
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('resize', onWindowResize)
 
   const focusAgentId = route.query.focus_agent as string | undefined
   if (focusAgentId) {
@@ -136,6 +189,7 @@ onMounted(async () => {
 onUnmounted(() => {
   store.disconnectSSE()
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', onWindowResize)
 })
 
 watch(workspaceId, async (newId, oldId) => {
@@ -144,9 +198,37 @@ watch(workspaceId, async (newId, oldId) => {
     await store.fetchWorkspace(newId)
     await store.fetchBlackboard(newId)
     await store.fetchTopology(newId)
-    store.connectSSE(newId)
+    store.connectSSE(newId, onSSEEvent)
   }
 })
+
+function onSSEEvent(event: string, data: Record<string, unknown>) {
+  if (event === 'agent:collaboration') {
+    const instanceId = data.instance_id as string
+    const target = data.target as string
+    if (instanceId && target) {
+      if (activeMode.value === '2d') {
+        workspace2dRef.value?.triggerMessageFlow(instanceId, target)
+      } else {
+        workspace3dRef.value?.triggerMessageFlow(instanceId, target)
+      }
+    }
+    if (collabPanelOpen.value && collabPanelRef.value) {
+      collabPanelRef.value.addLiveMessage(data)
+    }
+    if (chatSidebarTab.value === 'collab-flow' && collabTimelineRef.value) {
+      collabTimelineRef.value.addLiveMessage(data)
+    }
+  }
+}
+
+function onReplayFlow(sourceInstanceId: string, target: string) {
+  if (activeMode.value === '2d') {
+    workspace2dRef.value?.triggerMessageFlow(sourceInstanceId, target)
+  } else {
+    workspace3dRef.value?.triggerMessageFlow(sourceInstanceId, target)
+  }
+}
 
 function toggleMode() {
   if (isTransitioning.value) return
@@ -190,6 +272,7 @@ function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | '
 
 function onAgentDblClick(_id: string) {
   clickHandled = true
+  collabPanelOpen.value = false
   chatOpen.value = true
 }
 
@@ -204,7 +287,19 @@ function onHexAction(action: string) {
       break
     }
     case 'open-chat':
+      collabPanelOpen.value = false
       chatOpen.value = true
+      hexDrawerOpen.value = false
+      break
+    case 'view-collaboration':
+      if (selectedHex.value?.agentId) {
+        const agent = agents.value.find(a => a.instance_id === selectedHex.value!.agentId)
+        if (agent) {
+          collabPanelAgent.value = { instanceId: agent.instance_id, name: agent.display_name || agent.name }
+          chatOpen.value = false
+          collabPanelOpen.value = true
+        }
+      }
       hexDrawerOpen.value = false
       break
     case 'view-detail':
@@ -254,16 +349,15 @@ function onHexAction(action: string) {
     case 'rename-corridor':
       openRenameDialog()
       break
+    case 'rename-agent':
+      openRenameAgentDialog()
+      break
     case 'remove-corridor':
       if (selectedHex.value?.entityId) {
         store.deleteCorridorHex(workspaceId.value, selectedHex.value.entityId)
         selectedHex.value = null
         hexDrawerOpen.value = false
       }
-      break
-    case 'view-channel':
-      openChannelConfig()
-      hexDrawerOpen.value = false
       break
     case 'change-agent-color':
       if (selectedAgentId.value) {
@@ -285,6 +379,9 @@ function onHexAction(action: string) {
         selectedHex.value = null
         hexDrawerOpen.value = false
       }
+      break
+    case 'rename-human':
+      openRenameHumanDialog()
       break
     case 'focus-hex': {
       const q = selectedHex.value?.q
@@ -334,16 +431,76 @@ async function handleRenameCorridor() {
   }
 }
 
+const showRenameHumanDialog = ref(false)
+const renameHumanValue = ref('')
+const renameHumanSaving = ref(false)
+const renameHumanHexId = ref('')
+
+function openRenameHumanDialog() {
+  renameHumanHexId.value = selectedHex.value?.entityId || ''
+  const node = store.topologyNodes.find((n: any) => n.entity_id === renameHumanHexId.value && n.node_type === 'human')
+  renameHumanValue.value = node?.display_name || ''
+  showRenameHumanDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameHuman() {
+  const name = renameHumanValue.value.trim()
+  if (!renameHumanHexId.value) return
+  renameHumanSaving.value = true
+  try {
+    await store.renameHumanHex(workspaceId.value, renameHumanHexId.value, name)
+    toast.success(t('hexAction.humanRenamed'))
+    showRenameHumanDialog.value = false
+  } finally {
+    renameHumanSaving.value = false
+  }
+}
+
+const showRenameAgentDialog = ref(false)
+const renameAgentDisplayName = ref('')
+const renameAgentLabel = ref('')
+const renameAgentSaving = ref(false)
+const renameAgentInstanceId = ref('')
+const renameAgentOriginalName = ref('')
+
+function openRenameAgentDialog() {
+  if (!selectedHex.value?.agentId) return
+  const agent = agents.value.find(a => a.instance_id === selectedHex.value!.agentId)
+  if (!agent) return
+  renameAgentInstanceId.value = agent.instance_id
+  renameAgentOriginalName.value = agent.name
+  renameAgentDisplayName.value = agent.display_name || ''
+  renameAgentLabel.value = agent.label || ''
+  showRenameAgentDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameAgent() {
+  if (!renameAgentInstanceId.value) return
+  renameAgentSaving.value = true
+  try {
+    await store.updateAgent(workspaceId.value, renameAgentInstanceId.value, {
+      display_name: renameAgentDisplayName.value.trim(),
+      label: renameAgentLabel.value.trim(),
+    })
+    toast.success(t('hexAction.agentRenamed'))
+    showRenameAgentDialog.value = false
+  } finally {
+    renameAgentSaving.value = false
+  }
+}
+
 const showMemberPicker = ref(false)
 const pendingHumanHex = ref<{ q: number; r: number } | null>(null)
 
 const availableMembers = computed(() => store.members)
 
-async function pickMember(userId: string) {
+async function pickMember(userId: string, userName?: string) {
   const hex = pendingHumanHex.value
   if (!hex) return
   showMemberPicker.value = false
-  await store.createHumanHex(workspaceId.value, userId, hex.q, hex.r)
+  await store.createHumanHex(workspaceId.value, userId, hex.q, hex.r, undefined, userName || undefined)
   pendingHumanHex.value = null
 }
 
@@ -371,52 +528,6 @@ async function pickAgentColor(color: string) {
   showAgentColorPicker.value = false
   await store.updateAgentThemeColor(workspaceId.value, agentId, color)
   pendingAgentColorId.value = ''
-}
-
-const showChannelDialog = ref(false)
-const channelHexId = ref('')
-const channelMode = ref<'webhook' | 'websocket'>('webhook')
-const channelChatId = ref('')
-const channelAppId = ref('')
-const channelAppSecret = ref('')
-const channelSaving = ref(false)
-
-function openChannelConfig() {
-  channelHexId.value = selectedHex.value?.entityId || ''
-  const node = store.topologyNodes.find((n: any) => n.entity_id === channelHexId.value)
-  const cfg = node?.extra?.channel_config as Record<string, string> | undefined
-  if (cfg) {
-    channelMode.value = (cfg.mode === 'websocket' ? 'websocket' : 'webhook')
-    channelChatId.value = cfg.chat_id || ''
-    channelAppId.value = cfg.app_id || ''
-    channelAppSecret.value = cfg.app_secret || ''
-  } else {
-    channelMode.value = 'webhook'
-    channelChatId.value = ''
-    channelAppId.value = ''
-    channelAppSecret.value = ''
-  }
-  showChannelDialog.value = true
-}
-
-async function saveChannelConfig() {
-  const hexId = channelHexId.value
-  if (!hexId) return
-  channelSaving.value = true
-  try {
-    const config: Record<string, string> = {
-      chat_id: channelChatId.value,
-      mode: channelMode.value,
-    }
-    if (channelMode.value === 'websocket') {
-      config.app_id = channelAppId.value
-      config.app_secret = channelAppSecret.value
-    }
-    await store.updateHumanHexChannel(workspaceId.value, hexId, 'feishu', config)
-    showChannelDialog.value = false
-  } finally {
-    channelSaving.value = false
-  }
 }
 
 function onCanvasAreaClick() {
@@ -515,6 +626,11 @@ function handleKeydown(e: KeyboardEvent) {
   if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
 
   if (e.key === 'Escape') {
+    if (focusMode.value) {
+      focusMode.value = false
+      e.preventDefault()
+      return
+    }
     if (isMovingHex.value) {
       cancelMoveMode()
     } else {
@@ -552,7 +668,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden bg-background">
+  <div class="flex flex-col h-screen overflow-hidden bg-background" :class="{ 'drag-no-select': isDraggingChat }">
     <!-- Toolbar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-border bg-background/80 backdrop-blur-sm shrink-0 z-10">
       <div class="flex items-center gap-3">
@@ -686,6 +802,8 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topology?.nodes"
+            :topology-edges="store.topologyEdges"
+            :message-flow-stats="store.messageFlowStats"
             :is-moving-hex="isMovingHex"
             :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
@@ -708,6 +826,8 @@ function handleKeydown(e: KeyboardEvent) {
             :selected-agent-id="selectedAgentId"
             :selected-hex="selectedHexPos"
             :topology-nodes="store.topologyNodes"
+            :topology-edges="store.topologyEdges"
+            :message-flow-stats="store.messageFlowStats"
             :is-moving-hex="isMovingHex"
             :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
@@ -743,6 +863,10 @@ function handleKeydown(e: KeyboardEvent) {
                 <span class="text-foreground/70">{{ t('workspaceView.panCanvas') }}</span>
               </div>
               <div class="flex justify-between gap-4">
+                <span>{{ t('workspaceView.rightDrag') }}</span>
+                <span class="text-foreground/70">{{ t('workspaceView.panCanvas') }}</span>
+              </div>
+              <div class="flex justify-between gap-4">
                 <span>+ / -</span>
                 <span class="text-foreground/70">{{ t('workspaceView.zoom') }}</span>
               </div>
@@ -773,24 +897,86 @@ function handleKeydown(e: KeyboardEvent) {
       <Transition name="chat-slide">
         <div
           v-if="chatOpen"
-          class="w-[400px] border-l border-border flex flex-col shrink-0 bg-card"
+          class="border-l border-border flex shrink-0 bg-card relative"
+          :style="{ width: chatWidth + 'px' }"
         >
-          <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
-            <div class="flex items-center gap-2">
-              <MessageSquare class="w-4 h-4 text-primary" />
-              <span class="text-sm font-medium">{{ ws?.name || 'Workspace' }}</span>
-              <span class="text-xs text-muted-foreground">{{ t('workspaceView.groupChat') }}</span>
-            </div>
-            <button
-              class="p-1 rounded hover:bg-muted transition-colors"
-              @click="chatOpen = false"
-            >
-              <X class="w-4 h-4" />
-            </button>
+          <!-- Resize handle -->
+          <div
+            class="absolute left-0 top-0 bottom-0 w-1 z-10 cursor-col-resize group"
+            @pointerdown="onResizeHandlePointerDown"
+          >
+            <div
+              class="absolute inset-y-0 left-0 w-1 transition-colors"
+              :class="isDraggingChat ? 'bg-primary' : 'group-hover:bg-primary/50'"
+            />
           </div>
-          <ChatPanel
+          <div class="flex flex-col flex-1 min-w-0">
+            <div class="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+              <div class="flex items-center gap-1">
+                <button
+                  class="px-2.5 py-1 text-xs rounded-md transition-colors"
+                  :class="chatSidebarTab === 'blackboard' ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'"
+                  @click="chatSidebarTab = 'blackboard'"
+                >
+                  {{ t('workspaceView.centralBlackboardChat') }}
+                </button>
+                <button
+                  class="px-2.5 py-1 text-xs rounded-md transition-colors"
+                  :class="chatSidebarTab === 'collab-flow' ? 'bg-violet-500/15 text-violet-400 font-medium' : 'text-muted-foreground hover:text-foreground'"
+                  @click="chatSidebarTab = 'collab-flow'"
+                >
+                  {{ t('workspaceView.collabFlow') }}
+                </button>
+              </div>
+              <div class="flex items-center gap-1">
+                <button
+                  v-if="chatSidebarTab === 'blackboard'"
+                  class="p-1 rounded hover:bg-muted transition-colors"
+                  :title="focusMode ? t('workspaceView.exitFocus') : t('workspaceView.enterFocus')"
+                  @click="toggleFocusMode"
+                >
+                  <Minimize v-if="focusMode" class="w-4 h-4" />
+                  <Focus v-else class="w-4 h-4" />
+                </button>
+                <button
+                  class="p-1 rounded hover:bg-muted transition-colors"
+                  @click="chatOpen = false"
+                >
+                  <X class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <ChatPanel
+              v-if="chatSidebarTab === 'blackboard'"
+              :workspace-id="workspaceId"
+              class="flex-1 min-h-0"
+            />
+            <CollaborationTimeline
+              v-else
+              ref="collabTimelineRef"
+              :workspace-id="workspaceId"
+              :agents="agents"
+              class="flex-1 min-h-0"
+              @replay-flow="onReplayFlow"
+            />
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Agent Collaboration Panel -->
+      <Transition name="chat-slide">
+        <div
+          v-if="collabPanelOpen && collabPanelAgent"
+          class="border-l border-border flex shrink-0 bg-card"
+          style="width: 400px"
+        >
+          <AgentCollaborationPanel
+            ref="collabPanelRef"
             :workspace-id="workspaceId"
+            :instance-id="collabPanelAgent.instanceId"
+            :agent-name="collabPanelAgent.name"
             class="flex-1 min-h-0"
+            @close="collabPanelOpen = false"
           />
         </div>
       </Transition>
@@ -811,6 +997,7 @@ function handleKeydown(e: KeyboardEvent) {
       :agent-info="hexAgentInfo"
       :entity-info="selectedHex?.entityId ? { id: selectedHex.entityId, name: hexEntityName } : undefined"
       :chat-sidebar-open="chatOpen"
+      :chat-sidebar-width="chatWidth"
       @close="closeHexDrawer"
       @action="onHexAction"
     />
@@ -849,6 +1036,89 @@ function handleKeydown(e: KeyboardEvent) {
       </Transition>
     </Teleport>
 
+    <!-- Rename Human Hex Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameHumanDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameHumanDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameHumanTitle') }}</h3>
+            <input
+              v-model="renameHumanValue"
+              type="text"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              :placeholder="t('hexAction.humanNamePlaceholder')"
+              @keydown.enter="handleRenameHuman"
+            />
+            <div class="flex justify-end gap-3">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameHumanDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameHumanSaving"
+                @click="handleRenameHuman"
+              >
+                {{ renameHumanSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Rename Agent Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameAgentDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameAgentDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameAgentTitle') }}</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('hexAction.agentDisplayNameLabel') }}</label>
+                <input
+                  v-model="renameAgentDisplayName"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  :placeholder="renameAgentOriginalName"
+                  @keydown.enter="handleRenameAgent"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('hexAction.agentLabelFieldLabel') }}</label>
+                <input
+                  v-model="renameAgentLabel"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  :placeholder="t('hexAction.agentLabelPlaceholder')"
+                  @keydown.enter="handleRenameAgent"
+                />
+              </div>
+            </div>
+            <div class="flex justify-end gap-3">
+              <button
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameAgentDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameAgentSaving"
+                @click="handleRenameAgent"
+              >
+                {{ renameAgentSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Member Picker Dialog -->
     <Teleport to="body">
       <Transition name="fade">
@@ -870,7 +1140,7 @@ function handleKeydown(e: KeyboardEvent) {
                 v-for="member in availableMembers"
                 :key="member.user_id"
                 class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-left"
-                @click="pickMember(member.user_id)"
+                @click="pickMember(member.user_id, member.user_name)"
               >
                 <div
                   v-if="member.user_avatar_url"
@@ -957,82 +1227,26 @@ function handleKeydown(e: KeyboardEvent) {
       </Transition>
     </Teleport>
 
-    <!-- Channel Config Dialog -->
+    <!-- Focus Mode Dialog -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="showChannelDialog" class="fixed inset-0 z-50 flex items-center justify-center">
-          <div class="absolute inset-0 bg-black/50" @click="showChannelDialog = false" />
-          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-lg space-y-4">
-            <h3 class="text-sm font-semibold">{{ t('channel.configTitle') }}</h3>
-
-            <div class="space-y-3">
-              <label class="block text-xs text-muted-foreground">{{ t('channel.mode') }}</label>
-              <div class="flex gap-2">
-                <button
-                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
-                  :class="channelMode === 'webhook' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
-                  @click="channelMode = 'webhook'"
-                >
-                  Webhook
-                </button>
-                <button
-                  class="flex-1 px-3 py-2 rounded-lg border text-sm transition-colors"
-                  :class="channelMode === 'websocket' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'"
-                  @click="channelMode = 'websocket'"
-                >
-                  WebSocket
-                </button>
-              </div>
-
-              <div>
-                <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.chatId') }}</label>
-                <input
-                  v-model="channelChatId"
-                  type="text"
-                  class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="oc_xxxxx"
-                />
-              </div>
-
-              <template v-if="channelMode === 'websocket'">
-                <div>
-                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appId') }}</label>
-                  <input
-                    v-model="channelAppId"
-                    type="text"
-                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="cli_xxxxx"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs text-muted-foreground mb-1">{{ t('channel.appSecret') }}</label>
-                  <input
-                    v-model="channelAppSecret"
-                    type="password"
-                    class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </template>
-
-              <p class="text-xs text-muted-foreground">
-                {{ channelMode === 'webhook' ? t('channel.webhookHint') : t('channel.websocketHint') }}
-              </p>
+        <div v-if="focusMode" class="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm">
+          <div class="flex items-center justify-between px-5 py-2.5 border-b border-border shrink-0">
+            <div class="flex items-center gap-2">
+              <MessageSquare class="w-4 h-4 text-primary" />
+              <span class="text-sm font-semibold">{{ ws?.name }}</span>
+              <span class="text-xs text-muted-foreground">{{ t('workspaceView.focusMode') }}</span>
             </div>
-
-            <div class="flex justify-end gap-3 pt-2">
-              <button
-                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-                @click="showChannelDialog = false"
-              >
-                {{ t('common.cancel') }}
-              </button>
-              <button
-                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
-                :disabled="channelSaving || !channelChatId"
-                @click="saveChannelConfig"
-              >
-                {{ channelSaving ? t('common.saving') : t('common.save') }}
-              </button>
+            <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="focusMode = false">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex-1 flex min-h-0">
+            <div class="flex-1 flex flex-col min-h-0 min-w-0 border-r border-border">
+              <BlackboardOverlay :open="true" :workspace-id="workspaceId" embedded @close="focusMode = false" />
+            </div>
+            <div class="flex-1 flex flex-col min-h-0 min-w-0">
+              <ChatPanel :workspace-id="workspaceId" class="flex-1 min-h-0" />
             </div>
           </div>
         </div>
@@ -1049,8 +1263,11 @@ function handleKeydown(e: KeyboardEvent) {
 }
 .chat-slide-enter-from,
 .chat-slide-leave-to {
-  width: 0 !important;
+  width: 0px !important;
   opacity: 0;
+}
+.drag-no-select {
+  user-select: none;
 }
 .fade-enter-active,
 .fade-leave-active {

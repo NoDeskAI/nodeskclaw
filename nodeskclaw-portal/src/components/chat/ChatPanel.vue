@@ -59,6 +59,11 @@ function agentLabel(a: AgentBrief): string {
   return a.display_name || a.name
 }
 
+function agentSublabel(senderId: string): string | null {
+  const a = agents.value.find(x => x.instance_id === senderId)
+  return a?.label ?? null
+}
+
 function agentSlug(senderId: string): string | null {
   const a = agents.value.find(x => x.instance_id === senderId)
   return a?.slug ?? null
@@ -311,6 +316,7 @@ const editor = useEditor({
       suggestion: {
         pluginKey: AGENT_MENTION_KEY,
         char: '@',
+        allowedPrefixes: null,
         items: ({ query }: { query: string }) => {
           const q = query.toLowerCase()
           return agents.value
@@ -319,6 +325,7 @@ const editor = useEditor({
             .map(a => ({
               id: a.instance_id,
               label: agentLabel(a),
+              sublabel: a.label,
               status: a.status,
               slug: a.slug,
             }))
@@ -560,6 +567,11 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 :title="msg.sender_name"
               >{{ msg.sender_name }}</span>
               <span
+                v-if="msg.sender_type === 'agent' && agentSublabel(msg.sender_id)"
+                class="text-[10px] text-muted-foreground truncate max-w-[100px]"
+                :title="agentSublabel(msg.sender_id)!"
+              >{{ agentSublabel(msg.sender_id) }}</span>
+              <span
                 v-if="msg.sender_type === 'agent' && agentSlug(msg.sender_id)"
                 class="slug-tag"
                 @click="copySlug(msg.sender_id)"
@@ -603,7 +615,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               </button>
             </div>
             <div
-              v-else
+              v-else-if="msg.sender_type !== 'agent'"
               class="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap bg-primary text-primary-foreground"
             >
               <template v-for="(seg, si) in parseContent(msg.content)" :key="si">
@@ -646,7 +658,10 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               @mouseenter="updateSuggestionIndex(mentionState!, idx)"
             >
               <Bot class="w-4 h-4 shrink-0" :style="{ color: getAgentColor(item.id) }" />
-              <span class="font-medium truncate">{{ item.label }}</span>
+              <div class="flex flex-col min-w-0 flex-1">
+                <span class="font-medium truncate">{{ item.label }}</span>
+                <span v-if="item.sublabel" class="text-[10px] text-muted-foreground truncate">{{ item.sublabel }}</span>
+              </div>
               <span class="text-xs text-muted-foreground ml-auto shrink-0">{{ item.status }}</span>
             </button>
           </div>

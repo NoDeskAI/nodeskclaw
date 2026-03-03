@@ -56,6 +56,32 @@ def _unregister_deploy_task(deploy_id: str) -> None:
     _running_tasks.pop(deploy_id, None)
 
 
+_bg_tasks: set[asyncio.Task] = set()
+_PV_CLEANUP_DELAY = 15
+_PV_CLEANUP_RETRIES = 3
+
+
+def _schedule_pv_cleanup(k8s: K8sClient, namespace: str) -> None:
+    """Namespace 删除后，延迟清理残留的 Released PV。"""
+    async def _run():
+        for attempt in range(1, _PV_CLEANUP_RETRIES + 1):
+            await asyncio.sleep(_PV_CLEANUP_DELAY)
+            try:
+                deleted = await k8s.cleanup_released_pvs(namespace)
+                if deleted:
+                    logger.info("后台清理了 %d 个 Released PV (namespace=%s)", deleted, namespace)
+                return
+            except Exception as e:
+                logger.warning(
+                    "后台清理 PV 第 %d 次失败 (namespace=%s): %s",
+                    attempt, namespace, e,
+                )
+
+    task = asyncio.create_task(_run())
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
 async def cancel_deploy(deploy_id: str) -> str:
     """立即取消部署：清理 K8s namespace + 更新 DB + 杀掉后台协程。
 
@@ -101,6 +127,7 @@ async def cancel_deploy(deploy_id: str) -> str:
                 await k8s.core.delete_namespace(instance.namespace)
                 ns_cleaned = True
                 logger.info("取消部署，已清理命名空间: %s", instance.namespace)
+                _schedule_pv_cleanup(k8s, instance.namespace)
         except Exception:
             logger.warning("取消部署，清理命名空间 %s 失败", instance.namespace)
 
@@ -699,6 +726,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     await k8s.core.delete_namespace(ctx.namespace)
                     ns_cleaned = True
                     logger.info("部署失败，已清理命名空间: %s", ctx.namespace)
+                    _schedule_pv_cleanup(k8s, ctx.namespace)
                 except Exception:
                     logger.warning("清理命名空间 %s 失败", ctx.namespace)
 
@@ -735,6 +763,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 await cleanup_k8s.core.delete_namespace(ctx.namespace)
                 ns_cleaned = True
                 logger.info("部署异常，已清理命名空间: %s", ctx.namespace)
+                _schedule_pv_cleanup(cleanup_k8s, ctx.namespace)
             except Exception:
                 logger.warning("清理命名空间 %s 失败", ctx.namespace)
 

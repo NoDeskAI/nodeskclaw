@@ -93,7 +93,7 @@ if [ -d "${IMAGE_DATA_DIR}/extensions" ]; then
 fi
 
 # 3c. 确保所有子目录存在（新版本可能新增了子目录）
-for subdir in agents/main/sessions config credentials extensions workspace memory data temp canvas devices identity cron; do
+for subdir in agents/main/sessions config credentials extensions workspace memory data temp canvas devices identity cron skills; do
   mkdir -p "${PVC_DATA_DIR}/${subdir}"
 done
 

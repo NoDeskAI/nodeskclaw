@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSvgZoom } from '@/composables/useSvgZoom'
 import { axialToWorld, hexPolygonPoints, HEX_SIZE } from '@/composables/useHexLayout'
-import type { AgentBrief } from '@/stores/workspace'
+import { useTopologyBFS } from '@/composables/useTopologyBFS'
+import { useFlowAnimation2D } from '@/composables/useFlowAnimation'
+import type { AgentBrief, MessageFlowPair, TopologyNode as StoreTopologyNode, TopologyEdge } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -23,6 +25,8 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
+  topologyEdges?: TopologyEdge[]
+  messageFlowStats?: MessageFlowPair[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -41,11 +45,47 @@ function focusOnHex(q: number, r: number) {
   focusOnPosition(x * SCALE, y * SCALE)
 }
 
-defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex })
+const SCALE = 60
+
+const storeNodes = computed(() => (props.topologyNodes || []) as StoreTopologyNode[])
+const storeEdges = computed(() => props.topologyEdges || [] as TopologyEdge[])
+const { findPath, findReachableEndpoints } = useTopologyBFS(storeNodes, storeEdges)
+const { particles, pulses, triggerFlow, getParticlePosition, dispose: disposeAnim } = useFlowAnimation2D(SCALE)
+
+function triggerMessageFlow(sourceInstanceId: string, target: string) {
+  const nodes = props.topologyNodes || []
+  const sourceNode = nodes.find(n => n.entity_id === sourceInstanceId)
+  if (!sourceNode) return
+
+  if (target.startsWith('agent:')) {
+    const targetName = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'agent' && n.display_name?.toLowerCase() === targetName.toLowerCase())
+    if (targetNode) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, targetNode.hex_q, targetNode.hex_r)
+      if (path) triggerFlow(path)
+    }
+  } else if (target.startsWith('human:')) {
+    const targetId = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'human' && n.entity_id === targetId)
+    if (targetNode) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, targetNode.hex_q, targetNode.hex_r)
+      if (path) triggerFlow(path)
+    }
+  } else if (target === 'broadcast') {
+    const endpoints = findReachableEndpoints(sourceNode.hex_q, sourceNode.hex_r)
+    for (const ep of endpoints) {
+      const path = findPath(sourceNode.hex_q, sourceNode.hex_r, ep.q, ep.r)
+      if (path) triggerFlow(path)
+    }
+  }
+}
+
+onUnmounted(() => disposeAnim())
+
+defineExpose({ zoomIn, zoomOut, resetView, panBy, focusOnHex, triggerMessageFlow })
 
 const hoveredId = ref<string | null>(null)
 
-const SCALE = 60
 const HEX_RADIUS = HEX_SIZE * SCALE * 0.85
 const BB_RADIUS = HEX_RADIUS * 1.15
 const GRID_RANGE = 8
@@ -187,6 +227,29 @@ function humanHexPoints(cx: number, cy: number): string {
   return hexPolygonPoints(cx, cy, HUMAN_RADIUS)
 }
 
+const heatLines = computed(() => {
+  const stats = props.messageFlowStats
+  if (!stats || stats.length === 0) return []
+  const maxCount = Math.max(...stats.map(s => s.count))
+  if (maxCount === 0) return []
+  return stats.map(s => {
+    const [sq, sr] = s.sender_hex_key.split(',').map(Number)
+    const [rq, rr] = s.receiver_hex_key.split(',').map(Number)
+    const from = axialToWorld(sq, sr)
+    const to = axialToWorld(rq, rr)
+    const ratio = s.count / maxCount
+    return {
+      key: s.sender_hex_key + '-' + s.receiver_hex_key,
+      x1: from.x * SCALE,
+      y1: from.y * SCALE,
+      x2: to.x * SCALE,
+      y2: to.y * SCALE,
+      width: 1 + 4 * ratio,
+      opacity: 0.15 + 0.45 * ratio,
+    }
+  })
+})
+
 const emptyHexes = computed(() => {
   const occupied = new Set<string>()
   occupied.add('0:0')
@@ -212,6 +275,7 @@ const emptyHexes = computed(() => {
     class="w-full h-full"
     viewBox="-400 -300 800 600"
     preserveAspectRatio="xMidYMid meet"
+    @contextmenu.prevent
   >
     <defs>
       <radialGradient id="grid-fade" cx="50%" cy="50%" r="50%">
@@ -241,6 +305,19 @@ const emptyHexes = computed(() => {
         opacity="0.18"
         mask="url(#grid-mask)"
       />
+
+      <!-- Heatmap overlay -->
+      <g class="heat-layer" v-if="heatLines.length">
+        <line
+          v-for="hl in heatLines"
+          :key="hl.key"
+          :x1="hl.x1" :y1="hl.y1" :x2="hl.x2" :y2="hl.y2"
+          stroke="#a78bfa"
+          :stroke-width="hl.width"
+          :opacity="hl.opacity"
+          stroke-linecap="round"
+        />
+      </g>
 
       <!-- Empty hex clickable areas -->
       <g
@@ -350,13 +427,22 @@ const emptyHexes = computed(() => {
           {{ agent.sse_connected ? agent.status : 'disconnected' }}
         </text>
         <text
-          y="0"
+          :y="agent.label ? -4 : 0"
           text-anchor="middle"
           :fill="agent.sse_connected ? 'white' : '#9ca3af'"
           font-size="11"
           font-weight="500"
         >
           {{ agent.display_name || agent.name }}
+        </text>
+        <text
+          v-if="agent.label"
+          y="10"
+          text-anchor="middle"
+          fill="#9ca3af"
+          font-size="8"
+        >
+          {{ agent.label }}
         </text>
       </g>
 
@@ -417,6 +503,34 @@ const emptyHexes = computed(() => {
         <text y="12" text-anchor="middle" fill="#d4d4d8" font-size="8" font-weight="500">
           {{ hh.display_name || 'Human' }}
         </text>
+      </g>
+
+      <!-- Message flow animation particles -->
+      <g class="flow-anim-layer">
+        <circle
+          v-for="p in particles"
+          :key="p.id"
+          :cx="getParticlePosition(p).x"
+          :cy="getParticlePosition(p).y"
+          r="4"
+          :fill="p.color"
+          :opacity="1 - p.progress * 0.5"
+        />
+      </g>
+
+      <!-- Hex pulse on message arrival -->
+      <g class="pulse-layer">
+        <template v-for="pulse in pulses" :key="pulse.key">
+          <circle
+            :cx="axialToWorld(Number(pulse.key.split(',')[0]), Number(pulse.key.split(',')[1])).x * SCALE"
+            :cy="axialToWorld(Number(pulse.key.split(',')[0]), Number(pulse.key.split(',')[1])).y * SCALE"
+            :r="HEX_RADIUS * 0.6"
+            fill="none"
+            stroke="#a78bfa"
+            stroke-width="2"
+            class="animate-hex-pulse"
+          />
+        </template>
       </g>
 
       <!-- Selected hex highlight for agents -->
@@ -499,6 +613,14 @@ const emptyHexes = computed(() => {
 }
 .animate-move-source {
   animation: move-source-pulse 1s ease-in-out infinite;
+}
+
+@keyframes hex-pulse {
+  0% { r: 10; opacity: 0.8; }
+  100% { r: 30; opacity: 0; }
+}
+.animate-hex-pulse {
+  animation: hex-pulse 0.5s ease-out forwards;
 }
 
 .move-target-hex {

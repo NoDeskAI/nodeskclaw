@@ -999,6 +999,16 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移：已为 instances 表添加 agent_theme_color 列")
 
+        col = (await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'instances' AND column_name = 'agent_label'"
+        ))).first()
+        if col is None:
+            await conn.execute(text(
+                "ALTER TABLE instances ADD COLUMN agent_label VARCHAR(128)"
+            ))
+            logger.info("自动迁移：已为 instances 表添加 agent_label 列")
+
     # ── 迁移 24: 为已有实例补建 InstanceMember 记录 ──
     async with engine.begin() as conn:
         await conn.execute(text("""
@@ -1011,7 +1021,19 @@ async def lifespan(app: FastAPI):
         affected = conn.info.get("rowcount", 0)
         logger.info("迁移 24：为已有实例补建 InstanceMember 记录，影响 %s 行", affected)
 
-    # ── 迁移 25: genes 表新增 synced_at 列（GeneHub 缓存降级） ──
+    # ── 迁移 25: human_hexes 新增 display_name 列 ──
+    async with engine.begin() as conn:
+        hh_dn_col = await conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'human_hexes' AND column_name = 'display_name'"
+        ))
+        if hh_dn_col.first() is None:
+            await conn.execute(text(
+                "ALTER TABLE human_hexes ADD COLUMN display_name VARCHAR(100)"
+            ))
+            logger.info("自动迁移：已为 human_hexes 表添加 display_name 列")
+
+    # ── 迁移 26: genes 表新增 synced_at 列（GeneHub 缓存降级） ──
     async with engine.begin() as conn:
         col = await conn.execute(text(
             "SELECT column_name FROM information_schema.columns "
@@ -1021,7 +1043,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE genes ADD COLUMN synced_at TIMESTAMPTZ"
             ))
-            logger.info("自动迁移 25：已为 genes 表添加 synced_at 列")
+            logger.info("自动迁移 26：已为 genes 表添加 synced_at 列")
 
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，

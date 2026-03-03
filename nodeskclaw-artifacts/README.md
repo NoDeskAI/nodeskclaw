@@ -72,9 +72,9 @@ cd nodeskclaw-artifacts/openclaw-image
 
 | 文件 | 作用 |
 |------|------|
-| `docker-entrypoint.sh` | 容器启动入口。检查 `OPENCLAW_FORCE_RECONFIG` 决定是否从模板重建配置，注入凭证，然后 `exec openclaw gateway` 前台运行 |
+| `docker-entrypoint.sh` | 容器启动入口。检查 `OPENCLAW_FORCE_RECONFIG` 决定是否从模板重建配置，补全旧配置缺失的 `controlUi` 字段（版本兼容），注入凭证，然后 `exec openclaw gateway` 前台运行 |
 | `init-container.sh` | K8s Init Container 执行。首次部署时将 `/root/.openclaw` 模板拷贝到 PVC；版本升级时合并内置插件、更新版本标记 |
-| `openclaw.json.template` | 配置模板，包含 `${OPENCLAW_GATEWAY_PORT}` 等占位符，由 entrypoint 用 `envsubst` 替换生成 `openclaw.json` |
+| `openclaw.json.template` | 配置模板，包含 `${OPENCLAW_GATEWAY_PORT}` 等占位符，由 entrypoint 用 `envsubst` 替换生成 `openclaw.json`。`controlUi` 包含 `allowInsecureAuth`（绕过设备配对）和 `dangerouslyAllowHostHeaderOriginFallback`（非 loopback 绑定时的 Origin 校验回退） |
 | `build-and-push.sh` | 一键构建推送脚本。支持 `--version` 指定版本、`--build-only` 仅构建、npm 版本校验、自动打 tag |
 | `check-update.sh` | 版本检测脚本。查询 npm 最新稳定版（过滤 beta/rc），支持 `--update` 自动更新 Dockerfile |
 

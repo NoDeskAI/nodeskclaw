@@ -132,6 +132,71 @@ class PodFS:
         except Exception:
             return None
 
+    async def list_dir(self, path: str) -> list[dict] | None:
+        """List directory contents with metadata via a single exec call.
+
+        Returns a list of dicts ``{name, is_dir, size, modified_at}`` or
+        *None* when the path does not exist.
+        """
+        try:
+            result = await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["bash", "-c",
+                 f"find '/root/{path}' -maxdepth 1 -mindepth 1 "
+                 f"-printf '%y\\t%s\\t%T@\\t%f\\n' 2>/dev/null || echo '__NOT_FOUND__'"],
+                container=self._container,
+            )
+        except Exception:
+            return None
+
+        if not result or "__NOT_FOUND__" in result:
+            return None
+
+        items: list[dict] = []
+        for line in result.strip().splitlines():
+            parts = line.split("\t", 3)
+            if len(parts) < 4:
+                continue
+            ftype, size_str, mtime_str, name = parts
+            items.append({
+                "name": name,
+                "is_dir": ftype == "d",
+                "size": int(size_str) if size_str.isdigit() else 0,
+                "modified_at": float(mtime_str) if mtime_str.replace(".", "", 1).isdigit() else 0.0,
+            })
+        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        return items
+
+    async def file_stat(self, path: str) -> dict | None:
+        """Get file metadata: size, modified_at, mime_type."""
+        try:
+            result = await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["bash", "-c",
+                 f"if stat -c '%s|%Y' '/root/{path}' 2>/dev/null; then "
+                 f"file -bi '/root/{path}' 2>/dev/null || echo 'application/octet-stream'; "
+                 f"else echo '__NOT_FOUND__'; fi"],
+                container=self._container,
+            )
+        except Exception:
+            return None
+
+        if not result or "__NOT_FOUND__" in result:
+            return None
+
+        lines = result.strip().splitlines()
+        if len(lines) < 1:
+            return None
+        stat_parts = lines[0].split("|")
+        if len(stat_parts) < 2:
+            return None
+        mime = lines[1].strip().split(";")[0] if len(lines) > 1 else "application/octet-stream"
+        return {
+            "size": int(stat_parts[0]) if stat_parts[0].isdigit() else 0,
+            "modified_at": float(stat_parts[1]) if stat_parts[1].isdigit() else 0.0,
+            "mime_type": mime,
+        }
+
 
 async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient:
     cluster_result = await db.execute(

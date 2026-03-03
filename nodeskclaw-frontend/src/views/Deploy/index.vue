@@ -404,8 +404,7 @@ async function handleDeploy() {
       query: { name: form.value.name },
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '部署请求失败'
-    toast.error(msg)
+    toast.error(resolveApiErrorMessage(e, '部署请求失败'))
     deploying.value = false
   }
 }

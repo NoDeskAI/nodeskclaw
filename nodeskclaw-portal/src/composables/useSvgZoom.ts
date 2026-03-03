@@ -15,6 +15,7 @@ export function useSvgZoom(
 ) {
   const transform = ref<SvgTransform>({ x: 0, y: 0, k: 1 })
   let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | null = null
+  const abortController = new AbortController()
 
   const transformStr = ref('translate(0,0) scale(1)')
 
@@ -24,7 +25,7 @@ export function useSvgZoom(
 
     zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([options?.minZoom ?? 0.3, options?.maxZoom ?? 3])
-      .filter((event) => event.type !== 'dblclick')
+      .filter((event) => event.type !== 'dblclick' && event.button !== 2)
       .wheelDelta((event) =>
         -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002),
       )
@@ -35,6 +36,37 @@ export function useSvgZoom(
       })
 
     select(svg).call(zoomBehavior)
+
+    let rightDragging = false
+    let lastX = 0
+    let lastY = 0
+    const signal = abortController.signal
+
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.button !== 2) return
+      rightDragging = true
+      lastX = e.clientX
+      lastY = e.clientY
+      svg.setPointerCapture(e.pointerId)
+    }, { signal })
+
+    svg.addEventListener('pointermove', (e) => {
+      if (!rightDragging || !zoomBehavior) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+      lastX = e.clientX
+      lastY = e.clientY
+      select(svg).call(zoomBehavior.translateBy, dx * 0.8, dy * 0.8)
+    }, { signal })
+
+    svg.addEventListener('pointerup', (e) => {
+      if (e.button !== 2) return
+      rightDragging = false
+    }, { signal })
+
+    svg.addEventListener('lostpointercapture', () => {
+      rightDragging = false
+    }, { signal })
   }
 
   function zoomIn(factor = 1.3) {
@@ -69,6 +101,7 @@ export function useSvgZoom(
 
   onMounted(init)
   onUnmounted(() => {
+    abortController.abort()
     if (svgRef.value) {
       select(svgRef.value).on('.zoom', null)
     }

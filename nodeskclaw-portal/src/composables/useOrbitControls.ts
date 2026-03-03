@@ -17,6 +17,7 @@ export function useOrbitControls(
   },
 ) {
   let controls: OrbitControls | null = null
+  const abortController = new AbortController()
 
   let _animCamPos: THREE.Vector3 | null = null
   let _animTarget: THREE.Vector3 | null = null
@@ -31,10 +32,64 @@ export function useOrbitControls(
     controls.target.set(0, 0, 0)
     controls.enablePan = true
     controls.screenSpacePanning = true
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+    }
     controls.touches = {
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
     }
+
+    const el = renderer.domElement
+    const signal = abortController.signal
+    let rightDragging = false
+    let lastX = 0
+    let lastY = 0
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 2) return
+      rightDragging = true
+      lastX = e.clientX
+      lastY = e.clientY
+      el.setPointerCapture(e.pointerId)
+    }, { signal })
+
+    el.addEventListener('pointermove', (e) => {
+      if (!rightDragging || !controls) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+      lastX = e.clientX
+      lastY = e.clientY
+
+      const forward = new THREE.Vector3()
+      camera.getWorldDirection(forward)
+      forward.y = 0
+      forward.normalize()
+
+      const right = new THREE.Vector3()
+        .crossVectors(forward, new THREE.Vector3(0, 1, 0))
+        .normalize()
+
+      const dist = camera.position.distanceTo(controls.target)
+      const sensitivity = dist * 0.0016
+
+      const offset = new THREE.Vector3()
+        .addScaledVector(right, -dx * sensitivity)
+        .addScaledVector(forward, dy * sensitivity)
+
+      controls.target.add(offset)
+      camera.position.add(offset)
+    }, { signal })
+
+    el.addEventListener('pointerup', (e) => {
+      if (e.button !== 2) return
+      rightDragging = false
+    }, { signal })
+
+    el.addEventListener('lostpointercapture', () => {
+      rightDragging = false
+    }, { signal })
   }
 
   const stop = watch(rendererRef, (renderer) => {
@@ -135,6 +190,7 @@ export function useOrbitControls(
   }
 
   onUnmounted(() => {
+    abortController.abort()
     stop()
     controls?.dispose()
     controls = null

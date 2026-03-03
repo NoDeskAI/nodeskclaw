@@ -69,6 +69,31 @@ else
   echo "[entrypoint] 配置文件已存在，跳过生成"
 fi
 
+# ---- 1.1. 配置补全（兼容旧版 PVC 上的配置） ----
+
+if [ -f "${CONFIG_FILE}" ]; then
+  node -e "
+    const fs = require('fs');
+    const f = '${CONFIG_FILE}';
+    let text = fs.readFileSync(f, 'utf8');
+    text = text.replace(/^\s*\/\/.*$/gm, '');
+    const c = JSON.parse(text);
+    let changed = false;
+    if (c.gateway?.controlUi && !c.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback) {
+      c.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true;
+      changed = true;
+    }
+    if (c.gateway?.controlUi && !c.gateway.controlUi.dangerouslyDisableDeviceAuth) {
+      c.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+      changed = true;
+    }
+    if (changed) {
+      fs.writeFileSync(f, JSON.stringify(c, null, 2));
+      console.log('[entrypoint] 已补全 controlUi 配置');
+    }
+  "
+fi
+
 # ---- 2. 凭证注入 ----
 
 if [ -n "${OPENCLAW_CREDENTIALS_JSON:-}" ]; then

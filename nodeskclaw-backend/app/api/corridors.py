@@ -447,6 +447,7 @@ async def create_human_hex(
         user_id=body.user_id,
         hex_q=body.hex_q,
         hex_r=body.hex_r,
+        display_name=body.display_name,
         display_color=body.display_color,
         channel_type=body.channel_type,
         channel_config=body.channel_config,
@@ -454,7 +455,7 @@ async def create_human_hex(
     )
     db.add(hh)
     await db.commit()
-    broadcast_event(workspace_id, "human:hex_placed", {"hex_id": hh.id, "user_id": body.user_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r})
+    broadcast_event(workspace_id, "human:hex_placed", {"hex_id": hh.id, "user_id": body.user_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_name": hh.display_name})
     audit = TopologyAuditLog(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
@@ -469,7 +470,8 @@ async def create_human_hex(
     await db.commit()
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
-        hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, display_name=hh.display_name,
+        display_color=hh.display_color,
         channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))
@@ -502,6 +504,8 @@ async def update_human_hex(
         hh.hex_q = new_q
         hh.hex_r = new_r
         position_changed = True
+    if body.display_name is not None:
+        hh.display_name = body.display_name
     if body.display_color is not None:
         hh.display_color = body.display_color
     if body.channel_type is not None:
@@ -517,14 +521,14 @@ async def update_human_hex(
         )
         await db.commit()
     actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "human:hex_updated", {"hex_id": hex_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color})
+    broadcast_event(workspace_id, "human:hex_updated", {"hex_id": hex_id, "hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_name": hh.display_name, "display_color": hh.display_color})
     audit = TopologyAuditLog(
         id=str(uuid.uuid4()),
         workspace_id=workspace_id,
         action="human_hex_updated",
         target_type="human_hex",
         target_id=hex_id,
-        new_value={"hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_color": hh.display_color},
+        new_value={"hex_q": hh.hex_q, "hex_r": hh.hex_r, "display_name": hh.display_name, "display_color": hh.display_color},
         actor_type=actor_type,
         actor_id=actor_id,
     )
@@ -532,7 +536,8 @@ async def update_human_hex(
     await db.commit()
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
-        hex_q=hh.hex_q, hex_r=hh.hex_r, display_color=hh.display_color,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, display_name=hh.display_name,
+        display_color=hh.display_color,
         channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))

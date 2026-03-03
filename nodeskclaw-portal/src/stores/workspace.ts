@@ -7,6 +7,7 @@ export interface AgentBrief {
   instance_id: string
   name: string
   display_name: string | null
+  label: string | null
   slug: string | null
   status: string
   hex_q: number
@@ -62,6 +63,7 @@ export interface HumanHexInfo {
   user_id: string
   hex_q: number
   hex_r: number
+  display_name: string | null
   display_color: string
   channel_type: string | null
   channel_config: Record<string, unknown> | null
@@ -112,6 +114,12 @@ export interface TopologyInfo {
   edges: TopologyEdge[]
 }
 
+export interface MessageFlowPair {
+  sender_hex_key: string
+  receiver_hex_key: string
+  count: number
+}
+
 export interface GroupChatMessage {
   id: string
   sender_type: 'user' | 'agent' | 'system'
@@ -135,6 +143,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const corridorHexes = ref<CorridorHexInfo[]>([])
   const connections = ref<ConnectionInfo[]>([])
   const topology = ref<TopologyInfo | null>(null)
+  const messageFlowStats = ref<MessageFlowPair[]>([])
 
   // ── Workspace CRUD ────────────────────────────────
 
@@ -574,6 +583,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       })
     }
 
+    const humanNotifyEvents = [
+      'human:message_delivered', 'human:message_received',
+    ]
+    for (const eventName of humanNotifyEvents) {
+      eventSource.addEventListener(eventName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          externalCallback?.(eventName, data)
+        } catch { /* ignore */ }
+      })
+    }
+
     eventSource.onerror = () => {
       setTimeout(() => {
         if (eventSource?.readyState === EventSource.CLOSED) {
@@ -642,6 +663,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       topology.value = res.data.data
     } catch (e) {
       console.error('fetchTopology error:', e)
+    }
+    fetchMessageFlowStats(workspaceId)
+  }
+
+  async function fetchMessageFlowStats(workspaceId: string) {
+    try {
+      const res = await api.get(`/workspaces/${workspaceId}/topology/message-flow`)
+      messageFlowStats.value = res.data.data || []
+    } catch {
+      messageFlowStats.value = []
     }
   }
 
@@ -722,6 +753,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           user_id: (n.extra?.user_id as string) || '',
           hex_q: n.hex_q,
           hex_r: n.hex_r,
+          display_name: n.display_name || null,
           display_color: (n.extra?.display_color as string) || '#f59e0b',
           channel_type: (n.extra?.channel_type as string) || null,
           channel_config: (n.extra?.channel_config as Record<string, unknown>) || null,
@@ -730,9 +762,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function createHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number, displayColor?: string) {
+  async function createHumanHex(workspaceId: string, userId: string, hexQ: number, hexR: number, displayColor?: string, displayName?: string) {
     const payload: Record<string, unknown> = { user_id: userId, hex_q: hexQ, hex_r: hexR }
     if (displayColor) payload.display_color = displayColor
+    if (displayName) payload.display_name = displayName
     await api.post(`/workspaces/${workspaceId}/human-hexes`, payload)
     await fetchTopology(workspaceId)
   }
@@ -749,6 +782,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function deleteHumanHex(workspaceId: string, hexId: string) {
     await api.delete(`/workspaces/${workspaceId}/human-hexes/${hexId}`)
+    await fetchTopology(workspaceId)
+  }
+
+  async function renameHumanHex(workspaceId: string, hexId: string, displayName: string) {
+    await api.put(`/workspaces/${workspaceId}/human-hexes/${hexId}`, { display_name: displayName })
     await fetchTopology(workspaceId)
   }
 
@@ -786,6 +824,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     topology,
     topologyNodes: computed(() => topology.value?.nodes || []),
     topologyEdges: computed(() => topology.value?.edges || []),
+    messageFlowStats,
     resetCurrentState,
     setChatVisible,
     fetchWorkspaces,
@@ -820,6 +859,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     createHumanHex,
     moveHumanHex,
     updateHumanHexColor,
+    renameHumanHex,
     deleteHumanHex,
     updateHumanHexChannel,
   }

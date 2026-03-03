@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.workspace_message import WorkspaceMessage
@@ -52,6 +52,53 @@ async def get_recent_messages(
         .where(
             WorkspaceMessage.workspace_id == workspace_id,
             WorkspaceMessage.deleted_at.is_(None),
+        )
+        .order_by(WorkspaceMessage.created_at.desc())
+        .limit(limit)
+    )
+    messages = list(result.scalars().all())
+    messages.reverse()
+    return messages
+
+
+async def get_collaboration_timeline(
+    db: AsyncSession,
+    workspace_id: str,
+    limit: int = 100,
+    since: datetime | None = None,
+) -> list[WorkspaceMessage]:
+    q = (
+        select(WorkspaceMessage)
+        .where(
+            WorkspaceMessage.workspace_id == workspace_id,
+            WorkspaceMessage.message_type == "collaboration",
+            WorkspaceMessage.deleted_at.is_(None),
+        )
+    )
+    if since:
+        q = q.where(WorkspaceMessage.created_at > since)
+    result = await db.execute(q.order_by(WorkspaceMessage.created_at.desc()).limit(limit))
+    messages = list(result.scalars().all())
+    messages.reverse()
+    return messages
+
+
+async def get_agent_collaboration_messages(
+    db: AsyncSession,
+    workspace_id: str,
+    instance_id: str,
+    limit: int = 50,
+) -> list[WorkspaceMessage]:
+    result = await db.execute(
+        select(WorkspaceMessage)
+        .where(
+            WorkspaceMessage.workspace_id == workspace_id,
+            WorkspaceMessage.message_type == "collaboration",
+            WorkspaceMessage.deleted_at.is_(None),
+            or_(
+                WorkspaceMessage.sender_id == instance_id,
+                WorkspaceMessage.target_instance_id == instance_id,
+            ),
         )
         .order_by(WorkspaceMessage.created_at.desc())
         .limit(limit)

@@ -21,8 +21,8 @@ parameters:
   subPath: "/nodeskclaw"
   # 删除 PVC 时将子目录归档（重命名，不物理删除），便于恢复
   archiveOnDelete: "true"
-# Retain: 即使 PVC 被删除，NAS 上的数据也保留
-reclaimPolicy: Retain
+# Delete: PVC 删除时自动回收 PV（archiveOnDelete=true 保证 NAS 数据归档而非物理删除）
+reclaimPolicy: Delete
 # 允许后续扩容 PVC
 allowVolumeExpansion: true
 # 立即绑定

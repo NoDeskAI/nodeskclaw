@@ -15,6 +15,7 @@ export interface PortalUser {
   avatar_url: string | null
   is_super_admin: boolean
   current_org_id: string | null
+  portal_org_role: string | null
   oauth_connections: OAuthConnectionInfo[]
 }
 

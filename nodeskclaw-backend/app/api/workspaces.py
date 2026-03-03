@@ -520,6 +520,66 @@ async def list_workspace_messages(
     ])
 
 
+@router.get("/{workspace_id}/collaboration-timeline")
+async def list_collaboration_timeline(
+    workspace_id: str,
+    limit: int = Query(default=100, le=500),
+    since: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """List all collaboration messages in a workspace as a timeline."""
+    from datetime import datetime as dt
+    since_dt = dt.fromisoformat(since) if since else None
+    messages = await msg_service.get_collaboration_timeline(
+        db, workspace_id, limit, since_dt,
+    )
+    return _ok([
+        {
+            "id": m.id,
+            "workspace_id": m.workspace_id,
+            "sender_type": m.sender_type,
+            "sender_id": m.sender_id,
+            "sender_name": m.sender_name,
+            "content": m.content,
+            "message_type": m.message_type,
+            "target_instance_id": m.target_instance_id,
+            "depth": m.depth,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in messages
+    ])
+
+
+@router.get("/{workspace_id}/agents/{instance_id}/collaboration-messages")
+async def list_agent_collaboration_messages(
+    workspace_id: str,
+    instance_id: str,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    """List collaboration messages sent to or from a specific agent."""
+    messages = await msg_service.get_agent_collaboration_messages(
+        db, workspace_id, instance_id, limit,
+    )
+    return _ok([
+        {
+            "id": m.id,
+            "workspace_id": m.workspace_id,
+            "sender_type": m.sender_type,
+            "sender_id": m.sender_id,
+            "sender_name": m.sender_name,
+            "content": m.content,
+            "message_type": m.message_type,
+            "target_instance_id": m.target_instance_id,
+            "depth": m.depth,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in messages
+    ])
+
+
 # ── Legacy Chat Proxy (deprecated) ──────────────────
 
 @router.post("/{workspace_id}/agents/{instance_id}/chat")
@@ -781,6 +841,16 @@ async def _stream_agent_response(
                 },
                 json={"model": "gpt-4", "messages": messages, "stream": True},
             ) as resp:
+                if resp.status_code != 200:
+                    logger.error(
+                        "Agent %s API returned %d, expected 200",
+                        agent_name, resp.status_code,
+                    )
+                    broadcast_event(workspace_id, "agent:done", {
+                        "instance_id": instance_id,
+                        "agent_name": agent_name,
+                    })
+                    return
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue

@@ -309,6 +309,31 @@ docker pull registry.k8s.io/ingress-nginx/controller:v1.12.0
 docker build -t my-image:latest .
 ```
 
+## JSONC 配置文件解析规则
+
+**`openclaw.json` 及从 `openclaw.json.template` 生成的配置文件可能包含 `//` 行注释（JSONC 格式）。标准 `JSON.parse()` 不支持注释，直接解析会报 SyntaxError。**
+
+这个问题已经发生过：entrypoint 中新增的配置补全步骤直接用 `JSON.parse()` 读取包含 `//` 注释的 `openclaw.json`，导致解析失败 → `set -euo pipefail` 使脚本中断 → 容器 CrashLoopBackOff。
+
+### 必须做
+
+- **解析前剥离注释**：任何用 `JSON.parse()` 读取 `openclaw.json` 的地方，必须先 `text.replace(/^\s*\/\/.*$/gm, '')` 剥离行注释
+- **写回时用标准 JSON**：`JSON.stringify(obj, null, 2)` 写回的是干净 JSON（无注释），后续解析不会再有问题
+- **新增解析逻辑时自查**：写 `JSON.parse` 读取任何可能含注释的配置文件前，先确认来源是否可能是 JSONC
+
+### 涉及场景
+
+| 场景 | 文件 | 风险 |
+|------|------|------|
+| entrypoint 配置补全 | `docker-entrypoint.sh` 中的 `node -e` | 首次从模板生成的配置含注释 |
+| 后端读取 Pod 配置 | `llm_config_service.py` 通过 `kubectl exec cat` 读取 | 如果 Pod 上配置未被 backend 重写过，可能仍含注释 |
+| 任何新增的配置迁移/修补脚本 | — | 同上 |
+
+### 严禁
+
+- **禁止裸用 `JSON.parse()` 读取 `openclaw.json`**：必须考虑 JSONC 可能性
+- **禁止假设配置文件是干净 JSON**：模板生成的文件、用户手动编辑过的文件都可能含注释
+
 ## 基础设施约束
 
 - **数据库**：火山云 RDS PostgreSQL，不用本地 SQLite，不自建 Docker PostgreSQL 容器

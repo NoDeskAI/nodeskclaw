@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, inject, type ComputedRef } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Loader2, Package, ExternalLink, Trash2, Upload, Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted, watch, inject, type ComputedRef } from 'vue'
+import { useRoute } from 'vue-router'
+import { Loader2, Package, Download, Trash2, Upload, Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { InstanceGeneItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
+import GeneMarketDialog from '@/components/gene/GeneMarketDialog.vue'
+import api from '@/services/api'
 
 const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
 const store = useGeneStore()
 
-const loading = computed(() => store.loading)
+const initialLoading = ref(true)
 const instanceGenes = computed(() => store.instanceGenes)
+const marketDialogOpen = ref(false)
 const focusGeneId = computed(() => {
   const value = route.query.focus_gene_id
   return typeof value === 'string' ? value : ''
@@ -79,8 +81,39 @@ function effectivenessScore(item: InstanceGeneItem): number {
 
 const busyStatuses = new Set(['uninstalling', 'forgetting', 'installing', 'learning'])
 
-function goToMarket() {
-  router.push('/gene-market')
+const TRANSITIONAL_STATUSES = new Set(['learning', 'installing', 'forgetting', 'uninstalling'])
+const hasTransitionalGenes = computed(() =>
+  instanceGenes.value.some(g => TRANSITIONAL_STATUSES.has(g.status)),
+)
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await api.get(`/instances/${instanceId.value}/genes`)
+      store.instanceGenes = res.data.data || []
+    } catch { /* ignore */ }
+    if (!hasTransitionalGenes.value) stopPolling()
+  }, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
+
+watch(hasTransitionalGenes, (has) => {
+  if (has) startPolling()
+  else stopPolling()
+})
+
+function openMarketDialog() {
+  marketDialogOpen.value = true
+}
+
+async function onGeneInstalled() {
+  await store.fetchInstanceGenes(instanceId.value)
 }
 
 function openForgetDialog(item: InstanceGeneItem) {
@@ -143,9 +176,12 @@ async function handleCreate() {
   }
 }
 
-onMounted(() => {
-  store.fetchInstanceGenes(instanceId.value)
+onMounted(async () => {
+  await store.fetchInstanceGenes(instanceId.value)
+  initialLoading.value = false
 })
+
+onUnmounted(stopPolling)
 </script>
 
 <template>
@@ -155,10 +191,10 @@ onMounted(() => {
       <div class="flex items-center gap-2">
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          @click="goToMarket"
+          @click="openMarketDialog"
         >
-          <ExternalLink class="w-4 h-4" />
-          浏览基因市场
+          <Download class="w-4 h-4" />
+          学习基因
         </button>
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
@@ -170,7 +206,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="flex items-center justify-center py-16">
+    <div v-if="initialLoading" class="flex items-center justify-center py-16">
       <Loader2 class="w-8 h-8 animate-spin text-muted-foreground" />
     </div>
 
@@ -179,10 +215,10 @@ onMounted(() => {
       <p class="text-sm">暂无已学习基因</p>
       <button
         class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        @click="goToMarket"
+        @click="openMarketDialog"
       >
-        <ExternalLink class="w-4 h-4" />
-        浏览基因市场
+        <Download class="w-4 h-4" />
+        学习基因
       </button>
     </div>
 
@@ -364,5 +400,10 @@ onMounted(() => {
       </div>
     </div>
 
+    <GeneMarketDialog
+      v-model="marketDialogOpen"
+      :instance-id="instanceId"
+      @installed="onGeneInstalled"
+    />
   </div>
 </template>

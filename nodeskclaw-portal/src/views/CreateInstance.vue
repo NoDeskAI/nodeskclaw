@@ -615,7 +615,10 @@ async function handleDeploy() {
 
         <!-- 部署 -->
         <div class="pt-4 space-y-3">
-          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+          <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+            <AlertCircle class="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+            <p class="text-sm text-destructive leading-relaxed">{{ error }}</p>
+          </div>
           <button
             :disabled="!canDeploy"
             class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"

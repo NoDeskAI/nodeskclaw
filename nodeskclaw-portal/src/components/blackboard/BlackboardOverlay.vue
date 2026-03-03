@@ -5,10 +5,11 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   workspaceId: string
-}>()
+  embedded?: boolean
+}>(), { embedded: false })
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -122,15 +123,19 @@ function nodeTypeLabel(type: string): string {
 </script>
 
 <template>
-  <Transition name="fade">
+  <Transition :name="embedded ? '' : 'fade'">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      @click.self="emit('close')"
+      :class="embedded
+        ? 'flex flex-col flex-1 min-h-0'
+        : 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'"
+      @click.self="!embedded && emit('close')"
     >
-      <div class="w-full max-w-[80%] mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col h-[85vh]">
+      <div :class="embedded
+        ? 'flex flex-col flex-1 min-h-0'
+        : 'w-full max-w-[80%] mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col h-[85vh]'">
         <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-          <h2 class="text-lg font-semibold">{{ t('hexAction.centralBlackboard') }}</h2>
+          <h2 :class="embedded ? 'text-sm font-semibold' : 'text-lg font-semibold'">{{ t('hexAction.centralBlackboard') }}</h2>
           <div class="flex items-center gap-1">
             <button
               v-if="canEdit && !editing"
@@ -148,7 +153,7 @@ function nodeTypeLabel(type: string): string {
             >
               <Eye class="w-4 h-4" />
             </button>
-            <button class="p-1.5 rounded hover:bg-muted transition-colors" @click="emit('close')">
+            <button v-if="!embedded" class="p-1.5 rounded hover:bg-muted transition-colors" @click="emit('close')">
               <X class="w-5 h-5" />
             </button>
           </div>

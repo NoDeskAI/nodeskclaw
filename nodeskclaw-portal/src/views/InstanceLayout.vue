@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Circle, Loader2, LayoutDashboard, Brain, Dna, History, Wrench, Radio, Users } from 'lucide-vue-next'
+import { ArrowLeft, Circle, Loader2, LayoutDashboard, Brain, Dna, History, Wrench, Radio, FolderOpen, Users } from 'lucide-vue-next'
 import api from '@/services/api'
 
 const route = useRoute()
@@ -67,6 +67,7 @@ const navItems = computed(() => {
     { name: 'InstanceSettings', label: t('common.modelConfig'), icon: Brain },
   ]
   if (myInstanceRole.value === 'admin') {
+    items.push({ name: 'InstanceFiles', label: t('common.files'), icon: FolderOpen })
     items.push({ name: 'InstanceMembers', label: t('common.members'), icon: Users })
   }
   return items

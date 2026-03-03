@@ -6,9 +6,10 @@ import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
 import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
+import { useTopologyBFS } from '@/composables/useTopologyBFS'
 import { createGrabby, animateGrabby, updateGrabbyTheme, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
 import { createCorridorPath, disposeCorridorPath, disposeCorridorPathShared } from './CorridorPath'
-import type { AgentBrief, TopologyNode } from '@/stores/workspace'
+import type { AgentBrief, TopologyNode, TopologyEdge, MessageFlowPair } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -20,6 +21,8 @@ const props = defineProps<{
   selectedAgentId: string | null
   selectedHex: { q: number, r: number } | null
   topologyNodes?: TopologyNode[]
+  topologyEdges?: TopologyEdge[]
+  messageFlowStats?: MessageFlowPair[]
   isMovingHex?: boolean
   movingHexSource?: { q: number, r: number } | null
 }>()
@@ -78,6 +81,10 @@ scene.add(dirLight)
 // Honeycomb hex grid lines (vibecraft-style)
 const hexGridGroup = createWorldHexGrid()
 scene.add(hexGridGroup)
+
+const heatmapGroup = new THREE.Group()
+heatmapGroup.name = 'heatmapLines'
+scene.add(heatmapGroup)
 
 scene.fog = new THREE.FogExp2(0x0a0a1a, 0.04)
 scene.background = new THREE.Color(0x0a0a1a)
@@ -242,6 +249,32 @@ function createBBLabelSprite(): THREE.Sprite {
 
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
 
+function createAgentLabelSprite(name: string, label?: string | null): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  const hasLabel = !!label
+  canvas.width = 256
+  canvas.height = hasLabel ? 56 : 36
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = 'transparent'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.font = 'bold 16px sans-serif'
+  ctx.fillStyle = '#e2e8f0'
+  ctx.textAlign = 'center'
+  ctx.fillText(name.slice(0, 16), 128, 18)
+  if (hasLabel) {
+    ctx.font = '12px sans-serif'
+    ctx.fillStyle = '#94a3b8'
+    ctx.fillText(label!.slice(0, 20), 128, 40)
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(mat)
+  const sy = hasLabel ? 0.28 : 0.18
+  sprite.scale.set(1.2, sy, 1)
+  sprite.userData.baseScale = { x: 1.2, y: sy }
+  return sprite
+}
+
 function createCorridorLabelSprite(name: string): THREE.Sprite {
   const canvas = document.createElement('canvas')
   canvas.width = 256
@@ -339,6 +372,11 @@ function syncScene() {
 
   for (const agent of props.agents) {
     const group = createHexMesh(agent)
+    const agentName = agent.display_name || agent.name
+    const agentLabel = createAgentLabelSprite(agentName, agent.label)
+    agentLabel.position.set(0, 0.65, 0)
+    group.add(agentLabel)
+    labelSprites.add(agentLabel)
     scene.add(group)
     hexMeshes.set(agent.instance_id, group)
   }
@@ -378,6 +416,115 @@ function syncScene() {
 }
 
 watch([() => props.agents, () => props.topologyNodes], syncScene, { deep: true, immediate: true })
+
+const heatmapMaterials: THREE.LineBasicMaterial[] = []
+
+function syncHeatmap() {
+  for (const child of [...heatmapGroup.children]) {
+    heatmapGroup.remove(child)
+    if ((child as THREE.Line).geometry) (child as THREE.Line).geometry.dispose()
+  }
+  for (const mat of heatmapMaterials) mat.dispose()
+  heatmapMaterials.length = 0
+
+  const stats = props.messageFlowStats
+  if (!stats || stats.length === 0) return
+  const maxCount = Math.max(...stats.map(s => s.count))
+  if (maxCount === 0) return
+
+  for (const s of stats) {
+    const [sq, sr] = s.sender_hex_key.split(',').map(Number)
+    const [rq, rr] = s.receiver_hex_key.split(',').map(Number)
+    const from = axialToWorld(sq, sr)
+    const to = axialToWorld(rq, rr)
+    const ratio = s.count / maxCount
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(from.x, 0.01, from.y),
+      new THREE.Vector3(to.x, 0.01, to.y),
+    ])
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xa78bfa,
+      transparent: true,
+      opacity: 0.15 + 0.45 * ratio,
+    })
+    heatmapMaterials.push(mat)
+    heatmapGroup.add(new THREE.Line(geo, mat))
+  }
+}
+
+watch(() => props.messageFlowStats, syncHeatmap, { deep: true })
+
+// ── Flow animation (3D particles) ──────────────────────
+const storeNodes3d = computed(() => (props.topologyNodes || []) as TopologyNode[])
+const storeEdges3d = computed(() => props.topologyEdges || [] as TopologyEdge[])
+const { findPath: findPath3d, findReachableEndpoints: findEndpoints3d } = useTopologyBFS(storeNodes3d, storeEdges3d)
+
+const flowGroup = new THREE.Group()
+flowGroup.name = 'flowParticles'
+scene.add(flowGroup)
+const FLOW_SPHERE_GEO = new THREE.SphereGeometry(0.05, 8, 8)
+const FLOW_DURATION_MS = 700
+const MAX_FLOW = 10
+
+interface Flow3D {
+  mesh: THREE.Mesh
+  material: THREE.MeshStandardMaterial
+  path: THREE.Vector3[]
+  startTime: number
+  targetHexKey: string
+}
+
+const activeFlows: Flow3D[] = []
+
+function triggerMessageFlow(sourceInstanceId: string, target: string) {
+  const nodes = props.topologyNodes || []
+  const sourceNode = nodes.find(n => n.entity_id === sourceInstanceId)
+  if (!sourceNode) return
+
+  if (target.startsWith('agent:')) {
+    const targetName = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'agent' && n.display_name?.toLowerCase() === targetName.toLowerCase())
+    if (targetNode) spawnFlowParticle(sourceNode, targetNode)
+  } else if (target.startsWith('human:')) {
+    const targetId = target.slice(6)
+    const targetNode = nodes.find(n => n.node_type === 'human' && n.entity_id === targetId)
+    if (targetNode) spawnFlowParticle(sourceNode, targetNode)
+  } else if (target === 'broadcast') {
+    const endpoints = findEndpoints3d(sourceNode.hex_q, sourceNode.hex_r)
+    for (const ep of endpoints) {
+      const targetNode = nodes.find(n => n.hex_q === ep.q && n.hex_r === ep.r)
+      if (targetNode) spawnFlowParticle(sourceNode, targetNode)
+    }
+  }
+}
+
+function spawnFlowParticle(source: TopologyNode, target: TopologyNode) {
+  if (activeFlows.length >= MAX_FLOW) return
+  const hexPath = findPath3d(source.hex_q, source.hex_r, target.hex_q, target.hex_r)
+  if (!hexPath || hexPath.length < 2) return
+
+  const path3d = hexPath.map(h => {
+    const w = axialToWorld(h.q, h.r)
+    return new THREE.Vector3(w.x, 0.15, w.y)
+  })
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xa78bfa,
+    emissive: 0xa78bfa,
+    emissiveIntensity: 0.8,
+    transparent: true,
+    opacity: 1,
+  })
+  const mesh = new THREE.Mesh(FLOW_SPHERE_GEO, material)
+  mesh.position.copy(path3d[0])
+  flowGroup.add(mesh)
+
+  activeFlows.push({
+    mesh, material, path: path3d,
+    startTime: performance.now(),
+    targetHexKey: `${target.hex_q},${target.hex_r}`,
+  })
+}
 
 // Hover + selection animation
 const clock = new THREE.Clock()
@@ -514,6 +661,27 @@ addToLoop(() => {
     const base = sprite.userData.baseScale as { x: number; y: number }
     sprite.scale.set(base.x * scaleFactor, base.y * scaleFactor, 1)
   }
+
+  const now = performance.now()
+  for (let i = activeFlows.length - 1; i >= 0; i--) {
+    const flow = activeFlows[i]
+    const elapsed = now - flow.startTime
+    const progress = Math.min(1, elapsed / FLOW_DURATION_MS)
+
+    if (progress >= 1) {
+      flowGroup.remove(flow.mesh)
+      flow.material.dispose()
+      activeFlows.splice(i, 1)
+      continue
+    }
+
+    const totalSegs = flow.path.length - 1
+    const segProgress = progress * totalSegs
+    const segIdx = Math.min(Math.floor(segProgress), totalSegs - 1)
+    const segT = segProgress - segIdx
+    flow.mesh.position.lerpVectors(flow.path[segIdx], flow.path[segIdx + 1], segT)
+    flow.material.opacity = 1 - progress * 0.5
+  }
 })
 
 onUnmounted(() => {
@@ -522,6 +690,13 @@ onUnmounted(() => {
   AGENT_BASE_EDGE_GEO.dispose()
   EMPTY_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
+  FLOW_SPHERE_GEO.dispose()
+  for (const flow of activeFlows) {
+    flowGroup.remove(flow.mesh)
+    flow.material.dispose()
+  }
+  activeFlows.length = 0
+  for (const mat of heatmapMaterials) mat.dispose()
   disposeGrabbyShared()
   disposeCorridorPathShared()
 })
@@ -533,6 +708,7 @@ defineExpose({
   panBy: (dx: number, dy: number) => orbitControls.panBy(dx, dy),
   focusOnPosition: (x: number, z: number) => orbitControls.focusOnPosition(x, z),
   getCameraXZDirections: () => orbitControls.getCameraXZDirections(),
+  triggerMessageFlow,
 })
 </script>
 

@@ -271,14 +271,7 @@ def build_deployment(
             V1Container(
                 name="init-root-data",
                 image=image,
-                command=["/bin/sh", "-c"],
-                args=[
-                    "if [ ! -f /init-data/.openclaw-version ]; then "
-                    "cp -a /root/.openclaw /init-data/.openclaw 2>/dev/null || true; "
-                    "cp /root/.openclaw-version /init-data/.openclaw-version 2>/dev/null || true; "
-                    "cp /root/.bashrc /root/.profile /init-data/ 2>/dev/null || true; "
-                    "fi"
-                ],
+                command=["/init-container.sh"],
                 volume_mounts=[V1VolumeMount(name="root-data", mount_path="/init-data")],
                 resources=V1ResourceRequirements(
                     requests={"cpu": "50m", "memory": "64Mi"},
@@ -316,7 +309,8 @@ def build_deployment(
                 )
             )
 
-    http_get = V1HTTPGetAction(path="/", port=port)
+    liveness_get = V1HTTPGetAction(path="/healthz", port=port)
+    readiness_get = V1HTTPGetAction(path="/readyz", port=port)
 
     container = V1Container(
         name=name,
@@ -332,21 +326,21 @@ def build_deployment(
         ),
         volume_mounts=volume_mounts or None,
         startup_probe=V1Probe(
-            http_get=http_get,
+            http_get=liveness_get,
             initial_delay_seconds=5,
             period_seconds=3,
             failure_threshold=20,
             timeout_seconds=2,
         ),
         readiness_probe=V1Probe(
-            http_get=http_get,
+            http_get=readiness_get,
             period_seconds=5,
             failure_threshold=3,
             success_threshold=1,
             timeout_seconds=2,
         ),
         liveness_probe=V1Probe(
-            http_get=http_get,
+            http_get=liveness_get,
             period_seconds=15,
             failure_threshold=3,
             timeout_seconds=3,
