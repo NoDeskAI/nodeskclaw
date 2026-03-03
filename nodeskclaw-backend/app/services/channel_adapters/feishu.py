@@ -38,18 +38,18 @@ def build_workspace_message_card(
     *,
     workspace_name: str,
     workspace_id: str,
-    agent_name: str,
+    source_name: str,
     content: str,
     human_hex_name: str = "",
     portal_base_url: str = "",
 ) -> dict:
-    """Build an interactive card for delivering an Agent collaboration message."""
+    """Build an interactive card for delivering a workspace message."""
     truncated = content[:500] + ("..." if len(content) > 500 else "")
 
     if human_hex_name:
-        body_md = f"**工位**: {human_hex_name}\n**来源 Agent**: {agent_name}\n\n{truncated}"
+        body_md = f"**工位**: {human_hex_name}\n**来源**: {source_name}\n\n{truncated}"
     else:
-        body_md = f"**来源 Agent**: {agent_name}\n\n{truncated}"
+        body_md = f"**来源**: {source_name}\n\n{truncated}"
 
     if human_hex_name:
         note_text = f"通过工位「{human_hex_name}」接收 · 直接回复将路由至相邻 Agent"

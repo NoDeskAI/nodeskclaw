@@ -126,10 +126,10 @@ async def handle_collaboration_message(
                     if not can:
                         logger.info("Corridor topology blocks %s -> human:%s", source_name, human_hex_id)
                         return
-                    _fire_task(_deliver_to_human(
+                    _fire_task(deliver_to_human(
                         workspace_id=workspace_id,
                         human_hex_id=hh.id,
-                        source_agent_name=source_name,
+                        source_name=source_name,
                         message=text,
                     ))
         elif target == "broadcast":
@@ -160,10 +160,10 @@ async def handle_collaboration_message(
                 for ep in human_endpoints:
                     hh = await _get_human_hex(db, ep.entity_id)
                     if hh:
-                        _fire_task(_deliver_to_human(
+                        _fire_task(deliver_to_human(
                             workspace_id=workspace_id,
                             human_hex_id=hh.id,
-                            source_agent_name=source_name,
+                            source_name=source_name,
                             message=text,
                         ))
             else:
@@ -185,14 +185,14 @@ async def handle_collaboration_message(
 # ── Human delivery ────────────────────────────────────
 
 
-async def _deliver_to_human(
+async def deliver_to_human(
     *,
     workspace_id: str,
     human_hex_id: str,
-    source_agent_name: str,
+    source_name: str,
     message: str,
 ) -> None:
-    """Deliver a collaboration message to a Human Hex via Feishu (or SSE fallback)."""
+    """Deliver a message to a Human Hex via Feishu (or SSE fallback)."""
     from app.api.workspaces import broadcast_event
     from app.core.config import settings
 
@@ -235,7 +235,7 @@ async def _deliver_to_human(
         card = build_workspace_message_card(
             workspace_name=workspace_name,
             workspace_id=workspace_id,
-            agent_name=source_agent_name,
+            source_name=source_name,
             content=message,
             human_hex_name=human_hex.display_name or "",
             portal_base_url=settings.PORTAL_BASE_URL,
@@ -257,7 +257,7 @@ async def _deliver_to_human(
     broadcast_event(workspace_id, "human:message_delivered", {
         "human_hex_id": human_hex_id,
         "user_id": human_hex.user_id if human_hex else "",
-        "source_agent": source_agent_name,
+        "source_name": source_name,
         "content": message[:200],
         "delivered_via": delivered_via,
     })

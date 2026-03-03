@@ -402,9 +402,12 @@ async def workspace_chat(
     from app.services import corridor_router
     has_topo = await corridor_router.has_any_connections(workspace_id, db)
 
+    human_endpoints: list = []
+
     if has_topo:
         audience = await corridor_router.get_blackboard_audience(workspace_id, db)
         reachable_ids = {ep.entity_id for ep in audience if ep.endpoint_type == "agent"}
+        human_endpoints = [ep for ep in audience if ep.endpoint_type == "human"]
         target_agents = [a for a in running_agents if a.id in reachable_ids]
         excluded = [a for a in running_agents if a.id not in reachable_ids]
         if excluded:
@@ -424,6 +427,7 @@ async def workspace_chat(
                 await db.commit()
                 audience = await corridor_router.get_blackboard_audience(workspace_id, db)
                 reachable_ids = {ep.entity_id for ep in audience if ep.endpoint_type == "agent"}
+                human_endpoints = [ep for ep in audience if ep.endpoint_type == "human"]
                 target_agents = [a for a in running_agents if a.id in reachable_ids]
                 excluded = [a for a in running_agents if a.id not in reachable_ids]
             if excluded:
@@ -460,7 +464,17 @@ async def workspace_chat(
             )
         )
 
-    return _ok({"status": "broadcasting", "agent_count": len(target_agents)})
+    if human_endpoints:
+        from app.services.collaboration_service import deliver_to_human
+        for ep in human_endpoints:
+            _fire_task(deliver_to_human(
+                workspace_id=workspace_id,
+                human_hex_id=ep.entity_id,
+                source_name=user.name,
+                message=data.message,
+            ))
+
+    return _ok({"status": "broadcasting", "agent_count": len(target_agents), "human_count": len(human_endpoints)})
 
 
 class SystemMessageRequest(BaseModel):
