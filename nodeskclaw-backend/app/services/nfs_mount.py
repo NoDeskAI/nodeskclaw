@@ -5,6 +5,7 @@ is a single exec call to the target Pod — no temp dirs, no tar, no bulk sync.
 """
 
 import base64
+import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -196,6 +197,42 @@ class PodFS:
             "modified_at": float(stat_parts[1]) if stat_parts[1].isdigit() else 0.0,
             "mime_type": mime,
         }
+
+
+    async def scan_skills(self, skills_dir_rel: str) -> list[dict]:
+        """Batch-scan all skill directories under *skills_dir_rel*.
+
+        Uses a single ``node -e`` exec to list every sub-directory, read its
+        ``SKILL.md`` content, and count the files it contains.
+
+        Returns ``[{name, content, file_count}]``.
+        """
+        script = (
+            "const fs=require('fs'),path=require('path');"
+            "const dir='/root/'+process.argv[1];"
+            "const r=[];"
+            "if(fs.existsSync(dir)){"
+            "for(const n of fs.readdirSync(dir).sort()){"
+            "const d=path.join(dir,n);"
+            "if(!fs.statSync(d).isDirectory())continue;"
+            "const md=path.join(d,'SKILL.md');"
+            "let c='';"
+            "if(fs.existsSync(md))c=fs.readFileSync(md,'utf8');"
+            "const fc=fs.readdirSync(d).filter(f=>fs.statSync(path.join(d,f)).isFile()).length;"
+            "r.push({name:n,content:c,file_count:fc});"
+            "}}"
+            "process.stdout.write(JSON.stringify(r));"
+        )
+        try:
+            result = await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["node", "-e", script, skills_dir_rel],
+                container=self._container,
+            )
+            return json.loads(result) if result else []
+        except Exception:
+            logger.warning("scan_skills failed for %s/%s", self._ns, self._pod, exc_info=True)
+            return []
 
 
 async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient:

@@ -187,6 +187,33 @@ def _has_frontmatter(content: str) -> bool:
     return content.lstrip().startswith("---")
 
 
+def _parse_skill_frontmatter(content: str) -> dict:
+    """Extract YAML front matter from SKILL.md content as a dict."""
+    import yaml
+
+    stripped = content.lstrip()
+    if not stripped.startswith("---"):
+        return {}
+    end = stripped.find("\n---", 3)
+    if end == -1:
+        return {}
+    try:
+        return yaml.safe_load(stripped[3:end]) or {}
+    except Exception:
+        return {}
+
+
+def _skill_body(content: str) -> str:
+    """Return the body of SKILL.md (everything after front matter)."""
+    stripped = content.lstrip()
+    if not stripped.startswith("---"):
+        return content
+    end = stripped.find("\n---", 3)
+    if end == -1:
+        return content
+    return stripped[end + 4:].lstrip()
+
+
 def _validate_skill_metadata(
     manifest: dict | None,
     short_description: str | None,
@@ -646,6 +673,153 @@ async def get_instance_genes(db: AsyncSession, instance_id: str) -> list[dict]:
             "gene": _gene_to_dict(gene),
         }
         items.append(d)
+    return items
+
+
+TRANSITIONAL_STATUSES = {
+    InstanceGeneStatus.installing,
+    InstanceGeneStatus.learning,
+    InstanceGeneStatus.uninstalling,
+    InstanceGeneStatus.forgetting,
+}
+
+STALE_TERMINAL_STATUSES = {
+    InstanceGeneStatus.installed,
+    InstanceGeneStatus.learn_failed,
+    InstanceGeneStatus.failed,
+    InstanceGeneStatus.simplified,
+    InstanceGeneStatus.forget_failed,
+}
+
+CONTENT_PREVIEW_LEN = 200
+
+
+async def get_instance_skills(db: AsyncSession, instance_id: str) -> list[dict]:
+    """Return the merged skill list driven by Pod filesystem + DB enrichment.
+
+    Each item is typed ``hub`` (matched Gene Hub entry) or ``emerged``
+    (only exists inside the Pod, not in the Hub).
+    """
+    from app.services.instance_service import get_instance
+
+    instance = await get_instance(instance_id, db)
+
+    async with remote_fs(instance, db) as fs:
+        pod_skills = await fs.scan_skills(SKILLS_DIR_REL)
+
+    pod_skill_names: set[str] = {s["name"] for s in pod_skills}
+
+    ig_result = await db.execute(
+        select(InstanceGene, Gene)
+        .join(Gene, InstanceGene.gene_id == Gene.id)
+        .where(InstanceGene.instance_id == instance_id, not_deleted(InstanceGene))
+    )
+    ig_rows = ig_result.all()
+
+    skill_to_ig: dict[str, tuple[InstanceGene, Gene]] = {}
+    for ig, gene in ig_rows:
+        manifest = _json_loads(gene.manifest) or {}
+        skill_name = manifest.get("skill", {}).get("name", gene.slug)
+        skill_to_ig[skill_name] = (ig, gene)
+
+    all_skill_names = list(pod_skill_names)
+    gene_result = await db.execute(
+        select(Gene).where(Gene.slug.in_(all_skill_names), not_deleted(Gene))
+    )
+    hub_genes: dict[str, Gene] = {g.slug: g for g in gene_result.scalars().all()}
+
+    items: list[dict] = []
+    seen_skill_names: set[str] = set()
+
+    for skill_data in pod_skills:
+        sname = skill_data["name"]
+        content: str = skill_data.get("content", "")
+        file_count: int = skill_data.get("file_count", 0)
+        fm = _parse_skill_frontmatter(content)
+        body = _skill_body(content)
+        seen_skill_names.add(sname)
+
+        ig_pair = skill_to_ig.get(sname)
+        hub_gene = hub_genes.get(sname)
+        if hub_gene is None and ig_pair is not None:
+            hub_gene = ig_pair[1]
+
+        if hub_gene is not None:
+            ig_data = None
+            if ig_pair:
+                ig_obj = ig_pair[0]
+                ig_data = {
+                    "id": ig_obj.id,
+                    "instance_id": ig_obj.instance_id,
+                    "gene_id": ig_obj.gene_id,
+                    "genome_id": ig_obj.genome_id,
+                    "status": ig_obj.status,
+                    "installed_version": ig_obj.installed_version,
+                    "learning_output": ig_obj.learning_output,
+                    "config_snapshot": _json_loads(ig_obj.config_snapshot),
+                    "agent_self_eval": ig_obj.agent_self_eval,
+                    "usage_count": ig_obj.usage_count,
+                    "variant_published": ig_obj.variant_published,
+                    "installed_at": ig_obj.installed_at,
+                    "created_at": ig_obj.created_at,
+                }
+            items.append({
+                "type": "hub",
+                "skill_name": sname,
+                "name": hub_gene.name,
+                "description": hub_gene.short_description or hub_gene.description or "",
+                "file_count": file_count,
+                "gene": _gene_to_dict(hub_gene),
+                "instance_gene": ig_data,
+            })
+        else:
+            preview = body[:CONTENT_PREVIEW_LEN] + ("..." if len(body) > CONTENT_PREVIEW_LEN else "")
+            items.append({
+                "type": "emerged",
+                "skill_name": sname,
+                "name": fm.get("name", sname),
+                "description": fm.get("description", ""),
+                "file_count": file_count,
+                "content_preview": preview,
+                "full_content": content,
+                "frontmatter": fm,
+            })
+
+    for sname, (ig, gene) in skill_to_ig.items():
+        if sname in seen_skill_names:
+            continue
+        if ig.status in TRANSITIONAL_STATUSES:
+            items.append({
+                "type": "hub",
+                "skill_name": sname,
+                "name": gene.name,
+                "description": gene.short_description or gene.description or "",
+                "file_count": 0,
+                "gene": _gene_to_dict(gene),
+                "instance_gene": {
+                    "id": ig.id,
+                    "instance_id": ig.instance_id,
+                    "gene_id": ig.gene_id,
+                    "genome_id": ig.genome_id,
+                    "status": ig.status,
+                    "installed_version": ig.installed_version,
+                    "learning_output": ig.learning_output,
+                    "config_snapshot": _json_loads(ig.config_snapshot),
+                    "agent_self_eval": ig.agent_self_eval,
+                    "usage_count": ig.usage_count,
+                    "variant_published": ig.variant_published,
+                    "installed_at": ig.installed_at,
+                    "created_at": ig.created_at,
+                },
+            })
+        elif ig.status in STALE_TERMINAL_STATUSES:
+            logger.info(
+                "Soft-deleting stale InstanceGene %s (gene=%s, status=%s) — skill not found in Pod",
+                ig.id, gene.slug, ig.status,
+            )
+            ig.soft_delete()
+
+    await db.commit()
     return items
 
 

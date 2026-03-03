@@ -200,6 +200,16 @@ async def instance_genes(
     return ApiResponse(data=genes)
 
 
+@router.get("/instances/{instance_id}/skills")
+async def instance_skills(
+    instance_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    skills = await gene_service.get_instance_skills(db, instance_id)
+    return ApiResponse(data=skills)
+
+
 @router.post("/instances/{instance_id}/genes/install")
 async def install_gene(
     instance_id: str,
