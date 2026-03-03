@@ -173,8 +173,8 @@ async def submit_approval_request(
                 from app.services.channel_adapters.feishu import FeishuChannelAdapter
 
                 adapter = FeishuChannelAdapter(
-                    app_id=settings.FEISHU_APP_ID,
-                    app_secret=settings.FEISHU_APP_SECRET,
+                    app_id=settings.FEISHU_APP_ID_PORTAL,
+                    app_secret=settings.FEISHU_APP_SECRET_PORTAL,
                 )
                 await adapter.send_approval_request(
                     channel_config=hh.channel_config,
