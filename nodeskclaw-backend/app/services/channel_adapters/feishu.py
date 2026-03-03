@@ -29,7 +29,7 @@ async def get_feishu_open_id(user_id: str, db: AsyncSession) -> str | None:
             UserOAuthConnection.user_id == user_id,
             UserOAuthConnection.provider == "feishu",
             not_deleted(UserOAuthConnection),
-        )
+        ).order_by(UserOAuthConnection.created_at.desc()).limit(1)
     )
     return result.scalar_one_or_none()
 
