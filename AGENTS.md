@@ -224,7 +224,7 @@ NoDeskClaw 后端通过 GeneHub Registry 实现基因市场数据代理和标准
 在 `.env` 中设置以下环境变量（留空则全部走本地数据库）：
 
 ```
-GENEHUB_REGISTRY_URL=https://genehub-registry.nodeskai.com
+GENEHUB_REGISTRY_URL=https://genehub.nodeskai.com
 GENEHUB_API_KEY=<publisher-level API Key>
 ```
 

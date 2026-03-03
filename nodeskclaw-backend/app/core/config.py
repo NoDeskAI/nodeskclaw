@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     HTTPS_PROXY: str = ""
 
     # ── GeneHub Registry ────────────────────────────────
-    GENEHUB_REGISTRY_URL: str = ""  # e.g. https://genehub-registry.nodeskai.com
+    GENEHUB_REGISTRY_URL: str = ""  # e.g. https://genehub.nodeskai.com
     GENEHUB_API_KEY: str = ""       # publisher-level API Key
 
     # ── CORS ─────────────────────────────────────────────
