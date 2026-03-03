@@ -222,15 +222,15 @@ async def deliver_to_human(
                 receive_id_type = "open_id"
 
     delivered_via = "sse"
-    if receive_id and receive_id_type and settings.FEISHU_APP_ID:
+    if receive_id and receive_id_type and settings.FEISHU_APP_ID_PORTAL:
         from app.services.channel_adapters.feishu import (
             FeishuChannelAdapter,
             build_workspace_message_card,
         )
 
         adapter = FeishuChannelAdapter(
-            app_id=settings.FEISHU_APP_ID,
-            app_secret=settings.FEISHU_APP_SECRET,
+            app_id=settings.FEISHU_APP_ID_PORTAL,
+            app_secret=settings.FEISHU_APP_SECRET_PORTAL,
         )
         card = build_workspace_message_card(
             workspace_name=workspace_name,
