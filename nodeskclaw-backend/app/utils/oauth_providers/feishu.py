@@ -53,6 +53,10 @@ async def _fetch_email_via_contact(
                 if email:
                     logger.info("通讯录 API 补取到邮箱: %s", email)
                     return email
+                logger.warning(
+                    "通讯录 API 返回成功但邮箱为空，可能缺少 contact:user.email:readonly 权限，"
+                    "响应 user 字段: %s", list(user_data.keys()),
+                )
             else:
                 logger.warning("通讯录 API 查询失败: %s", data)
     except Exception:
