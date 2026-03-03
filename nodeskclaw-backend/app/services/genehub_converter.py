@@ -36,7 +36,7 @@ def genehub_gene_to_local(
         "install_count": gene.get("install_count", 0),
         "avg_rating": gene.get("avg_rating", 0),
         "effectiveness_score": gene.get("effectiveness_score", 0),
-        "is_featured": gene.get("install_count", 0) > 0,
+        "is_featured": gene.get("is_featured", gene.get("install_count", 0) > 0),
         "review_status": gene.get("review_status", "approved"),
         "is_published": gene.get("is_published", True),
         "created_by": cache.get("created_by"),
@@ -53,7 +53,14 @@ def genehub_genome_to_local(
     """Map a GeneHub genome object to the dict format NoDeskClaw frontends expect."""
     cache = local_cache or {}
     raw_genes = genome.get("genes") or []
-    gene_slugs = [g["slug"] if isinstance(g, dict) else g for g in raw_genes]
+    gene_slugs = []
+    for g in raw_genes:
+        if isinstance(g, dict):
+            slug = g.get("slug")
+            if slug:
+                gene_slugs.append(str(slug))
+        elif isinstance(g, str):
+            gene_slugs.append(g)
     return {
         "id": cache.get("id", genome.get("id", genome.get("slug", ""))),
         "name": genome.get("name", ""),
@@ -65,7 +72,7 @@ def genehub_genome_to_local(
         "config_override": cache.get("config_override"),
         "install_count": genome.get("install_count", 0),
         "avg_rating": genome.get("avg_rating", 0),
-        "is_featured": genome.get("install_count", 0) > 0,
+        "is_featured": genome.get("is_featured", genome.get("install_count", 0) > 0),
         "is_published": genome.get("is_published", True),
         "created_by": cache.get("created_by"),
         "org_id": cache.get("org_id"),

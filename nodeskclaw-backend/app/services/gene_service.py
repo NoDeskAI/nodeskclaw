@@ -109,11 +109,13 @@ async def _upsert_gene_cache(db: AsyncSession, gene_data: dict) -> Gene | None:
     return gene
 
 
-async def _batch_upsert_gene_cache(db: AsyncSession, genes_data: list[dict]) -> None:
-    """Upsert multiple GeneHub genes into local cache."""
-    for g in genes_data:
-        await _upsert_gene_cache(db, g)
-    await db.commit()
+async def _batch_upsert_gene_cache(genes_data: list[dict]) -> None:
+    """Upsert multiple GeneHub genes into local cache (uses own session)."""
+    from app.core.deps import async_session_factory
+    async with async_session_factory() as db:
+        for g in genes_data:
+            await _upsert_gene_cache(db, g)
+        await db.commit()
 
 _background_tasks: set[asyncio.Task] = set()
 
@@ -357,7 +359,7 @@ async def list_genes(
         items, total = extract_paginated_items(body)
         slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in items])
         converted = [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in items]
-        _fire_task(_batch_upsert_gene_cache(db, items))
+        _fire_task(_batch_upsert_gene_cache(items))
         return converted, total
 
     return await _list_genes_local(
@@ -386,13 +388,13 @@ async def get_gene(db: AsyncSession, gene_id: str) -> dict:
 
     hub_data = await genehub_client.get_gene(gene.slug)
     if hub_data:
-        _fire_task(_upsert_and_commit(db, hub_data))
+        _fire_task(_upsert_and_commit(hub_data))
         return genehub_gene_to_local(hub_data, _gene_to_dict(gene))
 
     return _gene_to_dict(gene)
 
 
-async def _upsert_and_commit(db: AsyncSession, gene_data: dict) -> None:
+async def _upsert_and_commit(gene_data: dict) -> None:
     """Helper to upsert a single gene cache entry in a background task."""
     from app.core.deps import async_session_factory
     async with async_session_factory() as session:
@@ -461,6 +463,7 @@ async def get_featured_genes(db: AsyncSession, limit: int = 10) -> list[dict]:
     hub_data = await genehub_client.get_featured_genes(limit)
     if hub_data is not None:
         slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in hub_data])
+        _fire_task(_batch_upsert_gene_cache(hub_data))
         return [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in hub_data]
 
     result = await db.execute(
@@ -492,6 +495,7 @@ async def get_gene_synergies(db: AsyncSession, gene_id: str) -> list[dict]:
     hub_data = await genehub_client.get_gene_synergies(gene_obj.slug)
     if hub_data is not None:
         slug_map = await _build_slug_cache_map(db, [g.get("slug", "") for g in hub_data])
+        _fire_task(_batch_upsert_gene_cache(hub_data))
         return [genehub_gene_to_local(g, slug_map.get(g.get("slug", ""))) for g in hub_data]
 
     slugs = _json_loads(gene_obj.synergies) or []
@@ -534,6 +538,7 @@ async def list_genomes(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict], int]:
+    # Genomes 不做本地缓存 upsert（数据量小，NoDeskClaw 侧 genomes 由 admin 管理）
     body = await genehub_client.list_genomes(keyword=keyword, page=page, page_size=page_size)
     if body is not None:
         items, total = extract_paginated_items(body)

@@ -39,6 +39,17 @@ async def _get_client() -> httpx.AsyncClient:
     return _client
 
 
+def _log_error(method: str, path: str, exc: Exception) -> None:
+    if isinstance(exc, httpx.TimeoutException):
+        logger.warning("GeneHub timeout: %s %s", method, path)
+    elif isinstance(exc, httpx.HTTPStatusError):
+        logger.warning("GeneHub HTTP %d: %s %s", exc.response.status_code, method, path)
+    elif isinstance(exc, httpx.RequestError):
+        logger.warning("GeneHub connection error: %s %s -> %s", method, path, exc)
+    else:
+        logger.warning("GeneHub unexpected error: %s %s -> %s", method, path, exc)
+
+
 async def _get(path: str, params: dict[str, Any] | None = None) -> dict | None:
     if not _is_enabled():
         return None
@@ -52,7 +63,7 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict | None:
             return None
         return body
     except Exception as e:
-        logger.warning("GeneHub request failed: %s %s -> %s", path, params, e)
+        _log_error("GET", path, e)
         return None
 
 
@@ -69,7 +80,7 @@ async def _post(path: str, json_body: dict | None = None) -> dict | None:
             return None
         return body
     except Exception as e:
-        logger.warning("GeneHub POST failed: %s -> %s", path, e)
+        _log_error("POST", path, e)
         return None
 
 
