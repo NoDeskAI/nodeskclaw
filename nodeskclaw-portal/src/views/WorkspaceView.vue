@@ -13,6 +13,7 @@ import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
 import AgentCollaborationPanel from '@/components/workspace/AgentCollaborationPanel.vue'
+import AgentDetailDialog from '@/components/workspace/AgentDetailDialog.vue'
 import CollaborationTimeline from '@/components/workspace/CollaborationTimeline.vue'
 import { useToast } from '@/composables/useToast'
 import { axialToWorld } from '@/composables/useHexLayout'
@@ -53,6 +54,8 @@ const isFullscreen = ref(false)
 const focusMode = ref(false)
 const selectedAgentId = ref<string | null>(null)
 const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !== 'hidden')
+const agentDetailVisible = ref(false)
+const agentDetailId = ref<string | null>(null)
 
 const CHAT_MIN_RATIO = 0.191
 const CHAT_MAX_RATIO = 0.618
@@ -304,7 +307,8 @@ function onHexAction(action: string) {
       break
     case 'view-detail':
       if (selectedHex.value?.agentId) {
-        router.push(`/instances/${selectedHex.value.agentId}`)
+        agentDetailId.value = selectedHex.value.agentId
+        agentDetailVisible.value = true
       }
       hexDrawerOpen.value = false
       break
@@ -1226,6 +1230,14 @@ function handleKeydown(e: KeyboardEvent) {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Agent Detail Dialog -->
+    <AgentDetailDialog
+      v-model:visible="agentDetailVisible"
+      :instance-id="agentDetailId"
+      @navigate="router.push(`/instances/${agentDetailId}`)"
+      @deleted="store.fetchWorkspace(workspaceId)"
+    />
 
     <!-- Focus Mode Dialog -->
     <Teleport to="body">

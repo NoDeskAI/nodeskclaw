@@ -55,7 +55,7 @@ vue-tsc -b       # 类型检查
 | 路径 | 页面 | 说明 |
 |------|------|------|
 | `/` | 工作区列表 | 首页 |
-| `/workspace/:id` | 工作区视图 | 拓扑图 + 群聊 |
+| `/workspace/:id` | 工作区视图 | 拓扑图 + 群聊 + Agent 详情弹窗 |
 | `/instances` | 实例列表 | 所有 Agent 实例 |
 | `/instances/:id` | 实例详情 | 概览/基因/进化/MCP/Channel/设置/文件/成员 |
 | `/members` | 组织成员 | 成员管理 |
