@@ -79,7 +79,7 @@ onUnmounted(() => {
             {{ t('hexAction.emptySlot') }}
           </template>
           <template v-else-if="hexType === 'agent'">
-            {{ agentInfo?.name || 'Agent' }}
+            {{ agentInfo?.name || 'AI 员工' }}
           </template>
           <template v-else-if="hexType === 'corridor'">
             {{ entityInfo?.name || t('hexAction.corridor') }}

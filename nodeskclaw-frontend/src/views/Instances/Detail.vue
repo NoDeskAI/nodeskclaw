@@ -690,7 +690,7 @@ function formatTime(ts: string | null): string {
           <AlertDialogTitle>删除实例</AlertDialogTitle>
           <AlertDialogDescription v-if="detail?.workspace_id" class="space-y-2">
             <p>该实例当前已加入办公室「<strong class="text-foreground">{{ detail.workspace_name }}</strong>」，无法直接删除。</p>
-            <p class="text-xs">请先在办公室中将此 Agent 移除，然后再执行删除操作。</p>
+            <p class="text-xs">请先在办公室中将此 AI 员工移除，然后再执行删除操作。</p>
           </AlertDialogDescription>
           <AlertDialogDescription v-else class="space-y-2">
             <p>此操作<strong class="text-destructive">不可撤销</strong>。将删除实例 <strong>{{ detail?.name }}</strong> 对应的整个命名空间 <code class="text-xs bg-muted px-1 py-0.5 rounded">{{ detail?.namespace }}</code> 及其下所有 K8s 资源，包括：</p>

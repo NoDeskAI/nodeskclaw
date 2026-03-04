@@ -1,11 +1,11 @@
 # OpenClaw Channel Plugin: NoDeskClaw
 
-DeskClaw 赛博办公室 Agent 协同通信的 OpenClaw channel plugin。让 Agent 能通过 `send` 工具主动与办公室中的其他 Agent 协同。
+DeskClaw 赛博办公室 AI 员工协同通信的 OpenClaw channel plugin。让 AI 员工能通过 `send` 工具主动与办公室中的其他 AI 员工协同。
 
 ## 用途
 
-- 接入 OpenClaw 的 channel 系统，为 DeskClaw 赛博办公室提供 Agent 间通信能力
-- Agent 可以使用 `send -t nodeskclaw -to "agent:{name}" -m "消息"` 向其他 Agent 发送协同消息
+- 接入 OpenClaw 的 channel 系统，为 DeskClaw 赛博办公室提供 AI 员工间通信能力
+- AI 员工可以使用 `send -t nodeskclaw -to "agent:{name}" -m "消息"` 向其他 AI 员工发送协同消息
 - 通过 SSE（Server-Sent Events）将消息推送给已连接的 NoDeskClaw 后端，由后端处理和分发
 
 ## 架构概览
@@ -14,7 +14,7 @@ DeskClaw 赛博办公室 Agent 协同通信的 OpenClaw channel plugin。让 Age
 
 1. **SSE 服务端**：在端口 9721 上运行 SSE 服务器
 2. **消息广播**：`sendText` 被调用时，将消息广播给所有已连接的 SSE 客户端（NoDeskClaw 后端）
-3. **无连接时报错**：若没有后端连接（`clients.size === 0`），`sendText` 会抛出错误，让 Agent 感知到 channel 不可用
+3. **无连接时报错**：若没有后端连接（`clients.size === 0`），`sendText` 会抛出错误，让 AI 员工感知到 channel 不可用
 4. **心跳**：SSE 服务器每 15 秒发送一次 `heartbeat` 事件
 5. **健康检查**：提供 `/sse/health` 端点，返回 `{ ok, clients }` 用于监控
 
@@ -88,10 +88,10 @@ SSE 事件类型：
 
 ## 使用方式
 
-Agent 在对话中可以使用 `send` 工具与办公室中的其他 Agent 协同：
+AI 员工在对话中可以使用 `send` 工具与办公室中的其他 AI 员工协同：
 
 ```text
 send -t nodeskclaw -to "agent:researcher" -m "请帮我查一下这个问题的背景资料"
 ```
 
-若此时没有 NoDeskClaw 后端连接，`sendText` 会抛出错误，Agent 可据此提示用户检查后端连接状态。
+若此时没有 NoDeskClaw 后端连接，`sendText` 会抛出错误，AI 员工可据此提示用户检查后端连接状态。

@@ -136,7 +136,7 @@ def build_context_prompt(
     else:
         messages_text = "(no recent messages from other members)"
 
-    return f"""你是赛博办公室"{workspace_name}"中的 Agent "{agent_display_name}"。
+    return f"""你是赛博办公室"{workspace_name}"中的 AI 员工"{agent_display_name}"。
 
 办公室成员:
 {members_text}
@@ -146,7 +146,7 @@ def build_context_prompt(
 
 ---
 你可以直接回复参与讨论。如果当前话题与你无关或你没有要补充的，回复 NO_REPLY 即可。
-如需主动联系其他 Agent，使用 send 工具: send -t nodeskclaw -to "agent:{{name}}" -m "消息"
+如需主动联系其他 AI 员工，使用 send 工具: send -t nodeskclaw -to "agent:{{name}}" -m "消息"
 """
 
 

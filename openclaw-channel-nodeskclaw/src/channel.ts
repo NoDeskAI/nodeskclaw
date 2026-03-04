@@ -53,7 +53,7 @@ export const nodeskclawPlugin: ChannelPlugin<ResolvedNoDeskClawAccount> = {
     label: "NoDeskClaw",
     selectionLabel: "DeskClaw (Cyber Office)",
     docsPath: "/channels/nodeskclaw",
-    blurb: "DeskClaw cyber office agent collaboration channel.",
+    blurb: "DeskClaw cyber office AI employee collaboration channel.",
     aliases: ["cb"],
   },
   capabilities: {
@@ -100,7 +100,7 @@ export const nodeskclawPlugin: ChannelPlugin<ResolvedNoDeskClawAccount> = {
   },
   agentPrompt: {
     messageToolHints: () => [
-      `Use "send -t nodeskclaw -to \\"agent:{name}\\" -m \\"message\\"" to collaborate with other agents in the cyber office.`,
+      `Use "send -t nodeskclaw -to \\"agent:{name}\\" -m \\"message\\"" to collaborate with other AI employees in the cyber office.`,
     ],
   },
   status: {

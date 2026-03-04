@@ -184,7 +184,7 @@ async def delete_workspace(db: AsyncSession, workspace_id: str) -> bool:
         )
     )
     if agents_count.scalar() > 0:
-        raise ValueError("请先移除办公室内的所有 Agent")
+        raise ValueError("请先移除办公室内的所有 AI 员工")
 
     ws.soft_delete()
     await db.commit()
@@ -394,7 +394,7 @@ async def _remove_channel_plugin(inst: Instance, db: AsyncSession) -> None:
 _NODE_TYPE_LABELS = {
     "blackboard": "黑板",
     "corridor": "走廊",
-    "agent": "Agent",
+    "agent": "AI 员工",
     "human": "成员",
 }
 
@@ -421,7 +421,7 @@ async def _notify_topology_status(
         content = (
             f"{agent_name} 当前位置没有相邻节点连接，"
             "除加入消息外不会参与工作区交互。"
-            "请在拓扑编辑器中手动连接，或将 Agent 拖到已有节点旁边。"
+            "请在拓扑编辑器中手动连接，或将 AI 员工拖到已有节点旁边。"
         )
 
     broadcast_event(workspace_id, "system:info", {

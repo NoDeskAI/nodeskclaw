@@ -114,7 +114,7 @@ function formatMetricType(t: string): string {
     user_positive: '用户正向',
     user_negative: '用户负向',
     task_success: '任务成功',
-    agent_self_eval: 'Agent 自评',
+      agent_self_eval: 'AI 员工自评',
   }
   return map[t] ?? t
 }
@@ -386,7 +386,7 @@ const categories = ['开发', '数据', '运维', '网络', '创意', '沟通', 
             <CardContent class="pt-4">
               <div class="flex items-center gap-2 text-muted-foreground mb-1">
                 <Sparkles class="w-4 h-4" />
-                <span class="text-sm">Agent 创造</span>
+                <span class="text-sm">AI 员工创造</span>
               </div>
               <div class="text-2xl font-bold">{{ store.stats?.agent_created_count ?? 0 }}</div>
             </CardContent>
@@ -532,7 +532,7 @@ const categories = ['开发', '数据', '运维', '网络', '创意', '沟通', 
                 <TableCell>{{ gene.category || '-' }}</TableCell>
                 <TableCell>
                   <Badge :variant="gene.source === 'official' ? 'default' : 'secondary'">
-                    {{ gene.source === 'official' ? '官方' : gene.source === 'agent' ? 'Agent' : gene.source }}
+                    {{ gene.source === 'official' ? '官方' : gene.source === 'agent' ? 'AI 员工' : gene.source }}
                   </Badge>
                 </TableCell>
                 <TableCell class="text-center">{{ gene.install_count }}</TableCell>
@@ -718,7 +718,7 @@ const categories = ['开发', '数据', '运维', '网络', '创意', '沟通', 
                 <TableCell class="text-muted-foreground font-mono text-xs">{{ gene.slug }}</TableCell>
                 <TableCell>
                   <Badge :variant="gene.source === 'official' ? 'default' : 'secondary'">
-                    {{ gene.source === 'official' ? '官方' : gene.source === 'agent' ? 'Agent' : gene.source }}
+                    {{ gene.source === 'official' ? '官方' : gene.source === 'agent' ? 'AI 员工' : gene.source }}
                   </Badge>
                 </TableCell>
                 <TableCell>

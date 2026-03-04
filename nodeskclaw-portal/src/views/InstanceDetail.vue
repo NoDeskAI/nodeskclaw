@@ -330,8 +330,8 @@ async function handleDelete() {
               <h3 class="text-base font-semibold">删除AI 员工</h3>
             </div>
             <div v-if="instance?.workspace_id" class="text-sm text-muted-foreground space-y-2">
-              <p>该AI 员工当前已加入办公室「<span class="text-foreground font-medium">{{ instance.workspace_name }}</span>」，无法直接删除。</p>
-              <p class="text-xs">请先在办公室中将此 Agent 移除，然后再执行删除操作。</p>
+              <p>该 AI 员工当前已加入办公室「<span class="text-foreground font-medium">{{ instance.workspace_name }}</span>」，无法直接删除。</p>
+              <p class="text-xs">请先在办公室中将此 AI 员工移除，然后再执行删除操作。</p>
             </div>
             <div v-else class="text-sm text-muted-foreground space-y-2">
               <p>确定删除AI 员工「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>

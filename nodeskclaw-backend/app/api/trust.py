@@ -138,7 +138,7 @@ async def submit_approval_request(
         workspace_id=body.workspace_id,
         agent_instance_id=body.agent_instance_id,
         decision_type=body.action_type,
-        context_summary=f"Agent requested approval for {body.action_type}",
+        context_summary=f"AI Employee requested approval for {body.action_type}",
         proposal=body.proposal,
         outcome="pending",
     )

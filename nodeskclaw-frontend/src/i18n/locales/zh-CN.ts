@@ -145,8 +145,8 @@ const zhCN = {
     },
     workspace: {
       not_found: "办公室不存在",
-      agent_not_found: "Agent 不存在",
-      agent_not_in_workspace: "Agent 不在该办公室中",
+      agent_not_found: "AI 员工不存在",
+      agent_not_in_workspace: "AI 员工不在该办公室中",
       blackboard_not_found: "黑板不存在",
       member_not_found: "成员不存在",
     },

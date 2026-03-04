@@ -118,7 +118,7 @@ async function save() {
 const canEdit = computed(() => activeTab.value === 'objectives-tasks' || activeTab.value === 'notes-perf')
 
 function nodeTypeLabel(type: string): string {
-  const map: Record<string, string> = { agent: 'Agent', corridor: t('blackboard.topoCorridorNode'), human: t('blackboard.topoHumanNode'), blackboard: t('blackboard.topoBlackboardNode') }
+  const map: Record<string, string> = { agent: 'AI 员工', corridor: t('blackboard.topoCorridorNode'), human: t('blackboard.topoHumanNode'), blackboard: t('blackboard.topoBlackboardNode') }
   return map[type] || type
 }
 </script>
@@ -194,7 +194,7 @@ function nodeTypeLabel(type: string): string {
             </div>
             <div v-else class="space-y-4">
               <div v-if="agents.length > 0">
-                <h3 class="text-sm font-medium mb-2 text-muted-foreground">Agent</h3>
+                <h3 class="text-sm font-medium mb-2 text-muted-foreground">AI 员工</h3>
                 <div class="space-y-1.5">
                   <div
                     v-for="agent in agents"

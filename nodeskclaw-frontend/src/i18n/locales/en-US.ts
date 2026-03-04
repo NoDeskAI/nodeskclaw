@@ -145,8 +145,8 @@ const enUS = {
     },
     workspace: {
       not_found: "Cyber office does not exist",
-      agent_not_found: "Agent does not exist",
-      agent_not_in_workspace: "Agent is not in this cyber office",
+      agent_not_found: "AI Employee does not exist",
+      agent_not_in_workspace: "AI Employee is not in this cyber office",
       blackboard_not_found: "Blackboard does not exist",
       member_not_found: "Member does not exist",
     },

@@ -1716,7 +1716,7 @@ async def publish_variant(
     manifest = _json_loads(parent.manifest) or {}
     manifest["skill"] = {"name": slug, "content": ig.learning_output}
 
-    variant_desc = f"Agent {agent_display} 基于 {parent.name} 的进化版本"
+    variant_desc = f"AI 员工 {agent_display} 基于 {parent.name} 的进化版本"
     _validate_skill_metadata(manifest, parent.short_description, variant_desc)
 
     variant = Gene(

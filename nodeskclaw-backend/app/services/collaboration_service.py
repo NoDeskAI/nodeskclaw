@@ -340,7 +340,7 @@ async def _invoke_target_agent(
     if ws_info and ws_info.agents:
         for a in ws_info.agents:
             members.append({
-                "type": "Agent",
+                "type": "AI 员工",
                 "name": a.display_name or a.name,
                 "id": a.instance_id,
             })

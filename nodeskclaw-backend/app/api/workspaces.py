@@ -229,7 +229,7 @@ async def update_agent(
     await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     agent = await workspace_service.update_agent(db, workspace_id, instance_id, data)
     if agent is None:
-        raise _error(404, 40431, "errors.workspace.agent_not_found", "Agent 不存在")
+        raise _error(404, 40431, "errors.workspace.agent_not_found", "AI 员工不存在")
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -243,7 +243,7 @@ async def remove_agent(
     await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     ok = await workspace_service.remove_agent(db, workspace_id, instance_id)
     if not ok:
-        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该办公室中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "AI 员工不在该办公室中")
     return _ok(message="已移除")
 
 
@@ -511,7 +511,7 @@ async def workspace_chat(
     running_agents = await _get_running_agents(db, workspace_id)
     if not running_agents:
         logger.warning("workspace_chat: workspace=%s 没有运行中的 Agent", workspace_id)
-        _broadcast_system_info(workspace_id, "办公室内没有运行中的 Agent")
+        _broadcast_system_info(workspace_id, "办公室内没有运行中的 AI 员工")
         return _ok({"status": "no_agents"})
 
     from app.services import corridor_router
@@ -556,10 +556,10 @@ async def workspace_chat(
 
     if not target_agents:
         logger.warning(
-            "workspace_chat: workspace=%s has_topo=%s, 没有可达的运行中 Agent (running=%d)",
+            "workspace_chat: workspace=%s has_topo=%s, 没有可达的运行中 AI 员工 (running=%d)",
             workspace_id, has_topo, len(running_agents),
         )
-        _broadcast_system_info(workspace_id, "没有可达的运行中 Agent")
+        _broadcast_system_info(workspace_id, "没有可达的运行中 AI 员工")
         return _ok({"status": "no_reachable_agents"})
 
     members = _build_members_list(ws_info, user)
@@ -734,7 +734,7 @@ async def agent_chat(
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该办公室中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "AI 员工不在该办公室中")
 
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)
@@ -756,7 +756,7 @@ async def agent_chat(
 
     base_url, token = _get_instance_connection(inst)
     if not base_url or not token:
-        raise _error(400, 40033, "errors.workspace.agent_connection_missing", "Agent 实例缺少访问地址或 Token")
+        raise _error(400, 40033, "errors.workspace.agent_connection_missing", "AI 员工实例缺少访问地址或 Token")
 
     async def stream():
         full_response = ""
@@ -926,7 +926,7 @@ def _build_members_list(ws_info, user) -> list[dict]:
     if ws_info and ws_info.agents:
         for a in ws_info.agents:
             members.append({
-                "type": "Agent",
+                "type": "AI 员工",
                 "name": a.display_name or a.name,
                 "id": a.instance_id,
             })

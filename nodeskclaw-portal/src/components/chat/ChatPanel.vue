@@ -649,7 +649,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
           class="absolute bottom-full left-4 right-4 mb-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden z-10"
         >
           <div class="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide border-b border-border">
-            Agent
+            AI 员工
           </div>
           <div class="max-h-40 overflow-y-auto">
             <button
