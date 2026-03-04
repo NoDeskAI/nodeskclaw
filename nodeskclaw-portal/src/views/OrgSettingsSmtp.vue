@@ -9,7 +9,7 @@ import api from '@/services/api'
 import { Loader2, Trash2, Send, Save, Eye, EyeOff, MailPlus } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { toast } = useToast()
+const toast = useToast()
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
 
@@ -74,12 +74,12 @@ async function handleSave() {
   if (!orgStore.currentOrg || saving.value) return
 
   if (!form.value.smtp_host || !form.value.smtp_username || !form.value.from_email) {
-    toast({ title: t('orgSettings.smtpFillRequired'), variant: 'destructive' })
+    toast.error(t('orgSettings.smtpFillRequired'))
     return
   }
 
   if (!hasConfig.value && !form.value.smtp_password) {
-    toast({ title: t('orgSettings.smtpPasswordRequired'), variant: 'destructive' })
+    toast.error(t('orgSettings.smtpPasswordRequired'))
     return
   }
 
@@ -90,10 +90,10 @@ async function handleSave() {
       delete payload.smtp_password
     }
     await api.put(`/org-settings/${orgStore.currentOrg.id}/smtp-config`, payload)
-    toast({ title: t('orgSettings.smtpSaved') })
+    toast.success(t('orgSettings.smtpSaved'))
     await fetchConfig()
   } catch (e: any) {
-    toast({ title: resolveApiErrorMessage(e, t('orgSettings.smtpSaveFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('orgSettings.smtpSaveFailed')))
   } finally {
     saving.value = false
   }
@@ -103,15 +103,15 @@ async function handleTest() {
   if (!orgStore.currentOrg || testing.value) return
   const email = testEmail.value || authStore.user?.email
   if (!email) {
-    toast({ title: t('orgSettings.smtpTestEmailRequired'), variant: 'destructive' })
+    toast.error(t('orgSettings.smtpTestEmailRequired'))
     return
   }
   testing.value = true
   try {
     await api.post(`/org-settings/${orgStore.currentOrg.id}/smtp-config/test`, { recipient_email: email })
-    toast({ title: t('orgSettings.smtpTestSent') })
+    toast.success(t('orgSettings.smtpTestSent'))
   } catch (e: any) {
-    toast({ title: resolveApiErrorMessage(e, t('orgSettings.smtpTestFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('orgSettings.smtpTestFailed')))
   } finally {
     testing.value = false
   }
@@ -122,12 +122,12 @@ async function handleDelete() {
   deleting.value = true
   try {
     await api.delete(`/org-settings/${orgStore.currentOrg.id}/smtp-config`)
-    toast({ title: t('orgSettings.smtpDeleted') })
+    toast.success(t('orgSettings.smtpDeleted'))
     hasConfig.value = false
     form.value = { smtp_host: '', smtp_port: 587, smtp_username: '', smtp_password: '', from_email: '', from_name: '', use_tls: true }
     passwordPlaceholder.value = ''
   } catch (e: any) {
-    toast({ title: resolveApiErrorMessage(e, t('orgSettings.smtpDeleteFailed')), variant: 'destructive' })
+    toast.error(resolveApiErrorMessage(e, t('orgSettings.smtpDeleteFailed')))
   } finally {
     deleting.value = false
   }
