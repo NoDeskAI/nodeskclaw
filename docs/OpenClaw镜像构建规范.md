@@ -120,7 +120,7 @@ GitHub Actions 定时检测 npm 新版本
 |------|------|
 | 基础镜像 | `internet-cn-beijing.cr.volces.com/library/node:${NODE_VERSION}-bookworm-slim` |
 | 系统依赖 | `curl`, `git`, `ca-certificates`, `jq`, `procps`, `gettext-base`（envsubst） |
-| 全局安装 | `npm install -g openclaw@${OPENCLAW_VERSION}` |
+| 全局安装 | `npm install -g openclaw@${OPENCLAW_VERSION} @nodeskai/genehub` |
 | 预置目录 | 在 `/root/.openclaw/` 下创建完整子目录结构 |
 | 配置模板 | 拷入 `openclaw.json.template` 到 `/root/.openclaw/` |
 | 默认插件 | 如有内置插件，拷入 `extensions/` |

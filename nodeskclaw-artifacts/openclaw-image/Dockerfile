@@ -27,7 +27,7 @@ RUN apt-get update && \
     git config --global --add url."https://github.com/".insteadOf git@github.com:
 
 # ---------- 全局安装 OpenClaw ----------
-RUN npm install -g openclaw@${OPENCLAW_VERSION} && \
+RUN npm install -g openclaw@${OPENCLAW_VERSION} @nodeskai/genehub && \
     npm cache clean --force
 
 # ---------- 预置用户数据目录结构 ----------
