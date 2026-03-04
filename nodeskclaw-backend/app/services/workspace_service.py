@@ -535,6 +535,7 @@ async def _send_welcome_message(workspace_id: str, inst: Instance) -> None:
             workspace_id=workspace_id,
             target_instance=inst,
             source_name="System",
+            source_instance_id="system",
             message=WELCOME_MESSAGE,
             depth=0,
         )
