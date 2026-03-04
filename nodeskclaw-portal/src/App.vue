@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
-import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User, SlidersHorizontal } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User, SlidersHorizontal } from 'lucide-vue-next'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
@@ -95,16 +95,6 @@ function onLocaleChange(value: string) {
             >
               <Server class="w-4 h-4 inline mr-1.5" />
               {{ t('common.instance') }}
-            </button>
-            <button
-              :class="[
-                'px-3 py-1.5 rounded-md text-sm transition-colors',
-                route.path === '/members' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
-              ]"
-              @click="router.push('/members')"
-            >
-              <Users class="w-4 h-4 inline mr-1.5" />
-              {{ t('common.members') }}
             </button>
             <button
               :class="[

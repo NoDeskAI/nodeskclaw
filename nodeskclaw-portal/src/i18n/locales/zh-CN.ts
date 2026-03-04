@@ -575,6 +575,8 @@ const zhCN = {
   orgSettings: {
     navTitle: "组织设置",
     title: "组织设置",
+    humanMembers: "人类成员",
+    requiredGenesTab: "必装基因",
     requiredGenesTitle: "必装基因",
     requiredGenesDesc: "Agent 加入办公室时必须安装的基因列表",
     addGene: "添加基因",

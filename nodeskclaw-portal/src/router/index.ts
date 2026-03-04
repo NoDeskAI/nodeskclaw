@@ -83,19 +83,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Settings.vue'),
   },
   {
-    path: '/members',
-    name: 'OrgMembers',
-    component: () => import('@/views/OrgMembers.vue'),
-  },
-  {
     path: '/usage',
     name: 'OrgUsage',
     component: () => import('@/views/OrgUsage.vue'),
   },
   {
     path: '/org-settings',
-    name: 'OrgSettings',
     component: () => import('@/views/OrgSettings.vue'),
+    children: [
+      { path: '', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue') },
+      { path: 'genes', name: 'OrgSettingsGenes', component: () => import('@/views/OrgSettingsGenes.vue') },
+    ],
+  },
+  {
+    path: '/members',
+    redirect: '/org-settings',
   },
   {
     path: '/gene-market',

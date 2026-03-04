@@ -179,10 +179,10 @@ async function copyPassword() {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-6 py-8">
+  <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold">{{ t('orgMembers.title') }}</h1>
+        <h2 class="text-base font-semibold">{{ t('orgMembers.title') }}</h2>
         <p class="text-sm text-muted-foreground mt-0.5">
           {{ t('orgMembers.subtitle', { orgName: orgStore.currentOrg?.name || t('orgMembers.orgFallback') }) }}
         </p>

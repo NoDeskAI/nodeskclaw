@@ -575,6 +575,8 @@ const enUS = {
   orgSettings: {
     navTitle: "Org Settings",
     title: "Organization Settings",
+    humanMembers: "Human Members",
+    requiredGenesTab: "Required Genes",
     requiredGenesTitle: "Required Genes",
     requiredGenesDesc: "Genes that must be installed when an Agent joins a cyber office",
     addGene: "Add Gene",
