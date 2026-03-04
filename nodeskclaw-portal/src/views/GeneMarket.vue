@@ -28,7 +28,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
-import type { GeneItem, GenomeItem } from '@/stores/gene'
+import type { GeneItem, GenomeItem, TemplateItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 
@@ -37,7 +37,7 @@ const store = useGeneStore()
 const toast = useToast()
 const { t, locale } = useI18n()
 
-const viewMode = ref<'genes' | 'genomes' | 'evolution'>('genes')
+const viewMode = ref<'genes' | 'genomes' | 'templates' | 'evolution'>('genes')
 const keyword = ref('')
 const selectedTag = ref<string | null>(null)
 const selectedCategory = ref<string | null>(null)
@@ -177,15 +177,20 @@ function formatDate(s?: string): string {
   return d.toLocaleString(currentLocale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-const featuredItems = computed(() =>
-  viewMode.value === 'genes' ? store.featuredGenes : store.featuredGenomes,
-)
+const featuredItems = computed(() => {
+  if (viewMode.value === 'genes') return store.featuredGenes
+  if (viewMode.value === 'genomes') return store.featuredGenomes
+  return []
+})
 
 const hasFeatured = computed(() => featuredItems.value.length > 0)
 
-const totalCount = computed(() =>
-  viewMode.value === 'genes' ? store.totalGenes : store.totalGenomes,
-)
+const totalCount = computed(() => {
+  if (viewMode.value === 'genes') return store.totalGenes
+  if (viewMode.value === 'genomes') return store.totalGenomes
+  if (viewMode.value === 'templates') return store.totalTemplates
+  return 0
+})
 
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value) || 1)
 const canPrev = computed(() => page.value > 1)
@@ -201,8 +206,14 @@ async function loadData() {
       page: page.value,
       page_size: pageSize.value,
     })
-  } else {
+  } else if (viewMode.value === 'genomes') {
     await store.fetchGenomes({
+      keyword: keyword.value || undefined,
+      page: page.value,
+      page_size: pageSize.value,
+    })
+  } else if (viewMode.value === 'templates') {
+    await store.fetchTemplates({
       keyword: keyword.value || undefined,
       page: page.value,
       page_size: pageSize.value,
@@ -213,9 +224,13 @@ async function loadData() {
 async function loadFeatured() {
   if (viewMode.value === 'genes') {
     await store.fetchFeaturedGenes()
-  } else {
+  } else if (viewMode.value === 'genomes') {
     await store.fetchFeaturedGenomes()
   }
+}
+
+function goToTemplate(id: string) {
+  router.push(`/gene-market/template/${id}`)
 }
 
 async function onMount() {
@@ -240,6 +255,8 @@ watch([viewMode, selectedTag, selectedCategory, sortBy], () => {
   page.value = 1
   if (viewMode.value === 'evolution') {
     loadEvolution()
+  } else if (viewMode.value === 'templates') {
+    loadData()
   } else {
     loadFeatured()
     loadData()
@@ -295,6 +312,17 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="viewMode = 'genomes'"
           >
             {{ t('geneMarket.tabGenomes') }}
+          </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              viewMode === 'templates'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            ]"
+            @click="viewMode = 'templates'"
+          >
+            {{ t('geneMarket.tabTemplates') }}
           </button>
           <button
             :class="[
@@ -626,7 +654,7 @@ function hasNativeTools(gene: GeneItem): boolean {
               </div>
               </div>
             </template>
-            <template v-else>
+            <template v-else-if="viewMode === 'genomes'">
               <div
                 v-for="genome in store.genomes"
                 :key="genome.id"
@@ -668,6 +696,36 @@ function hasNativeTools(gene: GeneItem): boolean {
                 <span class="shrink-0">{{ t('geneMarket.learnCount', { count: genome.install_count ?? 0 }) }}</span>
               </div>
             </div>
+            </template>
+            <template v-else-if="viewMode === 'templates'">
+              <div
+                v-for="tpl in store.templates"
+                :key="tpl.id"
+                class="p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition cursor-pointer"
+                @click="goToTemplate(tpl.id)"
+              >
+                <div class="flex items-start gap-3 mb-2">
+                  <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <component :is="resolveIcon(tpl.icon)" class="w-5 h-5 text-primary" />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <span class="font-medium truncate block">{{ tpl.name }}</span>
+                    <p class="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      {{ tpl.short_description ?? tpl.description ?? '' }}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
+                  <span class="flex items-center gap-1">
+                    <Dna class="w-3.5 h-3.5" />
+                    {{ t('template.geneCount', { count: tpl.gene_slugs?.length ?? 0 }) }}
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <Download class="w-3.5 h-3.5" />
+                    {{ t('template.useCount', { count: tpl.use_count ?? 0 }) }}
+                  </span>
+                </div>
+              </div>
             </template>
           </div>
         </section>

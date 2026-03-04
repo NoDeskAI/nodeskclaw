@@ -26,6 +26,7 @@ class DeployRequest(BaseModel):
     storage_size: str = "80Gi"
     advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
     llm_configs: list[LlmConfigItem] | None = None
+    template_id: str | None = None
 
     @field_validator("storage_size")
     @classmethod

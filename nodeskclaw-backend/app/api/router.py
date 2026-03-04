@@ -26,6 +26,7 @@ from app.api.trust import router as trust_router
 from app.api.webhooks import router as webhook_router
 from app.api.workspaces import router as workspace_router
 from app.api.templates import router as template_router
+from app.api.instance_templates import router as instance_template_router
 from app.core.deps import require_org_role
 
 from app.api.portal.instances import router as portal_instance_router
@@ -69,6 +70,7 @@ api_router.include_router(workspace_router, prefix="/workspaces", tags=["赛博�
 api_router.include_router(corridor_router, prefix="/workspaces", tags=["过道系统"])
 api_router.include_router(trust_router, prefix="/workspaces", tags=["渐进式信任"])
 api_router.include_router(template_router, prefix="/workspaces", tags=["办公室模板"])
+api_router.include_router(instance_template_router, tags=["AI 员工模板"])
 api_router.include_router(gene_router, tags=["基因进化"])
 
 # ── 管理平台 Admin API（/api/v1/admin）─────────────────────

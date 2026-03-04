@@ -115,6 +115,11 @@ const routes: RouteRecordRaw[] = [
     name: 'GenomeDetail',
     component: () => import('@/views/GenomeDetail.vue'),
   },
+  {
+    path: '/gene-market/template/:id',
+    name: 'TemplateDetail',
+    component: () => import('@/views/TemplateDetail.vue'),
+  },
   // Enterprise files
   {
     path: '/enterprise-files',

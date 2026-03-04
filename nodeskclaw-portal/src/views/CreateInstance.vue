@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2 } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2, Dna, Package, X } from 'lucide-vue-next'
 import ModelSelect from '@/components/shared/ModelSelect.vue'
 import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import { pinyin } from 'pinyin-pro'
@@ -12,6 +12,7 @@ import { useOrgStore } from '@/stores/org'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const orgStore = useOrgStore()
@@ -35,6 +36,34 @@ const storageGi = ref(20)
 const deploying = ref(false)
 const error = ref('')
 const currentStep = ref(1)
+
+// ── Template ──
+import { useGeneStore } from '@/stores/gene'
+import type { TemplateItem } from '@/stores/gene'
+
+const geneStore = useGeneStore()
+const selectedTemplate = ref<TemplateItem | null>(null)
+const templateSelectorOpen = ref(false)
+const templateLoading = ref(false)
+
+async function openTemplateSelector() {
+  templateSelectorOpen.value = true
+  templateLoading.value = true
+  try {
+    await geneStore.fetchTemplates({ page_size: 50 })
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+function selectTemplate(tpl: TemplateItem) {
+  selectedTemplate.value = tpl
+  templateSelectorOpen.value = false
+}
+
+function clearTemplate() {
+  selectedTemplate.value = null
+}
 
 const nameHasEdgeSpaces = computed(() => name.value.length > 0 && name.value !== name.value.trim())
 
@@ -250,6 +279,18 @@ onMounted(async () => {
   } finally {
     loadingInit.value = false
   }
+
+  const qTemplateId = route.query.template_id as string | undefined
+  if (qTemplateId) {
+    try {
+      await geneStore.fetchTemplate(qTemplateId)
+      if (geneStore.currentTemplate) {
+        selectedTemplate.value = geneStore.currentTemplate
+      }
+    } catch {
+      // ignore
+    }
+  }
 })
 
 const llmReady = computed(() => {
@@ -307,6 +348,7 @@ async function handleDeploy() {
       storage_size: `${storageGi.value}Gi`,
       description: description.value || undefined,
       llm_configs: activeLlm.length > 0 ? activeLlm : undefined,
+      template_id: selectedTemplate.value?.id || undefined,
     })
 
     const deployId = res.data.data?.deploy_id
@@ -375,6 +417,75 @@ async function handleDeploy() {
     <template v-else>
       <!-- ══ Step 1: 基本信息 ══ -->
       <div v-if="currentStep === 1" class="space-y-8">
+        <!-- 模板选择 -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium">{{ t('template.selectLabel') }}</label>
+          <div v-if="selectedTemplate" class="flex items-center gap-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Package class="w-4 h-4 text-primary" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium">{{ selectedTemplate.name }}</div>
+              <div class="text-xs text-muted-foreground flex items-center gap-1">
+                <Dna class="w-3 h-3" />
+                {{ t('template.geneCount', { count: selectedTemplate.gene_slugs?.length ?? 0 }) }}
+              </div>
+            </div>
+            <button class="p-1 rounded hover:bg-muted transition-colors" @click="clearTemplate">
+              <X class="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          <div v-else class="flex gap-2">
+            <button
+              class="flex-1 py-2.5 px-4 rounded-lg border border-border bg-card text-sm text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors text-center"
+              @click="openTemplateSelector"
+            >
+              {{ t('template.chooseTemplate') }}
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('template.selectHint') }}</p>
+        </div>
+
+        <!-- 模板选择器弹出 -->
+        <div v-if="templateSelectorOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="templateSelectorOpen = false">
+          <div class="w-[480px] max-h-[60vh] bg-card border border-border rounded-xl shadow-lg flex flex-col">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 class="font-semibold text-sm">{{ t('template.chooseTemplate') }}</h3>
+              <button class="p-1 rounded hover:bg-muted transition-colors" @click="templateSelectorOpen = false">
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+              <div v-if="templateLoading" class="flex justify-center py-8">
+                <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+              <template v-else-if="geneStore.templates.length > 0">
+                <button
+                  v-for="tpl in geneStore.templates"
+                  :key="tpl.id"
+                  class="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
+                  @click="selectTemplate(tpl)"
+                >
+                  <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Package class="w-4 h-4 text-primary" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium">{{ tpl.name }}</div>
+                    <div class="text-xs text-muted-foreground line-clamp-1">{{ tpl.short_description ?? '' }}</div>
+                  </div>
+                  <span class="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                    <Dna class="w-3 h-3" />
+                    {{ tpl.gene_slugs?.length ?? 0 }}
+                  </span>
+                </button>
+              </template>
+              <div v-else class="text-center py-8 text-muted-foreground text-sm">
+                {{ t('template.noTemplates') }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 名称 -->
         <div class="space-y-2">
           <label class="text-sm font-medium">给你的 AI 员工取个名字</label>

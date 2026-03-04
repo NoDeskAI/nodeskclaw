@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, inject, type ComputedRef 
 import { useRoute } from 'vue-router'
 import {
   Loader2, Package, Download, Trash2, Upload, Sparkles, X,
-  AlertTriangle, RefreshCw, Zap, FileText,
+  AlertTriangle, RefreshCw, Zap, FileText, Save,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { InstanceSkillItem, InstanceGeneItem } from '@/stores/gene'
@@ -46,6 +46,37 @@ const displayedSkills = computed(() => {
 const createDialogOpen = ref(false)
 const createPrompt = ref('')
 const creating = ref(false)
+
+const saveTemplateOpen = ref(false)
+const templateName = ref('')
+const templateSlug = ref('')
+const templateDesc = ref('')
+const savingTemplate = ref(false)
+
+const hasInstalledGenes = computed(() =>
+  instanceSkills.value.some(s => s.instance_gene?.status === 'installed' || s.type === 'hub'),
+)
+
+async function handleSaveTemplate() {
+  if (!templateName.value.trim() || !templateSlug.value.trim()) return
+  savingTemplate.value = true
+  try {
+    await store.createTemplateFromInstance(instanceId.value, {
+      name: templateName.value.trim(),
+      slug: templateSlug.value.trim(),
+      description: templateDesc.value || undefined,
+    })
+    toast.success(t('template.saved'))
+    saveTemplateOpen.value = false
+    templateName.value = ''
+    templateSlug.value = ''
+    templateDesc.value = ''
+  } catch {
+    toast.error(t('template.saveFailed'))
+  } finally {
+    savingTemplate.value = false
+  }
+}
 
 const forgetTarget = ref<InstanceSkillItem | null>(null)
 const confirmInput = ref('')
@@ -220,6 +251,14 @@ onUnmounted(stopPolling)
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">{{ t('instanceGenes.title') }}</h2>
       <div class="flex items-center gap-2">
+        <button
+          v-if="hasInstalledGenes"
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
+          @click="saveTemplateOpen = true"
+        >
+          <Save class="w-4 h-4" />
+          {{ t('template.saveAsTemplate') }}
+        </button>
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           @click="openMarketDialog"
@@ -521,6 +560,69 @@ onUnmounted(stopPolling)
             >
               <Loader2 v-if="creating" class="w-4 h-4 animate-spin inline mr-1" />
               {{ t('common.submit') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Save as Template Dialog -->
+    <Teleport to="body">
+      <div
+        v-if="saveTemplateOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        @click.self="saveTemplateOpen = false"
+      >
+        <div class="bg-card rounded-xl border border-border shadow-xl w-full max-w-md mx-4 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">{{ t('template.saveAsTemplate') }}</h3>
+            <button class="text-muted-foreground hover:text-foreground" @click="saveTemplateOpen = false">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+          <p class="text-sm text-muted-foreground mb-4">{{ t('template.saveDesc') }}</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">{{ t('template.nameLabel') }}</label>
+              <input
+                v-model="templateName"
+                type="text"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                :placeholder="t('template.namePlaceholder')"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">{{ t('template.slugLabel') }}</label>
+              <input
+                v-model="templateSlug"
+                type="text"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+                :placeholder="t('template.slugPlaceholder')"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">{{ t('template.descLabel') }}</label>
+              <textarea
+                v-model="templateDesc"
+                class="w-full h-20 px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                :placeholder="t('template.descPlaceholder')"
+              />
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-4">
+            <button
+              class="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50"
+              @click="saveTemplateOpen = false"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              class="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              :disabled="savingTemplate || !templateName.trim() || !templateSlug.trim()"
+              @click="handleSaveTemplate"
+            >
+              <Loader2 v-if="savingTemplate" class="w-4 h-4 animate-spin inline mr-1" />
+              {{ t('common.save') }}
             </button>
           </div>
         </div>

@@ -273,6 +273,8 @@ class _DeployContext:
     proxy_endpoint: str | None = None
     org_id: str | None = None
     has_llm_configs: bool = False
+    template_id: str | None = None
+    template_gene_slugs: list[str] | None = None
 
 
 async def deploy_instance(
@@ -402,6 +404,12 @@ async def deploy_instance(
             user.id, org_id, [c.provider for c in req.llm_configs],
         )
 
+    # 解析模板基因
+    template_gene_slugs: list[str] | None = None
+    if req.template_id:
+        from app.services.instance_template_service import get_template_gene_slugs
+        template_gene_slugs = await get_template_gene_slugs(db, req.template_id)
+
     # 创建部署记录
     max_rev = await db.execute(
         select(func.coalesce(func.max(DeployRecord.revision), 0)).where(
@@ -446,6 +454,8 @@ async def deploy_instance(
         proxy_endpoint=cluster.proxy_endpoint,
         org_id=org_id,
         has_llm_configs=bool(req.llm_configs),
+        template_id=req.template_id,
+        template_gene_slugs=template_gene_slugs,
     )
 
 
@@ -460,6 +470,8 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     steps = list(DEPLOY_STEPS_BASE)
     if ctx.has_llm_configs:
         steps.append("应用实例配置")
+    if ctx.template_gene_slugs:
+        steps.append("安装模板基因")
     total = len(steps)
 
     try:
@@ -751,7 +763,33 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 else:
                     await ensure_openclaw_gateway_config(instance, db)
 
-                success_msg = f"部署成功{llm_sync_warning}"
+                gene_install_warning = ""
+                if ctx.template_gene_slugs:
+                    gene_step = len(steps)
+                    _publish(gene_step, "安装模板基因")
+                    failed_genes: list[str] = []
+                    for gene_slug in ctx.template_gene_slugs:
+                        try:
+                            from app.services.gene_service import install_gene
+                            await install_gene(db, ctx.instance_id, gene_slug)
+                        except Exception as ge:
+                            logger.warning("模板基因安装失败（继续）: slug=%s err=%s", gene_slug, ge)
+                            failed_genes.append(gene_slug)
+                    if failed_genes:
+                        gene_install_warning = f"（{len(failed_genes)} 个基因安装失败: {', '.join(failed_genes)}）"
+                        _publish(gene_step, "安装模板基因", status="success",
+                                 message=f"{len(ctx.template_gene_slugs) - len(failed_genes)}/{len(ctx.template_gene_slugs)} 安装成功")
+                    else:
+                        _publish(gene_step, "安装模板基因", status="success")
+
+                    if ctx.template_id:
+                        try:
+                            from app.services.instance_template_service import increment_use_count
+                            await increment_use_count(db, ctx.template_id)
+                        except Exception:
+                            pass
+
+                success_msg = f"部署成功{llm_sync_warning}{gene_install_warning}"
                 _publish(total, "完成", status="success", message=success_msg)
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
             else:
