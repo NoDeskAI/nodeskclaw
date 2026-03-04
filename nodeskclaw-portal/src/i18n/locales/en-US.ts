@@ -65,7 +65,7 @@ const enUS = {
   },
   orgSetup: {
     title: "Set up your organization",
-    subtitle: "Complete your organization info to start using NoDeskClaw",
+    subtitle: "Complete your organization info to start using DeskClaw",
     orgName: "Organization name",
     orgNamePlaceholder: "e.g. NoDesk AI",
     orgSlug: "Organization slug",

@@ -65,7 +65,7 @@ const zhCN = {
   },
   orgSetup: {
     title: "开通企业空间",
-    subtitle: "完善你的企业信息，即可开始使用 NoDeskClaw",
+    subtitle: "完善你的企业信息，即可开始使用 DeskClaw",
     orgName: "企业名称",
     orgNamePlaceholder: "如：NoDesk AI",
     orgSlug: "企业标识符",

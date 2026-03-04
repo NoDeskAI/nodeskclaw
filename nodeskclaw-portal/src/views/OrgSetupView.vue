@@ -169,7 +169,7 @@ async function handleSubmit() {
       </form>
 
       <p class="text-[11px] text-muted-foreground/50 text-center">
-        NoDeskClaw &copy; 2026 &middot; by <a href="https://nodesks.ai/" target="_blank" class="hover:text-muted-foreground transition-colors underline underline-offset-2">NoDesk AI</a>
+        DeskClaw &copy; 2026 &middot; by <a href="https://nodesks.ai/" target="_blank" class="hover:text-muted-foreground transition-colors underline underline-offset-2">NoDesk AI</a>
       </p>
     </div>
   </div>

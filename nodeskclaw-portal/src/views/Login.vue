@@ -139,7 +139,7 @@ watch(isRegister, () => { error.value = '' })
           <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
             <PawPrint class="w-6 h-6 text-primary" />
           </div>
-          <span class="text-xl font-bold tracking-tight">NoDeskClaw</span>
+          <span class="text-xl font-bold tracking-tight">DeskClaw</span>
           <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
         </div>
 
@@ -181,7 +181,7 @@ watch(isRegister, () => { error.value = '' })
             <PawPrint class="w-7 h-7 text-primary" />
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xl font-bold">NoDeskClaw</span>
+            <span class="text-xl font-bold">DeskClaw</span>
             <span class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
           </div>
         </div>
@@ -379,7 +379,7 @@ watch(isRegister, () => { error.value = '' })
         <!-- 底部 -->
         <div class="pt-4 text-center">
           <p class="text-[11px] text-muted-foreground/50">
-            NoDeskClaw &copy; 2026 &middot; by <a href="https://nodesks.ai/" target="_blank" class="hover:text-muted-foreground transition-colors underline underline-offset-2">NoDesk AI</a>
+            DeskClaw &copy; 2026 &middot; by <a href="https://nodesks.ai/" target="_blank" class="hover:text-muted-foreground transition-colors underline underline-offset-2">NoDesk AI</a>
           </p>
         </div>
       </div>

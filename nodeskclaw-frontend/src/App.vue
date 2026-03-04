@@ -184,7 +184,7 @@ const sseStatusText = computed(() => {
         <!-- Logo -->
         <div class="h-14 flex items-center gap-2 px-4 border-b border-border overflow-hidden">
           <PawPrint class="w-5 h-5 text-primary shrink-0" />
-          <span v-if="!sidebarCollapsed" class="font-bold text-base whitespace-nowrap">NoDeskClaw</span>
+          <span v-if="!sidebarCollapsed" class="font-bold text-base whitespace-nowrap">DeskClaw</span>
           <span v-if="!sidebarCollapsed" class="px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded bg-primary/15 text-primary">Beta</span>
         </div>
 
@@ -332,7 +332,7 @@ const sseStatusText = computed(() => {
               {{ sseStatusText }}
             </span>
           </div>
-          <span>NoDeskClaw v0.1.0-beta</span>
+          <span>DeskClaw v0.1.0-beta</span>
         </footer>
       </div>
     </div>
