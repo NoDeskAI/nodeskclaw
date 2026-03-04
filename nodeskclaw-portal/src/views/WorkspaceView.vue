@@ -67,6 +67,12 @@ const showShortcutHints = ref(localStorage.getItem('workspace-shortcut-hints') !
 const agentDetailVisible = ref(false)
 const agentDetailId = ref<string | null>(null)
 
+function openAgentDetailPage() {
+  if (!agentDetailId.value) return
+  const r = router.resolve(`/instances/${agentDetailId.value}`)
+  window.open(r.href, '_blank')
+}
+
 const CHAT_MIN_RATIO = 0.191
 const CHAT_MAX_RATIO = 0.618
 const CHAT_STORAGE_KEY = 'workspace-chat-width'
@@ -1300,7 +1306,7 @@ function handleKeydown(e: KeyboardEvent) {
     <AgentDetailDialog
       v-model:visible="agentDetailVisible"
       :instance-id="agentDetailId"
-      @navigate="() => { const r = router.resolve(`/instances/${agentDetailId}`); window.open(r.href, '_blank') }"
+      @navigate="openAgentDetailPage"
       @deleted="store.fetchWorkspace(workspaceId)"
     />
 
