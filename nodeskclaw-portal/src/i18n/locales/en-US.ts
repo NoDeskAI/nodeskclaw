@@ -323,6 +323,11 @@ const enUS = {
     agentLabelFieldLabel: "Label",
     agentLabelPlaceholder: "Enter label describing what this Agent does",
     agentRenamed: "Agent renamed",
+    changeFloor: "Change Floor",
+    changeFloorTitle: "Select Target Floor",
+    floorLabel: "Floor {floor}",
+    lobbyFloor: "Lobby",
+    floorChanged: "Moved to floor {floor}",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",

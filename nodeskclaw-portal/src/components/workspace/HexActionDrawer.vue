@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Move, PenSquare, Crosshair, GitBranch } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Move, PenSquare, Crosshair, GitBranch, Layers } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -24,7 +24,7 @@ const emit = defineEmits<{
 
 const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
-  agent: { f: 'focus-hex', c: 'open-chat', d: 'view-detail', l: 'view-collaboration', r: 'rename-agent', p: 'change-agent-color', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
+  agent: { f: 'focus-hex', c: 'open-chat', d: 'view-detail', l: 'view-collaboration', r: 'rename-agent', p: 'change-agent-color', m: 'move-hex', g: 'change-floor', Delete: 'remove-agent', Backspace: 'remove-agent' },
   corridor: { f: 'focus-hex', r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
   human: { f: 'focus-hex', r: 'rename-human', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
   blackboard: { f: 'focus-hex', e: 'view-blackboard' },
@@ -188,6 +188,14 @@ onUnmounted(() => {
             <Move class="w-4 h-4 text-muted-foreground" />
             <span>{{ t('hexAction.move') }}</span>
             <kbd class="kbd-hint">M</kbd>
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'change-floor')"
+          >
+            <Layers class="w-4 h-4 text-indigo-400" />
+            <span>{{ t('hexAction.changeFloor') }}</span>
+            <kbd class="kbd-hint">G</kbd>
           </button>
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"

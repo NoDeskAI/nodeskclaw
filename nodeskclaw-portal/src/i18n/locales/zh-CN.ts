@@ -323,6 +323,11 @@ const zhCN = {
     agentLabelFieldLabel: "标签",
     agentLabelPlaceholder: "输入标签，描述 Agent 的职责",
     agentRenamed: "Agent 已重命名",
+    changeFloor: "切换楼层",
+    changeFloorTitle: "选择目标楼层",
+    floorLabel: "楼层 {floor}",
+    lobbyFloor: "大厅",
+    floorChanged: "已移至楼层 {floor}",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",
