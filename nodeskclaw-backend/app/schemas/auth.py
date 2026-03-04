@@ -83,6 +83,20 @@ class UserInfo(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AccountLoginRequest(BaseModel):
+    account: str
+    password: str
+
+
+class VerificationCodeSendRequest(BaseModel):
+    account: str
+
+
+class VerificationCodeLoginRequest(BaseModel):
+    account: str
+    code: str
+
+
 class ChangePasswordRequest(BaseModel):
     old_password: str | None = None
     new_password: str

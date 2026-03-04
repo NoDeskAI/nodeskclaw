@@ -4,7 +4,9 @@ import hashlib
 import hmac
 import logging
 import secrets
+import time
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
@@ -18,7 +20,7 @@ from app.utils.oauth_providers import get_provider
 
 logger = logging.getLogger(__name__)
 
-_sms_codes: dict[str, tuple[str, float]] = {}
+_verification_codes: dict[str, tuple[str, float]] = {}
 
 
 async def oauth_login(
@@ -341,10 +343,8 @@ async def login_with_email(email: str, password: str, db: AsyncSession) -> Login
 
 async def send_sms_code(phone: str) -> dict:
     """发送验证码（当前为 mock，生产环境接真实 SMS 服务）。"""
-    import time
-
-    if phone in _sms_codes:
-        _, expire_ts = _sms_codes[phone]
+    if phone in _verification_codes:
+        _, expire_ts = _verification_codes[phone]
         remaining = expire_ts - time.time()
         if remaining > 240:
             raise HTTPException(
@@ -357,7 +357,7 @@ async def send_sms_code(phone: str) -> dict:
             )
 
     code = f"{secrets.randbelow(900000) + 100000}"
-    _sms_codes[phone] = (code, time.time() + 300)
+    _verification_codes[phone] = (code, time.time() + 300)
 
     # TODO: 接入真实 SMS 服务（阿里云/腾讯云短信）
     logger.info("SMS 验证码 [%s]: %s (mock)", phone, code)
@@ -367,9 +367,7 @@ async def send_sms_code(phone: str) -> dict:
 
 async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResponse:
     """手机号验证码登录（不存在则自动注册）。"""
-    import time
-
-    stored = _sms_codes.get(phone)
+    stored = _verification_codes.get(phone)
     if stored is None:
         raise HTTPException(
             status_code=400,
@@ -382,7 +380,7 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
 
     stored_code, expire_ts = stored
     if time.time() > expire_ts:
-        _sms_codes.pop(phone, None)
+        _verification_codes.pop(phone, None)
         raise HTTPException(
             status_code=400,
             detail={
@@ -401,7 +399,7 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
             },
         )
 
-    _sms_codes.pop(phone, None)
+    _verification_codes.pop(phone, None)
 
     result = await db.execute(
         select(User).options(selectinload(User.oauth_connections)).where(User.phone == phone, User.deleted_at.is_(None))
@@ -494,6 +492,187 @@ async def change_password(
     user.password_hash = _hash_password(new_password)
     await db.commit()
     logger.info("密码修改: user_id=%s", user_id)
+
+
+# ── 统一认证 ─────────────────────────────────────────────
+
+
+def _detect_account_type(account: str) -> Literal["email", "phone"]:
+    return "email" if "@" in account else "phone"
+
+
+async def login_with_account(
+    account: str, password: str, db: AsyncSession
+) -> LoginResponse:
+    """Unified account+password login. Auto-detects email vs phone."""
+    account_type = _detect_account_type(account)
+
+    if account_type == "email":
+        return await login_with_email(account, password, db)
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.oauth_connections))
+        .where(User.phone == account, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.password_hash:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error_code": 40120,
+                "message_key": "errors.auth.invalid_account_or_password",
+                "message": "账号或密码错误",
+            },
+        )
+    if not _verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error_code": 40120,
+                "message_key": "errors.auth.invalid_account_or_password",
+                "message": "账号或密码错误",
+            },
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40320,
+                "message_key": "errors.auth.account_disabled",
+                "message": "账户已被禁用",
+            },
+        )
+
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    return await _issue_tokens(user, db)
+
+
+async def send_verification_code(account: str, db: AsyncSession) -> dict:
+    """Send verification code. Email -> SMTP; phone -> SMS mock."""
+    account_type = _detect_account_type(account)
+
+    if account_type == "phone":
+        return await send_sms_code(account)
+
+    from app.services.email_service import get_smtp_config_for_email, send_verification_email
+
+    smtp_config = await get_smtp_config_for_email(db, account)
+    if not smtp_config:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40052,
+                "message_key": "errors.smtp.not_configured_for_user",
+                "message": "无法发送验证码邮件，该邮箱未注册或所属组织未配置 SMTP",
+            },
+        )
+
+    if account in _verification_codes:
+        _, expire_ts = _verification_codes[account]
+        remaining = expire_ts - time.time()
+        if remaining > 240:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_code": 42920,
+                    "message_key": "errors.auth.code_send_too_frequent",
+                    "message": "发送过于频繁，请稍后再试",
+                },
+            )
+
+    code = f"{secrets.randbelow(900000) + 100000}"
+    _verification_codes[account] = (code, time.time() + 300)
+
+    try:
+        await send_verification_email(account, code, smtp_config)
+    except Exception as exc:
+        _verification_codes.pop(account, None)
+        logger.warning("Failed to send verification email to %s: %s", account, exc)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": 50010,
+                "message_key": "errors.smtp.send_failed",
+                "message": f"邮件发送失败: {exc}",
+            },
+        )
+
+    return {"sent": True, "message": "验证码已发送"}
+
+
+async def login_with_verification_code(
+    account: str, code: str, db: AsyncSession
+) -> LoginResponse:
+    """Unified verification-code login. Phone auto-registers; email requires existing account."""
+    account_type = _detect_account_type(account)
+
+    if account_type == "phone":
+        return await login_with_phone(account, code, db)
+
+    stored = _verification_codes.get(account)
+    if stored is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40021,
+                "message_key": "errors.auth.code_not_requested",
+                "message": "请先获取验证码",
+            },
+        )
+
+    stored_code, expire_ts = stored
+    if time.time() > expire_ts:
+        _verification_codes.pop(account, None)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40022,
+                "message_key": "errors.auth.code_expired",
+                "message": "验证码已过期",
+            },
+        )
+    if stored_code != code:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40023,
+                "message_key": "errors.auth.code_invalid",
+                "message": "验证码错误",
+            },
+        )
+
+    _verification_codes.pop(account, None)
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.oauth_connections))
+        .where(User.email == account, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40025,
+                "message_key": "errors.auth.email_not_registered",
+                "message": "该邮箱未注册，请先通过账号密码注册",
+            },
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40320,
+                "message_key": "errors.auth.account_disabled",
+                "message": "账户已被禁用",
+            },
+        )
+
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    return await _issue_tokens(user, db)
 
 
 async def admin_reset_password(user_id: str, db: AsyncSession) -> str:

@@ -9,6 +9,7 @@ from app.core.deps import get_db, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
+    AccountLoginRequest,
     ChangePasswordRequest,
     EmailLoginRequest,
     EmailRegisterRequest,
@@ -20,6 +21,8 @@ from app.schemas.auth import (
     SmsSendRequest,
     TokenResponse,
     UserInfo,
+    VerificationCodeLoginRequest,
+    VerificationCodeSendRequest,
 )
 from app.schemas.common import ApiResponse
 from app.services import auth_service
@@ -210,3 +213,33 @@ async def update_staff(
     await db.commit()
     await db.refresh(user)
     return ApiResponse(data=UserInfo.model_validate(user))
+
+
+# ── 统一认证端点 ──────────────────────────────────────────
+
+
+@router.post("/account-login", response_model=ApiResponse[LoginResponse])
+async def account_login(
+    body: AccountLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await auth_service.login_with_account(body.account, body.password, db)
+    return ApiResponse(data=result)
+
+
+@router.post("/verification-code/send", response_model=ApiResponse)
+async def send_verification_code(
+    body: VerificationCodeSendRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await auth_service.send_verification_code(body.account, db)
+    return ApiResponse(data=result)
+
+
+@router.post("/verification-code/login", response_model=ApiResponse[LoginResponse])
+async def verification_code_login(
+    body: VerificationCodeLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await auth_service.login_with_verification_code(body.account, body.code, db)
+    return ApiResponse(data=result)

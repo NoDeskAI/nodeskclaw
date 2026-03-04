@@ -161,6 +161,25 @@ def _get_aes_key() -> bytes:
     return key[:32].ljust(32, b"0")
 
 
+def encrypt_sensitive(plaintext: str) -> str:
+    """Encrypt arbitrary sensitive data with AES-256-GCM, return base64(nonce + ciphertext)."""
+    key = _get_aes_key()
+    nonce = os.urandom(12)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return base64.b64encode(nonce + ciphertext).decode("utf-8")
+
+
+def decrypt_sensitive(encrypted: str) -> str:
+    """Decrypt base64(nonce + ciphertext) back to plaintext."""
+    key = _get_aes_key()
+    raw = base64.b64decode(encrypted)
+    nonce, ciphertext = raw[:12], raw[12:]
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+    return plaintext.decode("utf-8")
+
+
 def encrypt_kubeconfig(plaintext: str) -> str:
     """Encrypt KubeConfig with AES-256-GCM, return base64(nonce + ciphertext)."""
     key = _get_aes_key()

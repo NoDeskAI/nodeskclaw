@@ -47,10 +47,12 @@ nodeskclaw-backend/
 │   │   ├── workspace_member.py   # 工作区成员
 │   │   ├── blackboard.py     # 工作区黑板
 │   │   ├── workspace_template.py  # 工作区模板
-│   │   └── system_config.py  # 系统配置（键值对）
+│   │   ├── system_config.py  # 系统配置（键值对）
+│   │   └── org_smtp_config.py  # 组织 SMTP 邮件配置
 │   ├── schemas/              # Pydantic 请求/响应 Schema
 │   ├── services/             # 业务逻辑层
-│   │   ├── auth_service.py       # OAuth 登录逻辑（provider 可扩展）
+│   │   ├── auth_service.py       # OAuth 登录逻辑（provider 可扩展）、统一账号/验证码登录
+│   │   ├── email_service.py     # 邮件发送服务（aiosmtplib，验证码邮件 + 测试邮件）
 │   │   ├── cluster_service.py    # 集群管理
 │   │   ├── deploy_service.py     # 部署编排
 │   │   ├── instance_service.py   # 实例操作
@@ -99,7 +101,7 @@ API 路由同时挂载在两个前缀下：
 | 前缀 | 模块 | 说明 |
 |------|------|------|
 | `/api/v1/health` | 系统 | 健康检查 |
-| `/api/v1/auth` | 认证 | OAuth 登录、token 刷新、密码管理 |
+| `/api/v1/auth` | 认证 | OAuth 登录、统一账号/验证码登录、token 刷新、密码管理 |
 | `/api/v1/auth/oauth/callback` | 认证 | OAuth 登录回调（通用，支持 provider 参数） |
 | `PUT /api/v1/auth/me/password` | 认证 | 修改/设置密码 |
 | `/api/v1/orgs` | 组织 | 组织 CRUD、成员管理、管理员重置成员密码 |

@@ -21,6 +21,7 @@ from app.models.instance_member import InstanceMember  # noqa: F401
 from app.models.llm_usage_log import LlmUsageLog  # noqa: F401
 from app.models.org_llm_key import OrgLlmKey  # noqa: F401
 from app.models.org_required_gene import OrgRequiredGene  # noqa: F401
+from app.models.org_smtp_config import OrgSmtpConfig  # noqa: F401
 from app.models.oauth_connection import UserOAuthConnection  # noqa: F401
 from app.models.org_membership import OrgMembership  # noqa: F401
 from app.models.org_oauth_binding import OrgOAuthBinding  # noqa: F401

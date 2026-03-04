@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 import { resolveApiErrorMessage } from '@/i18n/error'
-import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, Mail, Phone, Eye, EyeOff } from 'lucide-vue-next'
+import { PawPrint, Loader2, Zap, Shield, Globe, Sparkles, KeyRound, MessageSquareCode, Eye, EyeOff } from 'lucide-vue-next'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 
 const router = useRouter()
@@ -14,16 +14,16 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref('')
-const activeTab = ref<'email' | 'phone'>('email')
+const activeTab = ref<'account' | 'code'>('account')
 const isRegister = ref(false)
 
-const emailForm = ref({ email: '', password: '', name: '' })
+const accountForm = ref({ account: '', password: '', name: '' })
 const showPassword = ref(false)
 
-const phoneForm = ref({ phone: '', code: '' })
-const smsSending = ref(false)
-const smsCountdown = ref(0)
-let smsTimer: ReturnType<typeof setInterval> | null = null
+const codeForm = ref({ account: '', code: '' })
+const codeSending = ref(false)
+const codeCountdown = ref(0)
+let codeTimer: ReturnType<typeof setInterval> | null = null
 const locale = ref(getCurrentLocale())
 
 const features = [
@@ -33,15 +33,17 @@ const features = [
   { icon: Sparkles, title: '弹性扩展', desc: '按需选择规格，灵活升降配' },
 ]
 
-const canSubmitEmail = computed(() => {
+const isAccountEmail = computed(() => accountForm.value.account.includes('@'))
+
+const canSubmitAccount = computed(() => {
   if (isRegister.value) {
-    return emailForm.value.email && emailForm.value.password.length >= 6
+    return isAccountEmail.value && accountForm.value.password.length >= 6
   }
-  return emailForm.value.email && emailForm.value.password
+  return accountForm.value.account && accountForm.value.password
 })
 
-const canSubmitPhone = computed(() => {
-  return phoneForm.value.phone.length >= 8 && phoneForm.value.code.length >= 4
+const canSubmitCode = computed(() => {
+  return codeForm.value.account.length >= 5 && codeForm.value.code.length >= 4
 })
 
 function handleOAuthLogin(provider: string) {
@@ -54,18 +56,18 @@ function handleOAuthLogin(provider: string) {
   }
 }
 
-async function handleEmailSubmit() {
-  if (!canSubmitEmail.value || loading.value) return
+async function handleAccountSubmit() {
+  if (!canSubmitAccount.value || loading.value) return
   loading.value = true
   try {
     if (isRegister.value) {
       await authStore.emailRegister(
-        emailForm.value.email,
-        emailForm.value.password,
-        emailForm.value.name || emailForm.value.email.split('@')[0],
+        accountForm.value.account,
+        accountForm.value.password,
+        accountForm.value.name || accountForm.value.account.split('@')[0],
       )
     } else {
-      await authStore.emailLogin(emailForm.value.email, emailForm.value.password)
+      await authStore.accountLogin(accountForm.value.account, accountForm.value.password)
     }
     error.value = ''
     router.replace('/')
@@ -79,31 +81,31 @@ async function handleEmailSubmit() {
   }
 }
 
-async function handleSendSms() {
-  if (!phoneForm.value.phone || smsSending.value || smsCountdown.value > 0) return
-  smsSending.value = true
+async function handleSendCode() {
+  if (!codeForm.value.account || codeSending.value || codeCountdown.value > 0) return
+  codeSending.value = true
   try {
-    await authStore.sendSmsCode(phoneForm.value.phone)
-    smsCountdown.value = 60
-    smsTimer = setInterval(() => {
-      smsCountdown.value--
-      if (smsCountdown.value <= 0 && smsTimer) {
-        clearInterval(smsTimer)
-        smsTimer = null
+    await authStore.sendVerificationCode(codeForm.value.account)
+    codeCountdown.value = 60
+    codeTimer = setInterval(() => {
+      codeCountdown.value--
+      if (codeCountdown.value <= 0 && codeTimer) {
+        clearInterval(codeTimer)
+        codeTimer = null
       }
     }, 1000)
   } catch (e: any) {
     error.value = resolveApiErrorMessage(e, t('auth.sendFailed'))
   } finally {
-    smsSending.value = false
+    codeSending.value = false
   }
 }
 
-async function handlePhoneSubmit() {
-  if (!canSubmitPhone.value || loading.value) return
+async function handleCodeSubmit() {
+  if (!canSubmitCode.value || loading.value) return
   loading.value = true
   try {
-    await authStore.smsLogin(phoneForm.value.phone, phoneForm.value.code)
+    await authStore.verificationCodeLogin(codeForm.value.account, codeForm.value.code)
     error.value = ''
     router.replace('/')
   } catch (e: any) {
@@ -117,7 +119,6 @@ function onLocaleChange(value: string) {
   locale.value = setCurrentLocale(value)
 }
 
-// 切换 tab 或模式时清空错误
 watch(activeTab, () => { error.value = '' })
 watch(isRegister, () => { error.value = '' })
 
@@ -198,63 +199,52 @@ watch(isRegister, () => { error.value = '' })
           <div class="flex rounded-lg bg-muted p-1 gap-1">
             <button
               class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all"
-              :class="activeTab === 'email' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              @click="activeTab = 'email'"
+              :class="activeTab === 'account' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              @click="activeTab = 'account'"
             >
-              <Mail class="w-4 h-4" />
-              {{ isRegister ? t('auth.emailRegister') : t('auth.emailLogin') }}
+              <KeyRound class="w-4 h-4" />
+              {{ t('auth.accountPasswordLogin') }}
             </button>
             <button
               class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all"
-              :class="activeTab === 'phone' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              @click="activeTab = 'phone'; isRegister = false"
+              :class="activeTab === 'code' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              @click="activeTab = 'code'; isRegister = false"
             >
-              <Phone class="w-4 h-4" />
-              {{ t('auth.phoneLogin') }}
+              <MessageSquareCode class="w-4 h-4" />
+              {{ t('auth.verificationCodeLogin') }}
             </button>
           </div>
 
-          <!-- 邮箱表单 -->
-          <form v-if="activeTab === 'email'" class="space-y-4" @submit.prevent="handleEmailSubmit">
-            <!-- 注册时的名称 -->
+          <!-- 账号密码表单 -->
+          <form v-if="activeTab === 'account'" class="space-y-4" @submit.prevent="handleAccountSubmit">
             <div v-if="isRegister" class="space-y-1.5">
-              <label class="text-sm font-medium text-foreground">名称</label>
+              <label class="text-sm font-medium text-foreground">{{ t('auth.nameLabel') }}</label>
               <input
-                v-model="emailForm.name"
+                v-model="accountForm.name"
                 type="text"
-                placeholder="你的名字（可选）"
+                :placeholder="t('auth.namePlaceholder')"
                 class="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
               />
             </div>
 
             <div class="space-y-1.5">
-              <label class="text-sm font-medium text-foreground">邮箱</label>
+              <label class="text-sm font-medium text-foreground">{{ t('auth.accountLabel') }}</label>
               <input
-                v-model="emailForm.email"
-                type="email"
-                placeholder="name@example.com"
+                v-model="accountForm.account"
+                :type="isRegister ? 'email' : 'text'"
+                :placeholder="isRegister ? t('auth.emailPlaceholder') : t('auth.accountPlaceholder')"
                 required
                 class="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
               />
             </div>
 
             <div class="space-y-1.5">
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-foreground">密码</label>
-                <button
-                  v-if="!isRegister"
-                  type="button"
-                  tabindex="-1"
-                  class="text-xs text-primary hover:text-primary/80 transition-colors"
-                >
-                  忘记密码？
-                </button>
-              </div>
+              <label class="text-sm font-medium text-foreground">{{ t('auth.passwordLabel') }}</label>
               <div class="relative">
                 <input
-                  v-model="emailForm.password"
+                  v-model="accountForm.password"
                   :type="showPassword ? 'text' : 'password'"
-                  :placeholder="isRegister ? '至少 6 位' : '输入密码'"
+                  :placeholder="isRegister ? t('auth.passwordMinLength') : t('auth.passwordPlaceholder')"
                   required
                   class="w-full h-10 px-3 pr-10 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
                 />
@@ -272,7 +262,7 @@ watch(isRegister, () => { error.value = '' })
 
             <button
               type="submit"
-              :disabled="!canSubmitEmail || loading"
+              :disabled="!canSubmitAccount || loading"
               class="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
@@ -291,39 +281,39 @@ watch(isRegister, () => { error.value = '' })
             </p>
           </form>
 
-          <!-- 手机表单 -->
-          <form v-if="activeTab === 'phone'" class="space-y-4" @submit.prevent="handlePhoneSubmit">
+          <!-- 验证码表单 -->
+          <form v-if="activeTab === 'code'" class="space-y-4" @submit.prevent="handleCodeSubmit">
             <div class="space-y-1.5">
-              <label class="text-sm font-medium text-foreground">手机号</label>
+              <label class="text-sm font-medium text-foreground">{{ t('auth.accountLabel') }}</label>
               <input
-                v-model="phoneForm.phone"
-                type="tel"
-                placeholder="输入手机号"
+                v-model="codeForm.account"
+                type="text"
+                :placeholder="t('auth.accountPlaceholder')"
                 required
                 class="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
               />
             </div>
 
             <div class="space-y-1.5">
-              <label class="text-sm font-medium text-foreground">验证码</label>
+              <label class="text-sm font-medium text-foreground">{{ t('auth.codeLabel') }}</label>
               <div class="flex gap-2">
                 <input
-                  v-model="phoneForm.code"
+                  v-model="codeForm.code"
                   type="text"
                   inputmode="numeric"
                   maxlength="6"
-                  placeholder="6 位验证码"
+                  :placeholder="t('auth.codePlaceholder')"
                   required
                   class="flex-1 h-10 px-3 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
                 />
                 <button
                   type="button"
-                  :disabled="!phoneForm.phone || phoneForm.phone.length < 8 || smsSending || smsCountdown > 0"
+                  :disabled="!codeForm.account || codeForm.account.length < 5 || codeSending || codeCountdown > 0"
                   class="shrink-0 h-10 px-4 rounded-lg border border-input text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  @click="handleSendSms"
+                  @click="handleSendCode"
                 >
-                  <Loader2 v-if="smsSending" class="w-4 h-4 animate-spin" />
-                  <template v-else-if="smsCountdown > 0">{{ smsCountdown }}s</template>
+                  <Loader2 v-if="codeSending" class="w-4 h-4 animate-spin" />
+                  <template v-else-if="codeCountdown > 0">{{ codeCountdown }}s</template>
                   <template v-else>{{ t('auth.sendCode') }}</template>
                 </button>
               </div>
@@ -331,15 +321,15 @@ watch(isRegister, () => { error.value = '' })
 
             <button
               type="submit"
-              :disabled="!canSubmitPhone || loading"
+              :disabled="!canSubmitCode || loading"
               class="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
-              {{ t('auth.loginOrRegister') }}
+              {{ t('auth.login') }}
             </button>
 
             <p class="text-xs text-center text-muted-foreground">
-              未注册的手机号将自动创建账户
+              {{ t('auth.codeLoginHint') }}
             </p>
           </form>
 

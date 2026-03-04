@@ -1,4 +1,4 @@
-"""Organization settings endpoints -- required genes configuration."""
+"""Organization settings endpoints -- required genes & SMTP configuration."""
 
 import logging
 
@@ -7,11 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_org_admin
+from app.core.security import decrypt_sensitive, encrypt_sensitive
 from app.models.base import not_deleted
 from app.models.gene import Gene
 from app.models.org_required_gene import OrgRequiredGene
+from app.models.org_smtp_config import OrgSmtpConfig
 from app.schemas.common import ApiResponse
 from app.schemas.organization import OrgRequiredGeneAdd, OrgRequiredGeneInfo
+from app.schemas.smtp import SmtpConfigCreate, SmtpConfigResponse, SmtpTestRequest
 
 logger = logging.getLogger(__name__)
 
@@ -122,3 +125,159 @@ async def remove_required_gene(
     rg.soft_delete()
     await db.commit()
     return ApiResponse(message="已移除")
+
+
+# ── SMTP 配置 ─────────────────────────────────────────────
+
+
+def _mask_password(encrypted: str) -> str:
+    try:
+        plain = decrypt_sensitive(encrypted)
+        if len(plain) <= 3:
+            return "****"
+        return "****" + plain[-3:]
+    except Exception:
+        return "****"
+
+
+def _smtp_to_response(cfg: OrgSmtpConfig) -> SmtpConfigResponse:
+    return SmtpConfigResponse(
+        id=cfg.id,
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_username=cfg.smtp_username,
+        smtp_password_masked=_mask_password(cfg.smtp_password_encrypted),
+        from_email=cfg.from_email,
+        from_name=cfg.from_name,
+        use_tls=cfg.use_tls,
+    )
+
+
+@router.get(
+    "/{org_id}/smtp-config",
+    response_model=ApiResponse[SmtpConfigResponse | None],
+)
+async def get_smtp_config(
+    org_id: str,
+    db: AsyncSession = Depends(get_db),
+    _auth: tuple = Depends(require_org_admin),
+):
+    result = await db.execute(
+        select(OrgSmtpConfig).where(
+            OrgSmtpConfig.org_id == org_id,
+            not_deleted(OrgSmtpConfig),
+        )
+    )
+    cfg = result.scalar_one_or_none()
+    return ApiResponse(data=_smtp_to_response(cfg) if cfg else None)
+
+
+@router.put(
+    "/{org_id}/smtp-config",
+    response_model=ApiResponse[SmtpConfigResponse],
+)
+async def upsert_smtp_config(
+    org_id: str,
+    body: SmtpConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    _auth: tuple = Depends(require_org_admin),
+):
+    result = await db.execute(
+        select(OrgSmtpConfig).where(
+            OrgSmtpConfig.org_id == org_id,
+            not_deleted(OrgSmtpConfig),
+        )
+    )
+    cfg = result.scalar_one_or_none()
+
+    encrypted_pw = encrypt_sensitive(body.smtp_password)
+
+    if cfg:
+        cfg.smtp_host = body.smtp_host
+        cfg.smtp_port = body.smtp_port
+        cfg.smtp_username = body.smtp_username
+        cfg.smtp_password_encrypted = encrypted_pw
+        cfg.from_email = body.from_email
+        cfg.from_name = body.from_name
+        cfg.use_tls = body.use_tls
+    else:
+        cfg = OrgSmtpConfig(
+            org_id=org_id,
+            smtp_host=body.smtp_host,
+            smtp_port=body.smtp_port,
+            smtp_username=body.smtp_username,
+            smtp_password_encrypted=encrypted_pw,
+            from_email=body.from_email,
+            from_name=body.from_name,
+            use_tls=body.use_tls,
+        )
+        db.add(cfg)
+
+    await db.commit()
+    await db.refresh(cfg)
+    return ApiResponse(data=_smtp_to_response(cfg))
+
+
+@router.delete(
+    "/{org_id}/smtp-config",
+    response_model=ApiResponse,
+)
+async def delete_smtp_config(
+    org_id: str,
+    db: AsyncSession = Depends(get_db),
+    _auth: tuple = Depends(require_org_admin),
+):
+    result = await db.execute(
+        select(OrgSmtpConfig).where(
+            OrgSmtpConfig.org_id == org_id,
+            not_deleted(OrgSmtpConfig),
+        )
+    )
+    cfg = result.scalar_one_or_none()
+    if not cfg:
+        raise HTTPException(404, detail={
+            "error_code": 40450,
+            "message_key": "errors.smtp.config_not_found",
+            "message": "SMTP 配置不存在",
+        })
+    cfg.soft_delete()
+    await db.commit()
+    return ApiResponse(message="SMTP 配置已删除")
+
+
+@router.post(
+    "/{org_id}/smtp-config/test",
+    response_model=ApiResponse,
+)
+async def test_smtp_config(
+    org_id: str,
+    body: SmtpTestRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: tuple = Depends(require_org_admin),
+):
+    result = await db.execute(
+        select(OrgSmtpConfig).where(
+            OrgSmtpConfig.org_id == org_id,
+            not_deleted(OrgSmtpConfig),
+        )
+    )
+    cfg = result.scalar_one_or_none()
+    if not cfg:
+        raise HTTPException(404, detail={
+            "error_code": 40450,
+            "message_key": "errors.smtp.config_not_found",
+            "message": "SMTP 配置不存在，请先保存配置",
+        })
+
+    from app.services.email_service import send_test_email
+    try:
+        await send_test_email(body.recipient_email, cfg)
+    except Exception as exc:
+        logger.warning("SMTP test failed for org %s: %s", org_id, exc)
+        raise HTTPException(400, detail={
+            "error_code": 40051,
+            "message_key": "errors.smtp.test_failed",
+            "message": f"SMTP 测试失败: {exc}",
+        })
+
+    return ApiResponse(message="测试邮件已发送")

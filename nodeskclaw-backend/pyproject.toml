@@ -26,6 +26,8 @@ dependencies = [
     "pyyaml>=6.0.3",
     "croniter>=6.0.0",
     "lark-oapi>=1.5.3",
+    # Email (SMTP)
+    "aiosmtplib>=3.0.0",
 ]
 
 [dependency-groups]

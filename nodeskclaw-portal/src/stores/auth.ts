@@ -103,10 +103,32 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
+  async function accountLogin(account: string, password: string) {
+    const res = await api.post('/auth/account-login', { account, password })
+    const data = res.data.data
+    setTokens(data.access_token, data.refresh_token)
+    user.value = data.user
+    return data
+  }
+
+  async function sendVerificationCode(account: string) {
+    const res = await api.post('/auth/verification-code/send', { account })
+    return res.data
+  }
+
+  async function verificationCodeLogin(account: string, code: string) {
+    const res = await api.post('/auth/verification-code/login', { account, code })
+    const data = res.data.data
+    setTokens(data.access_token, data.refresh_token)
+    user.value = data.user
+    return data
+  }
+
   return {
     token, refreshToken, user, isLoggedIn, lastOAuthProvider,
     setTokens, clearAuth,
     oauthLogin, emailRegister, emailLogin, sendSmsCode, smsLogin,
+    accountLogin, sendVerificationCode, verificationCodeLogin,
     fetchUser, logout,
   }
 })

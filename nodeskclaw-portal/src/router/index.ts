@@ -93,6 +93,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue') },
       { path: 'genes', name: 'OrgSettingsGenes', component: () => import('@/views/OrgSettingsGenes.vue') },
+      { path: 'smtp', name: 'OrgSettingsSmtp', component: () => import('@/views/OrgSettingsSmtp.vue') },
     ],
   },
   {

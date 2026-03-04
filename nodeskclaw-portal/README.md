@@ -32,8 +32,9 @@ nodeskclaw-portal/
 │       ├── InstanceList.vue        # 实例列表
 │       ├── InstanceDetail.vue      # 实例详情
 │       ├── OrgMembers.vue          # 组织成员管理（org-settings 子视图）
-│       ├── OrgSettings.vue         # 组织设置（Tab 布局：人类成员 + 默认工作基因）
+│       ├── OrgSettings.vue         # 组织设置（Tab 布局：人类成员 + 默认工作基因 + 邮件配置）
 │       ├── OrgSettingsGenes.vue    # 默认工作基因配置（org-settings 子视图）
+│       ├── OrgSettingsSmtp.vue     # SMTP 邮件配置（org-settings 子视图）
 │       ├── GeneMarket.vue          # 基因市场
 │       ├── EnterpriseFiles.vue     # 企业空间 — Agent 列表
 │       ├── EnterpriseFileBrowser.vue  # 企业空间 — 文件浏览器
@@ -64,8 +65,9 @@ vue-tsc -b       # 类型检查
 | `/settings` | 个人设置 | 用户信息、密码管理 |
 | `/usage` | 用量 | 组织用量统计 |
 | `/gene-market` | 基因市场 | 浏览安装基因 |
-| `/org-settings` | 组织设置 | Tab 布局：人类成员 + 默认工作基因（仅 org admin） |
+| `/org-settings` | 组织设置 | Tab 布局：人类成员 + 默认工作基因 + 邮件配置（仅 org admin） |
 | `/org-settings/genes` | 默认工作基因 | 默认工作基因配置（org-settings 子路由） |
+| `/org-settings/smtp` | 邮件配置 | 组织 SMTP 服务器配置（org-settings 子路由） |
 | `/members` | (重定向) | 重定向到 `/org-settings` |
 | `/enterprise-files` | 企业空间 | Agent 文件浏览（仅 org admin） |
 | `/enterprise-files/:instanceId` | 文件浏览器 | 单个 Agent 的文件列表和预览 |

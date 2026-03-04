@@ -3,7 +3,7 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useOrgStore } from '@/stores/org'
-import { Settings, Users, Dna } from 'lucide-vue-next'
+import { Settings, Users, Dna, Mail } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -12,6 +12,7 @@ const orgStore = useOrgStore()
 const navItems = [
   { name: 'OrgMembers', label: () => t('orgSettings.humanMembers'), icon: Users },
   { name: 'OrgSettingsGenes', label: () => t('orgSettings.requiredGenesTab'), icon: Dna },
+  { name: 'OrgSettingsSmtp', label: () => t('orgSettings.smtpConfigTab'), icon: Mail },
 ]
 
 onMounted(async () => {
