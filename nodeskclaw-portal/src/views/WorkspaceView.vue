@@ -370,13 +370,6 @@ function onHexAction(action: string) {
     case 'move-hex':
       enterMoveMode()
       break
-    case 'change-floor':
-      if (selectedAgentId.value) {
-        showFloorPicker.value = true
-        pendingFloorAgentId.value = selectedAgentId.value
-      }
-      hexDrawerOpen.value = false
-      break
     case 'rename-corridor':
       openRenameDialog()
       break
@@ -560,29 +553,6 @@ async function pickAgentColor(color: string) {
   await store.updateAgentThemeColor(workspaceId.value, agentId, color)
   pendingAgentColorId.value = ''
 }
-
-const showFloorPicker = ref(false)
-const pendingFloorAgentId = ref('')
-
-async function pickFloor(floor: number) {
-  const agentId = pendingFloorAgentId.value
-  if (!agentId) return
-  showFloorPicker.value = false
-  await store.updateAgent(workspaceId.value, agentId, { hex_floor: floor })
-  workspace3dRef.value?.flyToFloor(floor)
-  toast.success(t('hexAction.floorChanged', { floor }))
-  pendingFloorAgentId.value = ''
-}
-
-const availableFloors = computed(() => {
-  const floors = new Set<number>()
-  floors.add(0)
-  floors.add(1)
-  for (const agent of agents.value) floors.add(agent.hex_floor ?? 1)
-  const maxExisting = Math.max(...floors)
-  floors.add(maxExisting + 1)
-  return [...floors].sort((a, b) => a - b)
-})
 
 function onCanvasAreaClick() {
   nextTick(() => {
@@ -906,23 +876,6 @@ function handleKeydown(e: KeyboardEvent) {
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />
-          <!-- Floor Navigation -->
-          <div
-            v-if="activeMode === '3d' && workspace3dRef?.floorList?.length > 1"
-            class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10"
-          >
-            <button
-              v-for="floor in workspace3dRef.floorList"
-              :key="floor"
-              class="w-8 h-8 rounded-md text-xs font-medium transition-all border"
-              :class="workspace3dRef.currentFloor === floor
-                ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/30'
-                : 'bg-background/80 text-muted-foreground border-border/50 hover:bg-muted backdrop-blur-sm'"
-              @click="workspace3dRef?.flyToFloor(floor)"
-            >
-              {{ floor === 0 ? 'L' : `F${floor}` }}
-            </button>
-          </div>
         </div>
 
         <!-- 2D mode -->
@@ -1334,38 +1287,6 @@ function handleKeydown(e: KeyboardEvent) {
               <button
                 class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="showAgentColorPicker = false"
-              >
-                {{ t('common.cancel') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Floor Picker Dialog -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showFloorPicker" class="fixed inset-0 z-50 flex items-center justify-center">
-          <div class="absolute inset-0 bg-black/50" @click="showFloorPicker = false" />
-          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-xs shadow-lg space-y-4">
-            <h3 class="text-sm font-semibold">{{ t('hexAction.changeFloorTitle') }}</h3>
-            <div class="flex flex-col gap-2">
-              <button
-                v-for="floor in availableFloors"
-                :key="floor"
-                class="flex items-center justify-between px-4 py-2.5 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-                :class="{ 'border-primary bg-primary/10': agents.find(a => a.instance_id === pendingFloorAgentId)?.hex_floor === floor }"
-                @click="pickFloor(floor)"
-              >
-                <span>{{ floor === 0 ? t('hexAction.lobbyFloor') : t('hexAction.floorLabel', { floor }) }}</span>
-                <span class="text-xs text-muted-foreground">{{ agents.filter(a => (a.hex_floor ?? 1) === floor).length }} agents</span>
-              </button>
-            </div>
-            <div class="flex justify-end pt-2">
-              <button
-                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-                @click="showFloorPicker = false"
               >
                 {{ t('common.cancel') }}
               </button>

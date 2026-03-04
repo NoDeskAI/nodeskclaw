@@ -5,12 +5,10 @@ import * as THREE from 'three'
 import { useThreeScene } from '@/composables/useThreeScene'
 import { useOrbitControls } from '@/composables/useOrbitControls'
 import { useHexRaycaster } from '@/composables/useHexRaycaster'
-import { axialToWorld, HEX_SIZE, FLOOR_SPACING, floorToY } from '@/composables/useHexLayout'
+import { axialToWorld, HEX_SIZE } from '@/composables/useHexLayout'
 import { useTopologyBFS } from '@/composables/useTopologyBFS'
 import { createGrabby, animateGrabby, updateGrabbyTheme, disposeGrabby, disposeGrabbyShared, createPhoneStation, disposePhoneStation } from './Grabby'
 import { createCorridorPath, disposeCorridorPath, disposeCorridorPathShared } from './CorridorPath'
-import { createFloorPlatform, updateFloorTransparency, disposeFloorPlatformShared } from './FloorPlatform'
-import { createCoreColumn, type CoreColumnState } from './CoreColumn'
 import type { AgentBrief, TopologyNode, TopologyEdge, MessageFlowPair } from '@/stores/workspace'
 
 const { t } = useI18n()
@@ -38,7 +36,7 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLElement | null>(null)
 
 const { scene, camera, renderer, addToLoop } = useThreeScene(containerRef, {
-  cameraPos: [0, 12, 16],
+  cameraPos: [0, 8, 10],
   fov: 50,
 })
 
@@ -72,73 +70,34 @@ watch(dblclickId, (id) => {
   if (id && !id.startsWith('__') && !id.startsWith('empty:')) emit('agent-dblclick', id)
 })
 
-// ── Environment ────────────────────────────────────────
-const ambientLight = new THREE.AmbientLight(0x8888cc, 0.5)
+// Environment setup
+const ambientLight = new THREE.AmbientLight(0x8888cc, 0.6)
 scene.add(ambientLight)
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.7)
-dirLight.position.set(5, 15, 5)
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
+dirLight.position.set(5, 10, 5)
 scene.add(dirLight)
 
-const coreLight = new THREE.PointLight(0x7c3aed, 1.5, 20)
-coreLight.position.set(0, 4, 0)
-scene.add(coreLight)
+// Honeycomb hex grid lines (vibecraft-style)
+const hexGridGroup = createWorldHexGrid()
+scene.add(hexGridGroup)
 
-scene.fog = new THREE.FogExp2(0x0a0a1a, 0.018)
+const heatmapGroup = new THREE.Group()
+heatmapGroup.name = 'heatmapLines'
+scene.add(heatmapGroup)
+
+scene.fog = new THREE.FogExp2(0x0a0a1a, 0.04)
 scene.background = new THREE.Color(0x0a0a1a)
 
-// ── Floor management ───────────────────────────────────
-const floorGroups = new Map<number, THREE.Group>()
-const FLOOR_COLORS: Record<number, number> = {
-  0: 0xa78bfa,
-  1: 0x4ade80,
-  2: 0x60a5fa,
-  3: 0xfbbf24,
-  4: 0xf87171,
-}
-
-function getFloorColor(floor: number): number {
-  return FLOOR_COLORS[floor] ?? 0xa78bfa
-}
-
-function ensureFloor(floor: number): THREE.Group {
-  if (floorGroups.has(floor)) return floorGroups.get(floor)!
-  const platform = createFloorPlatform(floor, getFloorColor(floor))
-  scene.add(platform)
-  floorGroups.set(floor, platform)
-  return platform
-}
-
-function removeUnusedFloors(usedFloors: Set<number>) {
-  for (const [floor, group] of floorGroups) {
-    if (!usedFloors.has(floor)) {
-      scene.remove(group)
-      floorGroups.delete(floor)
-    }
-  }
-}
-
-// ── Core column ────────────────────────────────────────
-let coreColumn: CoreColumnState | null = null
-
-function syncCoreColumn(maxFloor: number) {
-  if (coreColumn) {
-    coreColumn.dispose()
-    scene.remove(coreColumn.group)
-  }
-  coreColumn = createCoreColumn(Math.max(maxFloor + 1, 2))
-  scene.add(coreColumn.group)
-}
-
-// ── Hex meshes management ──────────────────────────────
+// Hex meshes management
 const hexMeshes = new Map<string, THREE.Group>()
 const labelSprites = new Set<THREE.Sprite>()
 const LABEL_REF_DISTANCE = 12
 const _tmpWorldPos = new THREE.Vector3()
 
+const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
 const AGENT_BASE_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.08, 6)
 const AGENT_BASE_EDGE_GEO = new THREE.EdgesGeometry(AGENT_BASE_GEO)
-const HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.3, 6)
 
 const STATUS_COLORS_3D: Record<string, number> = {
   running: 0x4ade80, active: 0x4ade80, learning: 0x60a5fa,
@@ -149,16 +108,11 @@ const STATUS_COLORS_3D: Record<string, number> = {
 }
 const DISCONNECTED_COLOR = 0x555566
 
-const heatmapGroup = new THREE.Group()
-heatmapGroup.name = 'heatmapLines'
-scene.add(heatmapGroup)
-
 function createHexMesh(agent: AgentBrief): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(agent.hex_q, agent.hex_r)
-  const fy = floorToY(agent.hex_floor ?? 1) + 0.12
-  group.position.set(x, fy, y)
-  group.userData = { hexId: agent.instance_id, isHex: true, sseConnected: agent.sse_connected, floor: agent.hex_floor ?? 1 }
+  group.position.set(x, 0.04, y)
+  group.userData = { hexId: agent.instance_id, isHex: true, sseConnected: agent.sse_connected }
 
   const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
   const color = agent.sse_connected ? baseColor : DISCONNECTED_COLOR
@@ -197,10 +151,44 @@ function createHexMesh(agent: AgentBrief): THREE.Group {
   return group
 }
 
+function createWorldHexGrid(): THREE.LineSegments {
+  const gridRange = 8
+  const r = HEX_SIZE
+  const vertices: number[] = []
+  const angles: number[] = []
+  for (let i = 0; i < 6; i++) {
+    angles.push((Math.PI / 3) * i - Math.PI / 6)
+  }
+
+  for (let q = -gridRange; q <= gridRange; q++) {
+    for (let row = -gridRange; row <= gridRange; row++) {
+      if (Math.abs(q) + Math.abs(row) + Math.abs(-q - row) > gridRange * 2) continue
+      const { x, y } = axialToWorld(q, row)
+      for (let i = 0; i < 6; i++) {
+        const a1 = angles[i]
+        const a2 = angles[(i + 1) % 6]
+        vertices.push(x + r * Math.cos(a1), 0, y + r * Math.sin(a1))
+        vertices.push(x + r * Math.cos(a2), 0, y + r * Math.sin(a2))
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+  const material = new THREE.LineBasicMaterial({
+    color: 0x4ac8e8,
+    transparent: true,
+    opacity: 0.2,
+  })
+  const lines = new THREE.LineSegments(geometry, material)
+  lines.position.y = 0.005
+  return lines
+}
+
 function createBlackboardMesh(): THREE.Group {
   const group = new THREE.Group()
-  group.position.set(0, floorToY(0) + 0.15, 0)
-  group.userData = { hexId: '__blackboard__', isHex: true, floor: 0 }
+  group.position.set(0, 0.15, 0)
+  group.userData = { hexId: '__blackboard__', isHex: true }
 
   const bbSize = HEX_SIZE * 0.95
   const bbGeo = new THREE.CylinderGeometry(bbSize, bbSize, 0.15, 6)
@@ -309,12 +297,10 @@ function createCorridorLabelSprite(name: string): THREE.Sprite {
 function createHumanHexMesh(node: TopologyNode): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(node.hex_q, node.hex_r)
-  const floor = node.hex_floor ?? 1
-  const fy = floorToY(floor) + 0.25
-  group.position.set(x, fy, y)
+  group.position.set(x, 0.25, y)
   const hexId = `human:${node.entity_id}`
   const colorHex = (node.extra?.display_color as string) || '#f59e0b'
-  group.userData = { hexId, isHex: true, displayColor: colorHex, floor }
+  group.userData = { hexId, isHex: true, displayColor: colorHex }
   const color = new THREE.Color(colorHex)
   const mat = new THREE.MeshStandardMaterial({
     color,
@@ -337,16 +323,16 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   return group
 }
 
-const GRID_RANGE = 4
+
+const GRID_RANGE = 8
 const EMPTY_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.9, HEX_SIZE * 0.9, 0.05, 6)
 
-function createEmptyHexMesh(q: number, r: number, floor: number): THREE.Group {
+function createEmptyHexMesh(q: number, r: number): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(q, r)
-  const fy = floorToY(floor) + 0.025
-  group.position.set(x, fy, y)
+  group.position.set(x, 0.025, y)
   const hexId = `empty:${q}:${r}`
-  group.userData = { hexId, isHex: true, floor }
+  group.userData = { hexId, isHex: true }
 
   const mat = new THREE.MeshStandardMaterial({
     color: 0x1a1a3e,
@@ -359,46 +345,6 @@ function createEmptyHexMesh(q: number, r: number, floor: number): THREE.Group {
   return group
 }
 
-// ── Ambient dust particles ─────────────────────────────
-const dustGroup = createAmbientDust()
-scene.add(dustGroup.points)
-
-function createAmbientDust() {
-  const count = 200
-  const spread = 12
-  const positions = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * spread * 2
-    positions[i * 3 + 1] = Math.random() * FLOOR_SPACING * 4
-    positions[i * 3 + 2] = (Math.random() - 0.5) * spread * 2
-  }
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  const mat = new THREE.PointsMaterial({
-    color: 0x6366f1,
-    size: 0.04,
-    transparent: true,
-    opacity: 0.3,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  })
-  const points = new THREE.Points(geo, mat)
-
-  function animate(time: number) {
-    const pos = geo.attributes.position as THREE.BufferAttribute
-    for (let i = 0; i < pos.count; i++) {
-      let y = pos.getY(i)
-      y += 0.003 + Math.sin(time + i) * 0.001
-      if (y > FLOOR_SPACING * 4) y = 0
-      pos.setY(i, y)
-    }
-    pos.needsUpdate = true
-  }
-
-  return { points, animate, dispose: () => { geo.dispose(); mat.dispose() } }
-}
-
-// ── Scene sync ─────────────────────────────────────────
 function syncScene() {
   for (const [id, group] of hexMeshes) {
     if (group.userData.robot) disposeGrabby(group.userData.robot as THREE.Group)
@@ -412,35 +358,17 @@ function syncScene() {
   const corridorNodes = (props.topologyNodes || []).filter(n => n.node_type === 'corridor')
   const humanNodes = (props.topologyNodes || []).filter(n => n.node_type === 'human')
 
-  const usedFloors = new Set<number>()
-  usedFloors.add(0)
-
   const occupied = new Set<string>()
   occupied.add('0:0')
   for (const agent of props.agents) {
     occupied.add(`${agent.hex_q}:${agent.hex_r}`)
-    usedFloors.add(agent.hex_floor ?? 1)
   }
   for (const node of corridorNodes) {
     occupied.add(`${node.hex_q}:${node.hex_r}`)
-    usedFloors.add(node.hex_floor ?? 1)
   }
   for (const node of humanNodes) {
     occupied.add(`${node.hex_q}:${node.hex_r}`)
-    usedFloors.add(node.hex_floor ?? 1)
   }
-
-  if (usedFloors.size === 1 && usedFloors.has(0)) {
-    usedFloors.add(1)
-  }
-
-  for (const floor of usedFloors) {
-    ensureFloor(floor)
-  }
-  removeUnusedFloors(usedFloors)
-
-  const maxFloor = Math.max(...usedFloors)
-  syncCoreColumn(maxFloor)
 
   for (const agent of props.agents) {
     const group = createHexMesh(agent)
@@ -460,9 +388,6 @@ function syncScene() {
   for (const node of corridorNodes) {
     const hexId = `corridor:${node.entity_id}`
     const group = createCorridorPath(node.hex_q, node.hex_r, occupied, hexId)
-    const floor = node.hex_floor ?? 1
-    const { x, y: worldZ } = axialToWorld(node.hex_q, node.hex_r)
-    group.position.set(x, floorToY(floor) + 0.02, worldZ)
     if (node.display_name) {
       const label = createCorridorLabelSprite(node.display_name)
       label.position.set(0, 0.2, 0)
@@ -479,12 +404,11 @@ function syncScene() {
     hexMeshes.set(`human:${node.entity_id}`, group)
   }
 
-  const activeFloor = props.agents.length > 0 ? (props.agents[0].hex_floor ?? 1) : 1
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
     for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
       if (Math.abs(q) + Math.abs(r) + Math.abs(-q - r) > GRID_RANGE * 2) continue
       if (occupied.has(`${q}:${r}`)) continue
-      const group = createEmptyHexMesh(q, r, activeFloor)
+      const group = createEmptyHexMesh(q, r)
       scene.add(group)
       hexMeshes.set(`empty:${q}:${r}`, group)
     }
@@ -493,7 +417,6 @@ function syncScene() {
 
 watch([() => props.agents, () => props.topologyNodes], syncScene, { deep: true, immediate: true })
 
-// ── Heatmap ────────────────────────────────────────────
 const heatmapMaterials: THREE.LineBasicMaterial[] = []
 
 function syncHeatmap() {
@@ -512,16 +435,12 @@ function syncHeatmap() {
   for (const s of stats) {
     const [sq, sr] = s.sender_hex_key.split(',').map(Number)
     const [rq, rr] = s.receiver_hex_key.split(',').map(Number)
-    const sAgent = props.agents.find(a => a.hex_q === sq && a.hex_r === sr)
-    const rAgent = props.agents.find(a => a.hex_q === rq && a.hex_r === rr)
-    const sFloorY = floorToY(sAgent?.hex_floor ?? 1) + 0.05
-    const rFloorY = floorToY(rAgent?.hex_floor ?? 1) + 0.05
     const from = axialToWorld(sq, sr)
     const to = axialToWorld(rq, rr)
     const ratio = s.count / maxCount
     const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(from.x, sFloorY, from.y),
-      new THREE.Vector3(to.x, rFloorY, to.y),
+      new THREE.Vector3(from.x, 0.01, from.y),
+      new THREE.Vector3(to.x, 0.01, to.y),
     ])
     const mat = new THREE.LineBasicMaterial({
       color: 0xa78bfa,
@@ -584,14 +503,9 @@ function spawnFlowParticle(source: TopologyNode, target: TopologyNode) {
   const hexPath = findPath3d(source.hex_q, source.hex_r, target.hex_q, target.hex_r)
   if (!hexPath || hexPath.length < 2) return
 
-  const sFloor = source.hex_floor ?? 1
-  const tFloor = target.hex_floor ?? 1
-
-  const path3d = hexPath.map((h, idx) => {
+  const path3d = hexPath.map(h => {
     const w = axialToWorld(h.q, h.r)
-    const floorProgress = hexPath.length > 1 ? idx / (hexPath.length - 1) : 0
-    const interpFloor = sFloor + (tFloor - sFloor) * floorProgress
-    return new THREE.Vector3(w.x, floorToY(interpFloor) + 0.3, w.y)
+    return new THREE.Vector3(w.x, 0.15, w.y)
   })
 
   const material = new THREE.MeshStandardMaterial({
@@ -612,24 +526,15 @@ function spawnFlowParticle(source: TopologyNode, target: TopologyNode) {
   })
 }
 
-// ── Animation loop ─────────────────────────────────────
+// Hover + selection animation
 const clock = new THREE.Clock()
 addToLoop(() => {
   const t = clock.getElapsedTime()
-
-  coreColumn?.animate(t)
-  dustGroup.animate(t)
-
-  for (const [floor, group] of floorGroups) {
-    updateFloorTransparency(group, camera.position.y, floor)
-  }
-
   for (const [id, group] of hexMeshes) {
     if (id === '__blackboard__') {
       const isHovered = hoveredId.value === '__blackboard__'
       const isSelectedHex = props.selectedHex?.q === 0 && props.selectedHex?.r === 0
-      const baseY = floorToY(0) + 0.15
-      const targetY = isHovered ? baseY + 0.25 : isSelectedHex ? baseY + 0.15 : baseY
+      const targetY = isHovered ? 0.4 : isSelectedHex ? 0.3 : 0.15
       group.position.y += (targetY - group.position.y) * 0.1
 
       const mesh = group.children[0] as THREE.Mesh
@@ -665,6 +570,8 @@ addToLoop(() => {
       if (!railMat) continue
       const isHovered = hoveredId.value === id
       const isSelectedHex = props.selectedHex?.q === group.userData.hexQ && props.selectedHex?.r === group.userData.hexR
+      const targetY = isHovered ? 0.04 : isSelectedHex ? 0.03 : 0.02
+      group.position.y += (targetY - group.position.y) * 0.1
       railMat.emissiveIntensity = isSelectedHex ? 0.35 + Math.sin(t * 3) * 0.1 : isHovered ? 0.25 : 0.15
       railMat.opacity = isSelectedHex ? 0.9 : isHovered ? 0.85 : 0.7
       if (junctionMat) {
@@ -690,9 +597,7 @@ addToLoop(() => {
     const isMoveSource = props.isMovingHex && props.movingHexSource &&
       props.agents.some((a) => a.instance_id === id && a.hex_q === props.movingHexSource!.q && a.hex_r === props.movingHexSource!.r)
 
-    const agent = props.agents.find(a => a.instance_id === id)
-    const floorBase = floorToY(agent?.hex_floor ?? 1) + 0.12
-    const targetY = isHovered ? floorBase + 0.16 : (isSelected || isSelectedHex || isMoveSource) ? floorBase + 0.10 : floorBase
+    const targetY = isHovered ? 0.20 : (isSelected || isSelectedHex || isMoveSource) ? 0.14 : 0.04
     group.position.y += (targetY - group.position.y) * 0.1
 
     const mesh = group.children[0] as THREE.Mesh
@@ -703,6 +608,7 @@ addToLoop(() => {
         mat.emissive.set(0xf59e0b)
         mat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.25
       } else {
+        const agent = props.agents.find(a => a.instance_id === id)
         if (agent) {
           const baseColor = STATUS_COLORS_3D[agent.status] ?? 0xa78bfa
           mat.color.set(agent.sse_connected ? baseColor : DISCONNECTED_COLOR)
@@ -714,8 +620,9 @@ addToLoop(() => {
     }
 
     const robot = group.userData.robot as THREE.Group | undefined
-    const phoneStation = group.userData.phone as THREE.Group | undefined
-    if (robot || phoneStation) {
+    const phone = group.userData.phone as THREE.Group | undefined
+    if (robot || phone) {
+      const agent = props.agents.find(a => a.instance_id === id)
       if (agent) {
         if (robot) {
           animateGrabby(robot, agent.status, agent.sse_connected, t)
@@ -725,7 +632,7 @@ addToLoop(() => {
             robot.userData.lastBodyTheme = newTheme
           }
         }
-        if (phoneStation) phoneStation.visible = agent.sse_connected
+        if (phone) phone.visible = agent.sse_connected
       }
     }
   }
@@ -777,42 +684,6 @@ addToLoop(() => {
   }
 })
 
-// ── Floor navigation ───────────────────────────────────
-const currentFloor = ref(1)
-const floorList = computed(() => {
-  const floors = new Set<number>()
-  floors.add(0)
-  for (const agent of props.agents) floors.add(agent.hex_floor ?? 1)
-  const nodes = props.topologyNodes || []
-  for (const n of nodes) floors.add(n.hex_floor ?? (n.node_type === 'blackboard' ? 0 : 1))
-  return [...floors].sort((a, b) => a - b)
-})
-
-function flyToFloor(floor: number) {
-  currentFloor.value = floor
-  const targetY = floorToY(floor) + 8
-  const startY = camera.position.y
-  const startLookY = orbitControls.target?.y ?? 0
-  const targetLookY = floorToY(floor)
-  const duration = 800
-  const startTime = performance.now()
-
-  function animateCamera() {
-    const elapsed = performance.now() - startTime
-    const progress = Math.min(1, elapsed / duration)
-    const ease = 1 - Math.pow(1 - progress, 3)
-
-    camera.position.y = startY + (targetY - startY) * ease
-    if (orbitControls.target) {
-      orbitControls.target.y = startLookY + (targetLookY - startLookY) * ease
-    }
-
-    if (progress < 1) requestAnimationFrame(animateCamera)
-  }
-  requestAnimationFrame(animateCamera)
-}
-
-// ── Cleanup ────────────────────────────────────────────
 onUnmounted(() => {
   HEX_GEO.dispose()
   AGENT_BASE_GEO.dispose()
@@ -826,11 +697,8 @@ onUnmounted(() => {
   }
   activeFlows.length = 0
   for (const mat of heatmapMaterials) mat.dispose()
-  coreColumn?.dispose()
-  dustGroup.dispose()
   disposeGrabbyShared()
   disposeCorridorPathShared()
-  disposeFloorPlatformShared()
 })
 
 defineExpose({
@@ -841,9 +709,6 @@ defineExpose({
   focusOnPosition: (x: number, z: number) => orbitControls.focusOnPosition(x, z),
   getCameraXZDirections: () => orbitControls.getCameraXZDirections(),
   triggerMessageFlow,
-  flyToFloor,
-  currentFloor,
-  floorList,
 })
 </script>
 

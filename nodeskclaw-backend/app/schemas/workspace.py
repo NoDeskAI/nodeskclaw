@@ -30,7 +30,6 @@ class AgentBrief(BaseModel):
     status: str
     hex_q: int
     hex_r: int
-    hex_floor: int = 1
     sse_connected: bool = False
     theme_color: str | None = None
 
@@ -85,7 +84,6 @@ class AddAgentRequest(BaseModel):
     display_name: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
-    hex_floor: int | None = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -93,7 +91,6 @@ class UpdateAgentRequest(BaseModel):
     label: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
-    hex_floor: int | None = None
     theme_color: str | None = None
 
 
