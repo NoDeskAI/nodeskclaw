@@ -56,15 +56,15 @@ const isEmpty = computed(() => !loading.value && instances.value.length === 0)
   <div class="max-w-4xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold">我的实例</h1>
-        <p class="text-sm text-muted-foreground mt-0.5">管理你部署的 DeskClaw 实例</p>
+        <h1 class="text-xl font-bold">我的AI 员工</h1>
+        <p class="text-sm text-muted-foreground mt-0.5">管理你部署的 DeskClaw AI 员工</p>
       </div>
       <button
         class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="router.push('/create')"
       >
         <Plus class="w-4 h-4" />
-        创建实例
+        创建AI 员工
       </button>
     </div>
 
@@ -79,14 +79,14 @@ const isEmpty = computed(() => !loading.value && instances.value.length === 0)
         <Plus class="w-8 h-8 text-primary" />
       </div>
       <div>
-        <p class="text-lg font-medium">还没有实例</p>
+        <p class="text-lg font-medium">还没有AI 员工</p>
         <p class="text-sm text-muted-foreground mt-1">点击下方按钮创建你的第一个 AI 员工</p>
       </div>
       <button
         class="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
         @click="router.push('/create')"
       >
-        创建实例
+        创建AI 员工
       </button>
     </div>
 

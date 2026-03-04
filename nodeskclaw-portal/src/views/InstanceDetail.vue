@@ -177,7 +177,7 @@ async function pollOnce() {
     if (instance.value && instance.value.status !== 'restarting') {
       stopPolling()
       restarting.value = false
-      toast.success('重启完成，实例已恢复运行')
+      toast.success('重启完成，AI 员工已恢复运行')
     }
   } catch {
     // 轮询期间忽略网络错误
@@ -204,7 +204,7 @@ async function handleRestart() {
   restarting.value = true
   try {
     const res = await api.post(`/instances/${instanceId.value}/restart`)
-    toast.success(res.data?.message || '已触发重启，实例将在数秒后恢复')
+    toast.success(res.data?.message || '已触发重启，AI 员工将在数秒后恢复')
     await refreshInstanceBasic()
     startPolling()
   } catch (e: any) {
@@ -220,7 +220,7 @@ async function handleDelete() {
   deleting.value = true
   try {
     await api.delete(`/instances/${instanceId.value}`)
-    toast.success('实例已删除')
+    toast.success('AI 员工已删除')
     router.push('/instances')
   } catch (e: any) {
     deleting.value = false
@@ -244,7 +244,7 @@ async function handleDelete() {
           <div>
             <p class="text-sm font-medium">DeskClaw 访问地址</p>
             <p class="text-xs text-muted-foreground mt-0.5">
-              {{ restarting ? '实例正在重启，请稍候...' : '点击即可打开 AI 员工' }}
+              {{ restarting ? 'AI 员工正在重启，请稍候...' : '点击即可打开 AI 员工' }}
             </p>
           </div>
           <button
@@ -322,7 +322,7 @@ async function handleDelete() {
       <div v-else-if="restarting" class="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
         <div class="flex items-center gap-2 text-sm text-amber-400">
           <Loader2 class="w-4 h-4 animate-spin" />
-          实例正在重启，等待新 Pod 启动...
+          AI 员工正在重启，等待新 Pod 启动...
         </div>
       </div>
 
@@ -448,7 +448,7 @@ async function handleDelete() {
           @click="showRestartDialog = true"
         >
           <RotateCcw class="w-4 h-4" :class="restarting ? 'animate-spin' : ''" />
-          {{ restarting ? '重启中...' : '重启实例' }}
+          {{ restarting ? '重启中...' : '重启AI 员工' }}
         </button>
         <button
           v-if="canAdmin"
@@ -458,7 +458,7 @@ async function handleDelete() {
         >
           <Loader2 v-if="deleting" class="w-4 h-4 animate-spin" />
           <Trash2 v-else class="w-4 h-4" />
-          {{ deleting ? '删除中...' : '删除实例' }}
+          {{ deleting ? '删除中...' : '删除AI 员工' }}
         </button>
       </div>
     </div>
@@ -473,12 +473,12 @@ async function handleDelete() {
               <div class="p-2 rounded-lg bg-amber-500/10">
                 <AlertTriangle class="w-5 h-5 text-amber-400" />
               </div>
-              <h3 class="text-base font-semibold">重启实例</h3>
+              <h3 class="text-base font-semibold">重启AI 员工</h3>
             </div>
             <div class="text-sm text-muted-foreground space-y-2">
-              <p>即将重启实例，这将会：</p>
+              <p>即将重启AI 员工，这将会：</p>
               <ul class="list-disc list-inside space-y-1 text-xs">
-                <li>关闭实例中所有运行的程序</li>
+                <li>关闭AI 员工中所有运行的程序</li>
                 <li>重启期间服务将短暂不可用</li>
                 <li>正在进行的对话和任务会被中断</li>
               </ul>
@@ -512,16 +512,16 @@ async function handleDelete() {
               <div class="p-2 rounded-lg bg-red-500/10">
                 <AlertTriangle class="w-5 h-5 text-red-400" />
               </div>
-              <h3 class="text-base font-semibold">删除实例</h3>
+              <h3 class="text-base font-semibold">删除AI 员工</h3>
             </div>
             <div v-if="instance?.workspace_id" class="text-sm text-muted-foreground space-y-2">
-              <p>该实例当前已加入工作区「<span class="text-foreground font-medium">{{ instance.workspace_name }}</span>」，无法直接删除。</p>
+              <p>该AI 员工当前已加入工作区「<span class="text-foreground font-medium">{{ instance.workspace_name }}</span>」，无法直接删除。</p>
               <p class="text-xs">请先在工作区中将此 Agent 移除，然后再执行删除操作。</p>
             </div>
             <div v-else class="text-sm text-muted-foreground space-y-2">
-              <p>确定删除实例「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>
+              <p>确定删除AI 员工「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>
               <ul class="list-disc list-inside space-y-1 text-xs">
-                <li>实例及其 K8s 资源将被永久删除</li>
+                <li>AI 员工及其 K8s 资源将被永久删除</li>
                 <li>所有对话记录和工作区数据将丢失</li>
                 <li>此操作不可恢复</li>
               </ul>

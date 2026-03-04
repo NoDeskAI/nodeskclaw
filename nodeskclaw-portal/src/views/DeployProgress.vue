@@ -17,7 +17,7 @@ const instanceId = (route.query.instanceId as string) || ''
 const PORTAL_STEPS_BASE = [
   '预检查',
   '创建相关前置资源',
-  '部署实例',
+  '部署AI 员工',
   '等待就绪',
 ]
 
@@ -72,7 +72,7 @@ function sanitizeLogs(lines: string[]): string[] {
   const result: string[] = []
   for (const line of lines) {
     if (line.startsWith('开始等待') || line === '尚未发现 Pod（调度中）') {
-      result.push('等待实例启动...')
+      result.push('等待AI 员工启动...')
       continue
     }
     if (/^已等待\s/.test(line)) {
@@ -94,7 +94,7 @@ function sanitizeLogs(lines: string[]): string[] {
       continue
     }
     if (line === '无法获取 Pod 状态') {
-      result.push('实例状态获取中...')
+      result.push('AI 员工状态获取中...')
       continue
     }
   }
@@ -153,7 +153,7 @@ function subscribeSSE() {
     abortCtrl?.abort()
     if (finalStatus.value === 'in_progress') {
       finalStatus.value = 'failed'
-      finalMessage.value = '部署超时（6 分钟），请在实例列表查看状态'
+      finalMessage.value = '部署超时（6 分钟），请在AI 员工列表查看状态'
     }
   }, 360_000)
 
@@ -238,7 +238,7 @@ function lineColor(status: StepStatus) {
       <div class="flex items-center gap-3">
         <Rocket class="w-5 h-5 text-primary" />
         <div>
-          <h1 class="text-xl font-bold">部署实例</h1>
+          <h1 class="text-xl font-bold">部署AI 员工</h1>
           <p v-if="instanceName" class="text-sm text-muted-foreground">{{ instanceName }}</p>
         </div>
       </div>
@@ -326,7 +326,7 @@ function lineColor(status: StepStatus) {
         <CheckCircle class="w-12 h-12 text-green-500 mx-auto" />
         <div>
           <p class="text-lg font-semibold text-green-500">部署成功</p>
-          <p class="text-sm text-muted-foreground mt-1">实例 {{ instanceName }} 已就绪</p>
+          <p class="text-sm text-muted-foreground mt-1">AI 员工 {{ instanceName }} 已就绪</p>
         </div>
         <div class="flex justify-center gap-3">
           <button
@@ -335,13 +335,13 @@ function lineColor(status: StepStatus) {
             @click="router.push(`/instances/${instanceId}`)"
           >
             <ExternalLink class="w-4 h-4" />
-            查看实例
+            查看AI 员工
           </button>
           <button
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
             @click="router.push('/instances')"
           >
-            实例列表
+            AI 员工列表
           </button>
         </div>
       </div>
@@ -367,7 +367,7 @@ function lineColor(status: StepStatus) {
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
             @click="router.push('/instances')"
           >
-            实例列表
+            AI 员工列表
           </button>
         </div>
       </div>

@@ -233,7 +233,7 @@ async function handleSave() {
     if (result?.status === 'ok') {
       successMsg.value = '配置已保存，DeskClaw 已重启'
     } else if (result?.status === 'timeout') {
-      successMsg.value = '配置已保存，但 DeskClaw 重启超时，请检查实例状态'
+      successMsg.value = '配置已保存，但 DeskClaw 重启超时，请检查AI 员工状态'
     } else {
       successMsg.value = '配置已保存'
       if (result?.message) {
@@ -318,7 +318,7 @@ watch(() => instanceId.value, (val) => {
         <!-- Empty state: provider grid -->
         <div v-if="providerConfigs.length === 0 && !saving" class="space-y-3">
           <p class="text-xs text-muted-foreground">
-            当前实例未配置大模型 Provider，选择一个开始配置
+            当前AI 员工未配置大模型 Provider，选择一个开始配置
           </p>
           <div class="grid grid-cols-2 gap-2">
             <button

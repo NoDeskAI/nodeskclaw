@@ -268,7 +268,7 @@ const canDeploy = computed(() =>
 
 async function handleDeploy() {
   if (!name.value.trim()) {
-    error.value = '请输入实例名称'
+    error.value = '请输入AI 员工名称'
     return
   }
   if (!selectedImage.value) {
@@ -335,7 +335,7 @@ async function handleDeploy() {
         <ArrowLeft class="w-5 h-5" />
       </button>
       <div>
-        <h1 class="text-xl font-bold">创建实例</h1>
+        <h1 class="text-xl font-bold">创建AI 员工</h1>
         <p class="text-sm text-muted-foreground mt-0.5">只需几步即可部署你的 AI 员工</p>
       </div>
     </div>
@@ -391,12 +391,12 @@ async function handleDeploy() {
           </p>
         </div>
 
-        <!-- 实例标识 + 镜像版本 -->
+        <!-- AI 员工标识 + 镜像版本 -->
         <div class="grid grid-cols-2 gap-4">
-          <!-- 实例标识 (slug) -->
+          <!-- AI 员工标识 (slug) -->
           <div class="space-y-2">
             <div class="flex items-center gap-2">
-              <label class="text-sm font-medium">实例标识</label>
+              <label class="text-sm font-medium">AI 员工标识</label>
               <span v-if="slug && !slugManuallyEdited" class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">自动生成</span>
             </div>
             <div class="flex items-center gap-0">
@@ -637,7 +637,7 @@ async function handleDeploy() {
           </template>
 
           <p v-else class="text-xs text-muted-foreground italic">
-            已跳过大模型配置，创建后可在实例设置中配置
+            已跳过大模型配置，创建后可在AI 员工设置中配置
             <button class="text-primary ml-1 not-italic" @click="llmSkipped = false">撤销</button>
           </p>
         </div>
