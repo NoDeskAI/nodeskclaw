@@ -48,6 +48,7 @@ def _agent_brief(inst: Instance) -> AgentBrief:
         status=inst.status,
         hex_q=inst.hex_position_q,
         hex_r=inst.hex_position_r,
+        hex_floor=inst.hex_position_floor,
         sse_connected=inst.id in sse_listener_manager.healthy_instances,
         theme_color=inst.agent_theme_color,
     )
@@ -216,6 +217,9 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest, 
         inst.hex_position_q = pos[0]
         inst.hex_position_r = pos[1]
 
+    if data.hex_floor is not None:
+        inst.hex_position_floor = data.hex_floor
+
     inst.workspace_id = workspace_id
     inst.agent_display_name = data.display_name
 
@@ -317,6 +321,9 @@ async def update_agent(
         inst.hex_position_q = data.hex_q
     elif data.hex_r is not None:
         inst.hex_position_r = data.hex_r
+
+    if data.hex_floor is not None:
+        inst.hex_position_floor = data.hex_floor
 
     await db.commit()
 

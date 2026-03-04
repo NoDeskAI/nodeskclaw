@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class CorridorHexCreate(BaseModel):
     hex_q: int
     hex_r: int
+    hex_floor: int = 1
     display_name: str = ""
 
 
@@ -15,6 +16,7 @@ class CorridorHexUpdate(BaseModel):
     display_name: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
+    hex_floor: int | None = None
 
 
 class CorridorHexInfo(BaseModel):
@@ -22,6 +24,7 @@ class CorridorHexInfo(BaseModel):
     workspace_id: str
     hex_q: int
     hex_r: int
+    hex_floor: int = 1
     display_name: str
     created_by: str | None
     created_at: datetime
@@ -50,6 +53,7 @@ class HumanHexCreate(BaseModel):
     user_id: str
     hex_q: int
     hex_r: int
+    hex_floor: int = 1
     display_name: str | None = None
     display_color: str = "#f59e0b"
     channel_type: str | None = None
@@ -59,6 +63,7 @@ class HumanHexCreate(BaseModel):
 class HumanHexUpdate(BaseModel):
     hex_q: int | None = None
     hex_r: int | None = None
+    hex_floor: int | None = None
     display_name: str | None = None
     display_color: str | None = None
     channel_type: str | None = None
@@ -71,6 +76,7 @@ class HumanHexInfo(BaseModel):
     user_id: str
     hex_q: int
     hex_r: int
+    hex_floor: int = 1
     display_name: str | None = None
     display_color: str
     channel_type: str | None = None
@@ -81,6 +87,7 @@ class HumanHexInfo(BaseModel):
 class TopologyNodeInfo(BaseModel):
     hex_q: int
     hex_r: int
+    hex_floor: int = 0
     node_type: str
     entity_id: str | None = None
     display_name: str | None = None

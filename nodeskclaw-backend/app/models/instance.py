@@ -103,6 +103,7 @@ class Instance(BaseModel):
     )
     hex_position_q: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hex_position_r: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hex_position_floor: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
     agent_display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     agent_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     agent_theme_color: Mapped[str | None] = mapped_column(String(7), nullable=True)

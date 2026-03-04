@@ -34,6 +34,7 @@ class TopologyNode:
     node_type: str  # "blackboard" | "agent" | "human" | "corridor"
     entity_id: str | None = None
     display_name: str | None = None
+    hex_floor: int = 0
     extra: dict = field(default_factory=dict)
 
 
@@ -56,7 +57,7 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
     """Build a mapping from (q, r) -> node info for all occupied hexes."""
     hex_map: dict[tuple[int, int], TopologyNode] = {}
 
-    hex_map[(0, 0)] = TopologyNode(0, 0, "blackboard")
+    hex_map[(0, 0)] = TopologyNode(0, 0, "blackboard", hex_floor=0)
 
     agents_q = await db.execute(
         select(Instance).where(
@@ -70,6 +71,7 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
             hex_map[(q, r)] = TopologyNode(
                 q, r, "agent", entity_id=agent.id,
                 display_name=agent.agent_display_name or agent.name,
+                hex_floor=agent.hex_position_floor,
             )
 
     human_hexes_q = await db.execute(
@@ -82,6 +84,7 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
         hex_map[(hh.hex_q, hh.hex_r)] = TopologyNode(
             hh.hex_q, hh.hex_r, "human", entity_id=hh.id,
             display_name=hh.display_name,
+            hex_floor=hh.hex_floor,
             extra={"user_id": hh.user_id, "display_color": hh.display_color,
                    "channel_type": hh.channel_type, "channel_config": hh.channel_config},
         )
@@ -96,6 +99,7 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
         hex_map[(ch.hex_q, ch.hex_r)] = TopologyNode(
             ch.hex_q, ch.hex_r, "corridor", entity_id=ch.id,
             display_name=ch.display_name,
+            hex_floor=ch.hex_floor,
         )
 
     return hex_map

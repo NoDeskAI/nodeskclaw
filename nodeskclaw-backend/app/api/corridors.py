@@ -119,6 +119,7 @@ async def create_corridor_hex(
         workspace_id=workspace_id,
         hex_q=body.hex_q,
         hex_r=body.hex_r,
+        hex_floor=body.hex_floor,
         display_name=body.display_name,
         created_by=user.id if user else None,
     )
@@ -144,7 +145,7 @@ async def create_corridor_hex(
     await db.commit()
     return _ok(CorridorHexInfo(
         id=ch.id, workspace_id=ch.workspace_id,
-        hex_q=ch.hex_q, hex_r=ch.hex_r,
+        hex_q=ch.hex_q, hex_r=ch.hex_r, hex_floor=ch.hex_floor,
         display_name=ch.display_name,
         created_by=ch.created_by, created_at=ch.created_at,
     ).model_dump())
@@ -173,7 +174,7 @@ async def list_corridor_hexes(
     items = [
         CorridorHexInfo(
             id=c.id, workspace_id=c.workspace_id,
-            hex_q=c.hex_q, hex_r=c.hex_r,
+            hex_q=c.hex_q, hex_r=c.hex_r, hex_floor=c.hex_floor,
             display_name=c.display_name,
             created_by=c.created_by, created_at=c.created_at,
         ).model_dump()
@@ -203,6 +204,8 @@ async def update_corridor_hex(
 
     if body.display_name is not None:
         ch.display_name = body.display_name
+    if body.hex_floor is not None:
+        ch.hex_floor = body.hex_floor
 
     position_changed = False
     old_q, old_r = ch.hex_q, ch.hex_r
@@ -241,7 +244,7 @@ async def update_corridor_hex(
     await db.commit()
     return _ok(CorridorHexInfo(
         id=ch.id, workspace_id=ch.workspace_id,
-        hex_q=ch.hex_q, hex_r=ch.hex_r,
+        hex_q=ch.hex_q, hex_r=ch.hex_r, hex_floor=ch.hex_floor,
         display_name=ch.display_name,
         created_by=ch.created_by, created_at=ch.created_at,
     ).model_dump())
@@ -456,6 +459,7 @@ async def create_human_hex(
         user_id=body.user_id,
         hex_q=body.hex_q,
         hex_r=body.hex_r,
+        hex_floor=body.hex_floor,
         display_name=body.display_name,
         display_color=body.display_color,
         channel_type=body.channel_type,
@@ -479,8 +483,8 @@ async def create_human_hex(
     await db.commit()
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
-        hex_q=hh.hex_q, hex_r=hh.hex_r, display_name=hh.display_name,
-        display_color=hh.display_color,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, hex_floor=hh.hex_floor,
+        display_name=hh.display_name, display_color=hh.display_color,
         channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))
@@ -518,6 +522,8 @@ async def update_human_hex(
         hh.display_name = body.display_name
     if body.display_color is not None:
         hh.display_color = body.display_color
+    if body.hex_floor is not None:
+        hh.hex_floor = body.hex_floor
     if body.channel_type is not None:
         hh.channel_type = body.channel_type
     if body.channel_config is not None:
@@ -546,8 +552,8 @@ async def update_human_hex(
     await db.commit()
     return _ok(HumanHexInfo(
         id=hh.id, workspace_id=hh.workspace_id, user_id=hh.user_id,
-        hex_q=hh.hex_q, hex_r=hh.hex_r, display_name=hh.display_name,
-        display_color=hh.display_color,
+        hex_q=hh.hex_q, hex_r=hh.hex_r, hex_floor=hh.hex_floor,
+        display_name=hh.display_name, display_color=hh.display_color,
         channel_type=hh.channel_type, channel_config=hh.channel_config,
         created_at=hh.created_at,
     ).model_dump(mode="json"))
@@ -604,7 +610,7 @@ async def get_topology(
     return _ok(TopologyInfo(
         nodes=[
             TopologyNodeInfo(
-                hex_q=n.hex_q, hex_r=n.hex_r, node_type=n.node_type,
+                hex_q=n.hex_q, hex_r=n.hex_r, hex_floor=n.hex_floor, node_type=n.node_type,
                 entity_id=n.entity_id, display_name=n.display_name, extra=n.extra,
             )
             for n in topo.nodes

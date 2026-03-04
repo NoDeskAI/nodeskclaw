@@ -31,6 +31,7 @@ class CorridorHex(BaseModel):
     )
     hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
+    hex_floor: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
     display_name: Mapped[str] = mapped_column(String(100), default="", nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
@@ -52,6 +53,7 @@ class HumanHex(BaseModel):
     )
     hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
     hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
+    hex_floor: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     display_color: Mapped[str] = mapped_column(String(20), default="#f59e0b", nullable=False)
     channel_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
