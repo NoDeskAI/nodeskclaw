@@ -19,12 +19,14 @@ import {
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
 const { t } = useI18n()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const loading = ref(true)
 const showAddDialog = ref(false)
@@ -103,7 +105,7 @@ async function handleAddMember() {
     selectedUser.value = null
     addRole.value = 'member'
   } catch (e: any) {
-    alert(e?.response?.data?.message || t('orgMembers.addFailed'))
+    toast.error(e?.response?.data?.message || t('orgMembers.addFailed'))
   } finally {
     addLoading.value = false
   }
@@ -115,19 +117,24 @@ async function handleRoleChange(member: MemberInfo, newRole: string) {
   try {
     await orgStore.updateMemberRole(member.id, newRole)
   } catch (e: any) {
-    alert(e?.response?.data?.message || t('orgMembers.updateRoleFailed'))
+    toast.error(e?.response?.data?.message || t('orgMembers.updateRoleFailed'))
   } finally {
     actionLoading.value = null
   }
 }
 
 async function handleRemove(member: MemberInfo) {
-  if (!confirm(t('orgMembers.removeConfirm', { name: member.user_name || member.user_email }))) return
+  const ok = await confirm({
+    title: t('orgMembers.removeMemberTitle'),
+    description: t('orgMembers.removeConfirm', { name: member.user_name || member.user_email }),
+    variant: 'danger',
+  })
+  if (!ok) return
   actionLoading.value = member.id
   try {
     await orgStore.removeMember(member.id)
   } catch (e: any) {
-    alert(e?.response?.data?.message || t('orgMembers.removeFailed'))
+    toast.error(e?.response?.data?.message || t('orgMembers.removeFailed'))
   } finally {
     actionLoading.value = null
   }
@@ -140,7 +147,12 @@ const resetCopied = ref(false)
 
 async function handleResetPassword(member: MemberInfo) {
   const name = member.user_name || member.user_email || member.user_id
-  if (!confirm(t('orgMembers.resetPasswordConfirm', { name }))) return
+  const ok = await confirm({
+    title: t('orgMembers.resetPassword'),
+    description: t('orgMembers.resetPasswordConfirm', { name }),
+    variant: 'danger',
+  })
+  if (!ok) return
   actionLoading.value = member.id
   try {
     const res = await api.post(`/orgs/${orgStore.currentOrgId}/members/${member.user_id}/reset-password`)

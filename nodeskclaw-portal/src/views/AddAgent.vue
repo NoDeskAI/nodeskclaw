@@ -175,7 +175,7 @@ async function doAddAgent(instanceId: string, installGene: boolean) {
     })
   } catch (e: any) {
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
-    alert(resolveApiErrorMessage(e, t('addAgentView.addFailed')))
+    toast.error(resolveApiErrorMessage(e, t('addAgentView.addFailed')))
     adding.value = null
   }
 }

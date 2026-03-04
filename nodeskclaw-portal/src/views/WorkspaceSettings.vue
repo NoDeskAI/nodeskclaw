@@ -7,6 +7,7 @@ import { useWorkspaceStore, WORKSPACE_PERMISSIONS, PERMISSION_PRESETS, type Work
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
@@ -15,6 +16,7 @@ const router = useRouter()
 const store = useWorkspaceStore()
 const authStore = useAuthStore()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const workspaceId = computed(() => route.params.id as string)
 const canManageMembers = computed(() => store.hasPermission('manage_members'))
@@ -60,7 +62,12 @@ async function handleSave() {
 }
 
 async function handleDelete() {
-  if (!confirm(t('workspaceSettings.deleteConfirm'))) return
+  const ok = await confirm({
+    title: t('workspaceSettings.deleteWorkspace'),
+    description: t('workspaceSettings.deleteConfirm'),
+    variant: 'danger',
+  })
+  if (!ok) return
   deleting.value = true
   try {
     await store.deleteWorkspace(workspaceId.value)
@@ -249,7 +256,12 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
       return
     }
   }
-  if (!confirm(t('workspaceSettings.removeMemberConfirm', { name: member.user_name }))) return
+  const ok = await confirm({
+    title: t('workspaceSettings.removeMemberTitle'),
+    description: t('workspaceSettings.removeMemberConfirm', { name: member.user_name }),
+    variant: 'danger',
+  })
+  if (!ok) return
   removingUserId.value = member.user_id
   try {
     await store.removeMember(workspaceId.value, member.user_id)

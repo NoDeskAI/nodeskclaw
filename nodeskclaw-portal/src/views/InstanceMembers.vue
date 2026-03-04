@@ -6,10 +6,12 @@ import { UserPlus, Loader2, Trash2, Search } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const instanceId = inject<Ref<string>>('instanceId')!
 const myRole = inject<Ref<string | null>>('myInstanceRole', ref(null))
@@ -129,7 +131,12 @@ async function updateRole(member: MemberInfo, newRole: string) {
 
 async function removeMember(member: MemberInfo) {
   const name = member.user_name || member.user_email || member.user_id
-  if (!confirm(t('instanceMembers.removeConfirm', { name }))) return
+  const ok = await confirm({
+    title: t('instanceMembers.removeMemberTitle'),
+    description: t('instanceMembers.removeConfirm', { name }),
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await api.delete(`/instances/${instanceId.value}/members/${member.id}`)
     toast.success(t('instanceMembers.removeSuccess'))

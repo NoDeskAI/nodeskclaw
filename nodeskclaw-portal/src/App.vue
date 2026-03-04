@@ -7,6 +7,7 @@ import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 import { PawPrint, Settings, LogOut, Users, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User } from 'lucide-vue-next'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
+import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -55,6 +56,7 @@ function onLocaleChange(value: string) {
 
 <template>
   <ToastContainer />
+  <ConfirmDialog />
 
   <template v-if="isLoginPage">
     <router-view />
