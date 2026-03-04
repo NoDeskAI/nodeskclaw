@@ -262,23 +262,28 @@ def _k8s_name(instance: Instance) -> str:
 async def _find_running_pod(
     k8s: K8sClient, instance: Instance,
 ) -> tuple[str, str]:
-    """Return (pod_name, container_name) for the first Running & Ready pod."""
+    """Return (pod_name, container_name) for the first pod with a running container.
+
+    For kubectl exec file operations we only need the container process to be
+    alive (state == "running").  The readiness probe is irrelevant here — it
+    controls Service routing, not exec availability.
+    """
     container = _k8s_name(instance)
     label_selector = f"app.kubernetes.io/name={container}"
     pods = await k8s.list_pods(instance.namespace, label_selector)
     running = [p for p in pods if p["phase"] == "Running"]
     if not running:
         raise NFSMountError("实例无运行中的 Pod，无法同步文件")
-    ready = [
+    usable = [
         p for p in running
-        if any(c.get("ready") for c in p.get("containers", []))
+        if any(c.get("state") == "running" for c in p.get("containers", []))
     ]
-    if not ready:
+    if not usable:
         raise NFSMountError(
             "实例正在启动中，请稍后重试",
             message_key="errors.instance.pod_not_ready",
         )
-    return ready[0]["name"], container
+    return usable[0]["name"], container
 
 
 @asynccontextmanager
