@@ -768,13 +768,30 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     gene_step = len(steps)
                     _publish(gene_step, "安装模板基因")
                     failed_genes: list[str] = []
-                    for gene_slug in ctx.template_gene_slugs:
-                        try:
-                            from app.services.gene_service import install_gene_prerestart
-                            await install_gene_prerestart(ctx.instance_id, gene_slug)
-                        except Exception as ge:
-                            logger.warning("模板基因安装失败（继续）: slug=%s err=%s", gene_slug, ge)
-                            failed_genes.append(gene_slug)
+                    max_retries = 2
+                    from app.services.gene_service import install_gene_prerestart
+                    for idx, gene_slug in enumerate(ctx.template_gene_slugs):
+                        installed = False
+                        for attempt in range(max_retries + 1):
+                            try:
+                                await install_gene_prerestart(ctx.instance_id, gene_slug)
+                                installed = True
+                                break
+                            except Exception as ge:
+                                if attempt < max_retries:
+                                    logger.warning(
+                                        "模板基因安装失败（第 %d 次重试）: slug=%s err=%s",
+                                        attempt + 1, gene_slug, ge,
+                                    )
+                                    await asyncio.sleep(2)
+                                else:
+                                    logger.warning(
+                                        "模板基因安装失败（已重试 %d 次）: slug=%s err=%s",
+                                        max_retries, gene_slug, ge,
+                                    )
+                                    failed_genes.append(gene_slug)
+                        if installed and idx < len(ctx.template_gene_slugs) - 1:
+                            await asyncio.sleep(1)
 
                     installed_count = len(ctx.template_gene_slugs) - len(failed_genes)
                     if installed_count > 0:

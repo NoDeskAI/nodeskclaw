@@ -1039,47 +1039,59 @@ async def install_gene_prerestart(instance_id: str, gene_slug: str) -> None:
             await db.commit()
             await db.refresh(ig)
 
-            hub_manifest = await genehub_client.get_manifest(gene.slug)
-            manifest = hub_manifest or _json_loads(gene.manifest) or {}
-            skill = manifest.get("skill", {})
+            try:
+                hub_manifest = await genehub_client.get_manifest(gene.slug)
+                manifest = hub_manifest or _json_loads(gene.manifest) or {}
+                skill = manifest.get("skill", {})
 
-            async with remote_fs(instance, db) as fs:
-                skill_name = skill.get("name", gene.slug)
-                skill_content = skill.get("content", "")
-                await _write_skill_file(
-                    fs, skill_name, skill_content,
-                    gene.short_description or gene.description or "",
+                async with remote_fs(instance, db) as fs:
+                    skill_name = skill.get("name", gene.slug)
+                    skill_content = skill.get("content", "")
+                    await _write_skill_file(
+                        fs, skill_name, skill_content,
+                        gene.short_description or gene.description or "",
+                    )
+                    await ensure_skills_discovery(fs)
+                    await _apply_engineering_actions(fs, manifest)
+                    await invalidate_skill_snapshots(fs)
+                    await inject_evolution_notification(fs, skill_name, "installed")
+
+                ig.status = InstanceGeneStatus.installed
+                ig.installed_at = datetime.now(timezone.utc)
+                ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
+                await _record_evolution(
+                    db, instance_id, EvolutionEventType.learned, gene.name,
+                    gene_slug=gene.slug, gene_id=gene.id,
+                    details={"version": gene.version, "learning_type": "direct"},
                 )
-                await ensure_skills_discovery(fs)
-                await _apply_engineering_actions(fs, manifest)
-                await invalidate_skill_snapshots(fs)
-                await inject_evolution_notification(fs, skill_name, "installed")
+                await db.commit()
 
-            ig.status = InstanceGeneStatus.installed
-            ig.installed_at = datetime.now(timezone.utc)
-            ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
-            await _record_evolution(
-                db, instance_id, EvolutionEventType.learned, gene.name,
-                gene_slug=gene.slug, gene_id=gene.id,
-                details={"version": gene.version, "learning_type": "direct"},
-            )
-            await db.commit()
+                await genehub_client.report_install(gene.slug)
 
-            await genehub_client.report_install(gene.slug)
+                workspace_id = instance.workspace_id
+                if workspace_id:
+                    from app.api.workspaces import broadcast_event
+                    broadcast_event(workspace_id, "gene:installed", {
+                        "instance_id": instance.id,
+                        "gene_slug": gene.slug,
+                        "method": "direct",
+                    })
 
-            workspace_id = instance.workspace_id
-            if workspace_id:
-                from app.api.workspaces import broadcast_event
-                broadcast_event(workspace_id, "gene:installed", {
-                    "instance_id": instance.id,
-                    "gene_slug": gene.slug,
-                    "method": "direct",
-                })
-
-            logger.info(
-                "install_gene_prerestart: 基因 %s 已安装到实例 %s（不重启）",
-                gene_slug, instance.name,
-            )
+                logger.info(
+                    "install_gene_prerestart: 基因 %s 已安装到实例 %s（不重启）",
+                    gene_slug, instance.name,
+                )
+            except Exception as e:
+                logger.error(
+                    "install_gene_prerestart failed for gene %s on %s: %s",
+                    gene_slug, instance.name, e,
+                )
+                try:
+                    ig.status = InstanceGeneStatus.failed
+                    await db.commit()
+                except Exception:
+                    logger.error("Failed to mark gene %s as failed", gene_slug)
+                raise
 
 
 async def _inject_mcp_servers(
