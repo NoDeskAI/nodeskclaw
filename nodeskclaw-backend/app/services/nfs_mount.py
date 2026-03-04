@@ -136,15 +136,19 @@ class PodFS:
     async def list_dir(self, path: str) -> list[dict] | None:
         """List directory contents with metadata via a single exec call.
 
-        Returns a list of dicts ``{name, is_dir, size, modified_at}`` or
-        *None* when the path does not exist.
+        Returns a list of dicts ``{name, is_dir, size, modified_at}`` (may be
+        empty for an existing but empty directory) or *None* when the path
+        does not exist.
         """
         try:
             result = await self._k8s.exec_in_pod(
                 self._ns, self._pod,
                 ["bash", "-c",
+                 f"if [ -d '/root/{path}' ]; then "
                  f"find '/root/{path}' -maxdepth 1 -mindepth 1 "
-                 f"-printf '%y\\t%s\\t%T@\\t%f\\n' 2>/dev/null || echo '__NOT_FOUND__'"],
+                 f"-printf '%y\\t%s\\t%T@\\t%f\\n' 2>/dev/null; "
+                 f"echo '__DIR_OK__'; "
+                 f"else echo '__NOT_FOUND__'; fi"],
                 container=self._container,
             )
         except Exception:
@@ -155,6 +159,8 @@ class PodFS:
 
         items: list[dict] = []
         for line in result.strip().splitlines():
+            if line == "__DIR_OK__":
+                continue
             parts = line.split("\t", 3)
             if len(parts) < 4:
                 continue
