@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 SSE_PATH = "/sse/events"
 HEARTBEAT_TIMEOUT_S = 45
 RECONNECT_BASE_S = 2
-RECONNECT_MAX_S = 30
+RECONNECT_MAX_S = 10
 INITIAL_CONNECT_DELAY_S = 5
 
 
@@ -137,12 +137,15 @@ class SSEListenerManager:
                     "SSE connection lost for %s: %s: %s (reconnect in %.0fs)",
                     instance_id, type(e).__name__, e or "(no detail)", backoff,
                 )
+                if stop_event.is_set():
+                    return
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, RECONNECT_MAX_S)
+                continue
 
             if stop_event.is_set():
                 return
-
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, RECONNECT_MAX_S)
+            await asyncio.sleep(RECONNECT_BASE_S)
 
     async def _listen_once(
         self,

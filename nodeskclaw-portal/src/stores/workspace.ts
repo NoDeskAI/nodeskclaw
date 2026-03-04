@@ -547,6 +547,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       } catch { /* ignore */ }
     })
 
+    eventSource.addEventListener('agent:status_snapshot', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (currentWorkspace.value && Array.isArray(data.agents)) {
+          for (const item of data.agents) {
+            const agent = currentWorkspace.value.agents.find(
+              (a: { instance_id: string }) => a.instance_id === item.instance_id,
+            )
+            if (agent) agent.sse_connected = item.sse_connected
+          }
+        }
+      } catch { /* ignore */ }
+    })
+
     eventSource.addEventListener('blackboard:updated', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)

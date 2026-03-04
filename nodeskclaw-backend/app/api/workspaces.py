@@ -772,6 +772,9 @@ async def workspace_events(
     user=Depends(_get_current_user_from_query_dep()),
 ):
     await wm_service.check_workspace_member(workspace_id, user, db)
+
+    snapshot = await _build_agent_status_snapshot(workspace_id, db)
+
     queue: asyncio.Queue = asyncio.Queue()
     if workspace_id not in _workspace_queues:
         _workspace_queues[workspace_id] = set()
@@ -780,6 +783,8 @@ async def workspace_events(
     async def stream():
         try:
             yield f"data: {json.dumps({'event': 'connected'})}\n\n"
+            if snapshot:
+                yield f"event: agent:status_snapshot\ndata: {json.dumps(snapshot)}\n\n"
             while True:
                 try:
                     msg = await asyncio.wait_for(queue.get(), timeout=30)
@@ -792,6 +797,29 @@ async def workspace_events(
             _workspace_queues.get(workspace_id, set()).discard(queue)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+async def _build_agent_status_snapshot(workspace_id: str, db: AsyncSession) -> dict | None:
+    """Build a snapshot of all agents' SSE connection status for the workspace."""
+    from app.services.sse_listener import sse_listener_manager
+
+    result = await db.execute(
+        sa_select(Instance.id).where(
+            Instance.workspace_id == workspace_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    instance_ids = result.scalars().all()
+    if not instance_ids:
+        return None
+
+    healthy = sse_listener_manager.healthy_instances
+    return {
+        "agents": [
+            {"instance_id": iid, "sse_connected": iid in healthy}
+            for iid in instance_ids
+        ],
+    }
 
 
 # ── SSE Token ────────────────────────────────────────
