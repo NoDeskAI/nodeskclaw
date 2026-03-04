@@ -27,7 +27,7 @@ let smsTimer: ReturnType<typeof setInterval> | null = null
 const locale = ref(getCurrentLocale())
 
 const features = [
-  { icon: Zap, title: '一键部署', desc: '零配置启动你的 AI 助手' },
+  { icon: Zap, title: '一键部署', desc: '零配置启动你的 AI 员工' },
   { icon: Shield, title: '企业级安全', desc: '多租户隔离，数据独占' },
   { icon: Globe, title: '即开即用', desc: '自动域名，HTTPS 就绪' },
   { icon: Sparkles, title: '弹性扩展', desc: '按需选择规格，灵活升降配' },
@@ -144,11 +144,11 @@ watch(isRegister, () => { error.value = '' })
         </div>
 
         <h1 class="text-4xl xl:text-5xl font-bold leading-tight mb-4">
-          你的 AI 助手<br />
+          你的 AI 员工<br />
           <span class="text-primary">云端部署平台</span>
         </h1>
         <p class="text-base text-muted-foreground max-w-md mb-12">
-          基于 DeskClaw 的 SaaS 部署平台，让每个人都能拥有自己的 AI 助手。无需运维经验，一键创建，即刻使用。
+          基于 DeskClaw 的 SaaS 部署平台，让每个人都能拥有自己的 AI 员工。无需运维经验，一键创建，即刻使用。
         </p>
 
         <div class="grid grid-cols-2 gap-4 max-w-md">

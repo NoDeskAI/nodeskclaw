@@ -42,8 +42,8 @@ const zhCN = {
   auth: {
     createAccount: "创建账户",
     welcomeBack: "欢迎回来",
-    registerSubtitle: "注册以开始使用 AI 助手",
-    loginSubtitle: "登录以管理你的 AI 助手实例",
+    registerSubtitle: "注册以开始使用 AI 员工",
+    loginSubtitle: "登录以管理你的 AI 员工实例",
     emailLogin: "邮箱登录",
     emailRegister: "邮箱注册",
     phoneLogin: "手机登录",
@@ -622,7 +622,7 @@ const zhCN = {
   agentDetailDialog: {
     openInNewPage: "在新页面打开",
     openclawAccess: "DeskClaw 访问地址",
-    openclawHint: "点击即可打开 AI 助手",
+    openclawHint: "点击即可打开 AI 员工",
     open: "打开",
     basicInfo: "基本信息",
     imageVersion: "镜像版本",

@@ -42,8 +42,8 @@ const enUS = {
   auth: {
     createAccount: "Create account",
     welcomeBack: "Welcome back",
-    registerSubtitle: "Sign up to start using your AI assistant",
-    loginSubtitle: "Sign in to manage your AI assistant instances",
+    registerSubtitle: "Sign up to start using your AI employee",
+    loginSubtitle: "Sign in to manage your AI employee instances",
     emailLogin: "Email sign in",
     emailRegister: "Email sign up",
     phoneLogin: "Phone sign in",
@@ -622,7 +622,7 @@ const enUS = {
   agentDetailDialog: {
     openInNewPage: "Open in new page",
     openclawAccess: "DeskClaw Access URL",
-    openclawHint: "Click to open the AI assistant",
+    openclawHint: "Click to open the AI employee",
     open: "Open",
     basicInfo: "Basic Info",
     imageVersion: "Image Version",

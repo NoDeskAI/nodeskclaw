@@ -242,7 +242,7 @@ async function handleDelete() {
           <div>
             <p class="text-sm font-medium">DeskClaw 访问地址</p>
             <p class="text-xs text-muted-foreground mt-0.5">
-              {{ restarting ? '实例正在重启，请稍候...' : '点击即可打开 AI 助手' }}
+              {{ restarting ? '实例正在重启，请稍候...' : '点击即可打开 AI 员工' }}
             </p>
           </div>
           <button

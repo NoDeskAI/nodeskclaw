@@ -80,7 +80,7 @@ const isEmpty = computed(() => !loading.value && instances.value.length === 0)
       </div>
       <div>
         <p class="text-lg font-medium">还没有实例</p>
-        <p class="text-sm text-muted-foreground mt-1">点击下方按钮创建你的第一个 AI 助手</p>
+        <p class="text-sm text-muted-foreground mt-1">点击下方按钮创建你的第一个 AI 员工</p>
       </div>
       <button
         class="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"

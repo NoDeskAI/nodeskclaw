@@ -336,7 +336,7 @@ async function handleDeploy() {
       </button>
       <div>
         <h1 class="text-xl font-bold">创建实例</h1>
-        <p class="text-sm text-muted-foreground mt-0.5">只需几步即可部署你的 AI 助手</p>
+        <p class="text-sm text-muted-foreground mt-0.5">只需几步即可部署你的 AI 员工</p>
       </div>
     </div>
 
@@ -377,7 +377,7 @@ async function handleDeploy() {
       <div v-if="currentStep === 1" class="space-y-8">
         <!-- 名称 -->
         <div class="space-y-2">
-          <label class="text-sm font-medium">给你的 AI 助手取个名字</label>
+          <label class="text-sm font-medium">给你的 AI 员工取个名字</label>
           <input
             v-model="name"
             type="text"
