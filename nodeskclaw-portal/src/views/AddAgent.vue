@@ -2,13 +2,21 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check, AlertTriangle, X } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check, AlertTriangle, X, ExternalLink } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 
-const TOPOLOGY_GENE_SLUG = 'nodeskclaw-topology-awareness'
+interface MissingGene {
+  id: string
+  gene_id: string
+  gene_name: string
+  gene_slug: string
+  gene_short_description: string | null
+  gene_icon: string | null
+  gene_category: string | null
+}
 
 const { t } = useI18n()
 const route = useRoute()
@@ -36,10 +44,12 @@ let stepTimer: ReturnType<typeof setInterval> | null = null
 const search = ref('')
 
 const geneDialogInstanceId = ref<string | null>(null)
+const missingGenes = ref<MissingGene[]>([])
+const genehubWebUrl = ref('')
 const geneChecking = ref(false)
 
 const ADDING_STEPS_WITH_GENE = computed(() => [
-  t('addAgentView.stepCheckGene'),
+  t('addAgentView.stepInstallGenes'),
   t('addAgentView.stepConfiguring'),
   t('addAgentView.stepDeployPlugin'),
   t('addAgentView.stepRestarting'),
@@ -102,53 +112,53 @@ onMounted(async () => {
   fetchInstances()
 })
 
-async function checkTopologyGene(instanceId: string): Promise<boolean> {
-  try {
-    const res = await api.get(`/instances/${instanceId}/genes`)
-    const genes: any[] = res.data.data || []
-    return genes.some(
-      (g: any) => g.gene?.slug === TOPOLOGY_GENE_SLUG && g.status === 'installed',
-    )
-  } catch {
-    return false
-  }
+function geneHubLink(slug: string): string {
+  if (!genehubWebUrl.value) return ''
+  return `${genehubWebUrl.value.replace(/\/$/, '')}/genes/${slug}`
 }
 
 async function addToWorkspace(instanceId: string) {
   geneChecking.value = true
-  let hasGene: boolean
   try {
-    hasGene = await checkTopologyGene(instanceId)
-  } catch {
-    toast.error(t('addAgentView.geneCheckFailed'))
-    geneChecking.value = false
-    return
-  }
-  geneChecking.value = false
+    const res = await api.get(`/workspaces/${workspaceId.value}/check-agent-genes`, {
+      params: { instance_id: instanceId },
+    })
+    const data = res.data.data
+    genehubWebUrl.value = data.genehub_web_url || ''
 
-  if (!hasGene) {
+    if (data.all_installed) {
+      geneChecking.value = false
+      await doAddAgent(instanceId, [])
+      return
+    }
+
+    missingGenes.value = data.missing_genes || []
     geneDialogInstanceId.value = instanceId
-    return
+  } catch (e: any) {
+    toast.error(resolveApiErrorMessage(e, t('addAgentView.geneCheckFailed')))
+  } finally {
+    geneChecking.value = false
   }
-
-  await doAddAgent(instanceId, false)
 }
 
 function closeGeneDialog() {
   geneDialogInstanceId.value = null
+  missingGenes.value = []
 }
 
 async function confirmGeneInstall() {
   const instanceId = geneDialogInstanceId.value
   if (!instanceId) return
+  const slugs = missingGenes.value.map(g => g.gene_slug)
   geneDialogInstanceId.value = null
-  await doAddAgent(instanceId, true)
+  missingGenes.value = []
+  await doAddAgent(instanceId, slugs)
 }
 
-async function doAddAgent(instanceId: string, installGene: boolean) {
+async function doAddAgent(instanceId: string, installSlugs: string[]) {
   adding.value = instanceId
   addingStep.value = 0
-  currentSteps.value = installGene ? ADDING_STEPS_WITH_GENE.value : ADDING_STEPS_NORMAL.value
+  currentSteps.value = installSlugs.length > 0 ? ADDING_STEPS_WITH_GENE.value : ADDING_STEPS_NORMAL.value
 
   stepTimer = setInterval(() => {
     if (addingStep.value < currentSteps.value.length - 1) addingStep.value++
@@ -157,7 +167,7 @@ async function doAddAgent(instanceId: string, installGene: boolean) {
   try {
     await store.addAgent(
       workspaceId.value, instanceId, undefined,
-      targetHexQ.value, targetHexR.value, installGene,
+      targetHexQ.value, targetHexR.value, installSlugs,
     )
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
     adding.value = null
@@ -277,7 +287,7 @@ function goBack() {
           </span>
           <div v-else-if="geneChecking && geneDialogInstanceId === null && adding === null" class="flex items-center gap-1.5">
             <Loader2 class="w-3 h-3 animate-spin text-muted-foreground" />
-            <span class="text-xs text-muted-foreground">{{ t('addAgentView.stepCheckGene') }}</span>
+            <span class="text-xs text-muted-foreground">{{ t('addAgentView.stepInstallGenes') }}</span>
           </div>
           <button
             v-else
@@ -343,7 +353,7 @@ function goBack() {
       </div>
     </template>
 
-    <!-- Gene Install Confirmation Dialog -->
+    <!-- Missing Genes Dialog -->
     <Teleport to="body">
       <Transition name="fade">
         <div
@@ -351,22 +361,54 @@ function goBack() {
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
           @click.self="closeGeneDialog"
         >
-          <div class="bg-card border border-border rounded-xl shadow-lg max-w-sm w-full mx-4 p-6">
-            <div class="flex items-start gap-3 mb-4">
+          <div class="bg-card border border-border rounded-xl shadow-lg max-w-md w-full mx-4">
+            <div class="flex items-start gap-3 p-5 pb-3">
               <div class="shrink-0 w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
                 <AlertTriangle class="w-5 h-5 text-amber-500" />
               </div>
               <div class="flex-1 min-w-0">
                 <h3 class="text-sm font-semibold mb-1">{{ t('addAgentView.geneDialogTitle') }}</h3>
                 <p class="text-xs text-muted-foreground leading-relaxed">
-                  {{ t('addAgentView.geneDialogBody') }}
+                  {{ t('addAgentView.geneDialogBody', { count: missingGenes.length }) }}
                 </p>
               </div>
               <button class="shrink-0 p-1 rounded-md hover:bg-muted transition-colors" @click="closeGeneDialog">
                 <X class="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div class="flex items-center gap-2 justify-end">
+
+            <div class="px-5 pb-3 space-y-2 max-h-[240px] overflow-y-auto">
+              <div
+                v-for="gene in missingGenes"
+                :key="gene.gene_id"
+                class="flex items-center gap-3 p-3 rounded-lg border border-border"
+              >
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium truncate">{{ gene.gene_name }}</span>
+                    <span
+                      v-if="gene.gene_category"
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                    >{{ gene.gene_category }}</span>
+                  </div>
+                  <p v-if="gene.gene_short_description" class="text-xs text-muted-foreground mt-0.5 truncate">
+                    {{ gene.gene_short_description }}
+                  </p>
+                </div>
+                <a
+                  v-if="geneHubLink(gene.gene_slug)"
+                  :href="geneHubLink(gene.gene_slug)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  :title="t('addAgentView.viewOnGeneHub')"
+                >
+                  <ExternalLink class="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 justify-end p-5 pt-3 border-t border-border">
               <button
                 class="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors"
                 @click="closeGeneDialog"

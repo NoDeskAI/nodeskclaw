@@ -74,3 +74,25 @@ FeishuOrgSetupRequest = OAuthOrgSetupRequest
 
 class ResetPasswordResponse(BaseModel):
     password: str
+
+
+class OrgRequiredGeneAdd(BaseModel):
+    gene_id: str
+
+
+class OrgRequiredGeneInfo(BaseModel):
+    id: str
+    gene_id: str
+    gene_name: str
+    gene_slug: str
+    gene_short_description: str | None = None
+    gene_icon: str | None = None
+    gene_category: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CheckAgentGenesResponse(BaseModel):
+    missing_genes: list[OrgRequiredGeneInfo]
+    all_installed: bool
+    genehub_web_url: str

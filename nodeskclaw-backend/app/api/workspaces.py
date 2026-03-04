@@ -155,6 +155,69 @@ async def add_agent(
     return _ok(agent.model_dump(mode="json"))
 
 
+@router.get("/{workspace_id}/check-agent-genes")
+async def check_agent_genes(
+    workspace_id: str,
+    instance_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
+
+    from app.models.workspace import Workspace
+    from app.models.gene import Gene, InstanceGene, InstanceGeneStatus
+    from app.models.org_required_gene import OrgRequiredGene
+    from app.models.base import not_deleted
+    from app.core.config import settings
+
+    ws = (await db.execute(
+        sa_select(Workspace).where(Workspace.id == workspace_id, not_deleted(Workspace))
+    )).scalar_one_or_none()
+    if not ws:
+        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+
+    required_rows = (await db.execute(
+        sa_select(OrgRequiredGene, Gene)
+        .join(Gene, OrgRequiredGene.gene_id == Gene.id)
+        .where(
+            OrgRequiredGene.org_id == ws.org_id,
+            not_deleted(OrgRequiredGene),
+            not_deleted(Gene),
+        )
+    )).all()
+
+    if not required_rows:
+        return _ok({"missing_genes": [], "all_installed": True, "genehub_web_url": settings.GENEHUB_WEB_URL})
+
+    installed_result = await db.execute(
+        sa_select(Gene.slug).join(InstanceGene, InstanceGene.gene_id == Gene.id).where(
+            InstanceGene.instance_id == instance_id,
+            InstanceGene.status == InstanceGeneStatus.installed,
+            not_deleted(InstanceGene),
+        )
+    )
+    installed_slugs = {row[0] for row in installed_result.all()}
+
+    missing = []
+    for rg, gene in required_rows:
+        if gene.slug not in installed_slugs:
+            missing.append({
+                "id": rg.id,
+                "gene_id": gene.id,
+                "gene_name": gene.name,
+                "gene_slug": gene.slug,
+                "gene_short_description": gene.short_description,
+                "gene_icon": gene.icon,
+                "gene_category": gene.category,
+            })
+
+    return _ok({
+        "missing_genes": missing,
+        "all_installed": len(missing) == 0,
+        "genehub_web_url": settings.GENEHUB_WEB_URL,
+    })
+
+
 @router.put("/{workspace_id}/agents/{instance_id}")
 async def update_agent(
     workspace_id: str,

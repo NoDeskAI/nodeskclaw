@@ -1130,6 +1130,46 @@ async def lifespan(app: FastAPI):
             else:
                 logger.warning("迁移 27：模板文件 %s 不存在，跳过种子", tpl_path)
 
+    # ── 迁移 28: 创建 org_required_genes 表 ──
+    async with engine.begin() as conn:
+        tbl = await conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = 'org_required_genes'"
+        ))
+        if not tbl.scalar():
+            await conn.execute(text("""
+                CREATE TABLE org_required_genes (
+                    id VARCHAR(36) PRIMARY KEY,
+                    org_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+                    gene_id VARCHAR(36) NOT NULL REFERENCES genes(id),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    deleted_at TIMESTAMPTZ
+                )
+            """))
+            await conn.execute(text(
+                "CREATE INDEX ix_org_required_genes_org_id ON org_required_genes (org_id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX ix_org_required_genes_deleted_at ON org_required_genes (deleted_at)"
+            ))
+            await conn.execute(text("""
+                CREATE UNIQUE INDEX uq_org_required_gene_active
+                ON org_required_genes (org_id, gene_id)
+                WHERE deleted_at IS NULL
+            """))
+            logger.info("自动迁移 28：已创建 org_required_genes 表")
+        else:
+            idx = await conn.execute(text(
+                "SELECT 1 FROM pg_indexes WHERE indexname = 'uq_org_required_gene_active'"
+            ))
+            if not idx.scalar():
+                await conn.execute(text("""
+                    CREATE UNIQUE INDEX uq_org_required_gene_active
+                    ON org_required_genes (org_id, gene_id)
+                    WHERE deleted_at IS NULL
+                """))
+                logger.info("自动迁移 28：已补建 uq_org_required_gene_active 索引")
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

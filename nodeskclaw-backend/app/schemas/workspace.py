@@ -84,7 +84,7 @@ class AddAgentRequest(BaseModel):
     display_name: str | None = None
     hex_q: int | None = None
     hex_r: int | None = None
-    install_topology_gene: bool = False
+    install_gene_slugs: list[str] = []
 
 
 class UpdateAgentRequest(BaseModel):

@@ -32,6 +32,7 @@ nodeskclaw-portal/
 │       ├── InstanceList.vue        # 实例列表
 │       ├── InstanceDetail.vue      # 实例详情
 │       ├── OrgMembers.vue          # 组织成员管理
+│       ├── OrgSettings.vue         # 组织设置（必装基因配置）
 │       ├── GeneMarket.vue          # 基因市场
 │       ├── EnterpriseFiles.vue     # 企业空间 — Agent 列表
 │       ├── EnterpriseFileBrowser.vue  # 企业空间 — 文件浏览器
@@ -63,8 +64,18 @@ vue-tsc -b       # 类型检查
 | `/members` | 组织成员 | 成员管理（含管理员重置成员密码） |
 | `/usage` | 用量 | 组织用量统计 |
 | `/gene-market` | 基因市场 | 浏览安装基因 |
+| `/org-settings` | 组织设置 | 必装基因配置（仅 org admin） |
 | `/enterprise-files` | 企业空间 | Agent 文件浏览（仅 org admin） |
 | `/enterprise-files/:instanceId` | 文件浏览器 | 单个 Agent 的文件列表和预览 |
+
+## 组织设置
+
+组织管理员可配置 Agent 加入工作区时必须安装的基因列表。
+
+- 入口：顶部导航"组织设置"（仅 `portal_org_role === 'admin'` 可见）
+- 展示当前已配置的必装基因列表（名称、描述、分类）
+- 支持搜索并添加基因、移除已有基因
+- Agent 加入工作区时，前端自动检查缺失的必装基因并弹窗提示安装
 
 ## 企业空间
 

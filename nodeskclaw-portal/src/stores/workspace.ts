@@ -219,11 +219,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // ── Agent Management ──────────────────────────────
 
-  async function addAgent(workspaceId: string, instanceId: string, displayName?: string, hexQ?: number, hexR?: number, installTopologyGene?: boolean) {
+  async function addAgent(workspaceId: string, instanceId: string, displayName?: string, hexQ?: number, hexR?: number, installGeneSlugs?: string[]) {
     const body: Record<string, unknown> = { instance_id: instanceId }
     if (displayName) body.display_name = displayName
     if (hexQ !== undefined) { body.hex_q = hexQ; body.hex_r = hexR ?? 0 }
-    if (installTopologyGene) body.install_topology_gene = true
+    if (installGeneSlugs?.length) body.install_gene_slugs = installGeneSlugs
     const res = await api.post(`/workspaces/${workspaceId}/agents`, body)
     if (currentWorkspace.value?.id === workspaceId) {
       await fetchWorkspace(workspaceId)

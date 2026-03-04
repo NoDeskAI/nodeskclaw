@@ -93,6 +93,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/OrgUsage.vue'),
   },
   {
+    path: '/org-settings',
+    name: 'OrgSettings',
+    component: () => import('@/views/OrgSettings.vue'),
+  },
+  {
     path: '/gene-market',
     name: 'GeneMarket',
     component: () => import('@/views/GeneMarket.vue'),

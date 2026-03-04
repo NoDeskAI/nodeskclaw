@@ -15,6 +15,7 @@ from app.api.instances import (
 )
 from app.api.llm_keys import router as llm_keys_router
 from app.api.organizations import router as org_router
+from app.api.org_settings import router as org_settings_router
 from app.api.registry import router as registry_router
 from app.api.settings import router as settings_router
 from app.api.storage import router as storage_router
@@ -49,6 +50,7 @@ async def health_check():
 
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
 api_router.include_router(org_router, prefix="/orgs", tags=["组织"])
+api_router.include_router(org_settings_router, prefix="/orgs", tags=["组织设置"])
 api_router.include_router(billing_router, prefix="/billing", tags=["计费"])
 api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
 api_router.include_router(portal_deploy_router, prefix="/deploy", tags=["部署"])
