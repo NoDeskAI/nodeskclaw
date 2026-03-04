@@ -390,6 +390,7 @@ def build_deployment(
             template=V1PodTemplateSpec(
                 metadata=V1ObjectMeta(labels=pod_labels, annotations=pod_annotations),
                 spec=V1PodSpec(
+                    hostname=name,
                     init_containers=init_containers or None,
                     containers=all_containers,
                     volumes=volumes or None,
