@@ -32,8 +32,8 @@ nodeskclaw-portal/
 │       ├── InstanceList.vue        # 实例列表
 │       ├── InstanceDetail.vue      # 实例详情
 │       ├── OrgMembers.vue          # 组织成员管理（org-settings 子视图）
-│       ├── OrgSettings.vue         # 组织设置（Tab 布局：人类成员 + 必装基因）
-│       ├── OrgSettingsGenes.vue    # 必装基因配置（org-settings 子视图）
+│       ├── OrgSettings.vue         # 组织设置（Tab 布局：人类成员 + 默认工作基因）
+│       ├── OrgSettingsGenes.vue    # 默认工作基因配置（org-settings 子视图）
 │       ├── GeneMarket.vue          # 基因市场
 │       ├── EnterpriseFiles.vue     # 企业空间 — Agent 列表
 │       ├── EnterpriseFileBrowser.vue  # 企业空间 — 文件浏览器
@@ -64,8 +64,8 @@ vue-tsc -b       # 类型检查
 | `/settings` | 个人设置 | 用户信息、密码管理 |
 | `/usage` | 用量 | 组织用量统计 |
 | `/gene-market` | 基因市场 | 浏览安装基因 |
-| `/org-settings` | 组织设置 | Tab 布局：人类成员 + 必装基因（仅 org admin） |
-| `/org-settings/genes` | 必装基因 | 必装基因配置（org-settings 子路由） |
+| `/org-settings` | 组织设置 | Tab 布局：人类成员 + 默认工作基因（仅 org admin） |
+| `/org-settings/genes` | 默认工作基因 | 默认工作基因配置（org-settings 子路由） |
 | `/members` | (重定向) | 重定向到 `/org-settings` |
 | `/enterprise-files` | 企业空间 | Agent 文件浏览（仅 org admin） |
 | `/enterprise-files/:instanceId` | 文件浏览器 | 单个 Agent 的文件列表和预览 |
@@ -75,9 +75,9 @@ vue-tsc -b       # 类型检查
 组织管理员可配置 Agent 加入工作区时必须安装的基因列表。
 
 - 入口：顶部导航"组织设置"（仅 `portal_org_role === 'admin'` 可见）
-- 展示当前已配置的必装基因列表（名称、描述、分类）
+- 展示当前已配置的默认工作基因列表（名称、描述、分类）
 - 支持搜索并添加基因、移除已有基因
-- Agent 加入工作区时，前端自动检查缺失的必装基因并弹窗提示安装
+- Agent 加入工作区时，前端自动检查缺失的默认工作基因并弹窗提示安装
 
 ## 企业空间
 

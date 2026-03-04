@@ -83,7 +83,7 @@ async def add_required_gene(
         raise HTTPException(409, detail={
             "error_code": 40901,
             "message_key": "errors.org_settings.gene_already_required",
-            "message": "该基因已在必装列表中",
+            "message": "该基因已在默认工作基因列表中",
         })
 
     rg = OrgRequiredGene(org_id=org_id, gene_id=body.gene_id)
@@ -116,7 +116,7 @@ async def remove_required_gene(
         raise HTTPException(404, detail={
             "error_code": 40441,
             "message_key": "errors.org_settings.required_gene_not_found",
-            "message": "必装基因记录不存在",
+            "message": "默认工作基因记录不存在",
         })
 
     rg.soft_delete()
