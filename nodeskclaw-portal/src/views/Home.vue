@@ -57,7 +57,7 @@ const isEmpty = computed(() => !loading.value && instances.value.length === 0)
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-bold">我的实例</h1>
-        <p class="text-sm text-muted-foreground mt-0.5">管理你部署的 OpenClaw 实例</p>
+        <p class="text-sm text-muted-foreground mt-0.5">管理你部署的 DeskClaw 实例</p>
       </div>
       <button
         class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"

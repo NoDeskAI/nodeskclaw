@@ -46,14 +46,6 @@ const deleting = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollTimeout: ReturnType<typeof setTimeout> | null = null
 
-function formatCpu(val: string): string {
-  if (val.endsWith('m')) {
-    const cores = parseInt(val.slice(0, -1), 10) / 1000
-    return Number.isInteger(cores) ? `${cores} 核` : `${cores.toFixed(2)} 核`
-  }
-  return `${val} 核`
-}
-
 async function copyUrl() {
   try {
     await navigator.clipboard.writeText(openclawUrl.value)
@@ -167,7 +159,7 @@ async function handleDelete() {
       <div v-if="openclawUrl" class="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium">OpenClaw 访问地址</p>
+            <p class="text-sm font-medium">DeskClaw 访问地址</p>
             <p class="text-xs text-muted-foreground mt-0.5">
               {{ restarting ? '实例正在重启，请稍候...' : '点击即可打开 AI 助手' }}
             </p>
@@ -216,14 +208,6 @@ async function handleDelete() {
             <span class="ml-2 font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{{ instance.image_version }}</span>
           </div>
           <div>
-            <span class="text-muted-foreground">CPU</span>
-            <span class="ml-2">{{ formatCpu(instance.cpu_limit) }}</span>
-          </div>
-          <div>
-            <span class="text-muted-foreground">内存</span>
-            <span class="ml-2">{{ instance.mem_limit }}</span>
-          </div>
-          <div class="col-span-2">
             <span class="text-muted-foreground">创建时间</span>
             <span class="ml-2">{{ new Date(instance.created_at).toLocaleString('zh-CN') }}</span>
           </div>

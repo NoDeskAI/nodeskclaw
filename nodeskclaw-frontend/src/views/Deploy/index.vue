@@ -568,7 +568,7 @@ const yamlPreview = computed(() => {
   <div class="p-6 space-y-6 max-w-3xl mx-auto">
     <div class="flex items-center gap-2">
       <Rocket class="w-6 h-6" />
-      <h1 class="text-2xl font-bold">部署 OpenClaw 实例</h1>
+      <h1 class="text-2xl font-bold">部署 DeskClaw 实例</h1>
     </div>
 
     <div v-if="initializing" class="text-muted-foreground text-center py-12">

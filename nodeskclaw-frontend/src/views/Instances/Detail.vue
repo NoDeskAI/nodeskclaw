@@ -360,7 +360,7 @@ function formatTime(ts: string | null): string {
                   <span v-else class="text-muted-foreground">-</span>
                 </div>
                 <div class="flex justify-between items-center">
-                  <span class="text-muted-foreground">OpenClaw 控制台</span>
+                  <span class="text-muted-foreground">DeskClaw 控制台</span>
                   <a
                     v-if="consoleUrl"
                     :href="consoleUrl"

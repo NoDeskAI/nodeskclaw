@@ -565,7 +565,7 @@ async function handleDeploy() {
             <label class="text-sm font-medium">配置大模型</label>
           </div>
           <p class="text-xs text-muted-foreground">
-            OpenClaw 需要至少一个大模型 API Key 才能正常使用
+            DeskClaw 需要至少一个大模型 API Key 才能正常使用
           </p>
 
           <template v-if="!llmSkipped">

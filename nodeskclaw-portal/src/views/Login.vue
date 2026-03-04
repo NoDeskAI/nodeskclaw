@@ -148,7 +148,7 @@ watch(isRegister, () => { error.value = '' })
           <span class="text-primary">云端部署平台</span>
         </h1>
         <p class="text-base text-muted-foreground max-w-md mb-12">
-          基于 OpenClaw 的 SaaS 部署平台，让每个人都能拥有自己的 AI 助手。无需运维经验，一键创建，即刻使用。
+          基于 DeskClaw 的 SaaS 部署平台，让每个人都能拥有自己的 AI 助手。无需运维经验，一键创建，即刻使用。
         </p>
 
         <div class="grid grid-cols-2 gap-4 max-w-md">

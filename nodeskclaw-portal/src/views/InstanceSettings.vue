@@ -231,9 +231,9 @@ async function handleSave() {
     const res = await api.post(`/instances/${instanceId.value}/restart-openclaw`, null, { timeout: 120000 })
     const result = res.data.data
     if (result?.status === 'ok') {
-      successMsg.value = '配置已保存，OpenClaw 已重启'
+      successMsg.value = '配置已保存，DeskClaw 已重启'
     } else if (result?.status === 'timeout') {
-      successMsg.value = '配置已保存，但 OpenClaw 重启超时，请检查实例状态'
+      successMsg.value = '配置已保存，但 DeskClaw 重启超时，请检查实例状态'
     } else {
       successMsg.value = '配置已保存'
       if (result?.message) {
@@ -301,7 +301,7 @@ watch(() => instanceId.value, (val) => {
       <!-- Status messages -->
       <div v-if="restarting" class="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
         <RefreshCw class="w-4 h-4 text-amber-500 animate-spin" />
-        <span class="text-xs">OpenClaw 正在完成当前任务并重启...</span>
+        <span class="text-xs">DeskClaw 正在完成当前任务并重启...</span>
       </div>
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
       <p v-if="successMsg" class="text-sm text-green-500">{{ successMsg }}</p>
