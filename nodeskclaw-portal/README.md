@@ -20,6 +20,13 @@ NoDeskClaw 用户门户前端，基于 Vue 3 + Vite + TypeScript + Tailwind CSS 
 nodeskclaw-portal/
 ├── src/
 │   ├── components/        # 通用组件
+│   │   ├── hex3d/         # 3D 工作区（Three.js 摩天楼视图）
+│   │   │   ├── Workspace3D.vue   # 主 3D 场景（多层六边形塔）
+│   │   │   ├── FloorPlatform.ts  # 楼层平台（玻璃地板、发光边缘、角柱）
+│   │   │   ├── CoreColumn.ts     # 中央能量柱（粒子效果、信标灯）
+│   │   │   ├── Grabby.ts         # Agent 机器人 3D 模型
+│   │   │   └── CorridorPath.ts   # 过道路径 3D 模型
+│   │   ├── hex2d/         # 2D 工作区（SVG 平面视图）
 │   │   └── shared/        # 共享 UI 组件（CustomSelect、LocaleSelect、ModelSelect 等）
 │   ├── i18n/              # 国际化（zh-CN、en-US）
 │   │   └── locales/
