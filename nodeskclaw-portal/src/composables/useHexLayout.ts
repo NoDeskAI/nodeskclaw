@@ -1,6 +1,7 @@
 import { computed, type Ref } from 'vue'
 
 export const HEX_SIZE = 1.2
+export const FLOOR_SPACING = 4
 const SQRT3 = Math.sqrt(3)
 
 export interface HexCoord {
@@ -18,6 +19,10 @@ export function axialToWorld(q: number, r: number): PixelCoord {
     x: HEX_SIZE * (SQRT3 * q + (SQRT3 / 2) * r),
     y: HEX_SIZE * (1.5 * r),
   }
+}
+
+export function floorToY(floor: number): number {
+  return floor * FLOOR_SPACING
 }
 
 export function hexVertices(cx: number, cy: number, size: number): [number, number][] {

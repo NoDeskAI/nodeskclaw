@@ -12,6 +12,7 @@ export interface AgentBrief {
   status: string
   hex_q: number
   hex_r: number
+  hex_floor: number
   sse_connected: boolean
   theme_color: string | null
 }
@@ -97,6 +98,7 @@ export interface ConnectionInfo {
 export interface TopologyNode {
   hex_q: number
   hex_r: number
+  hex_floor: number
   node_type: 'blackboard' | 'corridor' | 'agent' | 'human'
   entity_id: string | null
   display_name: string | null

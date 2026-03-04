@@ -12,6 +12,7 @@ const { t } = useI18n()
 interface TopologyNode {
   hex_q: number
   hex_r: number
+  hex_floor?: number
   node_type: 'agent' | 'blackboard' | 'corridor' | 'human'
   entity_id?: string
   display_name?: string

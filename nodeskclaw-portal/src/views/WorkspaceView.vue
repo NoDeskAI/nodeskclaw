@@ -876,6 +876,23 @@ function handleKeydown(e: KeyboardEvent) {
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
           />
+          <!-- Floor Navigation -->
+          <div
+            v-if="activeMode === '3d' && workspace3dRef?.floorList?.length > 1"
+            class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10"
+          >
+            <button
+              v-for="floor in workspace3dRef.floorList"
+              :key="floor"
+              class="w-8 h-8 rounded-md text-xs font-medium transition-all border"
+              :class="workspace3dRef.currentFloor === floor
+                ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/30'
+                : 'bg-background/80 text-muted-foreground border-border/50 hover:bg-muted backdrop-blur-sm'"
+              @click="workspace3dRef?.flyToFloor(floor)"
+            >
+              {{ floor === 0 ? 'L' : `F${floor}` }}
+            </button>
+          </div>
         </div>
 
         <!-- 2D mode -->
