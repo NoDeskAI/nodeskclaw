@@ -184,7 +184,7 @@ async def delete_workspace(db: AsyncSession, workspace_id: str) -> bool:
         )
     )
     if agents_count.scalar() > 0:
-        raise ValueError("请先移除工作区内的所有 Agent")
+        raise ValueError("请先移除办公室内的所有 Agent")
 
     ws.soft_delete()
     await db.commit()
@@ -435,7 +435,7 @@ async def _notify_topology_status(
     })
 
 
-WELCOME_MESSAGE = "你好！你刚刚加入了工作区，请向大家介绍一下你自己：你叫什么名字、你的能力和专长是什么。"
+WELCOME_MESSAGE = "你好！你刚刚加入了赛博办公室，请向大家介绍一下你自己：你叫什么名字、你的能力和专长是什么。"
 WELCOME_READY_TIMEOUT = 120
 WELCOME_POLL_INTERVAL = 3
 WELCOME_FALLBACK_DELAY = 10
@@ -457,14 +457,14 @@ async def _broadcast_join_message(workspace_id: str, inst: Instance) -> None:
                 sender_type="system",
                 sender_id="system",
                 sender_name="System",
-                content=f"{agent_name} 已加入工作区",
+                content=f"{agent_name} 已加入办公室",
                 message_type="system",
             )
 
         broadcast_event(workspace_id, "system:welcome", {
             "agent_name": agent_name,
             "instance_id": inst.id,
-            "content": f"{agent_name} 已加入工作区",
+            "content": f"{agent_name} 已加入办公室",
         })
     except Exception as e:
         logger.warning("广播加入消息失败（非致命）: instance=%s error=%s", inst.name, e)
@@ -479,7 +479,7 @@ async def _broadcast_leave_message(workspace_id: str, inst: Instance) -> None:
 
     agent_name = inst.agent_display_name or inst.name
     msg_id = f"sys-leave-{inst.id[:8]}-{int(datetime.now(timezone.utc).timestamp())}"
-    content = f"{agent_name} 已退出工作区"
+    content = f"{agent_name} 已退出办公室"
 
     try:
         async with async_session_factory() as db:
@@ -649,7 +649,7 @@ async def add_workspace_member(
         )
     )
     if existing.scalar_one_or_none():
-        raise ValueError("用户已是工作区成员")
+        raise ValueError("用户已是办公室成员")
 
     perms = [p for p in (permissions or []) if p in WORKSPACE_PERMISSIONS]
     wm = WorkspaceMember(
@@ -732,7 +732,7 @@ async def remove_workspace_member(
                 workspace_id=workspace_id,
                 human_hex_id=human_hexes[0].id,
                 source_name="System",
-                message=f"你已被 {operator_name} 移出工作区",
+                message=f"你已被 {operator_name} 移出办公室",
             )
         except Exception as e:
             logger.warning("发送移除通知失败（非致命）: %s", e)

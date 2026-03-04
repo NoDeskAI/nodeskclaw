@@ -838,7 +838,7 @@ async def lifespan(app: FastAPI):
             await db.commit()
             logger.info("自动迁移：已种子化 3 个套餐")
 
-        # 种子预设工作区模板（幂等）
+        # 种子预设办公室模板（幂等）
         from app.models.workspace_template import WorkspaceTemplate
         import json as _json
         preset_names = ["软件研发团队", "内容工作室", "研究实验室"]
@@ -869,7 +869,7 @@ async def lifespan(app: FastAPI):
                 )
                 db.add(t)
         await db.commit()
-        logger.info("自动迁移：已种子化预设工作区模板")
+        logger.info("自动迁移：已种子化预设办公室模板")
 
         # 默认基因/基因组改为一次性 SQL 回填；启动流程不再自动写入
 
@@ -957,8 +957,8 @@ async def lifespan(app: FastAPI):
             ws = Workspace(
                 id=str(uuid.uuid4()),
                 org_id=org.id,
-                name="默认工作区",
-                description="自动创建的默认工作区",
+                name="默认办公室",
+                description="自动创建的默认办公室",
                 created_by=first_member.user_id if first_member else "system",
             )
             db.add(ws)

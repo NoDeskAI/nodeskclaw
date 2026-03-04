@@ -8,7 +8,7 @@ import { createNoDeskClawTools } from "./src/tools.js";
 const plugin = {
   id: "nodeskclaw",
   name: "NoDeskClaw",
-  description: "NoDeskClaw workspace agent collaboration channel",
+  description: "DeskClaw cyber office agent collaboration channel",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
     setNoDeskClawRuntime(api.runtime);

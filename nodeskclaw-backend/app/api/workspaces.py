@@ -104,7 +104,7 @@ async def get_workspace(
     await wm_service.check_workspace_member(workspace_id, user, db)
     ws = await workspace_service.get_workspace(db, workspace_id)
     if ws is None:
-        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -118,7 +118,7 @@ async def update_workspace(
     await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
     ws = await workspace_service.update_workspace(db, workspace_id, data)
     if ws is None:
-        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -134,7 +134,7 @@ async def delete_workspace(
     except ValueError as e:
         raise _error(400, 40030, "errors.workspace.delete_invalid", str(e))
     if not ok:
-        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
     return _ok(message="已删除")
 
 
@@ -174,7 +174,7 @@ async def check_agent_genes(
         sa_select(Workspace).where(Workspace.id == workspace_id, not_deleted(Workspace))
     )).scalar_one_or_none()
     if not ws:
-        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
 
     required_rows = (await db.execute(
         sa_select(OrgRequiredGene, Gene)
@@ -243,7 +243,7 @@ async def remove_agent(
     await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
     ok = await workspace_service.remove_agent(db, workspace_id, instance_id)
     if not ok:
-        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该工作区中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该办公室中")
     return _ok(message="已移除")
 
 
@@ -497,7 +497,7 @@ async def workspace_chat(
     await wm_service.check_workspace_access(workspace_id, user, "send_chat", db)
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     if ws_info is None:
-        raise _error(404, 40430, "errors.workspace.not_found", "工作区不存在")
+        raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
 
     await msg_service.record_message(
         db,
@@ -511,7 +511,7 @@ async def workspace_chat(
     running_agents = await _get_running_agents(db, workspace_id)
     if not running_agents:
         logger.warning("workspace_chat: workspace=%s 没有运行中的 Agent", workspace_id)
-        _broadcast_system_info(workspace_id, "工作区内没有运行中的 Agent")
+        _broadcast_system_info(workspace_id, "办公室内没有运行中的 Agent")
         return _ok({"status": "no_agents"})
 
     from app.services import corridor_router
@@ -734,7 +734,7 @@ async def agent_chat(
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该工作区中")
+        raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "Agent 不在该办公室中")
 
     ws_info = await workspace_service.get_workspace(db, workspace_id)
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)

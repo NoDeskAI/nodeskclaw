@@ -61,7 +61,7 @@ async def _check_workspace(workspace_id: str, org, db: AsyncSession) -> Workspac
     )
     ws = result.scalar_one_or_none()
     if not ws:
-        raise HTTPException(status_code=404, detail="workspace not found")
+        raise HTTPException(status_code=404, detail="cyber office not found")
     return ws
 
 

@@ -52,7 +52,7 @@ async def check_workspace_access(
     """
     org_id = await _get_workspace_org_id(workspace_id, db)
     if org_id is None:
-        raise NotFoundError("工作区不存在", "errors.workspace.not_found")
+        raise NotFoundError("办公室不存在", "errors.workspace.not_found")
 
     org_role = await _get_org_role(user.id, org_id, db)
     if org_role == OrgRole.admin:
@@ -67,7 +67,7 @@ async def check_workspace_access(
     )).scalar_one_or_none()
 
     if not member:
-        raise ForbiddenError("您不是该工作区的成员", "errors.workspace.no_access")
+        raise ForbiddenError("您不是该办公室的成员", "errors.workspace.no_access")
 
     if member.is_admin:
         return member
@@ -91,7 +91,7 @@ async def check_workspace_member(
     """
     org_id = await _get_workspace_org_id(workspace_id, db)
     if org_id is None:
-        raise NotFoundError("工作区不存在", "errors.workspace.not_found")
+        raise NotFoundError("办公室不存在", "errors.workspace.not_found")
 
     org_role = await _get_org_role(user.id, org_id, db)
     if org_role == OrgRole.admin:
@@ -106,7 +106,7 @@ async def check_workspace_member(
     )).scalar_one_or_none()
 
     if not member:
-        raise ForbiddenError("您不是该工作区的成员", "errors.workspace.no_access")
+        raise ForbiddenError("您不是该办公室的成员", "errors.workspace.no_access")
 
     return member
 
@@ -119,7 +119,7 @@ async def get_my_permissions(
     """Return the current user's permissions and admin status for the workspace."""
     org_id = await _get_workspace_org_id(workspace_id, db)
     if org_id is None:
-        raise NotFoundError("工作区不存在", "errors.workspace.not_found")
+        raise NotFoundError("办公室不存在", "errors.workspace.not_found")
 
     org_role = await _get_org_role(user.id, org_id, db)
     if org_role == OrgRole.admin:
@@ -138,7 +138,7 @@ async def get_my_permissions(
     )).scalar_one_or_none()
 
     if not member:
-        raise ForbiddenError("您不是该工作区的成员", "errors.workspace.no_access")
+        raise ForbiddenError("您不是该办公室的成员", "errors.workspace.no_access")
 
     if member.is_admin:
         return {

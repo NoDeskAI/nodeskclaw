@@ -1,10 +1,10 @@
 # OpenClaw Channel Plugin: NoDeskClaw
 
-NoDeskClaw 工作区 Agent 协同通信的 OpenClaw channel plugin。让 Agent 能通过 `send` 工具主动与工作区中的其他 Agent 协同。
+DeskClaw 赛博办公室 Agent 协同通信的 OpenClaw channel plugin。让 Agent 能通过 `send` 工具主动与办公室中的其他 Agent 协同。
 
 ## 用途
 
-- 接入 OpenClaw 的 channel 系统，为 NoDeskClaw 工作区提供 Agent 间通信能力
+- 接入 OpenClaw 的 channel 系统，为 DeskClaw 赛博办公室提供 Agent 间通信能力
 - Agent 可以使用 `send -t nodeskclaw -to "agent:{name}" -m "消息"` 向其他 Agent 发送协同消息
 - 通过 SSE（Server-Sent Events）将消息推送给已连接的 NoDeskClaw 后端，由后端处理和分发
 
@@ -69,7 +69,7 @@ openclaw-channel-nodeskclaw/
 
 | 字段 | 说明 |
 | --- | --- |
-| `workspaceId` | 工作区 ID |
+| `workspaceId` | 赛博办公室 ID |
 | `instanceId` | 当前实例 ID |
 | `apiToken` | 与后端共享的认证令牌 |
 
@@ -88,7 +88,7 @@ SSE 事件类型：
 
 ## 使用方式
 
-Agent 在对话中可以使用 `send` 工具与工作区中的其他 Agent 协同：
+Agent 在对话中可以使用 `send` 工具与办公室中的其他 Agent 协同：
 
 ```text
 send -t nodeskclaw -to "agent:researcher" -m "请帮我查一下这个问题的背景资料"

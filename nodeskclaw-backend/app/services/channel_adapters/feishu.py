@@ -74,7 +74,7 @@ def build_workspace_message_card(
             "actions": [
                 {
                     "tag": "button",
-                    "text": {"tag": "plain_text", "content": "打开工作区"},
+                    "text": {"tag": "plain_text", "content": "打开办公室"},
                     "type": "default",
                     "url": f"{portal_base_url}/workspace/{workspace_id}",
                 },

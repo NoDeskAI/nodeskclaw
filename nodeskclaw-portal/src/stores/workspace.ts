@@ -458,7 +458,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       sender_type: 'system',
       sender_id: 'system',
       sender_name: 'System',
-      content: content || `${agentName} 已加入工作区`,
+      content: content || `${agentName} 已加入办公室`,
       message_type: 'system',
       created_at: new Date().toISOString(),
     })

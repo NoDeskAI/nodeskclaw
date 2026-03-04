@@ -136,9 +136,9 @@ def build_context_prompt(
     else:
         messages_text = "(no recent messages from other members)"
 
-    return f"""你是工作区"{workspace_name}"中的 Agent "{agent_display_name}"。
+    return f"""你是赛博办公室"{workspace_name}"中的 Agent "{agent_display_name}"。
 
-工作区成员:
+办公室成员:
 {members_text}
 
 近期对话（来自其他成员，你自己的历史已在对话记录中）:

@@ -207,7 +207,7 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
         ws_name = ws_row.scalar_one_or_none()
         if ws_name:
             raise ConflictError(
-                message=f"实例「{instance.name}」仍在工作区「{ws_name}」中，请先将其从工作区移除",
+                message=f"实例「{instance.name}」仍在办公室「{ws_name}」中，请先将其从办公室移除",
                 message_key="errors.instance.still_in_workspace",
                 message_params={"workspace_name": ws_name},
             )

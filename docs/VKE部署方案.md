@@ -432,7 +432,7 @@ Namespace: oc-prod-main (每实例独占)
 | `/root/.openclaw/agents/main/sessions/` | 会话历史 | 是 |
 | `/root/.openclaw/credentials/` | API Key 等凭证 | 是 |
 | `/root/.openclaw/extensions/` | 插件代码（内置 + 用户自定义） | 是 |
-| `/root/.openclaw/workspace/` | 工作区（SKILL、项目文件） | 是 |
+| `/root/.openclaw/workspace/` | 办公室（SKILL、项目文件） | 是 |
 | `/root/.openclaw/memory/` | 长期记忆 | 是 |
 | `/root/.openclaw/data/` | 持久化数据（去重记录等） | 是 |
 | `/tmp/jiti/` | TypeScript 编译缓存 | 否（临时文件，不挂载） |

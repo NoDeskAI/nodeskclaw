@@ -370,7 +370,7 @@ async def rollback_openclaw_instance(k8s, instance, target_record): ...
 | 路径 | 内容 |
 |------|------|
 | `/usr/local/bin/openclaw` | OpenClaw 程序（镜像层，非 PVC） |
-| `/root/.openclaw/` | 用户数据：配置、会话、凭证、插件、工作区、技能、记忆 |
+| `/root/.openclaw/` | 用户数据：配置、会话、凭证、插件、办公室、技能、记忆 |
 | `/root/.bashrc` 等 | Shell 配置 |
 
 **Init Container 逻辑**：

@@ -2,7 +2,7 @@
   "name": "nodeskclaw",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenClaw channel plugin for NoDeskClaw workspace collaboration",
+  "description": "OpenClaw channel plugin for DeskClaw cyber office collaboration",
   "type": "module",
   "devDependencies": {
     "openclaw": "workspace:*"
@@ -14,9 +14,9 @@
     "channel": {
       "id": "nodeskclaw",
       "label": "NoDeskClaw",
-      "selectionLabel": "NoDeskClaw (Workspace)",
+      "selectionLabel": "DeskClaw (Cyber Office)",
       "docsPath": "/channels/nodeskclaw",
-      "blurb": "NoDeskClaw workspace agent collaboration channel.",
+      "blurb": "DeskClaw cyber office agent collaboration channel.",
       "aliases": ["cb"]
     }
   }

@@ -93,7 +93,7 @@ GitHub Actions 定时检测 npm 新版本
 │   ├── config/                          ← 插件配置
 │   ├── credentials/                     ← 凭证（API Key 等）
 │   ├── extensions/                      ← 插件代码
-│   ├── workspace/                       ← 工作区（SKILL、项目文件）
+│   ├── workspace/                       ← 办公室（SKILL、项目文件）
 │   ├── memory/                          ← 长期记忆
 │   ├── data/                            ← 持久化数据
 │   ├── temp/                            ← 临时文件
@@ -324,7 +324,7 @@ NoDeskClaw 部署表单
 | `.openclaw/openclaw.json` | **保留** | 用户自定义配置 |
 | `.openclaw/agents/` | **保留** | 会话历史 |
 | `.openclaw/credentials/` | **保留** | 用户凭证 |
-| `.openclaw/workspace/` | **保留** | 用户工作区 |
+| `.openclaw/workspace/` | **保留** | 用户办公室 |
 | `.openclaw/memory/` | **保留** | 长期记忆 |
 | `.openclaw/data/` | **保留** | 持久化数据 |
 | `.openclaw/config/` | **保留** | 插件配置 |
