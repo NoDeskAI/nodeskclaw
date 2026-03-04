@@ -2,8 +2,10 @@
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Move, PenSquare, Crosshair, GitBranch } from 'lucide-vue-next'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const { t } = useI18n()
+const store = useWorkspaceStore()
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -28,6 +30,12 @@ const SHORTCUT_MAP: Record<string, Record<string, string>> = {
   blackboard: { f: 'focus-hex', e: 'view-blackboard' },
 }
 
+const ACTION_PERM: Record<string, string> = {
+  'add-agent': 'manage_agents',
+  'place-corridor': 'edit_topology',
+  'place-human': 'edit_topology',
+}
+
 function onKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
@@ -37,6 +45,8 @@ function onKeydown(e: KeyboardEvent) {
 
   const action = map[e.key] || map[e.key.toLowerCase()]
   if (action) {
+    const requiredPerm = ACTION_PERM[action]
+    if (requiredPerm && !store.hasPermission(requiredPerm)) return
     e.preventDefault()
     e.stopPropagation()
     emit('action', action)
@@ -93,6 +103,7 @@ onUnmounted(() => {
         <!-- Empty hex actions -->
         <template v-if="hexType === 'empty'">
           <button
+            v-if="store.hasPermission('manage_agents')"
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'add-agent')"
           >
@@ -101,6 +112,7 @@ onUnmounted(() => {
             <kbd class="kbd-hint">A</kbd>
           </button>
           <button
+            v-if="store.hasPermission('edit_topology')"
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'place-corridor')"
           >
@@ -109,6 +121,7 @@ onUnmounted(() => {
             <kbd class="kbd-hint">C</kbd>
           </button>
           <button
+            v-if="store.hasPermission('edit_topology')"
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
             @click="emit('action', 'place-human')"
           >

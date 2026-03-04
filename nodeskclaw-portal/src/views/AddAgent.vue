@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -70,7 +72,15 @@ async function fetchInstances() {
   }
 }
 
-onMounted(fetchInstances)
+onMounted(async () => {
+  await store.fetchMyPermissions(workspaceId.value)
+  if (!store.hasPermission('manage_agents')) {
+    toast.error(t('errors.common.forbidden'))
+    router.replace(`/workspace/${workspaceId.value}`)
+    return
+  }
+  fetchInstances()
+})
 
 async function addToWorkspace(instanceId: string) {
   adding.value = instanceId

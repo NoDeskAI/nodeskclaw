@@ -734,6 +734,7 @@ function handleKeydown(e: KeyboardEvent) {
           <span class="font-semibold text-sm">{{ ws.name }}</span>
         </div>
         <button
+          v-if="store.hasPermission('manage_agents')"
           class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed text-xs transition-colors"
           :class="isPickingHexForAgent
             ? 'border-primary bg-primary/10 text-primary'
