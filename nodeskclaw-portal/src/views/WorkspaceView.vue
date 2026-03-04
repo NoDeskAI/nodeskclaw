@@ -745,10 +745,11 @@ function handleKeydown(e: KeyboardEvent) {
           :class="isPickingHexForAgent
             ? 'border-primary bg-primary/10 text-primary'
             : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'"
+          :title="t('workspaceView.addAgent')"
           @click="isPickingHexForAgent ? cancelPickHexMode() : enterPickHexMode()"
         >
           <Plus class="w-3.5 h-3.5" />
-          {{ t('workspaceView.addAgent') }}
+          <span class="hidden xl:inline">{{ t('workspaceView.addAgent') }}</span>
         </button>
 
         <div class="w-px h-5 bg-border" />
