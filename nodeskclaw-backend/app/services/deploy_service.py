@@ -770,11 +770,20 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     failed_genes: list[str] = []
                     for gene_slug in ctx.template_gene_slugs:
                         try:
-                            from app.services.gene_service import install_gene
-                            await install_gene(db, ctx.instance_id, gene_slug)
+                            from app.services.gene_service import install_gene_prerestart
+                            await install_gene_prerestart(ctx.instance_id, gene_slug)
                         except Exception as ge:
                             logger.warning("模板基因安装失败（继续）: slug=%s err=%s", gene_slug, ge)
                             failed_genes.append(gene_slug)
+
+                    installed_count = len(ctx.template_gene_slugs) - len(failed_genes)
+                    if installed_count > 0:
+                        try:
+                            from app.services.instance_service import restart_instance
+                            await restart_instance(ctx.instance_id, db)
+                        except Exception as restart_err:
+                            logger.warning("模板基因安装后重启失败: %s", restart_err)
+
                     if failed_genes:
                         gene_install_warning = f"（{len(failed_genes)} 个基因安装失败: {', '.join(failed_genes)}）"
                         _publish(gene_step, "安装模板基因", status="success",
