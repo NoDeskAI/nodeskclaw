@@ -189,6 +189,7 @@ const zhCN = {
   },
   workspaceView: {
     addAgent: "添加 Agent",
+    pickHexHint: "点击一个空白工位来放置 Agent",
     zoomIn: "放大 (+)",
     zoomOut: "缩小 (-)",
     resetView: "重置视角 (0)",

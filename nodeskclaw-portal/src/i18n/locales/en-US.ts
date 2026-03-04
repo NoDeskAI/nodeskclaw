@@ -189,6 +189,7 @@ const enUS = {
   },
   workspaceView: {
     addAgent: "Add Agent",
+    pickHexHint: "Click an empty hex to place the Agent",
     zoomIn: "Zoom in (+)",
     zoomOut: "Zoom out (-)",
     resetView: "Reset view (0)",

@@ -259,6 +259,14 @@ let clickHandled = false
 function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }) {
   clickHandled = true
 
+  if (isPickingHexForAgent.value) {
+    if (payload.type === 'empty') {
+      cancelPickHexMode()
+      router.push({ path: `/workspace/${workspaceId.value}/add-agent`, query: { hex_q: String(payload.q), hex_r: String(payload.r) } })
+    }
+    return
+  }
+
   if (isMovingHex.value) {
     if (payload.type === 'empty') {
       moveHexTo(payload.q, payload.r)
@@ -597,6 +605,7 @@ const isMovingHex = ref(false)
 const movingHexSource = ref<MovingHexSource | null>(null)
 
 function enterMoveMode() {
+  cancelPickHexMode()
   if (!selectedHex.value) return
   const hex = selectedHex.value
   let source: MovingHexSource | null = null
@@ -637,6 +646,21 @@ async function moveHexTo(targetQ: number, targetR: number) {
   }
 }
 
+const isPickingHexForAgent = ref(false)
+
+function enterPickHexMode() {
+  cancelMoveMode()
+  isPickingHexForAgent.value = true
+  selectedHex.value = null
+  hexDrawerOpen.value = false
+}
+
+function cancelPickHexMode() {
+  isPickingHexForAgent.value = false
+}
+
+const highlightEmptyHexes = computed(() => isMovingHex.value || isPickingHexForAgent.value)
+
 function handleKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return
@@ -644,6 +668,11 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (focusMode.value) {
       focusMode.value = false
+      e.preventDefault()
+      return
+    }
+    if (isPickingHexForAgent.value) {
+      cancelPickHexMode()
       e.preventDefault()
       return
     }
@@ -705,8 +734,11 @@ function handleKeydown(e: KeyboardEvent) {
           <span class="font-semibold text-sm">{{ ws.name }}</span>
         </div>
         <button
-          class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-          @click="router.push(`/workspace/${workspaceId}/add-agent`)"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed text-xs transition-colors"
+          :class="isPickingHexForAgent
+            ? 'border-primary bg-primary/10 text-primary'
+            : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'"
+          @click="isPickingHexForAgent ? cancelPickHexMode() : enterPickHexMode()"
         >
           <Plus class="w-3.5 h-3.5" />
           {{ t('workspaceView.addAgent') }}
@@ -783,6 +815,23 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
     </div>
 
+    <!-- Pick hex for agent hint bar -->
+    <Transition name="slide-down">
+      <div
+        v-if="isPickingHexForAgent"
+        class="flex items-center justify-center gap-3 px-4 py-1.5 bg-primary/10 border-b border-primary/30 shrink-0 z-10"
+      >
+        <span class="text-sm text-primary">{{ t('workspaceView.pickHexHint') }}</span>
+        <button
+          class="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/20 hover:bg-primary/30 text-primary transition-colors"
+          @click="cancelPickHexMode"
+        >
+          <X class="w-3 h-3" />
+          {{ t('hexAction.cancel') }}
+        </button>
+      </div>
+    </Transition>
+
     <!-- Move mode hint bar -->
     <Transition name="slide-down">
       <div
@@ -821,7 +870,7 @@ function handleKeydown(e: KeyboardEvent) {
             :topology-nodes="store.topology?.nodes"
             :topology-edges="store.topologyEdges"
             :message-flow-stats="store.messageFlowStats"
-            :is-moving-hex="isMovingHex"
+            :is-moving-hex="highlightEmptyHexes"
             :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
@@ -845,7 +894,7 @@ function handleKeydown(e: KeyboardEvent) {
             :topology-nodes="enrichedTopologyNodes"
             :topology-edges="store.topologyEdges"
             :message-flow-stats="store.messageFlowStats"
-            :is-moving-hex="isMovingHex"
+            :is-moving-hex="highlightEmptyHexes"
             :moving-hex-source="movingHexSource"
             @hex-click="onHexClick"
             @agent-dblclick="onAgentDblClick"
