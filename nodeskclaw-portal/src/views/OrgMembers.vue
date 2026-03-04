@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore, type MemberInfo } from '@/stores/org'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,7 @@ import {
   Shield,
   Trash2,
   ChevronDown,
+  Check,
   X,
 } from 'lucide-vue-next'
 import api from '@/services/api'
@@ -29,6 +30,33 @@ const selectedUser = ref<{ id: string; name: string; email: string | null } | nu
 const addRole = ref('member')
 const addLoading = ref(false)
 const actionLoading = ref<string | null>(null)
+
+const openRoleMenuId = ref<string | null>(null)
+const addRoleOpen = ref(false)
+
+const roleOptions = computed(() => [
+  { value: 'admin', label: t('orgMembers.roleAdmin') },
+  { value: 'member', label: t('orgMembers.roleMember') },
+])
+
+function toggleRoleMenu(memberId: string) {
+  openRoleMenuId.value = openRoleMenuId.value === memberId ? null : memberId
+}
+
+function closeAllMenus() {
+  openRoleMenuId.value = null
+  addRoleOpen.value = false
+}
+
+function onGlobalMousedown(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('[data-role-menu]')) {
+    closeAllMenus()
+  }
+}
+
+onMounted(() => document.addEventListener('mousedown', onGlobalMousedown, true))
+onUnmounted(() => document.removeEventListener('mousedown', onGlobalMousedown, true))
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -204,17 +232,38 @@ async function handleRemove(member: MemberInfo) {
 
           <!-- Actions (admin only) -->
           <div v-if="isOrgAdmin && member.user_id !== authStore.user?.id" class="flex items-center gap-2">
-            <div class="relative">
-              <select
-                :value="member.role"
-                class="appearance-none bg-card border border-border rounded-md px-3 py-1.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+            <div class="relative" data-role-menu>
+              <button
+                type="button"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs transition-colors"
+                :class="[
+                  actionLoading === member.id
+                    ? 'opacity-50 cursor-not-allowed border-border'
+                    : 'border-border hover:border-primary/40 cursor-pointer',
+                  openRoleMenuId === member.id ? 'ring-2 ring-primary/30 border-primary/40' : '',
+                ]"
                 :disabled="actionLoading === member.id"
-                @change="(e) => handleRoleChange(member, (e.target as HTMLSelectElement).value)"
+                @click.stop="toggleRoleMenu(member.id)"
               >
-                <option value="admin">{{ t('orgMembers.roleAdmin') }}</option>
-                <option value="member">{{ t('orgMembers.roleMember') }}</option>
-              </select>
-              <ChevronDown class="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                <span>{{ roleOptions.find(o => o.value === member.role)?.label }}</span>
+                <ChevronDown class="w-3 h-3 text-muted-foreground transition-transform" :class="openRoleMenuId === member.id ? 'rotate-180' : ''" />
+              </button>
+              <div
+                v-if="openRoleMenuId === member.id"
+                class="absolute right-0 z-20 mt-1 min-w-28 rounded-md border border-border bg-card shadow-lg overflow-hidden"
+              >
+                <button
+                  v-for="opt in roleOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+                  :class="member.role === opt.value ? 'text-primary' : 'text-foreground'"
+                  @click.stop="openRoleMenuId = null; handleRoleChange(member, opt.value)"
+                >
+                  <Check class="w-3 h-3 shrink-0" :class="member.role === opt.value ? 'opacity-100' : 'opacity-0'" />
+                  {{ opt.label }}
+                </button>
+              </div>
             </div>
             <button
               class="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -300,15 +349,35 @@ async function handleRemove(member: MemberInfo) {
           <!-- Role Select -->
           <div class="space-y-2">
             <label class="text-sm text-muted-foreground">{{ t('orgMembers.roleLabel') }}</label>
-            <div class="relative">
-              <select
-                v-model="addRole"
-                class="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            <div class="relative" data-role-menu>
+              <button
+                type="button"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors"
+                :class="[
+                  'border-border hover:border-primary/40',
+                  addRoleOpen ? 'ring-2 ring-primary/30 border-primary/40' : '',
+                ]"
+                @click.stop="addRoleOpen = !addRoleOpen"
               >
-                <option value="member">{{ t('orgMembers.roleMember') }}</option>
-                <option value="admin">{{ t('orgMembers.roleAdmin') }}</option>
-              </select>
-              <ChevronDown class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                <span>{{ roleOptions.find(o => o.value === addRole)?.label }}</span>
+                <ChevronDown class="w-4 h-4 text-muted-foreground transition-transform" :class="addRoleOpen ? 'rotate-180' : ''" />
+              </button>
+              <div
+                v-if="addRoleOpen"
+                class="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden"
+              >
+                <button
+                  v-for="opt in roleOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                  :class="addRole === opt.value ? 'text-primary' : 'text-foreground'"
+                  @click.stop="addRole = opt.value; addRoleOpen = false"
+                >
+                  <Check class="w-3.5 h-3.5 shrink-0" :class="addRole === opt.value ? 'opacity-100' : 'opacity-0'" />
+                  {{ opt.label }}
+                </button>
+              </div>
             </div>
           </div>
 
