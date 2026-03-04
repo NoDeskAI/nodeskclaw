@@ -20,13 +20,6 @@ NoDeskClaw 用户门户前端，基于 Vue 3 + Vite + TypeScript + Tailwind CSS 
 nodeskclaw-portal/
 ├── src/
 │   ├── components/        # 通用组件
-│   │   ├── hex3d/         # 3D 工作区（Three.js 摩天楼视图）
-│   │   │   ├── Workspace3D.vue   # 主 3D 场景（多层六边形塔）
-│   │   │   ├── FloorPlatform.ts  # 楼层平台（玻璃地板、发光边缘、角柱）
-│   │   │   ├── CoreColumn.ts     # 中央能量柱（粒子效果、信标灯）
-│   │   │   ├── Grabby.ts         # Agent 机器人 3D 模型
-│   │   │   └── CorridorPath.ts   # 过道路径 3D 模型
-│   │   ├── hex2d/         # 2D 工作区（SVG 平面视图）
 │   │   └── shared/        # 共享 UI 组件（CustomSelect、LocaleSelect、ModelSelect 等）
 │   ├── i18n/              # 国际化（zh-CN、en-US）
 │   │   └── locales/
@@ -66,6 +59,7 @@ vue-tsc -b       # 类型检查
 | `/workspace/:id` | 工作区视图 | 拓扑图 + 群聊 + Agent 详情弹窗 |
 | `/instances` | 实例列表 | 所有 Agent 实例 |
 | `/instances/:id` | 实例详情 | 概览/基因/进化/MCP/Channel/设置/文件/成员 |
+| `/settings` | 个人设置 | 用户信息、密码管理 |
 | `/members` | 组织成员 | 成员管理 |
 | `/usage` | 用量 | 组织用量统计 |
 | `/gene-market` | 基因市场 | 浏览安装基因 |
@@ -90,3 +84,12 @@ vue-tsc -b       # 类型检查
 - 文本文件侧面板：默认只读预览，可切换编辑模式
 - 保存时弹出确认对话框，提示修改可能影响运行中实例
 - 后端 API：`/instances/{id}/files`，权限检查使用 `check_instance_access(InstanceRole.admin)`
+
+## 个人设置
+
+设置页（`/settings`）提供用户信息展示和密码管理。
+
+- 用户信息：头像、姓名、邮箱
+- 密码管理：首次设置密码（无需旧密码）或修改密码（需验证旧密码）
+- 设置密码后可使用邮箱 + 密码登录，无需飞书 SSO
+- 后端 API：`PUT /auth/me/password`

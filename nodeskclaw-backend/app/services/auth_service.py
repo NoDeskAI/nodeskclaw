@@ -207,6 +207,7 @@ async def _build_user_info(user: User, db: AsyncSession) -> UserInfo:
     from app.models.org_membership import OrgMembership
 
     info = UserInfo.model_validate(user)
+    info.has_password = bool(user.password_hash)
     if user.current_org_id:
         result = await db.execute(
             select(AdminMembership.role).where(
@@ -446,3 +447,50 @@ async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResp
     user = refreshed.scalar_one()
     logger.info("手机登录: %s", phone)
     return await _issue_tokens(user, db)
+
+
+# ── 修改密码 ─────────────────────────────────────────────
+
+async def change_password(
+    user_id: str, old_password: str | None, new_password: str, db: AsyncSession
+) -> None:
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": 40020,
+                "message_key": "errors.auth.password_too_short",
+                "message": "密码至少 6 位",
+            },
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if user.password_hash:
+        if not old_password:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": 40024,
+                    "message_key": "errors.auth.old_password_required",
+                    "message": "请输入当前密码",
+                },
+            )
+        if not _verify_password(old_password, user.password_hash):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error_code": 40121,
+                    "message_key": "errors.auth.wrong_password",
+                    "message": "当前密码错误",
+                },
+            )
+
+    user.password_hash = _hash_password(new_password)
+    await db.commit()
+    logger.info("密码修改: user_id=%s", user_id)

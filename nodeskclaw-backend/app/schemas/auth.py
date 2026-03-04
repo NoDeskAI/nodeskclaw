@@ -73,6 +73,7 @@ class UserInfo(BaseModel):
     role: str
     is_active: bool = True
     is_super_admin: bool = False
+    has_password: bool = False
     current_org_id: str | None = None
     org_role: str | None = None
     portal_org_role: str | None = None
@@ -80,6 +81,11 @@ class UserInfo(BaseModel):
     oauth_connections: list[OAuthConnectionInfo] = []
 
     model_config = {"from_attributes": True}
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str | None = None
+    new_password: str
 
 
 class LoginResponse(BaseModel):

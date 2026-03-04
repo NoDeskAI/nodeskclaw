@@ -323,11 +323,6 @@ const zhCN = {
     agentLabelFieldLabel: "标签",
     agentLabelPlaceholder: "输入标签，描述 Agent 的职责",
     agentRenamed: "Agent 已重命名",
-    changeFloor: "切换楼层",
-    changeFloorTitle: "选择目标楼层",
-    floorLabel: "楼层 {floor}",
-    lobbyFloor: "大厅",
-    floorChanged: "已移至楼层 {floor}",
   },
   chat: {
     emptyHint: "发送消息开始群聊，所有 Agent 都会看到",
@@ -612,6 +607,22 @@ const zhCN = {
     delete: "删除实例",
     deleting: "删除中...",
   },
+  settings: {
+    password: "密码",
+    passwordNotSet: "未设置",
+    passwordNotSetHint: "你还没有设置密码。设置后可以使用邮箱和密码登录。",
+    passwordSet: "已设置",
+    currentPassword: "当前密码",
+    newPassword: "新密码",
+    confirmPassword: "确认密码",
+    setPassword: "设置密码",
+    changePassword: "修改密码",
+    passwordMismatch: "两次输入的密码不一致",
+    passwordTooShort: "密码至少 6 位",
+    passwordChanged: "密码已更新",
+    wrongPassword: "当前密码错误",
+    saving: "保存中...",
+  },
   errors: {
     common: {
       not_found: "资源不存在",
@@ -643,6 +654,8 @@ const zhCN = {
       sms_code_not_requested: "请先获取验证码",
       sms_code_expired: "验证码已过期",
       sms_code_invalid: "验证码错误",
+      old_password_required: "请输入当前密码",
+      wrong_password: "当前密码错误",
     },
     org: {
       user_has_no_org: "用户未加入任何组织",

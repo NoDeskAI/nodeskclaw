@@ -99,8 +99,9 @@ API 路由同时挂载在两个前缀下：
 | 前缀 | 模块 | 说明 |
 |------|------|------|
 | `/api/v1/health` | 系统 | 健康检查 |
-| `/api/v1/auth` | 认证 | OAuth 登录、token 刷新 |
+| `/api/v1/auth` | 认证 | OAuth 登录、token 刷新、密码管理 |
 | `/api/v1/auth/oauth/callback` | 认证 | OAuth 登录回调（通用，支持 provider 参数） |
+| `PUT /api/v1/auth/me/password` | 认证 | 修改/设置密码 |
 | `/api/v1/orgs` | 组织 | 组织 CRUD、成员管理 |
 | `/api/v1/orgs/oauth-setup` | 组织 | 组织 OAuth 设置（通用，通过 OAuth 租户绑定组织） |
 | `/api/v1/clusters` | 集群 | 集群 CRUD、KubeConfig 管理 |

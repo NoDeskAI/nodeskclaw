@@ -9,6 +9,7 @@ from app.core.deps import get_db, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     EmailLoginRequest,
     EmailRegisterRequest,
     FeishuCallbackRequest,
@@ -95,6 +96,7 @@ async def me(
     from app.models.org_membership import OrgMembership
 
     info = UserInfo.model_validate(current_user)
+    info.has_password = bool(current_user.password_hash)
     if current_user.current_org_id:
         result = await db.execute(
             select(AdminMembership.role).where(
@@ -114,6 +116,18 @@ async def me(
         )
         info.portal_org_role = result.scalar_one_or_none()
     return ApiResponse(data=info)
+
+
+@router.put("/me/password", response_model=ApiResponse)
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await auth_service.change_password(
+        current_user.id, body.old_password, body.new_password, db,
+    )
+    return ApiResponse(message="密码已更新")
 
 
 @router.post("/logout", response_model=ApiResponse)

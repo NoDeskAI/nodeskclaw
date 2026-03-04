@@ -323,11 +323,6 @@ const enUS = {
     agentLabelFieldLabel: "Label",
     agentLabelPlaceholder: "Enter label describing what this Agent does",
     agentRenamed: "Agent renamed",
-    changeFloor: "Change Floor",
-    changeFloorTitle: "Select Target Floor",
-    floorLabel: "Floor {floor}",
-    lobbyFloor: "Lobby",
-    floorChanged: "Moved to floor {floor}",
   },
   chat: {
     emptyHint: "Send a message to start group chat, all Agents will see it",
@@ -612,6 +607,22 @@ const enUS = {
     delete: "Delete Instance",
     deleting: "Deleting...",
   },
+  settings: {
+    password: "Password",
+    passwordNotSet: "Not set",
+    passwordNotSetHint: "You haven't set a password yet. After setting one, you can log in with your email and password.",
+    passwordSet: "Set",
+    currentPassword: "Current Password",
+    newPassword: "New Password",
+    confirmPassword: "Confirm Password",
+    setPassword: "Set Password",
+    changePassword: "Change Password",
+    passwordMismatch: "Passwords do not match",
+    passwordTooShort: "Password must be at least 6 characters",
+    passwordChanged: "Password updated",
+    wrongPassword: "Incorrect current password",
+    saving: "Saving...",
+  },
   errors: {
     common: {
       not_found: "Resource not found",
@@ -643,6 +654,8 @@ const enUS = {
       sms_code_not_requested: "Please request an SMS code first",
       sms_code_expired: "SMS code has expired",
       sms_code_invalid: "Invalid SMS code",
+      old_password_required: "Current password is required",
+      wrong_password: "Incorrect current password",
     },
     org: {
       user_has_no_org: "User has not joined any organization",
