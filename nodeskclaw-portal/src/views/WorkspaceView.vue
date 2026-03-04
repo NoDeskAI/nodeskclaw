@@ -1300,7 +1300,7 @@ function handleKeydown(e: KeyboardEvent) {
     <AgentDetailDialog
       v-model:visible="agentDetailVisible"
       :instance-id="agentDetailId"
-      @navigate="router.push(`/instances/${agentDetailId}`)"
+      @navigate="() => { const r = router.resolve(`/instances/${agentDetailId}`); window.open(r.href, '_blank') }"
       @deleted="store.fetchWorkspace(workspaceId)"
     />
 

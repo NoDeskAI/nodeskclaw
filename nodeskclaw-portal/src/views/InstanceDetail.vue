@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import {
+  ExternalLink, RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw, AlertTriangle,
+  Package, Zap, FileText,
+} from 'lucide-vue-next'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
+import type { InstanceSkillItem, InstanceGeneItem, GenomeItem } from '@/stores/gene'
 
 const router = useRouter()
 const toast = useToast()
@@ -43,6 +47,48 @@ const showRestartDialog = ref(false)
 const showDeleteDialog = ref(false)
 const deleting = ref(false)
 
+const skills = ref<InstanceSkillItem[]>([])
+const instanceGenes = ref<InstanceGeneItem[]>([])
+const appliedGenomes = ref<GenomeItem[]>([])
+const genesLoading = ref(false)
+
+const geneStatusClass: Record<string, string> = {
+  installed: 'bg-green-500/10 text-green-500',
+  learning: 'bg-yellow-500/10 text-yellow-500',
+  learn_failed: 'bg-red-500/10 text-red-500',
+  failed: 'bg-red-500/10 text-red-500',
+  installing: 'bg-blue-500/10 text-blue-500',
+  uninstalling: 'bg-gray-500/10 text-gray-500',
+  forgetting: 'bg-amber-500/10 text-amber-500',
+  forget_failed: 'bg-red-500/10 text-red-500',
+  simplified: 'bg-blue-500/10 text-blue-500',
+}
+
+function getStatusClass(status: string): string {
+  return geneStatusClass[status] ?? 'bg-gray-500/10 text-gray-500'
+}
+
+const statusLabels: Record<string, string> = {
+  installed: '已学习',
+  learning: '学习中',
+  learn_failed: '学习失败',
+  failed: '失败',
+  installing: '学习中',
+  uninstalling: '遗忘中',
+  forgetting: '深度遗忘中',
+  forget_failed: '遗忘失败',
+  simplified: '已简化',
+}
+
+function getStatusLabel(status: string): string {
+  return statusLabels[status] ?? status
+}
+
+function effectivenessScore(item: InstanceSkillItem): number {
+  if (item.instance_gene?.agent_self_eval != null) return item.instance_gene.agent_self_eval
+  return item.gene?.effectiveness_score ?? 0
+}
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -60,6 +106,7 @@ onMounted(async () => {
     restarting.value = true
     startPolling()
   }
+  fetchGenes()
 })
 
 onUnmounted(() => {
@@ -82,6 +129,40 @@ async function fetchDetail() {
     pageError.value = e?.response?.data?.message || '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchGenes() {
+  genesLoading.value = true
+  try {
+    const [skillsRes, genesRes] = await Promise.all([
+      api.get(`/instances/${instanceId.value}/skills`),
+      api.get(`/instances/${instanceId.value}/genes`),
+    ])
+    skills.value = skillsRes.data.data || []
+    instanceGenes.value = genesRes.data.data || []
+
+    const genomeIds = [...new Set(
+      instanceGenes.value
+        .map((g: InstanceGeneItem) => g.genome_id)
+        .filter((id): id is string => !!id),
+    )]
+    if (genomeIds.length > 0) {
+      const genomeResults = await Promise.all(
+        genomeIds.map(id => api.get(`/genomes/${id}`).catch(() => null)),
+      )
+      appliedGenomes.value = genomeResults
+        .filter(r => r?.data?.data)
+        .map(r => r!.data.data)
+    } else {
+      appliedGenomes.value = []
+    }
+  } catch {
+    skills.value = []
+    instanceGenes.value = []
+    appliedGenomes.value = []
+  } finally {
+    genesLoading.value = false
   }
 }
 
@@ -240,6 +321,112 @@ async function handleDelete() {
         <div class="flex items-center gap-2 text-sm text-amber-400">
           <Loader2 class="w-4 h-4 animate-spin" />
           实例正在重启，等待新 Pod 启动...
+        </div>
+      </div>
+
+      <!-- 已安装基因 -->
+      <div class="p-4 rounded-xl border border-border bg-card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-medium">已安装基因</h2>
+          <router-link
+            v-if="skills.length"
+            :to="`/instances/${instanceId}/genes`"
+            class="text-xs text-primary hover:text-primary/80 transition-colors"
+          >查看全部</router-link>
+        </div>
+        <div v-if="genesLoading" class="flex items-center justify-center py-8">
+          <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+        <div v-else-if="skills.length === 0" class="py-8 text-center">
+          <Package class="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+          <p class="text-sm text-muted-foreground">暂无基因</p>
+        </div>
+        <div v-else class="space-y-3">
+          <div
+            v-for="item in skills"
+            :key="item.skill_name"
+            class="rounded-lg border border-border p-3 hover:border-primary/30 transition-colors"
+          >
+            <div v-if="item.type === 'hub'" class="space-y-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-medium text-sm">{{ item.gene?.name ?? item.name }}</span>
+                <span class="text-xs text-muted-foreground">{{ item.gene?.slug ?? item.skill_name }}</span>
+                <span v-if="item.instance_gene?.installed_version || item.gene?.version" class="text-xs text-muted-foreground">
+                  v{{ item.instance_gene?.installed_version ?? item.gene?.version ?? '-' }}
+                </span>
+                <span
+                  v-if="item.instance_gene"
+                  class="px-2 py-0.5 rounded text-xs font-medium"
+                  :class="getStatusClass(item.instance_gene.status)"
+                >{{ getStatusLabel(item.instance_gene.status) }}</span>
+                <span v-else class="px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-500">
+                  已学习
+                </span>
+              </div>
+              <div v-if="item.gene?.tags?.length" class="flex flex-wrap gap-1">
+                <span
+                  v-for="tag in item.gene.tags"
+                  :key="tag"
+                  class="px-2 py-0.5 rounded bg-muted text-xs text-muted-foreground"
+                >{{ tag }}</span>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="flex-1 max-w-[200px]">
+                  <div class="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>效能</span>
+                    <span>{{ Math.round(effectivenessScore(item) * 100) }}%</span>
+                  </div>
+                  <div class="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      class="h-full rounded-full bg-primary transition-all"
+                      :style="{ width: `${Math.min(100, effectivenessScore(item) * 100)}%` }"
+                    />
+                  </div>
+                </div>
+                <span v-if="item.instance_gene" class="text-xs text-muted-foreground">
+                  使用 {{ item.instance_gene.usage_count }} 次
+                </span>
+              </div>
+            </div>
+            <div v-else class="space-y-1.5">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-medium text-sm">{{ item.name }}</span>
+                <span class="text-xs text-muted-foreground">{{ item.skill_name }}</span>
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-500/10 text-violet-500">
+                  <Zap class="w-3 h-3 inline -mt-0.5 mr-0.5" />基因涌现
+                </span>
+              </div>
+              <p v-if="item.description" class="text-sm text-muted-foreground line-clamp-2">{{ item.description }}</p>
+              <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                <span class="inline-flex items-center gap-1">
+                  <FileText class="w-3.5 h-3.5" />
+                  {{ item.file_count }} 个文件
+                </span>
+                <span v-if="item.frontmatter?.always" class="inline-flex items-center gap-1 text-amber-500">
+                  <Zap class="w-3.5 h-3.5" />
+                  常驻激活
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 已应用基因组 -->
+      <div v-if="appliedGenomes.length" class="p-4 rounded-xl border border-border bg-card">
+        <h2 class="text-sm font-medium mb-3">已应用基因组</h2>
+        <div class="space-y-2">
+          <div
+            v-for="genome in appliedGenomes"
+            :key="genome.id"
+            class="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
+          >
+            <div class="min-w-0">
+              <span class="font-medium text-sm">{{ genome.name }}</span>
+              <p v-if="genome.short_description" class="text-xs text-muted-foreground mt-0.5 truncate">{{ genome.short_description }}</p>
+            </div>
+            <span class="text-xs text-muted-foreground shrink-0 ml-3">{{ genome.gene_slugs.length }} 个基因</span>
+          </div>
         </div>
       </div>
 

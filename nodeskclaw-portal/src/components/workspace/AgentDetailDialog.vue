@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   ExternalLink, RefreshCw, Trash2, Circle, Loader2,
   Copy, Check, RotateCcw, AlertTriangle, X,
+  Package, Zap, FileText,
 } from 'lucide-vue-next'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
+import type { InstanceSkillItem, InstanceGeneItem, GenomeItem } from '@/stores/gene'
 
 const props = defineProps<{
   visible: boolean
@@ -21,6 +24,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToast()
+const router = useRouter()
 
 interface InstanceDetail {
   id: string
@@ -51,6 +55,52 @@ const showRestartConfirm = ref(false)
 const showDeleteConfirm = ref(false)
 const deleting = ref(false)
 
+const skills = ref<InstanceSkillItem[]>([])
+const instanceGenes = ref<InstanceGeneItem[]>([])
+const appliedGenomes = ref<GenomeItem[]>([])
+const genesLoading = ref(false)
+
+const geneStatusClass: Record<string, string> = {
+  installed: 'bg-green-500/10 text-green-500',
+  learning: 'bg-yellow-500/10 text-yellow-500',
+  learn_failed: 'bg-red-500/10 text-red-500',
+  failed: 'bg-red-500/10 text-red-500',
+  installing: 'bg-blue-500/10 text-blue-500',
+  uninstalling: 'bg-gray-500/10 text-gray-500',
+  forgetting: 'bg-amber-500/10 text-amber-500',
+  forget_failed: 'bg-red-500/10 text-red-500',
+  simplified: 'bg-blue-500/10 text-blue-500',
+}
+
+function getStatusClass(status: string): string {
+  return geneStatusClass[status] ?? 'bg-gray-500/10 text-gray-500'
+}
+
+function getStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    installed: t('instanceGenes.statusInstalled'),
+    learning: t('instanceGenes.statusLearning'),
+    learn_failed: t('instanceGenes.statusLearnFailed'),
+    failed: t('instanceGenes.statusFailed'),
+    installing: t('instanceGenes.statusLearning'),
+    uninstalling: t('instanceGenes.statusUninstalling'),
+    forgetting: t('instanceGenes.statusForgetting'),
+    forget_failed: t('instanceGenes.statusForgetFailed'),
+    simplified: t('instanceGenes.statusSimplified'),
+  }
+  return labels[status] ?? status
+}
+
+function effectivenessScore(item: InstanceSkillItem): number {
+  if (item.instance_gene?.agent_self_eval != null) return item.instance_gene.agent_self_eval
+  return item.gene?.effectiveness_score ?? 0
+}
+
+function genesPageHref(): string {
+  if (!props.instanceId) return ''
+  return router.resolve(`/instances/${props.instanceId}/genes`).href
+}
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -60,14 +110,6 @@ const statusColors: Record<string, string> = {
   deploying: 'text-yellow-400',
   restarting: 'text-amber-400',
   failed: 'text-red-400',
-}
-
-function formatCpu(val: string): string {
-  if (val.endsWith('m')) {
-    const cores = parseInt(val.slice(0, -1), 10) / 1000
-    return Number.isInteger(cores) ? `${cores} ${t('agentDetailDialog.cpu')}` : `${cores.toFixed(2)} ${t('agentDetailDialog.cpu')}`
-  }
-  return val
 }
 
 function close() {
@@ -99,6 +141,42 @@ async function fetchDetail() {
     error.value = t('agentDetailDialog.loadFailed')
   } finally {
     loading.value = false
+  }
+  fetchGenes()
+}
+
+async function fetchGenes() {
+  if (!props.instanceId) return
+  genesLoading.value = true
+  try {
+    const [skillsRes, genesRes] = await Promise.all([
+      api.get(`/instances/${props.instanceId}/skills`),
+      api.get(`/instances/${props.instanceId}/genes`),
+    ])
+    skills.value = skillsRes.data.data || []
+    instanceGenes.value = genesRes.data.data || []
+
+    const genomeIds = [...new Set(
+      instanceGenes.value
+        .map((g: InstanceGeneItem) => g.genome_id)
+        .filter((id): id is string => !!id),
+    )]
+    if (genomeIds.length > 0) {
+      const genomeResults = await Promise.all(
+        genomeIds.map(id => api.get(`/genomes/${id}`).catch(() => null)),
+      )
+      appliedGenomes.value = genomeResults
+        .filter(r => r?.data?.data)
+        .map(r => r!.data.data)
+    } else {
+      appliedGenomes.value = []
+    }
+  } catch {
+    skills.value = []
+    instanceGenes.value = []
+    appliedGenomes.value = []
+  } finally {
+    genesLoading.value = false
   }
 }
 
@@ -178,6 +256,9 @@ watch(() => props.visible, (val) => {
     deleting.value = false
     showRestartConfirm.value = false
     showDeleteConfirm.value = false
+    skills.value = []
+    instanceGenes.value = []
+    appliedGenomes.value = []
     fetchDetail()
   } else {
     stopPolling()
@@ -292,14 +373,6 @@ onUnmounted(stopPolling)
                     <span class="ml-1.5 font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{{ instance.image_version }}</span>
                   </div>
                   <div>
-                    <span class="text-muted-foreground text-xs">{{ t('agentDetailDialog.cpu') }}</span>
-                    <span class="ml-1.5 text-xs">{{ formatCpu(instance.cpu_limit) }}</span>
-                  </div>
-                  <div>
-                    <span class="text-muted-foreground text-xs">{{ t('agentDetailDialog.memory') }}</span>
-                    <span class="ml-1.5 text-xs">{{ instance.mem_limit }}</span>
-                  </div>
-                  <div>
                     <span class="text-muted-foreground text-xs">{{ t('agentDetailDialog.createdAt') }}</span>
                     <span class="ml-1.5 text-xs">{{ new Date(instance.created_at).toLocaleDateString('zh-CN') }}</span>
                   </div>
@@ -332,6 +405,84 @@ onUnmounted(stopPolling)
                 <div class="flex items-center gap-2 text-xs text-amber-400">
                   <Loader2 class="w-3.5 h-3.5 animate-spin" />
                   {{ t('agentDetailDialog.restarting') }}
+                </div>
+              </div>
+
+              <!-- Installed Genes -->
+              <div class="p-3 rounded-lg border border-border bg-card">
+                <div class="flex items-center justify-between mb-2">
+                  <h4 class="text-xs font-medium text-muted-foreground">{{ t('agentDetailDialog.installedGenes') }}</h4>
+                  <a
+                    v-if="skills.length"
+                    :href="genesPageHref()"
+                    target="_blank"
+                    class="text-xs text-primary hover:text-primary/80 transition-colors"
+                  >{{ t('agentDetailDialog.viewAll') }}</a>
+                </div>
+                <div v-if="genesLoading" class="flex items-center justify-center py-4">
+                  <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+                <div v-else-if="skills.length === 0" class="py-4 text-center">
+                  <Package class="w-6 h-6 mx-auto mb-1.5 text-muted-foreground/50" />
+                  <p class="text-xs text-muted-foreground">{{ t('agentDetailDialog.noGenes') }}</p>
+                </div>
+                <div v-else class="space-y-1.5">
+                  <div
+                    v-for="item in skills"
+                    :key="item.skill_name"
+                    class="p-2 rounded-md bg-muted/30"
+                  >
+                    <div v-if="item.type === 'hub'" class="space-y-1.5">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs font-medium">{{ item.gene?.name ?? item.name }}</span>
+                        <span
+                          v-if="item.instance_gene"
+                          class="px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
+                          :class="getStatusClass(item.instance_gene.status)"
+                        >{{ getStatusLabel(item.instance_gene.status) }}</span>
+                        <span v-else class="px-1.5 py-0.5 rounded text-[10px] font-medium leading-none bg-green-500/10 text-green-500">
+                          {{ t('instanceGenes.statusInstalled') }}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="flex-1 max-w-[140px]">
+                          <div class="h-1 rounded-full bg-muted overflow-hidden">
+                            <div
+                              class="h-full rounded-full bg-primary transition-all"
+                              :style="{ width: `${Math.min(100, effectivenessScore(item) * 100)}%` }"
+                            />
+                          </div>
+                        </div>
+                        <span class="text-[10px] text-muted-foreground">{{ Math.round(effectivenessScore(item) * 100) }}%</span>
+                      </div>
+                    </div>
+                    <div v-else class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-xs font-medium">{{ item.name }}</span>
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-medium leading-none bg-violet-500/10 text-violet-500">
+                        <Zap class="w-2.5 h-2.5 inline -mt-0.5 mr-0.5" />{{ t('instanceGenes.emerged') }}
+                      </span>
+                      <span class="text-[10px] text-muted-foreground ml-auto">
+                        <FileText class="w-3 h-3 inline -mt-0.5 mr-0.5" />{{ t('instanceGenes.fileCount', { count: item.file_count }) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Applied Genomes -->
+              <div v-if="appliedGenomes.length" class="p-3 rounded-lg border border-border bg-card">
+                <h4 class="text-xs font-medium text-muted-foreground mb-2">{{ t('agentDetailDialog.appliedGenomes') }}</h4>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="genome in appliedGenomes"
+                    :key="genome.id"
+                    class="flex items-center justify-between p-2 rounded-md bg-muted/30"
+                  >
+                    <span class="text-xs font-medium">{{ genome.name }}</span>
+                    <span class="text-[10px] text-muted-foreground">
+                      {{ t('agentDetailDialog.geneCount', { count: genome.gene_slugs.length }) }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </template>
