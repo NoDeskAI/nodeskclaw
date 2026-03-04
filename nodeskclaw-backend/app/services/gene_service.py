@@ -850,6 +850,22 @@ async def _has_meta_learning(db: AsyncSession, instance_id: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
+async def has_gene_installed(db: AsyncSession, instance_id: str, gene_slug: str) -> bool:
+    """Check if instance has a specific gene installed (status=installed)."""
+    result = await db.execute(
+        select(InstanceGene.id)
+        .join(Gene, InstanceGene.gene_id == Gene.id)
+        .where(
+            InstanceGene.instance_id == instance_id,
+            Gene.slug == gene_slug,
+            InstanceGene.status == InstanceGeneStatus.installed,
+            not_deleted(InstanceGene),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def _has_pending_learning(db: AsyncSession, instance_id: str, exclude_ig_id: str) -> bool:
     """Check if the instance still has other InstanceGene records in learning status."""
     result = await db.execute(
@@ -966,6 +982,104 @@ async def install_gene(
         "status": ig.status,
         "method": "learning" if has_learning else "direct",
     }
+
+
+async def install_gene_prerestart(instance_id: str, gene_slug: str) -> None:
+    """Synchronously install a gene without triggering a restart.
+
+    Uses its own DB session and advisory lock for isolation.
+    Designed to be called from add_agent before _deploy_channel_plugin,
+    so the subsequent restart picks up both the gene and channel plugin.
+    """
+    from app.core.deps import async_session_factory
+
+    async with _instance_pg_advisory_lock(instance_id):
+        async with async_session_factory() as db:
+            hub_gene = await genehub_client.get_gene(gene_slug)
+            if hub_gene:
+                gene = await _upsert_gene_cache(db, hub_gene)
+                await db.commit()
+            else:
+                gene = await get_gene_by_slug(db, gene_slug)
+
+            if not gene:
+                raise NotFoundError(f"基因 '{gene_slug}' 不存在")
+
+            instance = await db.get(Instance, instance_id)
+            if not instance:
+                raise NotFoundError(f"实例 '{instance_id}' 不存在")
+
+            existing = await db.execute(
+                select(InstanceGene).where(
+                    InstanceGene.instance_id == instance_id,
+                    InstanceGene.gene_id == gene.id,
+                    not_deleted(InstanceGene),
+                )
+            )
+            existing_ig = existing.scalar_one_or_none()
+            if existing_ig:
+                if existing_ig.status == InstanceGeneStatus.installed:
+                    return
+                if existing_ig.status in (
+                    InstanceGeneStatus.installing,
+                    InstanceGeneStatus.failed,
+                    InstanceGeneStatus.learn_failed,
+                ):
+                    existing_ig.soft_delete()
+                    await db.commit()
+
+            ig = InstanceGene(
+                instance_id=instance_id,
+                gene_id=gene.id,
+                status=InstanceGeneStatus.installing,
+                installed_version=gene.version,
+            )
+            db.add(ig)
+            gene.install_count += 1
+            await db.commit()
+            await db.refresh(ig)
+
+            hub_manifest = await genehub_client.get_manifest(gene.slug)
+            manifest = hub_manifest or _json_loads(gene.manifest) or {}
+            skill = manifest.get("skill", {})
+
+            async with remote_fs(instance, db) as fs:
+                skill_name = skill.get("name", gene.slug)
+                skill_content = skill.get("content", "")
+                await _write_skill_file(
+                    fs, skill_name, skill_content,
+                    gene.short_description or gene.description or "",
+                )
+                await ensure_skills_discovery(fs)
+                await _apply_engineering_actions(fs, manifest)
+                await invalidate_skill_snapshots(fs)
+                await inject_evolution_notification(fs, skill_name, "installed")
+
+            ig.status = InstanceGeneStatus.installed
+            ig.installed_at = datetime.now(timezone.utc)
+            ig.config_snapshot = _json_dumps(manifest.get("openclaw_config"))
+            await _record_evolution(
+                db, instance_id, EvolutionEventType.learned, gene.name,
+                gene_slug=gene.slug, gene_id=gene.id,
+                details={"version": gene.version, "learning_type": "direct"},
+            )
+            await db.commit()
+
+            await genehub_client.report_install(gene.slug)
+
+            workspace_id = instance.workspace_id
+            if workspace_id:
+                from app.api.workspaces import broadcast_event
+                broadcast_event(workspace_id, "gene:installed", {
+                    "instance_id": instance.id,
+                    "gene_slug": gene.slug,
+                    "method": "direct",
+                })
+
+            logger.info(
+                "install_gene_prerestart: 基因 %s 已安装到实例 %s（不重启）",
+                gene_slug, instance.name,
+            )
 
 
 async def _inject_mcp_servers(

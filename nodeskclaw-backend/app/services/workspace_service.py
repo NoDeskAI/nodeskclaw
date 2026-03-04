@@ -227,6 +227,18 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest, 
     await db.commit()
     await db.refresh(inst)
 
+    if data.install_topology_gene:
+        try:
+            from app.services.gene_service import install_gene_prerestart
+            await install_gene_prerestart(inst.id, "nodeskclaw-topology-awareness")
+        except Exception as e:
+            logger.error("拓扑基因安装失败，回滚工作区加入: instance=%s error=%s", inst.name, e)
+            inst.workspace_id = None
+            inst.hex_position_q = 0
+            inst.hex_position_r = 0
+            await db.commit()
+            raise ValueError(f"拓扑感知基因安装失败: {e}") from e
+
     await _deploy_channel_plugin(inst, db, workspace_id)
 
     has_topo = await corridor_router.has_any_connections(workspace_id, db)

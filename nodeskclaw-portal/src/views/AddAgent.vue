@@ -2,11 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Bot, Search, Rocket, RefreshCw, Check, AlertTriangle, X } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
+
+const TOPOLOGY_GENE_SLUG = 'nodeskclaw-topology-awareness'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -33,7 +35,25 @@ const addingDone = ref<string | null>(null)
 let stepTimer: ReturnType<typeof setInterval> | null = null
 const search = ref('')
 
-const ADDING_STEPS = ['配置中...', '部署插件...', '重启实例...', '连接中...']
+const geneDialogInstanceId = ref<string | null>(null)
+const geneChecking = ref(false)
+
+const ADDING_STEPS_WITH_GENE = computed(() => [
+  t('addAgentView.stepCheckGene'),
+  t('addAgentView.stepConfiguring'),
+  t('addAgentView.stepDeployPlugin'),
+  t('addAgentView.stepRestarting'),
+  t('addAgentView.stepConnecting'),
+])
+
+const ADDING_STEPS_NORMAL = computed(() => [
+  t('addAgentView.stepConfiguring'),
+  t('addAgentView.stepDeployPlugin'),
+  t('addAgentView.stepRestarting'),
+  t('addAgentView.stepConnecting'),
+])
+
+const currentSteps = ref<string[]>([])
 
 const alreadyInWorkspace = computed(() =>
   new Set(store.currentWorkspace?.agents?.map((a) => a.instance_id) || []),
@@ -82,22 +102,71 @@ onMounted(async () => {
   fetchInstances()
 })
 
+async function checkTopologyGene(instanceId: string): Promise<boolean> {
+  try {
+    const res = await api.get(`/instances/${instanceId}/genes`)
+    const genes: any[] = res.data.data || []
+    return genes.some(
+      (g: any) => g.gene?.slug === TOPOLOGY_GENE_SLUG && g.status === 'installed',
+    )
+  } catch {
+    return false
+  }
+}
+
 async function addToWorkspace(instanceId: string) {
+  geneChecking.value = true
+  let hasGene: boolean
+  try {
+    hasGene = await checkTopologyGene(instanceId)
+  } catch {
+    toast.error(t('addAgentView.geneCheckFailed'))
+    geneChecking.value = false
+    return
+  }
+  geneChecking.value = false
+
+  if (!hasGene) {
+    geneDialogInstanceId.value = instanceId
+    return
+  }
+
+  await doAddAgent(instanceId, false)
+}
+
+function closeGeneDialog() {
+  geneDialogInstanceId.value = null
+}
+
+async function confirmGeneInstall() {
+  const instanceId = geneDialogInstanceId.value
+  if (!instanceId) return
+  geneDialogInstanceId.value = null
+  await doAddAgent(instanceId, true)
+}
+
+async function doAddAgent(instanceId: string, installGene: boolean) {
   adding.value = instanceId
   addingStep.value = 0
+  currentSteps.value = installGene ? ADDING_STEPS_WITH_GENE.value : ADDING_STEPS_NORMAL.value
+
   stepTimer = setInterval(() => {
-    if (addingStep.value < ADDING_STEPS.length - 1) addingStep.value++
+    if (addingStep.value < currentSteps.value.length - 1) addingStep.value++
   }, 4000)
+
   try {
-    await store.addAgent(workspaceId.value, instanceId, undefined, targetHexQ.value, targetHexR.value)
+    await store.addAgent(
+      workspaceId.value, instanceId, undefined,
+      targetHexQ.value, targetHexR.value, installGene,
+    )
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
     adding.value = null
     addingDone.value = instanceId
     setTimeout(() => { addingDone.value = null }, 1500)
     await fetchInstances()
-    toast.success('Agent 已添加到工作区', {
+    toast.success(t('addAgentView.addedToast'), {
       action: {
-        label: '前往查看',
+        label: t('addAgentView.goToView'),
         onClick: () => router.push({
           path: `/workspace/${workspaceId.value}`,
           query: { focus_agent: instanceId },
@@ -106,7 +175,7 @@ async function addToWorkspace(instanceId: string) {
     })
   } catch (e: any) {
     if (stepTimer) { clearInterval(stepTimer); stepTimer = null }
-    alert(resolveApiErrorMessage(e, '添加失败'))
+    alert(resolveApiErrorMessage(e, t('addAgentView.addFailed')))
     adding.value = null
   }
 }
@@ -122,57 +191,52 @@ function goBack() {
       <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="goBack">
         <ArrowLeft class="w-5 h-5" />
       </button>
-      <h1 class="text-xl font-bold">添加 Agent</h1>
+      <h1 class="text-xl font-bold">{{ t('addAgentView.title') }}</h1>
     </div>
 
     <p class="text-sm text-muted-foreground mb-4">
-      从已有实例中选择一个 Agent 添加到工作区，或创建新实例
+      {{ t('addAgentView.subtitle') }}
     </p>
 
-    <!-- Create new instance -->
     <button
       class="w-full flex items-center gap-3 px-4 py-3 mb-4 rounded-lg border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors"
       @click="router.push(`/instances/create?workspace=${workspaceId}`)"
     >
       <Rocket class="w-5 h-5 text-primary" />
       <div class="text-left">
-        <p class="text-sm font-medium">创建新实例</p>
-        <p class="text-xs text-muted-foreground">部署一个全新的 OpenClaw 实例</p>
+        <p class="text-sm font-medium">{{ t('addAgentView.createNew') }}</p>
+        <p class="text-xs text-muted-foreground">{{ t('addAgentView.createNewDesc') }}</p>
       </div>
     </button>
 
-    <!-- Search + Refresh -->
     <div class="flex items-center gap-2 mb-4">
       <div class="relative flex-1">
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           v-model="search"
           class="w-full pl-9 pr-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
-          placeholder="搜索实例..."
+          :placeholder="t('addAgentView.searchPlaceholder')"
         />
       </div>
       <button
         class="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
         :disabled="loading"
-        title="刷新列表"
+        :title="t('addAgentView.refresh')"
         @click="fetchInstances"
       >
         <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
       </button>
     </div>
 
-    <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-10">
       <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
     </div>
 
-    <!-- Empty -->
     <div v-else-if="filtered.length === 0" class="text-center py-10 text-muted-foreground text-sm">
-      没有可用的实例
+      {{ t('addAgentView.noInstances') }}
     </div>
 
     <template v-else>
-      <!-- Running instances (can be added) -->
       <div v-if="runningInstances.length > 0" class="space-y-2">
         <div
           v-for="inst in runningInstances"
@@ -189,17 +253,17 @@ function goBack() {
               <p class="text-xs text-muted-foreground">{{ inst.status }}</p>
             </div>
           </div>
-          <!-- Adding progress -->
+
           <div v-if="adding === inst.id" class="flex items-center gap-2 min-w-[140px]">
             <div class="flex-1">
               <div class="flex items-center gap-1.5 mb-1">
                 <Loader2 class="w-3 h-3 animate-spin text-primary" />
-                <span class="text-xs text-muted-foreground">{{ ADDING_STEPS[addingStep] }}</span>
+                <span class="text-xs text-muted-foreground">{{ currentSteps[addingStep] }}</span>
               </div>
               <div class="h-1 rounded-full bg-muted overflow-hidden">
                 <div
                   class="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                  :style="{ width: `${((addingStep + 1) / ADDING_STEPS.length) * 100}%` }"
+                  :style="{ width: `${((addingStep + 1) / currentSteps.length) * 100}%` }"
                 />
               </div>
             </div>
@@ -209,23 +273,26 @@ function goBack() {
             class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-600 text-xs font-medium"
           >
             <Check class="w-3 h-3" />
-            已添加
+            {{ t('addAgentView.added') }}
           </span>
+          <div v-else-if="geneChecking && geneDialogInstanceId === null && adding === null" class="flex items-center gap-1.5">
+            <Loader2 class="w-3 h-3 animate-spin text-muted-foreground" />
+            <span class="text-xs text-muted-foreground">{{ t('addAgentView.stepCheckGene') }}</span>
+          </div>
           <button
             v-else
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
-            :disabled="!!adding"
+            :disabled="!!adding || geneChecking"
             @click="addToWorkspace(inst.id)"
           >
             <Plus class="w-3 h-3" />
-            添加
+            {{ t('addAgentView.addBtn') }}
           </button>
         </div>
       </div>
 
-      <!-- Already in this workspace -->
       <div v-if="addedInstances.length > 0" class="mt-6">
-        <p class="text-xs text-muted-foreground mb-2">已在当前工作区</p>
+        <p class="text-xs text-muted-foreground mb-2">{{ t('addAgentView.alreadyInWorkspace') }}</p>
         <div class="space-y-2">
           <div
             v-for="inst in addedInstances"
@@ -244,15 +311,14 @@ function goBack() {
             </div>
             <span class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs">
               <Check class="w-3 h-3" />
-              已添加
+              {{ t('addAgentView.added') }}
             </span>
           </div>
         </div>
       </div>
 
-      <!-- Unavailable instances (not running) -->
       <div v-if="unavailableInstances.length > 0" class="mt-6">
-        <p class="text-xs text-muted-foreground mb-2">以下实例尚未就绪，无法添加到工作区</p>
+        <p class="text-xs text-muted-foreground mb-2">{{ t('addAgentView.unavailableHint') }}</p>
         <div class="space-y-2 opacity-50">
           <div
             v-for="inst in unavailableInstances"
@@ -270,11 +336,64 @@ function goBack() {
               </div>
             </div>
             <span class="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs">
-              不可用
+              {{ t('addAgentView.unavailable') }}
             </span>
           </div>
         </div>
       </div>
     </template>
+
+    <!-- Gene Install Confirmation Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="geneDialogInstanceId"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          @click.self="closeGeneDialog"
+        >
+          <div class="bg-card border border-border rounded-xl shadow-lg max-w-sm w-full mx-4 p-6">
+            <div class="flex items-start gap-3 mb-4">
+              <div class="shrink-0 w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                <AlertTriangle class="w-5 h-5 text-amber-500" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold mb-1">{{ t('addAgentView.geneDialogTitle') }}</h3>
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                  {{ t('addAgentView.geneDialogBody') }}
+                </p>
+              </div>
+              <button class="shrink-0 p-1 rounded-md hover:bg-muted transition-colors" @click="closeGeneDialog">
+                <X class="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div class="flex items-center gap-2 justify-end">
+              <button
+                class="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors"
+                @click="closeGeneDialog"
+              >
+                {{ t('addAgentView.geneDialogCancel') }}
+              </button>
+              <button
+                class="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+                @click="confirmGeneInstall"
+              >
+                {{ t('addAgentView.geneDialogConfirm') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

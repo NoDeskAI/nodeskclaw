@@ -1098,6 +1098,38 @@ async def lifespan(app: FastAPI):
             ))
             logger.info("自动迁移 26：已为 genes 表添加 synced_at 列")
 
+    # ── 迁移 27: 种子 nodeskclaw-topology-awareness 基因 ──
+    async with async_session_factory() as db:
+        from app.models.gene import Gene
+        from app.models.base import not_deleted
+
+        existing_gene = (await db.execute(
+            select(Gene).where(Gene.slug == "nodeskclaw-topology-awareness", not_deleted(Gene))
+        )).scalar_one_or_none()
+
+        if existing_gene is None:
+            import pathlib, json as _json
+            tpl_path = pathlib.Path(__file__).parent / "data" / "gene_templates" / "mcp_topology_awareness.json"
+            if tpl_path.exists():
+                tpl = _json.loads(tpl_path.read_text())
+                gene = Gene(
+                    name=tpl["name"],
+                    slug=tpl["slug"],
+                    description=tpl.get("description"),
+                    category=tpl.get("category"),
+                    tags=_json.dumps(tpl.get("tags", []), ensure_ascii=False),
+                    source="official",
+                    version="1.0.0",
+                    manifest=_json.dumps(tpl.get("manifest", {}), ensure_ascii=False),
+                    is_published=True,
+                    review_status="approved",
+                )
+                db.add(gene)
+                await db.commit()
+                logger.info("自动迁移 27：已种子 nodeskclaw-topology-awareness 基因")
+            else:
+                logger.warning("迁移 27：模板文件 %s 不存在，跳过种子", tpl_path)
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。
