@@ -69,9 +69,25 @@ async function fetchRequiredGenes() {
   }
 }
 
+async function fetchInitialGenes() {
+  searching.value = true
+  try {
+    const res = await api.get('/genes', {
+      params: { page: 1, page_size: 20 },
+    })
+    searchResults.value = (res.data.data ?? []).filter(
+      (g: GeneSearchResult) => !existingSlugs.value.has(g.slug),
+    )
+  } catch {
+    searchResults.value = []
+  } finally {
+    searching.value = false
+  }
+}
+
 async function searchGenes() {
   if (!searchQuery.value.trim()) {
-    searchResults.value = []
+    await fetchInitialGenes()
     return
   }
   searching.value = true
@@ -91,6 +107,10 @@ async function searchGenes() {
 
 function onSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
+  if (!searchQuery.value.trim()) {
+    fetchInitialGenes()
+    return
+  }
   searchTimer = setTimeout(searchGenes, 300)
 }
 
@@ -133,6 +153,7 @@ function openAddDialog() {
   showAddDialog.value = true
   searchQuery.value = ''
   searchResults.value = []
+  fetchInitialGenes()
 }
 
 function closeAddDialog() {
@@ -240,13 +261,8 @@ onMounted(async () => {
               <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
 
-            <div v-else-if="!searchQuery.trim()" class="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Search class="w-6 h-6 mb-2 opacity-50" />
-              <p class="text-xs">{{ t('orgSettings.searchHint') }}</p>
-            </div>
-
             <div v-else-if="searchResults.length === 0" class="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <p class="text-xs">{{ t('orgSettings.noResults') }}</p>
+              <p class="text-xs">{{ searchQuery.trim() ? t('orgSettings.noResults') : t('orgSettings.noGenesAvailable') }}</p>
             </div>
 
             <div v-else class="space-y-2">

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
-import { PawPrint, Settings, LogOut, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User, SlidersHorizontal } from 'lucide-vue-next'
+import { PawPrint, Settings, LogOut, BarChart3, Boxes, Server, FlaskConical, FolderOpen, User } from 'lucide-vue-next'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
@@ -135,7 +135,7 @@ function onLocaleChange(value: string) {
               ]"
               @click="router.push('/org-settings')"
             >
-              <SlidersHorizontal class="w-4 h-4 inline mr-1.5" />
+              <Settings class="w-4 h-4 inline mr-1.5" />
               {{ t('orgSettings.navTitle') }}
             </button>
           </nav>
