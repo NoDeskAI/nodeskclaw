@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import {
   Search,
   Loader2,
-  ChevronDown,
   Star,
   Package,
   Code,
@@ -31,6 +30,7 @@ import {
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const router = useRouter()
 const store = useGeneStore()
@@ -83,6 +83,15 @@ function getSortLabel(value: string) {
   const translated = t(key)
   return translated === key ? value : translated
 }
+
+const categorySelectOptions = computed(() => [
+  { value: null, label: t('geneMarket.allCategories') },
+  ...categories.map(c => ({ value: c, label: localizeGeneMeta(c) })),
+])
+
+const sortSelectOptions = computed(() =>
+  sortOptions.map(s => ({ value: s, label: getSortLabel(s) }))
+)
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -490,30 +499,13 @@ function hasNativeTools(gene: GeneItem): boolean {
           </button>
         </div>
 
-        <div v-if="viewMode === 'genes'" class="relative">
-          <select
-            v-model="selectedCategory"
-            class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
-          >
-            <option :value="null">{{ t('geneMarket.allCategories') }}</option>
-            <option v-for="c in categories" :key="c" :value="c">
-              {{ localizeGeneMeta(c) }}
-            </option>
-          </select>
-          <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        </div>
+        <CustomSelect
+          v-if="viewMode === 'genes'"
+          v-model="selectedCategory"
+          :options="categorySelectOptions"
+        />
 
-        <div class="relative">
-          <select
-            v-model="sortBy"
-            class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
-          >
-            <option v-for="s in sortOptions" :key="s" :value="s">
-              {{ getSortLabel(s) }}
-            </option>
-          </select>
-          <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        </div>
+        <CustomSelect v-model="sortBy" :options="sortSelectOptions" />
       </div>
 
       <div v-if="store.loading" class="flex justify-center py-20">

@@ -3,6 +3,7 @@ import { ref, watch, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight, Filter } from 'lucide-vue-next'
 import api from '@/services/api'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 
@@ -51,6 +52,11 @@ const filteredMessages = computed(() => {
   )
 })
 
+const agentFilterOptions = computed(() => [
+  { value: '', label: t('workspaceView.allAgents') },
+  ...props.agents.map(a => ({ value: a.instance_id, label: a.display_name || a.name })),
+])
+
 function formatTime(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -91,15 +97,7 @@ defineExpose({ addLiveMessage })
   <div class="flex flex-col h-full">
     <div class="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
       <Filter class="w-3.5 h-3.5 text-muted-foreground" />
-      <select
-        v-model="filterAgent"
-        class="flex-1 text-xs bg-transparent border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
-      >
-        <option value="">{{ t('workspaceView.allAgents') }}</option>
-        <option v-for="a in agents" :key="a.instance_id" :value="a.instance_id">
-          {{ a.display_name || a.name }}
-        </option>
-      </select>
+      <CustomSelect v-model="filterAgent" :options="agentFilterOptions" size="xs" trigger-class="flex-1" />
     </div>
 
     <div class="flex-1 overflow-y-auto p-2 space-y-1.5">

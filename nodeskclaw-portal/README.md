@@ -20,6 +20,7 @@ NoDeskClaw 用户门户前端，基于 Vue 3 + Vite + TypeScript + Tailwind CSS 
 nodeskclaw-portal/
 ├── src/
 │   ├── components/        # 通用组件
+│   │   └── shared/        # 共享 UI 组件（CustomSelect、LocaleSelect、ModelSelect 等）
 │   ├── i18n/              # 国际化（zh-CN、en-US）
 │   │   └── locales/
 │   ├── router/            # Vue Router 路由定义

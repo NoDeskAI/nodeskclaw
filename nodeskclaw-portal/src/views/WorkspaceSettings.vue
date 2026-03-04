@@ -2,11 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Save, Trash2, Loader2, Users, Palette, UserPlus, Search, Shield, ShieldCheck, ChevronDown, X } from 'lucide-vue-next'
+import { ArrowLeft, Save, Trash2, Loader2, Users, Palette, UserPlus, Search, Shield, ShieldCheck, X } from 'lucide-vue-next'
 import { useWorkspaceStore, WORKSPACE_PERMISSIONS, PERMISSION_PRESETS, type WorkspaceMemberInfo } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -78,6 +79,10 @@ const PRESET_KEYS = ['administrator', 'collaborator', 'observer', 'custom'] as c
 function presetLabel(key: string): string {
   return t(`workspaceSettings.preset_${key}`)
 }
+
+const presetOptions = computed(() =>
+  PRESET_KEYS.map(pk => ({ value: pk, label: presetLabel(pk) }))
+)
 
 function permLabel(key: string): string {
   return t(`workspaceSettings.perm_${key}`)
@@ -377,13 +382,13 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
             <div v-if="editingMemberId === m.user_id" class="border-t border-border/50 px-3 py-3 space-y-3">
               <div class="flex items-center gap-2">
                 <label class="text-xs text-muted-foreground shrink-0">{{ t('workspaceSettings.presetRole') }}</label>
-                <select
-                  :value="editPreset"
-                  class="flex-1 text-xs px-2 py-1 rounded bg-background border border-border outline-none"
-                  @change="onEditPresetChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option v-for="pk in PRESET_KEYS" :key="pk" :value="pk">{{ presetLabel(pk) }}</option>
-                </select>
+                <CustomSelect
+                  :model-value="editPreset"
+                  :options="presetOptions"
+                  size="xs"
+                  trigger-class="flex-1"
+                  @update:model-value="(v: string | null) => onEditPresetChange(v!)"
+                />
               </div>
               <div class="grid grid-cols-2 gap-1.5">
                 <label
@@ -460,13 +465,13 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
             <div class="px-5 py-3 border-b border-border/50 space-y-3">
               <div class="flex items-center gap-2">
                 <label class="text-xs text-muted-foreground shrink-0">{{ t('workspaceSettings.presetRole') }}</label>
-                <select
-                  :value="addPreset"
-                  class="flex-1 text-xs px-2 py-1 rounded bg-muted border border-border outline-none"
-                  @change="onPresetChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option v-for="pk in PRESET_KEYS" :key="pk" :value="pk">{{ presetLabel(pk) }}</option>
-                </select>
+                <CustomSelect
+                  :model-value="addPreset"
+                  :options="presetOptions"
+                  size="xs"
+                  trigger-class="flex-1"
+                  @update:model-value="(v: string | null) => onPresetChange(v!)"
+                />
               </div>
               <div class="grid grid-cols-2 gap-1.5">
                 <label

@@ -3,6 +3,7 @@ import { ref, inject, onMounted, type ComputedRef } from 'vue'
 import { Loader2, Plus, Trash2, Wrench, Power, PowerOff } from 'lucide-vue-next'
 import api from '@/services/api'
 import { useI18n } from 'vue-i18n'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -118,10 +119,11 @@ onMounted(fetchServers)
           </div>
           <div>
             <label class="text-xs text-muted-foreground mb-1 block">Transport</label>
-            <select v-model="newTransport" class="w-full bg-background rounded px-2.5 py-1.5 text-sm outline-none border border-border">
-              <option value="stdio">stdio</option>
-              <option value="sse">sse</option>
-            </select>
+            <CustomSelect
+              v-model="newTransport"
+              :options="[{ value: 'stdio', label: 'stdio' }, { value: 'sse', label: 'sse' }]"
+              trigger-class="w-full"
+            />
           </div>
         </div>
         <div v-if="newTransport === 'stdio'">

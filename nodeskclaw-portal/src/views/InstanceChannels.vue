@@ -6,6 +6,7 @@ import {
   Upload, Package, FolderGit2, AlertCircle, Check, Eye, EyeOff,
 } from 'lucide-vue-next'
 import api from '@/services/api'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -359,16 +360,13 @@ watch(() => instanceId.value, (val) => {
                 </label>
 
                 <!-- Select -->
-                <select
+                <CustomSelect
                   v-if="field.type === 'select'"
-                  :value="editingConfigs[ch.id]?.[field.key] ?? field.default ?? ''"
-                  class="w-full px-3 py-1.5 rounded-md bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  @change="editingConfigs[ch.id][field.key] = ($event.target as HTMLSelectElement).value; markDirty()"
-                >
-                  <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
+                  :model-value="editingConfigs[ch.id]?.[field.key] ?? field.default ?? ''"
+                  :options="field.options ?? []"
+                  trigger-class="w-full"
+                  @update:model-value="(v: string | null) => { editingConfigs[ch.id][field.key] = v; markDirty() }"
+                />
 
                 <!-- Boolean -->
                 <label v-else-if="field.type === 'boolean'" class="flex items-center gap-2 cursor-pointer">

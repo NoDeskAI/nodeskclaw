@@ -6,6 +6,7 @@ import { UserPlus, Loader2, Trash2, Search } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -44,7 +45,7 @@ const searching = ref(false)
 const addRole = ref('viewer')
 const addingUserId = ref<string | null>(null)
 
-const roleOptions = ['admin', 'editor', 'user', 'viewer']
+const roleKeys = ['admin', 'editor', 'user', 'viewer']
 
 function roleLabel(role: string): string {
   const map: Record<string, string> = {
@@ -55,6 +56,10 @@ function roleLabel(role: string): string {
   }
   return map[role] ?? role
 }
+
+const roleOptions = computed(() =>
+  roleKeys.map(r => ({ value: r, label: roleLabel(r) }))
+)
 
 async function fetchMembers() {
   loading.value = true
@@ -201,14 +206,12 @@ onMounted(fetchMembers)
               </div>
             </td>
             <td class="px-4 py-3">
-              <select
+              <CustomSelect
                 v-if="isAdmin"
-                :value="m.role"
-                class="bg-transparent border border-border rounded px-2 py-1 text-sm"
-                @change="updateRole(m, ($event.target as HTMLSelectElement).value)"
-              >
-                <option v-for="r in roleOptions" :key="r" :value="r">{{ roleLabel(r) }}</option>
-              </select>
+                :model-value="m.role"
+                :options="roleOptions"
+                @update:model-value="(v: string | null) => updateRole(m, v!)"
+              />
               <span v-else class="text-sm">{{ roleLabel(m.role) }}</span>
             </td>
             <td class="px-4 py-3 text-muted-foreground">{{ formatTime(m.created_at) }}</td>
@@ -250,12 +253,7 @@ onMounted(fetchMembers)
           <!-- Role selector -->
           <div class="flex items-center gap-2">
             <span class="text-sm text-muted-foreground">{{ t('instanceMembers.roleLabel') }}:</span>
-            <select
-              v-model="addRole"
-              class="bg-transparent border border-border rounded px-2 py-1 text-sm"
-            >
-              <option v-for="r in roleOptions" :key="r" :value="r">{{ roleLabel(r) }}</option>
-            </select>
+            <CustomSelect v-model="addRole" :options="roleOptions" />
           </div>
 
           <!-- Search results -->

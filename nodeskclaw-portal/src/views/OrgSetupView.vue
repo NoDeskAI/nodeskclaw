@@ -5,7 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import api from '@/services/api'
-import { PawPrint, Building2, Loader2, ChevronDown } from 'lucide-vue-next'
+import { PawPrint, Building2, Loader2 } from 'lucide-vue-next'
+import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -30,6 +31,10 @@ const JOB_TITLE_OPTIONS = [
   { value: 'manager', labelKey: 'orgSetup.jobTitles.manager' },
   { value: 'other', labelKey: 'orgSetup.jobTitles.other' },
 ]
+
+const jobTitleSelectOptions = computed(() =>
+  JOB_TITLE_OPTIONS.map(opt => ({ value: opt.value, label: t(opt.labelKey) }))
+)
 
 function toSlug(name: string): string {
   return name
@@ -130,20 +135,12 @@ async function handleSubmit() {
         <!-- 职位 -->
         <div class="space-y-1.5">
           <label class="text-sm font-medium text-foreground">{{ t('orgSetup.jobTitle') }}</label>
-          <div class="relative">
-            <select
-              v-model="form.job_title"
-              required
-              class="w-full h-10 px-3 pr-8 rounded-lg border border-input bg-background text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
-              :class="{ 'text-muted-foreground': !form.job_title }"
-            >
-              <option value="" disabled>{{ t('orgSetup.jobTitlePlaceholder') }}</option>
-              <option v-for="opt in JOB_TITLE_OPTIONS" :key="opt.value" :value="opt.value">
-                {{ t(opt.labelKey) }}
-              </option>
-            </select>
-            <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          </div>
+          <CustomSelect
+            v-model="form.job_title"
+            :options="jobTitleSelectOptions"
+            :placeholder="t('orgSetup.jobTitlePlaceholder')"
+            trigger-class="w-full"
+          />
         </div>
 
         <!-- 错误提示 -->
