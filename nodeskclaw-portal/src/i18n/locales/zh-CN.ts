@@ -437,6 +437,7 @@ const zhCN = {
     tableNamespace: "命名空间",
     tableCreatedAt: "创建时间",
     tableRole: "我的角色",
+    createFromTemplate: "通过模板创建",
   },
   instanceMembers: {
     title: "成员管理",
@@ -574,6 +575,7 @@ const zhCN = {
     descPlaceholder: "简要描述该模板的用途...",
     saved: "模板已保存",
     saveFailed: "保存失败",
+    creatingFrom: "基于模板 {name} 创建",
   },
   channel: {
     configTitle: "Channel 配置",

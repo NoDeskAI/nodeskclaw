@@ -2,9 +2,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, Loader2, Server, RefreshCw } from 'lucide-vue-next'
+import { Plus, Loader2, Server, RefreshCw, Package, Dna, X } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
+import { useGeneStore } from '@/stores/gene'
+import type { TemplateItem } from '@/stores/gene'
 
 interface InstanceInfo {
   id: string
@@ -38,9 +40,28 @@ function getRoleLabel(role: string | null): string {
 
 const router = useRouter()
 const { t, locale } = useI18n()
+const geneStore = useGeneStore()
 const loading = ref(true)
 const instances = ref<InstanceInfo[]>([])
 const error = ref('')
+
+const templateSelectorOpen = ref(false)
+const templateLoading = ref(false)
+
+async function openTemplateSelector() {
+  templateSelectorOpen.value = true
+  templateLoading.value = true
+  try {
+    await geneStore.fetchTemplates({ page_size: 50 })
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+function selectTemplate(tpl: TemplateItem) {
+  templateSelectorOpen.value = false
+  router.push(`/instances/create?template_id=${tpl.id}`)
+}
 
 const statusConfig: Record<string, { color: string; bg: string }> = {
   running: { color: 'text-emerald-400', bg: 'bg-emerald-400' },
@@ -122,6 +143,53 @@ onMounted(fetchInstances)
           <Plus class="w-4 h-4" />
           {{ t('instanceList.createInstance') }}
         </button>
+        <button
+          class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          @click="openTemplateSelector"
+        >
+          <Package class="w-4 h-4" />
+          {{ t('instanceList.createFromTemplate') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Template selector modal -->
+    <div v-if="templateSelectorOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="templateSelectorOpen = false">
+      <div class="w-[480px] max-h-[60vh] bg-card border border-border rounded-xl shadow-lg flex flex-col">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 class="font-semibold text-sm">{{ t('template.chooseTemplate') }}</h3>
+          <button class="p-1 rounded hover:bg-muted transition-colors" @click="templateSelectorOpen = false">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+          <div v-if="templateLoading" class="flex justify-center py-8">
+            <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+          <template v-else-if="geneStore.templates.length > 0">
+            <button
+              v-for="tpl in geneStore.templates"
+              :key="tpl.id"
+              class="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
+              @click="selectTemplate(tpl)"
+            >
+              <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Package class="w-4 h-4 text-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium">{{ tpl.name }}</div>
+                <div class="text-xs text-muted-foreground line-clamp-1">{{ tpl.short_description ?? '' }}</div>
+              </div>
+              <span class="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                <Dna class="w-3 h-3" />
+                {{ tpl.gene_slugs?.length ?? 0 }}
+              </span>
+            </button>
+          </template>
+          <div v-else class="text-center py-8 text-muted-foreground text-sm">
+            {{ t('template.noTemplates') }}
+          </div>
+        </div>
       </div>
     </div>
 

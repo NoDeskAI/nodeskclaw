@@ -437,6 +437,7 @@ const enUS = {
     tableNamespace: "Namespace",
     tableCreatedAt: "Created At",
     tableRole: "My Role",
+    createFromTemplate: "Create from Template",
   },
   instanceMembers: {
     title: "Member Management",
@@ -574,6 +575,7 @@ const enUS = {
     descPlaceholder: "Briefly describe the purpose of this template...",
     saved: "Template saved",
     saveFailed: "Failed to save template",
+    creatingFrom: "Creating from template: {name}",
   },
   channel: {
     configTitle: "Channel Configuration",
