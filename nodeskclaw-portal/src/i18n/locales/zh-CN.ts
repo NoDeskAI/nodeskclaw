@@ -26,6 +26,7 @@ const zhCN = {
     saving: "保存中...",
     files: "文件",
     submit: "提交",
+    close: "关闭",
   },
   status: {
     running: "运行中",
@@ -441,6 +442,14 @@ const zhCN = {
     roleLabel: "角色",
     addFailed: "添加失败",
     confirmAdd: "确认添加",
+    resetPassword: "重置密码",
+    resetPasswordConfirm: "确定重置 {name} 的密码？原密码将失效。",
+    resetPasswordSuccess: "密码已重置",
+    resetPasswordResult: "{name} 的新密码：",
+    resetPasswordHint: "请将新密码告知该成员。关闭后无法再次查看。",
+    resetPasswordFailed: "重置密码失败",
+    copyPassword: "复制",
+    copied: "已复制",
   },
   orgUsage: {
     title: "资源用量",
@@ -666,6 +675,9 @@ const zhCN = {
       org_member_required: "您不是该组织的成员",
       missing_tenant_key: "当前用户没有关联飞书租户，无法使用飞书开通组织",
       slug_already_taken: "该企业标识符已被使用，请更换一个",
+      cannot_reset_own_password: "不能重置自己的密码，请到设置页修改",
+      cannot_reset_admin_password: "不能重置其他管理员的密码",
+      member_not_found: "该用户不是当前组织的成员",
     },
     workspace: {
       not_found: "工作区不存在",

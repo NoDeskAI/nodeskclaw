@@ -1,6 +1,7 @@
 """Organization management endpoints."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_org_admin, require_super_admin_dep
@@ -14,9 +15,10 @@ from app.schemas.organization import (
     OrgCreate,
     OrgInfo,
     OrgUpdate,
+    ResetPasswordResponse,
     UpdateMemberRoleRequest,
 )
-from app.services import org_service
+from app.services import auth_service, org_service
 
 router = APIRouter()
 
@@ -173,3 +175,57 @@ async def remove_member(
     """移除成员（组织管理员+）。"""
     await org_service.remove_member(org_id, membership_id, db)
     return ApiResponse(message="成员已移除")
+
+
+@router.post("/{org_id}/members/{user_id}/reset-password", response_model=ApiResponse[ResetPasswordResponse])
+async def reset_member_password(
+    org_id: str,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    _org_ctx: tuple = Depends(require_org_admin),
+):
+    """重置成员密码（组织管理员，仅限 member 角色）。"""
+    from app.models.org_membership import OrgMembership
+
+    current_user = _org_ctx[0]
+
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error_code": 40326,
+                "message_key": "errors.org.cannot_reset_own_password",
+                "message": "不能重置自己的密码，请到设置页修改",
+            },
+        )
+
+    result = await db.execute(
+        select(OrgMembership).where(
+            OrgMembership.user_id == user_id,
+            OrgMembership.org_id == org_id,
+            OrgMembership.deleted_at.is_(None),
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error_code": 40402,
+                "message_key": "errors.org.member_not_found",
+                "message": "该用户不是当前组织的成员",
+            },
+        )
+
+    if membership.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error_code": 40327,
+                "message_key": "errors.org.cannot_reset_admin_password",
+                "message": "不能重置其他管理员的密码",
+            },
+        )
+
+    plain = await auth_service.admin_reset_password(user_id, db)
+    return ApiResponse(data=ResetPasswordResponse(password=plain))

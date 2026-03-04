@@ -12,13 +12,19 @@ import {
   Shield,
   Trash2,
   X,
+  KeyRound,
+  Copy,
+  Check,
 } from 'lucide-vue-next'
 import api from '@/services/api'
+import { resolveApiErrorMessage } from '@/i18n/error'
+import { useToast } from '@/composables/useToast'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
 const { t } = useI18n()
+const toast = useToast()
 
 const loading = ref(true)
 const showAddDialog = ref(false)
@@ -126,6 +132,38 @@ async function handleRemove(member: MemberInfo) {
     actionLoading.value = null
   }
 }
+
+const showResetResultDialog = ref(false)
+const resetResultName = ref('')
+const resetResultPassword = ref('')
+const resetCopied = ref(false)
+
+async function handleResetPassword(member: MemberInfo) {
+  const name = member.user_name || member.user_email || member.user_id
+  if (!confirm(t('orgMembers.resetPasswordConfirm', { name }))) return
+  actionLoading.value = member.id
+  try {
+    const res = await api.post(`/orgs/${orgStore.currentOrgId}/members/${member.user_id}/reset-password`)
+    resetResultName.value = name
+    resetResultPassword.value = res.data.data.password
+    resetCopied.value = false
+    showResetResultDialog.value = true
+  } catch (e) {
+    toast.error(resolveApiErrorMessage(e, t('orgMembers.resetPasswordFailed')))
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+async function copyPassword() {
+  try {
+    await navigator.clipboard.writeText(resetResultPassword.value)
+    resetCopied.value = true
+    setTimeout(() => { resetCopied.value = false }, 2000)
+  } catch {
+    toast.error('Copy failed')
+  }
+}
 </script>
 
 <template>
@@ -216,6 +254,15 @@ async function handleRemove(member: MemberInfo) {
               :disabled="actionLoading === member.id"
               @update:model-value="(v: string | null) => handleRoleChange(member, v!)"
             />
+            <button
+              v-if="member.role !== 'admin'"
+              class="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              :disabled="actionLoading === member.id"
+              :title="t('orgMembers.resetPassword')"
+              @click="handleResetPassword(member)"
+            >
+              <KeyRound class="w-4 h-4" />
+            </button>
             <button
               class="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
               :disabled="actionLoading === member.id"
@@ -318,6 +365,51 @@ async function handleRemove(member: MemberInfo) {
             >
               <Loader2 v-if="addLoading" class="w-4 h-4 animate-spin" />
               {{ t('orgMembers.confirmAdd') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Reset Password Result Dialog -->
+    <Teleport to="body">
+      <div
+        v-if="showResetResultDialog"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div class="bg-card rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-base">{{ t('orgMembers.resetPasswordSuccess') }}</h3>
+            <button class="text-muted-foreground hover:text-foreground" @click="showResetResultDialog = false">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          <p class="text-sm text-muted-foreground">
+            {{ t('orgMembers.resetPasswordResult', { name: resetResultName }) }}
+          </p>
+
+          <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-background font-mono text-sm">
+            <span class="flex-1 select-all">{{ resetResultPassword }}</span>
+            <button
+              class="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              @click="copyPassword"
+            >
+              <Check v-if="resetCopied" class="w-4 h-4 text-green-500" />
+              <Copy v-else class="w-4 h-4" />
+            </button>
+          </div>
+
+          <p class="text-xs text-muted-foreground">
+            {{ t('orgMembers.resetPasswordHint') }}
+          </p>
+
+          <div class="flex justify-end">
+            <button
+              class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
+              @click="showResetResultDialog = false"
+            >
+              {{ t('common.close') }}
             </button>
           </div>
         </div>

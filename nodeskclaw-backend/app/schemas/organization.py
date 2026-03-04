@@ -70,3 +70,7 @@ class OAuthOrgSetupRequest(BaseModel):
 
 
 FeishuOrgSetupRequest = OAuthOrgSetupRequest
+
+
+class ResetPasswordResponse(BaseModel):
+    password: str

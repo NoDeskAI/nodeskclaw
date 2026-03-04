@@ -494,3 +494,35 @@ async def change_password(
     user.password_hash = _hash_password(new_password)
     await db.commit()
     logger.info("密码修改: user_id=%s", user_id)
+
+
+async def admin_reset_password(user_id: str, db: AsyncSession) -> str:
+    """管理员重置用户密码，返回随机明文密码。"""
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": 40401,
+                "message_key": "errors.auth.user_not_found_or_disabled",
+                "message": "用户不存在",
+            },
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": 40325,
+                "message_key": "errors.auth.account_disabled",
+                "message": "该用户已被禁用",
+            },
+        )
+
+    plain = secrets.token_urlsafe(9)
+    user.password_hash = _hash_password(plain)
+    await db.commit()
+    logger.info("管理员重置密码: user_id=%s", user_id)
+    return plain

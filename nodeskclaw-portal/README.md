@@ -60,7 +60,7 @@ vue-tsc -b       # 类型检查
 | `/instances` | 实例列表 | 所有 Agent 实例 |
 | `/instances/:id` | 实例详情 | 概览/基因/进化/MCP/Channel/设置/文件/成员 |
 | `/settings` | 个人设置 | 用户信息、密码管理 |
-| `/members` | 组织成员 | 成员管理 |
+| `/members` | 组织成员 | 成员管理（含管理员重置成员密码） |
 | `/usage` | 用量 | 组织用量统计 |
 | `/gene-market` | 基因市场 | 浏览安装基因 |
 | `/enterprise-files` | 企业空间 | Agent 文件浏览（仅 org admin） |

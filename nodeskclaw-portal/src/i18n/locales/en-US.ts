@@ -26,6 +26,7 @@ const enUS = {
     saving: "Saving...",
     files: "Files",
     submit: "Submit",
+    close: "Close",
   },
   status: {
     running: "Running",
@@ -441,6 +442,14 @@ const enUS = {
     roleLabel: "Role",
     addFailed: "Failed to add member",
     confirmAdd: "Confirm Add",
+    resetPassword: "Reset Password",
+    resetPasswordConfirm: "Reset password for {name}? The current password will be invalidated.",
+    resetPasswordSuccess: "Password Reset",
+    resetPasswordResult: "New password for {name}:",
+    resetPasswordHint: "Please share the new password with this member. It cannot be viewed again after closing.",
+    resetPasswordFailed: "Failed to reset password",
+    copyPassword: "Copy",
+    copied: "Copied",
   },
   orgUsage: {
     title: "Resource Usage",
@@ -666,6 +675,9 @@ const enUS = {
       org_member_required: "You are not a member of this organization",
       missing_tenant_key: "No Feishu tenant associated with your account",
       slug_already_taken: "This organization slug is already taken, please choose another",
+      cannot_reset_own_password: "Cannot reset your own password. Please change it in Settings.",
+      cannot_reset_admin_password: "Cannot reset another admin's password",
+      member_not_found: "This user is not a member of the current organization",
     },
     workspace: {
       not_found: "Workspace does not exist",
