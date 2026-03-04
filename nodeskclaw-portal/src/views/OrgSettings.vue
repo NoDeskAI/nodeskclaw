@@ -115,10 +115,10 @@ async function addRequiredGene(gene: GeneSearchResult) {
 
 async function removeRequiredGene(rg: RequiredGeneItem) {
   if (!orgId.value) return
-  const ok = await confirm(
-    t('orgSettings.removeConfirmTitle'),
-    t('orgSettings.removeConfirmBody', { name: rg.gene_name }),
-  )
+  const ok = await confirm({
+    title: t('orgSettings.removeConfirmTitle'),
+    description: t('orgSettings.removeConfirmBody', { name: rg.gene_name }),
+  })
   if (!ok) return
 
   actionLoading.value = rg.id

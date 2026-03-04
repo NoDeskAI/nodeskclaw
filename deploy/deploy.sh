@@ -12,6 +12,7 @@
 #   all       以上全部
 #
 # 选项:
+#   --context CTX   指定 kubectl 上下文（必填，防止误操作到错误集群）
 #   --build-only    仅构建+推送镜像，不更新 K8s
 #   --deploy-only   仅更新 K8s (需要 --tag 指定镜像标签)
 #   --tag TAG       指定镜像标签 (默认自动生成)
@@ -80,9 +81,10 @@ BUILD_ONLY=false
 DEPLOY_ONLY=false
 CUSTOM_TAG=""
 NO_CACHE=""
+KUBE_CONTEXT=""
 
 usage() {
-  echo "用法: $0 <backend|admin|portal|all> [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
+  echo "用法: $0 <backend|admin|portal|all> --context <kubectl-context> [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
   exit 1
 }
 
@@ -91,6 +93,7 @@ usage() {
 TARGET="$1"; shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --context)     KUBE_CONTEXT="$2"; shift ;;
     --build-only)  BUILD_ONLY=true ;;
     --deploy-only) DEPLOY_ONLY=true ;;
     --tag)         CUSTOM_TAG="$2"; shift ;;
@@ -103,6 +106,20 @@ done
 if [[ "$BUILD_ONLY" == true && "$DEPLOY_ONLY" == true ]]; then
   err "--build-only 和 --deploy-only 不能同时使用"
   exit 1
+fi
+
+if [[ "$BUILD_ONLY" != true && -z "$KUBE_CONTEXT" ]]; then
+  err "需要 K8s 操作但未指定 --context，请显式指定目标集群上下文"
+  echo ""
+  echo "可用上下文:"
+  kubectl config get-contexts -o name 2>/dev/null | while read -r ctx; do echo "  $ctx"; done
+  echo ""
+  usage
+fi
+
+KUBECTL="kubectl"
+if [[ -n "$KUBE_CONTEXT" ]]; then
+  KUBECTL="kubectl --context $KUBE_CONTEXT"
 fi
 
 # ── 确定构建目标列表 ─────────────────────────────────────
@@ -125,6 +142,7 @@ fi
 
 log "镜像标签: $TAG"
 log "目标组件: ${TARGETS[*]}"
+[[ -n "$KUBE_CONTEXT" ]] && log "K8s 上下文: $KUBE_CONTEXT"
 echo ""
 
 # ── 构建 & 推送 ──────────────────────────────────────────
@@ -166,21 +184,21 @@ deploy_to_k8s() {
   local deployment; deployment="$(get_k8s_deployment "$component")"
   local container="$image_name"
 
-  log "[$component] 更新 Deployment: $deployment -> $image"
+  log "[$component] 更新 Deployment: $deployment -> $image (context: $KUBE_CONTEXT)"
 
-  if ! kubectl -n "$NAMESPACE" get deployment "$deployment" &>/dev/null; then
+  if ! $KUBECTL -n "$NAMESPACE" get deployment "$deployment" &>/dev/null; then
     warn "[$component] Deployment 不存在，执行首次部署..."
-    kubectl apply -f "$SCRIPT_DIR/k8s/${component}.yaml"
+    $KUBECTL apply -f "$SCRIPT_DIR/k8s/${component}.yaml"
   fi
 
-  kubectl -n "$NAMESPACE" set image "deployment/$deployment" "$container=$image"
+  $KUBECTL -n "$NAMESPACE" set image "deployment/$deployment" "$container=$image"
 
   log "[$component] 等待滚动更新完成..."
-  if kubectl -n "$NAMESPACE" rollout status "deployment/$deployment" --timeout=180s; then
+  if $KUBECTL -n "$NAMESPACE" rollout status "deployment/$deployment" --timeout=180s; then
     ok "[$component] 部署完成"
   else
     err "[$component] 部署超时，请检查 Pod 状态"
-    kubectl -n "$NAMESPACE" get pods -l "app=$deployment"
+    $KUBECTL -n "$NAMESPACE" get pods -l "app=$deployment"
     return 1
   fi
 }
@@ -211,6 +229,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 log "部署摘要"
 echo "  标签: $TAG"
 echo "  仓库: $REGISTRY"
+[[ -n "$KUBE_CONTEXT" ]] && echo "  集群: $KUBE_CONTEXT"
 for t in "${TARGETS[@]}"; do
   local_failed=false
   for f in "${FAILED[@]+"${FAILED[@]}"}"; do
