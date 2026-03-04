@@ -90,6 +90,10 @@ function formatStatus(status: string) {
 }
 
 async function handleDelete(inst: InstanceInfo) {
+  if (inst.workspace_id) {
+    toast.error(t('instancesPage.cannotDeleteInWorkspace', { workspace: inst.workspace_name ?? '' }))
+    return
+  }
   if (!confirm(t('instancesPage.deleteConfirm', { name: inst.name }))) return
   try {
     await instanceStore.deleteInstance(inst.id)

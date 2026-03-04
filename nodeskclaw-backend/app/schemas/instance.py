@@ -26,6 +26,8 @@ class InstanceInfo(BaseModel):
     created_at: datetime
     updated_at: datetime
     my_role: str | None = None
+    workspace_id: str | None = None
+    workspace_name: str | None = None
 
     model_config = {"from_attributes": True}
 

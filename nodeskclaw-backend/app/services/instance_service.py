@@ -9,9 +9,11 @@ from typing import Coroutine
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.cluster import Cluster
+from app.models.workspace import Workspace
 from app.models.deploy_record import DeployAction, DeployRecord, DeployStatus
 from app.models.instance import Instance, InstanceStatus
 from app.schemas.deploy import DeployRecordInfo
@@ -85,13 +87,24 @@ async def list_instances(
     cluster_id: str | None = None,
     org_id: str | None = None,
 ) -> list[InstanceInfo]:
-    query = select(Instance).where(Instance.deleted_at.is_(None)).order_by(Instance.created_at.desc())
+    query = (
+        select(Instance)
+        .options(selectinload(Instance.workspace))
+        .where(Instance.deleted_at.is_(None))
+        .order_by(Instance.created_at.desc())
+    )
     if cluster_id:
         query = query.where(Instance.cluster_id == cluster_id)
     if org_id:
         query = query.where(Instance.org_id == org_id)
     result = await db.execute(query)
-    return [InstanceInfo.model_validate(i) for i in result.scalars().all()]
+    items: list[InstanceInfo] = []
+    for i in result.scalars().all():
+        info = InstanceInfo.model_validate(i)
+        if i.workspace and i.workspace.deleted_at is None:
+            info.workspace_name = i.workspace.name
+        items.append(info)
+    return items
 
 
 async def get_instance(instance_id: str, db: AsyncSession) -> Instance:
@@ -108,6 +121,16 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
     """Get instance info enriched with live K8s pod data."""
     instance = await get_instance(instance_id, db)
 
+    ws_name: str | None = None
+    if instance.workspace_id:
+        ws_row = await db.execute(
+            select(Workspace.name).where(
+                Workspace.id == instance.workspace_id,
+                Workspace.deleted_at.is_(None),
+            )
+        )
+        ws_name = ws_row.scalar_one_or_none()
+
     # Get cluster for k8s connection
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
@@ -122,6 +145,8 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
         mem_limit=instance.mem_limit,
         env_vars=json.loads(instance.env_vars) if instance.env_vars else {},
     )
+    if ws_name:
+        detail.workspace_name = ws_name
 
     if cluster and cluster.kubeconfig_encrypted:
         try:
@@ -171,6 +196,21 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
 async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool = True):
     """逻辑删除实例：标记 deleted_at，从 K8s 删除整个命名空间（级联删除所有资源）。"""
     instance = await get_instance(instance_id, db)
+
+    if instance.workspace_id:
+        ws_row = await db.execute(
+            select(Workspace.name).where(
+                Workspace.id == instance.workspace_id,
+                Workspace.deleted_at.is_(None),
+            )
+        )
+        ws_name = ws_row.scalar_one_or_none()
+        if ws_name:
+            raise ConflictError(
+                message=f"实例「{instance.name}」仍在工作区「{ws_name}」中，请先将其从工作区移除",
+                message_key="errors.instance.still_in_workspace",
+                message_params={"workspace_name": ws_name},
+            )
 
     if instance.workspace_id:
         from app.services.sse_listener import sse_listener_manager

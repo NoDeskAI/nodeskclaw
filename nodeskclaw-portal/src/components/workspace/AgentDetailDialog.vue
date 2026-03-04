@@ -40,6 +40,8 @@ interface InstanceDetail {
   env_vars: Record<string, string> | null
   created_at: string
   my_role: string | null
+  workspace_id: string | null
+  workspace_name: string | null
   pods: { name: string; status: string; ready: boolean; restart_count: number }[]
 }
 
@@ -507,7 +509,7 @@ onUnmounted(stopPolling)
               {{ restarting ? t('agentDetailDialog.restarting') : t('agentDetailDialog.restart') }}
             </button>
             <button
-              v-if="(ROLE_LEVEL[instance.my_role ?? ''] ?? 0) >= ROLE_LEVEL.admin"
+              v-if="(ROLE_LEVEL[instance.my_role ?? ''] ?? 0) >= ROLE_LEVEL.admin && !instance.workspace_id"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="deleting"
               @click="showDeleteConfirm = true"

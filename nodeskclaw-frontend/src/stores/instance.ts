@@ -21,6 +21,8 @@ export interface InstanceInfo {
   created_by: string
   created_at: string
   updated_at: string
+  workspace_id: string | null
+  workspace_name: string | null
 }
 
 export interface PodInfo {

@@ -34,6 +34,8 @@ interface InstanceDetail {
   mem_limit: string
   env_vars: Record<string, string> | null
   created_at: string
+  workspace_id: string | null
+  workspace_name: string | null
   pods: { name: string; status: string; ready: boolean; restart_count: number }[]
 }
 
@@ -512,7 +514,11 @@ async function handleDelete() {
               </div>
               <h3 class="text-base font-semibold">删除实例</h3>
             </div>
-            <div class="text-sm text-muted-foreground space-y-2">
+            <div v-if="instance?.workspace_id" class="text-sm text-muted-foreground space-y-2">
+              <p>该实例当前已加入工作区「<span class="text-foreground font-medium">{{ instance.workspace_name }}</span>」，无法直接删除。</p>
+              <p class="text-xs">请先在工作区中将此 Agent 移除，然后再执行删除操作。</p>
+            </div>
+            <div v-else class="text-sm text-muted-foreground space-y-2">
               <p>确定删除实例「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>
               <ul class="list-disc list-inside space-y-1 text-xs">
                 <li>实例及其 K8s 资源将被永久删除</li>
@@ -525,9 +531,10 @@ async function handleDelete() {
                 class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="showDeleteDialog = false"
               >
-                取消
+                {{ instance?.workspace_id ? '知道了' : '取消' }}
               </button>
               <button
+                v-if="!instance?.workspace_id"
                 class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
                 @click="handleDelete"
               >

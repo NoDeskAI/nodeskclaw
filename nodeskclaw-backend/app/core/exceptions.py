@@ -50,8 +50,16 @@ class BadRequestError(AppException):
 
 
 class ConflictError(AppException):
-    def __init__(self, message: str = "资源冲突", message_key: str = "errors.common.conflict"):
-        super().__init__(code=40900, message=message, status_code=409, message_key=message_key)
+    def __init__(
+        self,
+        message: str = "资源冲突",
+        message_key: str = "errors.common.conflict",
+        message_params: dict[str, str] | None = None,
+    ):
+        super().__init__(
+            code=40900, message=message, status_code=409,
+            message_key=message_key, message_params=message_params,
+        )
 
 
 class K8sError(AppException):

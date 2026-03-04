@@ -82,6 +82,7 @@ const enUS = {
     deleteConfirm: "Delete instance \"{name}\"? K8s resources will be deleted as well.",
     deleteSuccess: "Instance deleted",
     deleteFailed: "Failed to delete instance",
+    cannotDeleteInWorkspace: "This instance is in workspace \"{workspace}\". Please remove it from the workspace first.",
     status_running: "Running",
     status_learning: "Learning",
     status_deploying: "Deploying",

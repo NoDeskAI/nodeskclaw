@@ -82,6 +82,7 @@ const zhCN = {
     deleteConfirm: "确定删除实例 \"{name}\"？K8s 资源将同步删除。",
     deleteSuccess: "实例已删除",
     deleteFailed: "删除失败",
+    cannotDeleteInWorkspace: "该实例已加入工作区「{workspace}」，请先将其从工作区移除后再删除",
     status_running: "运行中",
     status_learning: "学习中",
     status_deploying: "部署中",
