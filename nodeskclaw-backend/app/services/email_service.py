@@ -1,17 +1,17 @@
-"""Email sending service using organization-level SMTP configuration."""
+"""Email sending service — 通过 EmailTransport 抽象解耦 SMTP 配置来源。
+
+CE: 全局 SMTP（GlobalSmtpTransport）
+EE: 组织级 SMTP（OrgSmtpTransport）
+"""
 
 import logging
 from email.message import EmailMessage
 
 import aiosmtplib
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decrypt_sensitive
-from app.models.base import not_deleted
-from app.models.org_membership import OrgMembership
-from app.models.org_smtp_config import OrgSmtpConfig
-from app.models.user import User
+from app.services.email.factory import get_email_transport
+from app.services.email.transport import SmtpConfig
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +64,8 @@ async def _send_email(
     to_email: str,
     subject: str,
     html_body: str,
-    smtp_config: OrgSmtpConfig,
+    smtp_config: SmtpConfig,
 ) -> None:
-    password = decrypt_sensitive(smtp_config.smtp_password_encrypted)
-
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = (
@@ -84,58 +82,28 @@ async def _send_email(
         hostname=smtp_config.smtp_host,
         port=smtp_config.smtp_port,
         username=smtp_config.smtp_username,
-        password=password,
+        password=smtp_config.smtp_password,
         start_tls=smtp_config.use_tls,
     )
     logger.info("Email sent to %s via %s:%s", to_email, smtp_config.smtp_host, smtp_config.smtp_port)
 
 
 async def send_verification_email(
-    to_email: str, code: str, smtp_config: OrgSmtpConfig
+    to_email: str, code: str, smtp_config: SmtpConfig,
 ) -> None:
     html = VERIFICATION_EMAIL_HTML.replace("{code}", code)
     await _send_email(to_email, VERIFICATION_EMAIL_SUBJECT, html, smtp_config)
 
 
 async def send_test_email(
-    to_email: str, smtp_config: OrgSmtpConfig
+    to_email: str, smtp_config: SmtpConfig,
 ) -> None:
     await _send_email(to_email, TEST_EMAIL_SUBJECT, TEST_EMAIL_HTML, smtp_config)
 
 
 async def get_smtp_config_for_email(
-    db: AsyncSession, email: str
-) -> OrgSmtpConfig | None:
-    """Look up user by email -> user's org memberships -> first org with SMTP configured."""
-    user_result = await db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
-    )
-    user = user_result.scalar_one_or_none()
-    if not user:
-        return None
-
-    membership_result = await db.execute(
-        select(OrgMembership.org_id).where(
-            OrgMembership.user_id == user.id,
-            not_deleted(OrgMembership),
-        )
-    )
-    org_ids = [row[0] for row in membership_result.all()]
-    if not org_ids:
-        return None
-
-    if user.current_org_id and user.current_org_id in org_ids:
-        org_ids = [user.current_org_id] + [oid for oid in org_ids if oid != user.current_org_id]
-
-    for org_id in org_ids:
-        smtp_result = await db.execute(
-            select(OrgSmtpConfig).where(
-                OrgSmtpConfig.org_id == org_id,
-                not_deleted(OrgSmtpConfig),
-            )
-        )
-        cfg = smtp_result.scalar_one_or_none()
-        if cfg:
-            return cfg
-
-    return None
+    db: AsyncSession, email: str,
+) -> SmtpConfig | None:
+    """通过 EmailTransport 解析 SMTP 配置（CE: 全局 / EE: 组织级）。"""
+    transport = get_email_transport()
+    return await transport.resolve_smtp_config(db, email)

@@ -269,9 +269,20 @@ async def test_smtp_config(
             "message": "SMTP 配置不存在，请先保存配置",
         })
 
+    from app.core.security import decrypt_sensitive
+    from app.services.email.transport import SmtpConfig
     from app.services.email_service import send_test_email
+    smtp = SmtpConfig(
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_username=cfg.smtp_username,
+        smtp_password=decrypt_sensitive(cfg.smtp_password_encrypted),
+        from_email=cfg.from_email,
+        from_name=cfg.from_name,
+        use_tls=cfg.use_tls,
+    )
     try:
-        await send_test_email(body.recipient_email, cfg)
+        await send_test_email(body.recipient_email, smtp)
     except Exception as exc:
         logger.warning("SMTP test failed for org %s: %s", org_id, exc)
         raise HTTPException(400, detail={
