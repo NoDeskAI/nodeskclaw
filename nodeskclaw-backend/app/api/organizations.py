@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_org_admin, require_super_admin_dep
+from app.core.deps import get_db, require_feature, require_org_admin, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
@@ -25,7 +25,8 @@ router = APIRouter()
 
 # ── 组织 CRUD（超管） ────────────────────────────────────
 
-@router.get("", response_model=ApiResponse[list[OrgInfo]])
+@router.get("", response_model=ApiResponse[list[OrgInfo]],
+            dependencies=[Depends(require_feature("platform_admin"))])
 async def list_organizations(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_super_admin_dep),
@@ -35,7 +36,8 @@ async def list_organizations(
     return ApiResponse(data=data)
 
 
-@router.post("", response_model=ApiResponse[OrgInfo])
+@router.post("", response_model=ApiResponse[OrgInfo],
+             dependencies=[Depends(require_feature("platform_admin"))])
 async def create_organization(
     body: OrgCreate,
     db: AsyncSession = Depends(get_db),
@@ -46,7 +48,8 @@ async def create_organization(
     return ApiResponse(data=data)
 
 
-@router.get("/my", response_model=ApiResponse[list[OrgInfo]])
+@router.get("/my", response_model=ApiResponse[list[OrgInfo]],
+            dependencies=[Depends(require_feature("multi_org"))])
 async def list_my_organizations(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -56,7 +59,8 @@ async def list_my_organizations(
     return ApiResponse(data=data)
 
 
-@router.post("/switch/{org_id}", response_model=ApiResponse[OrgInfo])
+@router.post("/switch/{org_id}", response_model=ApiResponse[OrgInfo],
+             dependencies=[Depends(require_feature("multi_org"))])
 async def switch_organization(
     org_id: str,
     db: AsyncSession = Depends(get_db),
@@ -67,7 +71,8 @@ async def switch_organization(
     return ApiResponse(data=data)
 
 
-@router.get("/{org_id}", response_model=ApiResponse[OrgInfo])
+@router.get("/{org_id}", response_model=ApiResponse[OrgInfo],
+            dependencies=[Depends(require_feature("platform_admin"))])
 async def get_organization(
     org_id: str,
     db: AsyncSession = Depends(get_db),
@@ -78,7 +83,8 @@ async def get_organization(
     return ApiResponse(data=OrgInfo.model_validate(org))
 
 
-@router.put("/{org_id}", response_model=ApiResponse[OrgInfo])
+@router.put("/{org_id}", response_model=ApiResponse[OrgInfo],
+            dependencies=[Depends(require_feature("platform_admin"))])
 async def update_organization(
     org_id: str,
     body: OrgUpdate,
@@ -90,7 +96,8 @@ async def update_organization(
     return ApiResponse(data=data)
 
 
-@router.delete("/{org_id}", response_model=ApiResponse)
+@router.delete("/{org_id}", response_model=ApiResponse,
+               dependencies=[Depends(require_feature("platform_admin"))])
 async def delete_organization(
     org_id: str,
     db: AsyncSession = Depends(get_db),
@@ -129,7 +136,8 @@ async def feishu_org_setup(
 
 # ── 成员管理 ─────────────────────────────────────────────
 
-@router.get("/{org_id}/members", response_model=ApiResponse[list[MemberInfo]])
+@router.get("/{org_id}/members", response_model=ApiResponse[list[MemberInfo]],
+            dependencies=[Depends(require_feature("multi_org"))])
 async def list_members(
     org_id: str,
     db: AsyncSession = Depends(get_db),
@@ -140,7 +148,8 @@ async def list_members(
     return ApiResponse(data=data)
 
 
-@router.post("/{org_id}/members", response_model=ApiResponse[MemberInfo])
+@router.post("/{org_id}/members", response_model=ApiResponse[MemberInfo],
+             dependencies=[Depends(require_feature("multi_org"))])
 async def add_member(
     org_id: str,
     body: AddMemberRequest,
@@ -152,7 +161,8 @@ async def add_member(
     return ApiResponse(data=data)
 
 
-@router.put("/{org_id}/members/{membership_id}", response_model=ApiResponse[MemberInfo])
+@router.put("/{org_id}/members/{membership_id}", response_model=ApiResponse[MemberInfo],
+            dependencies=[Depends(require_feature("multi_org"))])
 async def update_member_role(
     org_id: str,
     membership_id: str,
@@ -165,7 +175,8 @@ async def update_member_role(
     return ApiResponse(data=data)
 
 
-@router.delete("/{org_id}/members/{membership_id}", response_model=ApiResponse)
+@router.delete("/{org_id}/members/{membership_id}", response_model=ApiResponse,
+               dependencies=[Depends(require_feature("multi_org"))])
 async def remove_member(
     org_id: str,
     membership_id: str,
@@ -177,7 +188,8 @@ async def remove_member(
     return ApiResponse(message="成员已移除")
 
 
-@router.post("/{org_id}/members/{user_id}/reset-password", response_model=ApiResponse[ResetPasswordResponse])
+@router.post("/{org_id}/members/{user_id}/reset-password", response_model=ApiResponse[ResetPasswordResponse],
+             dependencies=[Depends(require_feature("multi_org"))])
 async def reset_member_password(
     org_id: str,
     user_id: str,

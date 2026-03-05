@@ -2,9 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.admin_members import router as admin_members_router
 from app.api.auth import router as auth_router
-from app.api.billing import router as billing_router
 from app.api.genes import router as gene_router
 from app.api.clusters import router as cluster_router
 from app.api.deploy import router as deploy_router
@@ -36,7 +34,6 @@ from app.api.portal.instance_members import router as portal_instance_members_ro
 from app.api.portal.deploy import router as portal_deploy_router
 from app.api.portal.channel_configs import router as portal_channel_config_router
 from app.api.portal.mcp import router as portal_mcp_router
-from app.api.portal.enterprise_files import router as portal_enterprise_files_router
 from app.api.portal.instance_files import router as portal_instance_files_router
 
 # ── Portal 公共 API（/api/v1）──────────────────────────────
@@ -64,7 +61,6 @@ async def system_info():
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
 api_router.include_router(org_router, prefix="/orgs", tags=["组织"])
 api_router.include_router(org_settings_router, prefix="/orgs", tags=["组织设置"])
-api_router.include_router(billing_router, prefix="/billing", tags=["计费"])
 api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
 api_router.include_router(portal_deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
@@ -72,7 +68,6 @@ api_router.include_router(portal_instance_router, prefix="/instances", tags=["�
 api_router.include_router(portal_instance_members_router, prefix="/instances", tags=["实例成员"])
 api_router.include_router(portal_channel_config_router, prefix="/instances", tags=["Channel 配置"])
 api_router.include_router(portal_mcp_router, prefix="/instances", tags=["MCP"])
-api_router.include_router(portal_enterprise_files_router, prefix="/enterprise-files", tags=["企业空间"])
 api_router.include_router(portal_instance_files_router, prefix="/instances", tags=["实例文件"])
 api_router.include_router(llm_keys_router, tags=["LLM Key 管理"])
 api_router.include_router(registry_router, prefix="/registry", tags=["镜像仓库"])
@@ -135,8 +130,3 @@ admin_router.include_router(llm_keys_router,
 admin_router.include_router(registry_router, prefix="/registry",
     tags=["Admin - 镜像仓库"],
     dependencies=[Depends(require_org_role("admin"))])
-admin_router.include_router(billing_router, prefix="/billing",
-    tags=["Admin - 计费"],
-    dependencies=[Depends(require_org_role("admin"))])
-admin_router.include_router(admin_members_router, prefix="/members",
-    tags=["Admin - 成员管理"])

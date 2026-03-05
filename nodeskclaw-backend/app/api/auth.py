@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_db, require_super_admin_dep
+from app.core.deps import get_db, require_feature, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
@@ -139,7 +139,8 @@ async def logout(current_user: User = Depends(get_current_user)):
     return ApiResponse(message="已登出")
 
 
-@router.get("/users", response_model=ApiResponse[list[UserInfo]])
+@router.get("/users", response_model=ApiResponse[list[UserInfo]],
+             dependencies=[Depends(require_feature("platform_admin"))])
 async def list_users(
     q: str | None = Query(None, description="按名称/邮箱/手机号模糊搜索"),
     db: AsyncSession = Depends(get_db),
@@ -164,7 +165,8 @@ async def list_users(
 
 # ── 运维人员管理 ─────────────────────────────────────────
 
-@router.get("/staff", response_model=ApiResponse[list[UserInfo]])
+@router.get("/staff", response_model=ApiResponse[list[UserInfo]],
+             dependencies=[Depends(require_feature("platform_admin"))])
 async def list_staff(
     q: str | None = Query(None, description="按名称/邮箱模糊搜索"),
     db: AsyncSession = Depends(get_db),
@@ -186,7 +188,8 @@ async def list_staff(
     return ApiResponse(data=staff)
 
 
-@router.put("/staff/{user_id}", response_model=ApiResponse[UserInfo])
+@router.put("/staff/{user_id}", response_model=ApiResponse[UserInfo],
+             dependencies=[Depends(require_feature("platform_admin"))])
 async def update_staff(
     user_id: str,
     is_super_admin: bool | None = Query(None),

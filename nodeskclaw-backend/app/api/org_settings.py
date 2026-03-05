@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_org_admin
+from app.core.deps import get_db, require_feature, require_org_admin
 from app.core.security import decrypt_sensitive, encrypt_sensitive
 from app.models.base import not_deleted
 from app.models.gene import Gene
@@ -156,6 +156,7 @@ def _smtp_to_response(cfg: OrgSmtpConfig) -> SmtpConfigResponse:
 @router.get(
     "/{org_id}/smtp-config",
     response_model=ApiResponse[SmtpConfigResponse | None],
+    dependencies=[Depends(require_feature("org_smtp_config"))],
 )
 async def get_smtp_config(
     org_id: str,
@@ -175,6 +176,7 @@ async def get_smtp_config(
 @router.put(
     "/{org_id}/smtp-config",
     response_model=ApiResponse[SmtpConfigResponse],
+    dependencies=[Depends(require_feature("org_smtp_config"))],
 )
 async def upsert_smtp_config(
     org_id: str,
@@ -221,6 +223,7 @@ async def upsert_smtp_config(
 @router.delete(
     "/{org_id}/smtp-config",
     response_model=ApiResponse,
+    dependencies=[Depends(require_feature("org_smtp_config"))],
 )
 async def delete_smtp_config(
     org_id: str,
@@ -248,6 +251,7 @@ async def delete_smtp_config(
 @router.post(
     "/{org_id}/smtp-config/test",
     response_model=ApiResponse,
+    dependencies=[Depends(require_feature("org_smtp_config"))],
 )
 async def test_smtp_config(
     org_id: str,
