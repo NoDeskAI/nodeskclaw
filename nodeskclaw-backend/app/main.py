@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
@@ -1343,6 +1344,9 @@ app.include_router(webhook_router)
 from app.core.feature_gate import feature_gate  # noqa: E402
 
 if feature_gate.is_ee:
+    _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
     try:
         from ee.backend.router import ee_api_router, ee_admin_router
         app.include_router(ee_api_router, prefix="/api/v1")
