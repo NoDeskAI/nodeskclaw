@@ -27,14 +27,13 @@ from app.schemas.deploy import DeployProgress, DeployRequest, PrecheckItem, Prec
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.event_bus import event_bus
 from app.services.k8s.k8s_client import K8sClient
+from app.services.deploy.factory import get_deploy_adapter
 from app.services.k8s.resource_builder import (
     build_configmap,
     build_deployment,
-    build_external_name_service,
     build_ingress,
     build_labels,
     build_network_policy,
-    build_proxy_ingress,
     build_pvc,
     build_resource_quota,
     build_service,
@@ -284,27 +283,13 @@ async def deploy_instance(
     同步阶段：创建 Instance + DeployRecord，立即返回 record.id。
     不执行任何 K8s 操作，由调用方用 asyncio.create_task 启动后台管道。
     """
-    # 组织配额检查 + 专属集群路由
-    effective_cluster_id = req.cluster_id
-    org = None
-    if org_id:
-        from app.models.organization import Organization
-        from app.services.billing_service import check_deploy_quota
-        org_result = await db.execute(
-            select(Organization).where(Organization.id == org_id, Organization.deleted_at.is_(None))
-        )
-        org = org_result.scalar_one_or_none()
-        if org:
-            await check_deploy_quota(
-                org, db,
-                cpu_request=req.cpu_limit,
-                mem_request=req.mem_limit,
-                storage_size=req.storage_size,
-            )
-            # 如果组织绑定了专属集群，强制使用该集群
-            if org.cluster_id:
-                effective_cluster_id = org.cluster_id
-                logger.info("组织 %s 绑定专属集群 %s，覆盖用户选择", org.slug, org.cluster_id)
+    adapter = get_deploy_adapter()
+    effective_cluster_id, org = await adapter.resolve_cluster(
+        req.cluster_id, db, org_id,
+        cpu_limit=req.cpu_limit,
+        mem_limit=req.mem_limit,
+        storage_size=req.storage_size,
+    )
 
     # 校验集群
     result = await db.execute(
@@ -320,16 +305,16 @@ async def deploy_instance(
         slug = _re.sub(r"[^a-z0-9-]", "-", req.name.lower()).strip("-")
         slug = _re.sub(r"-{2,}", "-", slug) or "instance"
 
-    # namespace: nodeskclaw-{org_slug}-{instance_slug}，K8s 限制 63 字符
-    org_slug = org.slug if org else "default"
-    ns_prefix = f"nodeskclaw-{org_slug}-"
-    max_slug_len = min(_K8S_NAME_MAX - len(ns_prefix), _DEPLOY_NAME_MAX)
+    # namespace: adapter 决定命名格式，K8s 限制 63 字符
+    auto_ns = adapter.build_namespace(slug, org)
+    max_slug_len = min(_K8S_NAME_MAX - (len(auto_ns) - len(slug)), _DEPLOY_NAME_MAX)
     if len(slug) > max_slug_len:
         original_slug = slug
         slug = _truncate_slug_preserve_suffix(slug, max_slug_len)
+        auto_ns = adapter.build_namespace(slug, org)
         logger.info("slug 截断: %s -> %s (max_slug_len=%d)", original_slug, slug, max_slug_len)
 
-    namespace = req.namespace or f"{ns_prefix}{slug}"
+    namespace = req.namespace or auto_ns
 
     # 自动注入 OPENCLAW_GATEWAY_TOKEN（用户未提供时自动生成）
     env_vars = dict(req.env_vars) if req.env_vars else {}
@@ -525,7 +510,8 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
 
             # Step 2: 创建命名空间 + ResourceQuota
             _publish(2, steps[1])
-            ns_labels = {"nodeskclaw.io/org-id": ctx.org_id} if ctx.org_id else None
+            adapter = get_deploy_adapter()
+            ns_labels = adapter.get_namespace_labels(ctx.org_id)
             await k8s.ensure_namespace(ctx.namespace, extra_labels=ns_labels)
             rq = build_resource_quota(
                 f"{ctx.namespace}-quota", ctx.namespace,
@@ -604,41 +590,20 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     ingress_host = f"{ctx.name}-{subdomain_suffix}.{ingress_base_domain}"
                 else:
                     ingress_host = f"{ctx.name}.{ingress_base_domain}"
-                inst_tls = None if ctx.proxy_endpoint else tls_secret_name
+                inst_tls = adapter.get_tls_secret(tls_secret_name, bool(ctx.proxy_endpoint))
                 ing = build_ingress(
                     ctx.name, ctx.namespace, ingress_host, labels,
                     tls_secret_name=inst_tls,
                     ingress_class=ctx.ingress_class,
                 )
                 await k8s.create_or_skip(k8s.networking.create_namespaced_ingress, ctx.namespace, ing)
-                # 回写自动生成的域名到实例记录
                 inst_result = await db.execute(
                     select(Instance).where(Instance.id == ctx.instance_id)
                 )
                 instance = inst_result.scalar_one()
                 instance.ingress_domain = ingress_host
                 await db.commit()
-                # 网关代理：在 infra 集群创建 proxy Ingress，将流量转发到 inst 集群
-                if ctx.proxy_endpoint:
-                    try:
-                        from app.services.k8s.client_manager import GATEWAY_NS
-                        gateway_api = await k8s_manager.get_gateway_client()
-                        gateway_k8s = K8sClient(gateway_api)
-
-                        ext_svc = build_external_name_service(ctx.cluster_id, ctx.proxy_endpoint)
-                        await gateway_k8s.create_or_skip(
-                            gateway_k8s.core.create_namespaced_service, GATEWAY_NS, ext_svc,
-                        )
-
-                        proxy_ing = build_proxy_ingress(
-                            ctx.name, ingress_host, ext_svc.metadata.name,
-                        )
-                        await gateway_k8s.create_or_skip(
-                            gateway_k8s.networking.create_namespaced_ingress, GATEWAY_NS, proxy_ing,
-                        )
-                        logger.info("已在网关集群创建代理 Ingress: %s -> %s", ingress_host, ctx.proxy_endpoint)
-                    except Exception as e:
-                        logger.warning("创建网关代理 Ingress 失败（非致命）: %s", e)
+                await adapter.setup_proxy(ctx, ingress_host)
             else:
                 logger.warning("未配置 ingress_base_domain，跳过 Ingress 创建")
 
@@ -655,10 +620,9 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     if peer_inst:
                         peer_namespaces.append(peer_inst.namespace)
 
-            # 始终创建默认隔离策略（允许 Ingress + 同 NS + 同组织 peer）
             np = build_network_policy(
                 f"{ctx.name}-isolation", ctx.namespace, labels,
-                peer_namespaces, org_id=ctx.org_id,
+                peer_namespaces, org_id=adapter.get_network_policy_org_id(ctx.org_id),
             )
             try:
                 await k8s.networking.create_namespaced_network_policy(ctx.namespace, np)
@@ -835,13 +799,12 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 except Exception:
                     logger.warning("清理命名空间 %s 失败", ctx.namespace)
 
-                await _cleanup_proxy_ingress(ctx)
+                await adapter.cleanup_proxy(ctx)
 
                 record.status = DeployStatus.failed
                 record.message = f"就绪超时: {cond_msg}"[:500]
                 record.finished_at = datetime.now(timezone.utc)
 
-                # 软删除实例 + 级联软删除部署记录
                 instance.soft_delete()
                 await db.execute(
                     update(DeployRecord)
@@ -855,7 +818,6 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 logger.warning("部署超时未就绪: %s (namespace=%s) — %s", ctx.name, ctx.namespace, cond_msg)
 
         except asyncio.CancelledError:
-            # 被 cancel_deploy() 杀掉的协程，清理已由 cancel_deploy() 完成
             logger.info("部署协程被取消: %s", ctx.name)
             return
 
@@ -872,7 +834,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
             except Exception:
                 logger.warning("清理命名空间 %s 失败", ctx.namespace)
 
-            await _cleanup_proxy_ingress(ctx)
+            await adapter.cleanup_proxy(ctx)
 
             try:
                 rec_result = await db.execute(select(DeployRecord).where(DeployRecord.id == ctx.record_id))
@@ -884,7 +846,6 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 inst_result = await db.execute(select(Instance).where(Instance.id == ctx.instance_id))
                 instance = inst_result.scalar_one()
 
-                # 软删除实例 + 级联软删除部署记录
                 instance.soft_delete()
                 await db.execute(
                     update(DeployRecord)
@@ -897,19 +858,3 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
 
             cleanup_hint = "，命名空间已清理" if ns_cleaned else ""
             _publish(total, "失败", status="failed", message=f"{str(e)[:180]}{cleanup_hint}")
-
-
-async def _cleanup_proxy_ingress(ctx: _DeployContext) -> None:
-    """清理 infra 网关集群上的代理 Ingress（部署失败或实例删除时调用）。"""
-    if not ctx.proxy_endpoint:
-        return
-    try:
-        from app.services.k8s.client_manager import GATEWAY_NS
-        gateway_api = await k8s_manager.get_gateway_client()
-        gateway_k8s = K8sClient(gateway_api)
-        await gateway_k8s.networking.delete_namespaced_ingress(
-            f"proxy-{ctx.name}", GATEWAY_NS,
-        )
-        logger.info("已清理网关代理 Ingress: proxy-%s", ctx.name)
-    except Exception:
-        logger.debug("清理网关代理 Ingress proxy-%s 失败（可能不存在）", ctx.name)
