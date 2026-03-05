@@ -10,8 +10,8 @@ ARG NODE_VERSION=22
 FROM internet-cn-beijing.cr.volces.com/library/node:${NODE_VERSION}-bookworm-slim
 
 # ---------- 构建参数 ----------
-ARG OPENCLAW_VERSION=2026.2.26
-ARG IMAGE_VERSION=v2026.2.26
+ARG OPENCLAW_VERSION=2026.3.2
+ARG IMAGE_VERSION=v2026.3.2
 
 # ---------- 元数据标签 ----------
 LABEL maintainer="Xy718Labs"
