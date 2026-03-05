@@ -640,3 +640,50 @@ cryptography==44.*           # AES 加密 KubeConfig
 | `_format_memory(bytes)` | bytes → 人类可读 | `1073741824` → `"1.0Gi"` |
 | `_extract_container_state(state)` | V1ContainerState → 状态字符串 | → `"running"` / `"waiting"` |
 | `_extract_container_reason(state)` | 提取异常原因 | → `"CrashLoopBackOff"` |
+
+---
+
+## 十四、DeploymentAdapter 抽象层（CE/EE）
+
+`deploy_service.py` 在关键分叉点调用 `DeploymentAdapter` 方法，CE/EE 通过不同实现提供不同的部署行为。
+
+### 接口定义
+
+`app/services/deploy/adapter.py` 定义了以下抽象方法：
+
+| 方法 | 说明 |
+|------|------|
+| `resolve_cluster(cluster_id, db, org_id, *, cpu_limit, mem_limit, storage_size)` | 解析最终部署集群，返回 `(effective_cluster_id, org_or_none)` |
+| `build_namespace(slug, org)` | 构建 namespace 名称 |
+| `get_namespace_labels(org_id)` | 返回 namespace 额外标签 |
+| `setup_proxy(ctx, ingress_host)` | Ingress 创建后的跨集群代理设置 |
+| `cleanup_proxy(ctx)` | 清理跨集群代理资源 |
+| `get_network_policy_org_id(org_id)` | 返回 NetworkPolicy 的 org_id 参数 |
+| `get_tls_secret(tls_secret_name, has_proxy)` | 返回 Ingress TLS secret 名称 |
+
+### CE 实现：BasicK8sAdapter
+
+文件：`app/services/deploy/basic_k8s.py`
+
+- `resolve_cluster`: 直接返回 `(cluster_id, None)`，不做配额检查
+- `build_namespace`: 返回 `nodeskclaw-default-{slug}`，不含 org_slug
+- `get_namespace_labels`: 返回 `None`
+- `setup_proxy` / `cleanup_proxy`: no-op
+- `get_network_policy_org_id`: 返回 `None`，不做组织级网络隔离
+- `get_tls_secret`: 直接返回传入的 `tls_secret_name`
+
+### EE 实现：FullK8sAdapter
+
+文件：`ee/backend/services/deploy/full_k8s.py`
+
+- `resolve_cluster`: 检查组织配额（通过 QuotaChecker）+ 专属集群覆盖
+- `build_namespace`: 返回 `nodeskclaw-{org_slug}-{slug}`，多租户隔离
+- `get_namespace_labels`: 返回 `{"nodeskclaw.io/org-id": org_id}`
+- `setup_proxy`: 在网关集群创建 ExternalName Service + Proxy Ingress
+- `cleanup_proxy`: 删除网关集群上的 Proxy Ingress
+- `get_network_policy_org_id`: 返回 `org_id`，启用组织级网络隔离
+- `get_tls_secret`: 有 proxy 时返回 `None`（TLS 由网关集群处理）
+
+### Factory
+
+`app/services/deploy/factory.py` 中的 `get_deploy_adapter()` 根据 `feature_gate.is_ee` 动态选择实现类。

@@ -13,6 +13,47 @@
 
 ---
 
+## 一.5、CE/EE 版本定义
+
+NoDeskClaw 分为两个版本：
+
+### CE（Community Edition，社区版）
+
+以 Apache 2.0 协议开源，包含核心功能：
+
+- 实例一键部署与管理（单集群）
+- 集群管理与健康巡检
+- 实时日志与事件监控
+- 基因市场与基因管理
+- 赛博办公室（过道、黑板、协同）
+- Channel 配置管理
+- LLM Key 管理与 LLM Proxy
+- 用户门户（Portal）
+- 飞书 SSO 登录
+- 全局 SMTP 邮件配置
+
+### EE（Enterprise Edition，企业版）
+
+在 CE 基础上叠加企业级功能，代码位于私有 `ee/` 目录。EE 功能定义在 `features.yaml` 中：
+
+| Feature ID | 名称 | 说明 |
+|------------|------|------|
+| multi_org | 多组织管理 | 组织创建、切换、成员管理 |
+| billing | 套餐计费 | 套餐管理、配额检查、用量统计 |
+| admin_members | 管理员成员管理 | 平台多管理员角色 |
+| platform_admin | 超管页面 | Organizations / Users / Plans / OrgMembers / OrgLlmKeys |
+| enterprise_files | 企业空间 | 组织级文件浏览 |
+| org_smtp_config | 组织 SMTP | 组织级 SMTP 邮件配置 |
+| topology_audit | 拓扑审计 | 赛博办公室拓扑变更审计日志 |
+| performance_analytics | 绩效分析 | AI 员工性能快照采集与分析 |
+| llm_analytics | LLM 用量分析 | LLM 用量统计报表 |
+| multi_cluster | 多集群管理 | 多 K8s 集群部署 + 跨集群网关代理 |
+| advanced_audit | 高级审计 | 全局操作审计中间件 + 查询导出 |
+| sso_ldap | LDAP/SAML SSO | 企业级 SSO 认证集成 |
+| advanced_rbac | 高级 RBAC | 细粒度角色权限控制 |
+
+---
+
 ## 二、背景与目标
 
 ### 2.1 背景

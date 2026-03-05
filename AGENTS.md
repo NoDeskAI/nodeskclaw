@@ -18,15 +18,17 @@ NoDeskClaw 是 OpenClaw 实例可视化管理系统，通过 Web 界面管理 K8
 
 ```
 NoDeskClaw/
-├── nodeskclaw-backend/           # 后端 API 服务（Python 3.12 + FastAPI）
-├── nodeskclaw-frontend/          # 管理后台前端（Vue 3）
-├── nodeskclaw-portal/            # 用户门户前端（Vue 3 + Three.js）
-├── nodeskclaw-llm-proxy/         # LLM 代理服务（Python 3.12 + FastAPI）
-├── nodeskclaw-artifacts/         # 镜像构建 & 部署制品
-├── openclaw/                     # OpenClaw 源码副本
+├── nodeskclaw-backend/            # 后端 API 服务（Python 3.12 + FastAPI）
+├── nodeskclaw-frontend/           # 管理后台前端（Vue 3）
+├── nodeskclaw-portal/             # 用户门户前端（Vue 3 + Three.js）
+├── nodeskclaw-llm-proxy/          # LLM 代理服务（Python 3.12 + FastAPI）
+├── nodeskclaw-artifacts/          # 镜像构建 & 部署制品
+├── openclaw/                      # OpenClaw 源码副本
 ├── openclaw-channel-nodeskclaw/   # Channel 插件
-├── deploy/                       # K8s 部署配置
-└── docs/                         # 设计文档
+├── deploy/                        # K8s 部署配置
+├── docs/                          # 设计文档
+├── features.yaml                  # CE/EE Feature 定义
+└── ee/                            # Enterprise Edition 模块（私有，.gitignore 排除）
 ```
 
 ## 构建/测试命令
@@ -214,6 +216,75 @@ refactor(frontend): SSE 流 baseURL 统一走配置常量
 ### 文档同步
 
 代码和文档必须在同一次操作中同步完成。
+
+## CE/EE 架构
+
+NoDeskClaw 采用 CE（Community Edition）/ EE（Enterprise Edition）双版本架构。CE 代码在主仓库开源，EE 代码在私有 `ee/` 目录中作为 overlay 叠加。
+
+### 版本判断
+
+运行时通过 `FeatureGate`（`app/core/feature_gate.py`）自动检测：
+
+- `ee/` 目录存在 -> `edition=ee` -> EE feature 全部启用
+- `ee/` 目录不存在 -> `edition=ce` -> EE feature 全部禁用
+
+EE 功能清单定义在 `features.yaml`。
+
+### 后端机制
+
+| 机制 | 文件 | 说明 |
+|------|------|------|
+| FeatureGate | `app/core/feature_gate.py` | 运行时 edition 判断 + feature 查询 |
+| require_feature() | `app/core/deps.py` | FastAPI 依赖工厂，守卫 EE 路由 |
+| GET /system/info | `app/api/router.py` | 暴露 edition + features 给前端 |
+| EE 模块加载 | `app/main.py` | 条件导入 `ee.backend.router` |
+| Hook 事件总线 | `app/core/hooks.py` | CE emit 事件，EE 注册 handler |
+
+### 四大抽象层
+
+CE/EE 行为差异通过抽象层 + Factory 模式实现：
+
+| 抽象层 | 接口 | CE 实现 | EE 实现 | Factory |
+|--------|------|---------|---------|---------|
+| DeploymentAdapter | `app/services/deploy/adapter.py` | `basic_k8s.py` | `ee/backend/services/deploy/full_k8s.py` | `app/services/deploy/factory.py` |
+| EmailTransport | `app/services/email/transport.py` | `global_smtp.py` | `ee/backend/services/email/org_smtp.py` | `app/services/email/factory.py` |
+| OrgProvider | `app/services/org/provider.py` | `single_org.py` | `ee/backend/services/org/multi_org.py` | `app/services/org/factory.py` |
+| QuotaChecker | `app/services/quota/checker.py` | `noop.py` | `ee/backend/services/quota/plan_based.py` | `app/services/quota/factory.py` |
+
+Factory 在 EE 模式下动态导入 `ee/` 中的实现类，CE 模式下使用默认实现。
+
+### 前端机制
+
+| 机制 | 文件 | 说明 |
+|------|------|------|
+| useFeature() | `src/composables/useFeature.ts` | 响应式 feature 检查 composable |
+| useEdition() | `src/composables/useFeature.ts` | 响应式 edition 检查 |
+| systemInfo | `src/stores/auth.ts` | 启动时拉取 `/system/info` |
+| requireFeature meta | `src/router/index.ts` | 路由级 feature guard |
+
+两个前端项目（`nodeskclaw-frontend`、`nodeskclaw-portal`）均已接入。
+
+### EE 目录结构
+
+```
+ee/
+├── backend/
+│   ├── router.py              # EE 路由注册入口
+│   ├── api/                   # 纯 EE 路由（billing、admin_members 等）
+│   ├── hooks/                 # EE Hook handler（topology_audit 等）
+│   └── services/              # EE 抽象层实现
+│       ├── deploy/full_k8s.py
+│       ├── email/org_smtp.py
+│       ├── org/multi_org.py
+│       └── quota/plan_based.py
+```
+
+### 开发规范
+
+- CE 代码不应直接 `import ee.*`，通过 Factory 间接加载
+- 新增 EE 功能：代码放 `ee/`，在 `features.yaml` 中注册 feature id
+- 混合逻辑解耦：CE 通过 `hooks.emit()` 发事件，EE 在 `ee/backend/hooks/` 注册 handler
+- 新增抽象层：接口和 CE 实现放 `app/services/*/`，EE 实现放 `ee/backend/services/*/`
 
 ## GeneHub 集成
 

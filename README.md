@@ -4,18 +4,29 @@ OpenClaw 实例可视化管理平台 -- One-click deploy, full control.
 
 通过 Web 界面管理 K8s 集群上的 OpenClaw 实例，支持一键部署、实时日志、集群健康巡检、飞书 SSO 登录。
 
+## CE/EE 架构
+
+NoDeskClaw 采用 Community Edition（CE）/ Enterprise Edition（EE）双版本架构：
+
+- **CE（社区版）**：本仓库，以 Apache 2.0 协议开源，包含核心功能（实例部署、集群管理、日志监控、基因市场等）
+- **EE（企业版）**：在 CE 基础上叠加企业级功能（多组织、计费、高级审计等），代码位于私有 `ee/` 目录
+
+运行时通过 `FeatureGate` 自动检测：`ee/` 目录存在则启用 EE 功能，否则以 CE 模式运行。EE 功能清单定义在 `features.yaml` 中。
+
 ## 项目结构
 
 ```
 NoDeskClaw/
-├── nodeskclaw-frontend/      # 前端（Vue 3 + shadcn-vue + Tailwind CSS）
-├── nodeskclaw-portal/        # 用户门户前端（Vue 3 + Tailwind CSS）
-├── nodeskclaw-backend/       # 后端（Python 3.12 + FastAPI）
-├── nodeskclaw-llm-proxy/     # LLM Proxy 服务（Go）
-├── nodeskclaw-artifacts/     # 镜像构建 & 部署制品
-├── openclaw-channel-nodeskclaw/  # OpenClaw channel plugin（工作区 Agent 协同）
-├── openclaw/                 # OpenClaw 源码（独立仓库，不纳入 Git）
-└── vibecraft/                # VibeCraft 源码（独立仓库，不纳入 Git）
+├── nodeskclaw-frontend/           # 管理后台前端（Vue 3 + shadcn-vue + Tailwind CSS）
+├── nodeskclaw-portal/             # 用户门户前端（Vue 3 + Tailwind CSS）
+├── nodeskclaw-backend/            # 后端 API 服务（Python 3.12 + FastAPI）
+├── nodeskclaw-llm-proxy/          # LLM Proxy 服务（Go）
+├── nodeskclaw-artifacts/          # 镜像构建 & 部署制品
+├── openclaw-channel-nodeskclaw/   # OpenClaw channel plugin（工作区 Agent 协同）
+├── features.yaml                  # CE/EE Feature 定义
+├── ee/                            # Enterprise Edition 模块（私有，.gitignore 排除）
+├── openclaw/                      # OpenClaw 源码（独立仓库，不纳入 Git）
+└── vibecraft/                     # VibeCraft 源码（独立仓库，不纳入 Git）
 ```
 
 ## 全局 i18n（国际化）
@@ -92,3 +103,11 @@ npm run dev
 - [后端 README](nodeskclaw-backend/README.md) -- API 概览、目录结构、环境变量详解
 - [制品 README](nodeskclaw-artifacts/README.md) -- OpenClaw 镜像构建、Dockerfile 说明
 - [Channel Plugin README](openclaw-channel-nodeskclaw/README.md) -- 工作区 Agent 协同 channel plugin
+
+## Contributing
+
+欢迎贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发流程和规范。
+
+## License
+
+[Apache License 2.0](LICENSE)

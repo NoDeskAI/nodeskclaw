@@ -1635,3 +1635,36 @@ kubectl --context <infra-cluster> get secret cr-pull-secret -n nodeskclaw-system
 ### 12.4 RBAC（infra 集群）
 
 后端 ServiceAccount 需要 `nodeskclaw-gateway-proxy` Role 权限来管理 `nodeskclaw-system` 命名空间的 proxy Ingress 和 ExternalName Service。
+
+---
+
+## 十三、CE/EE 部署差异
+
+NoDeskClaw 的 K8s 部署行为通过 `DeploymentAdapter` 抽象层在 CE 和 EE 之间分化。
+
+### CE 部署模式
+
+- **单集群**：所有实例部署到同一个 K8s 集群
+- **Namespace 命名**：`nodeskclaw-default-{slug}`，不含组织前缀
+- **无跨集群代理**：Ingress 直接指向本集群 Controller
+- **无组织级网络隔离**：NetworkPolicy 不设 org_id 标签
+- **无配额检查**：部署不受套餐限制
+
+### EE 部署模式
+
+- **多集群**：支持多个 K8s 集群，组织可配置专属集群
+- **Namespace 命名**：`nodeskclaw-{org_slug}-{slug}`，多租户隔离
+- **跨集群代理**：通过网关集群的 ExternalName Service + Proxy Ingress 路由到实例集群
+- **组织级网络隔离**：Namespace 标签含 `nodeskclaw.io/org-id`，NetworkPolicy 按组织隔离
+- **套餐配额检查**：部署前通过 QuotaChecker 校验组织配额
+
+### 对照表
+
+| 维度 | CE (BasicK8sAdapter) | EE (FullK8sAdapter) |
+|------|---------------------|---------------------|
+| 集群数量 | 单集群 | 多集群 |
+| Namespace | `nodeskclaw-default-{slug}` | `nodeskclaw-{org_slug}-{slug}` |
+| 跨集群代理 | 无 | ExternalName + Proxy Ingress |
+| NetworkPolicy org_id | 无 | 按组织隔离 |
+| 配额检查 | 无 | PlanBasedQuotaChecker |
+| TLS 处理 | 直接使用集群 TLS Secret | 网关集群终止 TLS |
