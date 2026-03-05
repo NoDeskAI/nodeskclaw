@@ -17,7 +17,7 @@ const routes: RouteRecordRaw[] = [
     path: '/setup-org',
     name: 'OrgSetup',
     component: () => import('@/views/OrgSetupView.vue'),
-    meta: { requiresAuth: true, allowNoOrg: true },
+    meta: { requiresAuth: true, allowNoOrg: true, requireFeature: 'multi_org' },
   },
   // Workspace routes (new primary pages)
   {
@@ -86,14 +86,15 @@ const routes: RouteRecordRaw[] = [
     path: '/usage',
     name: 'OrgUsage',
     component: () => import('@/views/OrgUsage.vue'),
+    meta: { requireFeature: 'billing' },
   },
   {
     path: '/org-settings',
     component: () => import('@/views/OrgSettings.vue'),
     children: [
-      { path: '', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue') },
+      { path: '', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue'), meta: { requireFeature: 'multi_org' } },
       { path: 'genes', name: 'OrgSettingsGenes', component: () => import('@/views/OrgSettingsGenes.vue') },
-      { path: 'smtp', name: 'OrgSettingsSmtp', component: () => import('@/views/OrgSettingsSmtp.vue') },
+      { path: 'smtp', name: 'OrgSettingsSmtp', component: () => import('@/views/OrgSettingsSmtp.vue'), meta: { requireFeature: 'org_smtp_config' } },
     ],
   },
   {
@@ -125,11 +126,13 @@ const routes: RouteRecordRaw[] = [
     path: '/enterprise-files',
     name: 'EnterpriseFiles',
     component: () => import('@/views/EnterpriseFiles.vue'),
+    meta: { requireFeature: 'enterprise_files' },
   },
   {
     path: '/enterprise-files/:instanceId',
     name: 'EnterpriseFileBrowser',
     component: () => import('@/views/EnterpriseFileBrowser.vue'),
+    meta: { requireFeature: 'enterprise_files' },
   },
   // Legacy redirects
   {
@@ -167,6 +170,14 @@ router.beforeEach(async (to, _from, next) => {
     }
     if (authStore.user && !authStore.user.current_org_id) {
       return next('/setup-org')
+    }
+
+    const requiredFeature = to.meta.requireFeature as string | undefined
+    if (requiredFeature && authStore.systemInfo) {
+      const feat = authStore.systemInfo.features.find((f: any) => f.id === requiredFeature)
+      if (!feat?.enabled) {
+        return next('/')
+      }
     }
   }
 

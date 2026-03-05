@@ -6,6 +6,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     minRole?: string
+    requireFeature?: string
   }
 }
 
@@ -109,38 +110,38 @@ const routes: RouteRecordRaw[] = [
     path: '/members',
     name: 'Members',
     component: () => import('@/views/Members/index.vue'),
-    meta: { minRole: 'admin' },
+    meta: { minRole: 'admin', requireFeature: 'admin_members' },
   },
   // ── 平台管理（超管） ──
   {
     path: '/platform/orgs',
     name: 'PlatformOrgs',
     component: () => import('@/views/Platform/Organizations.vue'),
-    meta: { minRole: 'super_admin' },
+    meta: { minRole: 'super_admin', requireFeature: 'platform_admin' },
   },
   {
     path: '/platform/orgs/:orgId/members',
     name: 'PlatformOrgMembers',
     component: () => import('@/views/Platform/OrgMembers.vue'),
-    meta: { minRole: 'super_admin' },
+    meta: { minRole: 'super_admin', requireFeature: 'platform_admin' },
   },
   {
     path: '/platform/orgs/:orgId/llm-keys',
     name: 'PlatformOrgLlmKeys',
     component: () => import('@/views/Platform/OrgLlmKeys.vue'),
-    meta: { minRole: 'super_admin' },
+    meta: { minRole: 'super_admin', requireFeature: 'platform_admin' },
   },
   {
     path: '/platform/users',
     name: 'PlatformUsers',
     component: () => import('@/views/Platform/Users.vue'),
-    meta: { minRole: 'super_admin' },
+    meta: { minRole: 'super_admin', requireFeature: 'platform_admin' },
   },
   {
     path: '/platform/plans',
     name: 'PlatformPlans',
     component: () => import('@/views/Platform/Plans.vue'),
-    meta: { minRole: 'super_admin' },
+    meta: { minRole: 'super_admin', requireFeature: 'billing' },
   },
 ]
 
@@ -182,6 +183,14 @@ router.beforeEach(async (to, _from, next) => {
   const minRole = to.meta.minRole
   if (minRole && !canAccessRoute(minRole)) {
     return next('/no-access')
+  }
+
+  const requiredFeature = to.meta.requireFeature
+  if (requiredFeature && auth.systemInfo) {
+    const feat = auth.systemInfo.features.find((f: any) => f.id === requiredFeature)
+    if (!feat?.enabled) {
+      return next('/no-access')
+    }
   }
 
   next()
