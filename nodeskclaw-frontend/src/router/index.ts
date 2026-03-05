@@ -162,6 +162,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   const auth = useAuthStore()
+  if (!auth.systemInfo) {
+    await auth.fetchSystemInfo()
+  }
   if (token && !auth.user) {
     await auth.fetchUser()
   }

@@ -20,11 +20,25 @@ export interface PortalUser {
   oauth_connections: OAuthConnectionInfo[]
 }
 
+export interface FeatureInfo {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+}
+
+export interface SystemInfo {
+  edition: 'ce' | 'ee'
+  version: string
+  features: FeatureInfo[]
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('portal_token'))
   const refreshToken = ref<string | null>(localStorage.getItem('portal_refresh_token'))
   const user = ref<PortalUser | null>(null)
   const lastOAuthProvider = ref<string | null>(sessionStorage.getItem('oauth_provider'))
+  const systemInfo = ref<SystemInfo | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
 
@@ -55,6 +69,15 @@ export const useAuthStore = defineStore('auth', () => {
     lastOAuthProvider.value = data.provider || provider
     sessionStorage.setItem('oauth_provider', lastOAuthProvider.value!)
     return data
+  }
+
+  async function fetchSystemInfo() {
+    try {
+      const res = await api.get('/system/info')
+      systemInfo.value = res.data
+    } catch {
+      systemInfo.value = { edition: 'ce', version: '0.0.0', features: [] }
+    }
   }
 
   async function fetchUser() {
@@ -125,10 +148,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, refreshToken, user, isLoggedIn, lastOAuthProvider,
+    token, refreshToken, user, systemInfo, isLoggedIn, lastOAuthProvider,
     setTokens, clearAuth,
     oauthLogin, emailRegister, emailLogin, sendSmsCode, smsLogin,
     accountLogin, sendVerificationCode, verificationCodeLogin,
-    fetchUser, logout,
+    fetchSystemInfo, fetchUser, logout,
   }
 })

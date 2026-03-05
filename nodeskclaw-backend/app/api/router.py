@@ -28,6 +28,8 @@ from app.api.workspaces import router as workspace_router
 from app.api.templates import router as template_router
 from app.api.instance_templates import router as instance_template_router
 from app.core.deps import require_org_role
+from app.core.feature_gate import feature_gate
+from app.core.config import settings
 
 from app.api.portal.instances import router as portal_instance_router
 from app.api.portal.instance_members import router as portal_instance_members_router
@@ -47,6 +49,16 @@ api_router = APIRouter()
 async def health_check():
     """NoDeskClaw backend health probe."""
     return {"status": "ok"}
+
+
+@api_router.get("/system/info", tags=["系统"])
+async def system_info():
+    """暴露 edition 和启用的 feature 列表，供前端初始化使用。"""
+    return {
+        "edition": feature_gate.edition,
+        "version": settings.APP_VERSION,
+        "features": feature_gate.all_features(),
+    }
 
 
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])

@@ -159,6 +159,9 @@ router.beforeEach(async (to, _from, next) => {
   if (token && !isSetupPage && !to.meta.allowNoOrg) {
     const { useAuthStore } = await import('@/stores/auth')
     const authStore = useAuthStore()
+    if (!authStore.systemInfo) {
+      await authStore.fetchSystemInfo()
+    }
     if (!authStore.user) {
       await authStore.fetchUser()
     }

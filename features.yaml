@@ -1,0 +1,63 @@
+# NoDeskClaw CE/EE Feature Registry
+#
+# edition_features.ee 中列出的 feature 仅在 EE 模式下启用。
+# 运行时通过 FeatureGate 判断：检测 ee/ 目录存在 -> edition=ee -> 全部启用
+#                             ee/ 不存在 -> edition=ce -> EE feature 禁用
+#
+# 每个 feature 对应后端的 require_feature() 守卫或前端的 useFeature() 判断。
+
+edition_features:
+  ee:
+    # ── 现有功能（需从 CE 仓库迁移到 ee/） ──
+    - id: multi_org
+      name: Multi-Organization Management
+      description: 多组织创建、切换、成员管理
+
+    - id: billing
+      name: Plans & Billing
+      description: 套餐管理、配额检查、用量统计
+
+    - id: admin_members
+      name: Admin Platform Members
+      description: 管理平台成员（多管理员角色）
+
+    - id: platform_admin
+      name: Platform Admin Pages
+      description: 超管页面（Organizations / Users / Plans / OrgMembers / OrgLlmKeys）
+
+    - id: enterprise_files
+      name: Enterprise File Browser
+      description: 企业空间文件浏览
+
+    - id: org_smtp_config
+      name: Organization SMTP Config
+      description: 组织级 SMTP 界面配置
+
+    - id: topology_audit
+      name: Topology Audit Log
+      description: 赛博办公室拓扑变更审计日志
+
+    - id: performance_analytics
+      name: Performance Analytics
+      description: AI 员工性能快照采集与分析
+
+    - id: llm_analytics
+      name: LLM Usage Analytics
+      description: LLM 用量统计报表
+
+    # ── 未来功能（代码将在 ee/ 仓库中新增） ──
+    - id: multi_cluster
+      name: Multi-Cluster Management
+      description: 多 K8s 集群部署 + 跨集群网关代理
+
+    - id: advanced_audit
+      name: Advanced Operation Audit
+      description: 全局操作审计中间件 + 查询导出
+
+    - id: sso_ldap
+      name: LDAP/SAML SSO
+      description: 企业级 SSO 认证集成
+
+    - id: advanced_rbac
+      name: Advanced RBAC
+      description: 细粒度角色权限控制

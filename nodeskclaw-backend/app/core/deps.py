@@ -1,4 +1,4 @@
-"""FastAPI dependency injection – DB session + RBAC helpers."""
+"""FastAPI dependency injection – DB session + RBAC helpers + FeatureGate."""
 
 from collections.abc import AsyncGenerator
 
@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.core.feature_gate import feature_gate
 
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -298,3 +299,24 @@ def require_org_role(min_role: str):
         return user, org
 
     return _dependency
+
+
+# ── Feature Gate Dependencies ─────────────────────────────
+
+def require_feature(feature_id: str):
+    """工厂函数：生成要求指定 EE feature 已启用的依赖。
+
+    用法：router = APIRouter(dependencies=[Depends(require_feature("billing"))])
+    或在单个端点上：@router.get("/...", dependencies=[Depends(require_feature("billing"))])
+    """
+    async def _check_feature():
+        if not feature_gate.is_enabled(feature_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error_code": 40320,
+                    "message_key": "errors.feature.ee_required",
+                    "message": f"Feature '{feature_id}' requires Enterprise Edition",
+                },
+            )
+    return _check_feature

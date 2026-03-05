@@ -1339,6 +1339,18 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1/admin")
 app.include_router(webhook_router)
 
+# ── EE 模块自动加载 ─────────────────────────────────
+from app.core.feature_gate import feature_gate  # noqa: E402
+
+if feature_gate.is_ee:
+    try:
+        from ee.backend.router import ee_api_router, ee_admin_router
+        app.include_router(ee_api_router, prefix="/api/v1")
+        app.include_router(ee_admin_router, prefix="/api/v1/admin")
+        logging.getLogger(__name__).info("EE 模块已加载")
+    except ImportError:
+        logging.getLogger(__name__).warning("检测到 ee/ 目录但 EE 模块加载失败，以 CE 模式运行")
+
 if settings.DEBUG:
     from app.api.llm_proxy import router as llm_proxy_router
     app.include_router(llm_proxy_router, tags=["LLM 代理（开发模式）"])

@@ -21,10 +21,24 @@ export interface UserInfo {
   oauth_connections: OAuthConnectionInfo[]
 }
 
+export interface FeatureInfo {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+}
+
+export interface SystemInfo {
+  edition: 'ce' | 'ee'
+  version: string
+  features: FeatureInfo[]
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const refreshToken = ref<string | null>(localStorage.getItem('refresh_token'))
   const user = ref<UserInfo | null>(null)
+  const systemInfo = ref<SystemInfo | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
 
@@ -53,6 +67,15 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
+  async function fetchSystemInfo() {
+    try {
+      const res = await api.get('/api/v1/system/info', { baseURL: '' })
+      systemInfo.value = res.data
+    } catch {
+      systemInfo.value = { edition: 'ce', version: '0.0.0', features: [] }
+    }
+  }
+
   async function fetchUser() {
     try {
       const res = await api.get('/auth/me')
@@ -74,10 +97,12 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     refreshToken,
     user,
+    systemInfo,
     isLoggedIn,
     setTokens,
     clearAuth,
     oauthLogin,
+    fetchSystemInfo,
     fetchUser,
     logout,
   }
