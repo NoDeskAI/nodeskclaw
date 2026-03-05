@@ -153,6 +153,15 @@ build_and_push() {
   local context; context="$(get_build_context "$component")"
   local dockerfile; dockerfile="$(get_dockerfile "$component")"
 
+  if [[ "$component" == "backend" && -d "$PROJECT_ROOT/ee" ]]; then
+    local ee_df
+    ee_df="$(mktemp)"
+    cat "$dockerfile" > "$ee_df"
+    echo 'COPY ee/ ./ee/' >> "$ee_df"
+    dockerfile="$ee_df"
+    log "[$component] 检测到 ee/ 目录，构建 EE 版镜像"
+  fi
+
   log "[$component] 构建镜像: $image"
   if ! docker build --platform linux/amd64 \
     $NO_CACHE \

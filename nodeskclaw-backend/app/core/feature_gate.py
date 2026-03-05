@@ -10,6 +10,7 @@ EE feature 清单从 features.yaml 加载，支持 ee/features.yaml 合并扩展
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]  # nodeskclaw-backend/../
+_PROJECT_ROOT = Path(
+    os.getenv("NODESKCLAW_ROOT", str(Path(__file__).resolve().parents[3]))
+)
 _FEATURES_YAML = _PROJECT_ROOT / "features.yaml"
 _EE_DIR = _PROJECT_ROOT / "ee"
 _EE_FEATURES_YAML = _EE_DIR / "features.yaml"

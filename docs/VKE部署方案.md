@@ -1235,7 +1235,7 @@ deploy/
 
 | 组件 | 镜像名 | Dockerfile | Build Context | 端口 |
 |------|--------|-----------|---------------|------|
-| backend | `nodeskclaw-backend:TAG` | `nodeskclaw-backend/Dockerfile` | 项目根目录（需包含 `openclaw-channel-nodeskclaw/`） | 8000 |
+| backend | `nodeskclaw-backend:TAG` | `nodeskclaw-backend/Dockerfile` | 项目根目录（需包含 `openclaw-channel-nodeskclaw/`、`features.yaml`；EE 构建需包含 `ee/`） | 8000 |
 | admin | `nodeskclaw-admin:TAG` | `nodeskclaw-frontend/Dockerfile` (多阶段 Node+Nginx) | `nodeskclaw-frontend/` | 80 |
 | portal | `nodeskclaw-portal:TAG` | `nodeskclaw-portal/Dockerfile` (多阶段 Node+Nginx) | `nodeskclaw-portal/` | 80 |
 
@@ -1255,6 +1255,8 @@ Admin 和 Portal 前端的 Nginx 配置将 `/api` 请求反向代理到 `http://
 ```
 
 镜像标签格式：`YYYYMMDD-<git-short-hash>`（如 `20260218-b0f6ad1`）
+
+**CE/EE 自动检测**：`deploy.sh` 在构建 backend 镜像时自动检测项目根目录下 `ee/` 是否存在。若存在，在 Dockerfile 基础上追加 `COPY ee/ ./ee/` 构建 EE 版镜像；若不存在，构建标准 CE 版镜像。EE 构建前需先执行 `./scripts/setup-ee.sh` 拉取 EE 私有仓库。
 
 ### 9.1 首次部署
 

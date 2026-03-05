@@ -10,9 +10,11 @@ RUN uv sync --frozen --no-dev
 
 COPY nodeskclaw-backend/ .
 COPY openclaw-channel-nodeskclaw/ ./openclaw-channel-nodeskclaw/
+COPY features.yaml ./features.yaml
 
 RUN mkdir -p /app/data
 
+ENV NODESKCLAW_ROOT=/app
 EXPOSE 8000
 
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
