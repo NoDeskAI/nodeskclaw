@@ -1347,6 +1347,10 @@ if feature_gate.is_ee:
         from ee.backend.router import ee_api_router, ee_admin_router
         app.include_router(ee_api_router, prefix="/api/v1")
         app.include_router(ee_admin_router, prefix="/api/v1/admin")
+
+        from ee.backend.hooks.topology_audit import register_hooks as _register_audit_hooks
+        _register_audit_hooks()
+
         logging.getLogger(__name__).info("EE 模块已加载")
     except ImportError:
         logging.getLogger(__name__).warning("检测到 ee/ 目录但 EE 模块加载失败，以 CE 模式运行")
