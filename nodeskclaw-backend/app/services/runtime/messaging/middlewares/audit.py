@@ -84,6 +84,23 @@ class AuditMiddleware(MessageMiddleware):
                 "mode": ctx.delivery_plan.mode if ctx.delivery_plan else "unknown",
             })
 
+            envelope = ctx.envelope
+            sender = envelope.data.sender if envelope.data else None
+            if sender and sender.type and sender.type.value == "agent":
+                from app.core import hooks as _hooks
+                await _hooks.emit(
+                    "operation_audit",
+                    action="agent.message_sent",
+                    target_type="workspace",
+                    target_id=ctx.workspace_id or "",
+                    actor_type="agent",
+                    actor_id=sender.id,
+                    details={
+                        "delivered_to": [r.target_node_id for r in delivered],
+                        "intent": envelope.data.intent.value if envelope.data else None,
+                    },
+                )
+
         retried = ctx.extra.get("retried_targets", [])
         for target_id in retried:
             await record_audit_event(ctx, "message_retried", {
