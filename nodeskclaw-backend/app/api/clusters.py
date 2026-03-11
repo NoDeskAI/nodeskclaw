@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db
 from app.core.exceptions import NotFoundError
 from app.core.security import get_current_user
@@ -37,6 +38,7 @@ async def create_cluster(
 ):
     """添加集群。"""
     data = await cluster_service.create_cluster(body, current_user, db)
+    await hooks.emit("operation_audit", action="cluster.created", target_type="cluster", target_id=data.id, actor_id=current_user.id, org_id=current_user.current_org_id)
     return ApiResponse(data=data)
 
 
@@ -60,6 +62,7 @@ async def update_cluster(
 ):
     """更新集群配置。"""
     data = await cluster_service.update_cluster(cluster_id, body, db)
+    await hooks.emit("operation_audit", action="cluster.updated", target_type="cluster", target_id=cluster_id, actor_id=_current_user.id, org_id=_current_user.current_org_id)
     return ApiResponse(data=data)
 
 
@@ -71,6 +74,7 @@ async def delete_cluster(
 ):
     """删除集群。"""
     await cluster_service.delete_cluster(cluster_id, db)
+    await hooks.emit("operation_audit", action="cluster.deleted", target_type="cluster", target_id=cluster_id, actor_id=_current_user.id, org_id=_current_user.current_org_id)
     return ApiResponse(message="集群已删除")
 
 
@@ -186,4 +190,5 @@ async def update_kubeconfig(
 ):
     """更新 KubeConfig（重建连接）。"""
     data = await cluster_service.update_kubeconfig(cluster_id, body.kubeconfig, db)
+    await hooks.emit("operation_audit", action="cluster.kubeconfig_updated", target_type="cluster", target_id=cluster_id, actor_id=_current_user.id, org_id=_current_user.current_org_id)
     return ApiResponse(data=data)

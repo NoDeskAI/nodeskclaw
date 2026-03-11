@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -61,6 +62,7 @@ async def update_setting(
 
     row = await config_service.set_config(key, body.value, db)
     display_value = "******" if key in _SENSITIVE_KEYS and row.value else row.value
+    await hooks.emit("operation_audit", action="system.setting_updated", target_type="system_config", target_id=key, actor_id=_current_user.id, details={})
     return ApiResponse(data={"key": row.key, "value": display_value})
 
 

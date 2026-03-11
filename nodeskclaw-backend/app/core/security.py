@@ -1,8 +1,10 @@
 """JWT utilities, current_user dependency, KubeConfig AES-256-GCM encryption."""
 
 import base64
+import contextvars
 import os
 from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import Depends, HTTPException, Query, status
@@ -15,6 +17,27 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.deps import get_db
 from app.models.user import User
+
+
+# ── Auth Actor Context ────────────────────────────────────
+
+class AuthActor(NamedTuple):
+    actor_type: str  # "user" | "agent"
+    actor_id: str
+    actor_name: str
+
+
+_auth_actor: contextvars.ContextVar[AuthActor | None] = contextvars.ContextVar(
+    "_auth_actor", default=None,
+)
+
+
+def get_auth_actor() -> AuthActor | None:
+    return _auth_actor.get()
+
+
+def reset_auth_actor() -> None:
+    _auth_actor.set(None)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -146,6 +169,7 @@ async def get_current_user(
             },
         )
     user = await _get_user_by_token(credentials.credentials, db)
+    _auth_actor.set(AuthActor("user", user.id, user.name))
     if user.must_change_password:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -175,7 +199,9 @@ async def get_current_user_unchecked(
                 "message": "未提供认证信息",
             },
         )
-    return await _get_user_by_token(credentials.credentials, db)
+    user = await _get_user_by_token(credentials.credentials, db)
+    _auth_actor.set(AuthActor("user", user.id, user.name))
+    return user
 
 
 async def get_current_user_from_query(
@@ -204,7 +230,9 @@ async def get_current_user_or_agent(
     token = credentials.credentials
 
     try:
-        return await _get_user_by_token(token, db)
+        user = await _get_user_by_token(token, db)
+        _auth_actor.set(AuthActor("user", user.id, user.name))
+        return user
     except HTTPException:
         pass
 
@@ -238,6 +266,7 @@ async def get_current_user_or_agent(
                 "message": "用户不存在或已禁用",
             },
         )
+    _auth_actor.set(AuthActor("agent", instance.id, instance.name))
     return user
 
 

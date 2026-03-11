@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db, require_feature, require_org_admin, require_super_admin_dep
 from app.core.security import get_current_user
 from app.models.user import User
@@ -45,6 +46,7 @@ async def create_organization(
 ):
     """创建组织（超管）。"""
     data = await org_service.create_org(body, admin, db)
+    await hooks.emit("operation_audit", action="org.created", target_type="organization", target_id=data.id, actor_id=admin.id)
     return ApiResponse(data=data)
 
 
@@ -93,6 +95,7 @@ async def update_organization(
 ):
     """更新组织（超管）。"""
     data = await org_service.update_org(org_id, body, db)
+    await hooks.emit("operation_audit", action="org.updated", target_type="organization", target_id=org_id, actor_id=_admin.id)
     return ApiResponse(data=data)
 
 
@@ -105,6 +108,7 @@ async def delete_organization(
 ):
     """删除组织（超管）。"""
     await org_service.delete_org(org_id, db)
+    await hooks.emit("operation_audit", action="org.deleted", target_type="organization", target_id=org_id, actor_id=_admin.id)
     return ApiResponse(message="组织已删除")
 
 
@@ -158,6 +162,7 @@ async def add_member(
 ):
     """添加成员（组织管理员+）。"""
     data = await org_service.add_member(org_id, body.user_id, body.role, db)
+    await hooks.emit("operation_audit", action="org.member_added", target_type="org_membership", target_id=data.id, actor_id=_org_ctx[0].id, org_id=org_id)
     return ApiResponse(data=data)
 
 
@@ -172,6 +177,7 @@ async def update_member_role(
 ):
     """修改成员角色（组织管理员+）。"""
     data = await org_service.update_member_role(org_id, membership_id, body.role, db)
+    await hooks.emit("operation_audit", action="org.member_role_updated", target_type="org_membership", target_id=membership_id, actor_id=_org_ctx[0].id, org_id=org_id)
     return ApiResponse(data=data)
 
 
@@ -185,6 +191,7 @@ async def remove_member(
 ):
     """移除成员（组织管理员+）。"""
     await org_service.remove_member(org_id, membership_id, db)
+    await hooks.emit("operation_audit", action="org.member_removed", target_type="org_membership", target_id=membership_id, actor_id=_org_ctx[0].id, org_id=org_id)
     return ApiResponse(message="成员已移除")
 
 
@@ -240,6 +247,7 @@ async def reset_member_password(
         )
 
     plain = await auth_service.admin_reset_password(user_id, db)
+    await hooks.emit("operation_audit", action="org.member_password_reset", target_type="org_membership", target_id=user_id, actor_id=current_user.id, org_id=org_id)
     return ApiResponse(data=ResetPasswordResponse(password=plain))
 
 
