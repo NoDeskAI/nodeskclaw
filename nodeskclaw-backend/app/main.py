@@ -503,6 +503,10 @@ if feature_gate.is_ee:
     except ImportError:
         logging.getLogger(__name__).warning("检测到 ee/ 目录但 EE 模块加载失败，以 CE 模式运行")
 
+if not feature_gate.is_ee:
+    from app.services.audit_handler import register_ce_audit_handler
+    register_ce_audit_handler()
+
 if settings.DEBUG:
     from app.api.llm_proxy import router as llm_proxy_router
     app.include_router(llm_proxy_router, tags=["LLM 代理（开发模式）"])
