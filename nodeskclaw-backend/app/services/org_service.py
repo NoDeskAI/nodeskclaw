@@ -3,7 +3,7 @@
 import logging
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
@@ -250,8 +250,10 @@ async def delete_org(org_id: str, db: AsyncSession) -> None:
 
 # ── 成员管理 ─────────────────────────────────────────────
 
-async def list_members(org_id: str, db: AsyncSession) -> list[MemberInfo]:
-    """列出组织成员（排除 Admin 平台用户）。"""
+async def list_members(
+    org_id: str, db: AsyncSession, *, current_user_id: str | None = None,
+) -> list[MemberInfo]:
+    """列出组织成员（排除 Admin 平台用户，但始终包含当前用户）。"""
     admin_user_ids = (
         select(AdminMembership.user_id)
         .where(
@@ -259,13 +261,17 @@ async def list_members(org_id: str, db: AsyncSession) -> list[MemberInfo]:
             AdminMembership.deleted_at.is_(None),
         )
     )
+    admin_filter = User.id.notin_(admin_user_ids)
+    if current_user_id:
+        admin_filter = or_(admin_filter, User.id == current_user_id)
+
     result = await db.execute(
         select(OrgMembership, User)
         .join(User, OrgMembership.user_id == User.id)
         .where(
             OrgMembership.org_id == org_id,
             not_deleted(OrgMembership),
-            User.id.notin_(admin_user_ids),
+            admin_filter,
         )
     )
     members = []

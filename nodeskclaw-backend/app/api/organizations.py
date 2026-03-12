@@ -204,9 +204,10 @@ async def list_members(
     org_id: str,
     db: AsyncSession = Depends(get_db),
     _org_ctx: tuple = Depends(require_org_admin),
+    current_user: User = Depends(get_current_user),
 ):
     """列出组织成员（组织管理员+）。"""
-    data = await org_service.list_members(org_id, db)
+    data = await org_service.list_members(org_id, db, current_user_id=current_user.id)
     return ApiResponse(data=data)
 
 

@@ -593,6 +593,7 @@ const enUS = {
     searchPlaceholder: "Search members...",
     memberCount: "{count} member(s)",
     unknownUser: "Unknown User",
+    me: "Me",
     roleSuperAdmin: "Super Admin",
     roleAdmin: "Admin",
     roleMember: "Member",
