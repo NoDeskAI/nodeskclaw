@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
@@ -305,6 +305,26 @@ async def _seed_ee_platform_admin(
                 ))
                 await db.commit()
                 logger.info("\u79cd\u5b50\u6570\u636e\uff1a\u4e3a EE \u5e73\u53f0\u7ba1\u7406\u5458\u8865\u5efa AdminMembership")
+
+        stale = await db.execute(
+            select(AdminMembership).where(
+                AdminMembership.user_id != admin.id,
+                AdminMembership.deleted_at.is_(None),
+            )
+        )
+        stale_records = stale.scalars().all()
+        if stale_records:
+            stale_ids = [r.id for r in stale_records]
+            await db.execute(
+                update(AdminMembership)
+                .where(AdminMembership.id.in_(stale_ids))
+                .values(deleted_at=func.now())
+            )
+            await db.commit()
+            logger.info(
+                "种子数据：已清理 %d 条不属于 EE 平台管理员的 AdminMembership 残留记录",
+                len(stale_ids),
+            )
 
         if plain_password:
             return {"account": account, "password": plain_password}
