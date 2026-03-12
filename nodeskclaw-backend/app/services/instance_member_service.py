@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.models.admin_membership import AdminMembership
 from app.models.base import not_deleted
 from app.models.instance import Instance
 from app.models.instance_member import INSTANCE_ROLE_LEVEL, InstanceMember, InstanceRole
@@ -286,12 +287,19 @@ async def search_org_users(
     query_str: str,
     db: AsyncSession,
 ) -> list[dict]:
-    """Search org members who are NOT already instance members."""
+    """Search org members who are NOT already instance members (excluding Admin users)."""
     existing_member_ids = (
         select(InstanceMember.user_id)
         .where(
             InstanceMember.instance_id == instance_id,
             not_deleted(InstanceMember),
+        )
+    )
+    admin_user_ids = (
+        select(AdminMembership.user_id)
+        .where(
+            AdminMembership.org_id == org_id,
+            AdminMembership.deleted_at.is_(None),
         )
     )
 
@@ -303,6 +311,7 @@ async def search_org_users(
             not_deleted(OrgMembership),
             not_deleted(User),
             User.id.notin_(existing_member_ids),
+            User.id.notin_(admin_user_ids),
         )
     )
 

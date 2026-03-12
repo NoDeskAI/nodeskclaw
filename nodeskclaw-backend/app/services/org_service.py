@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.models.admin_membership import AdminMembership
 from app.models.base import not_deleted
 from app.models.oauth_connection import UserOAuthConnection
 from app.models.org_membership import OrgMembership, OrgRole
@@ -250,11 +251,22 @@ async def delete_org(org_id: str, db: AsyncSession) -> None:
 # ── 成员管理 ─────────────────────────────────────────────
 
 async def list_members(org_id: str, db: AsyncSession) -> list[MemberInfo]:
-    """列出组织成员。"""
+    """列出组织成员（排除 Admin 平台用户）。"""
+    admin_user_ids = (
+        select(AdminMembership.user_id)
+        .where(
+            AdminMembership.org_id == org_id,
+            AdminMembership.deleted_at.is_(None),
+        )
+    )
     result = await db.execute(
         select(OrgMembership, User)
         .join(User, OrgMembership.user_id == User.id)
-        .where(OrgMembership.org_id == org_id, not_deleted(OrgMembership))
+        .where(
+            OrgMembership.org_id == org_id,
+            not_deleted(OrgMembership),
+            User.id.notin_(admin_user_ids),
+        )
     )
     members = []
     for membership, user in result.all():

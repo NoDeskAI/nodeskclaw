@@ -6,6 +6,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenError, NotFoundError
+from app.models.admin_membership import AdminMembership
 from app.models.base import not_deleted
 from app.models.org_membership import OrgMembership, OrgRole
 from app.models.user import User
@@ -160,12 +161,19 @@ async def search_org_users(
     query_str: str,
     db: AsyncSession,
 ) -> list[dict]:
-    """Search org members who are NOT already workspace members."""
+    """Search org members who are NOT already workspace members (excluding Admin users)."""
     existing_member_ids = (
         select(WorkspaceMember.user_id)
         .where(
             WorkspaceMember.workspace_id == workspace_id,
             not_deleted(WorkspaceMember),
+        )
+    )
+    admin_user_ids = (
+        select(AdminMembership.user_id)
+        .where(
+            AdminMembership.org_id == org_id,
+            AdminMembership.deleted_at.is_(None),
         )
     )
 
@@ -177,6 +185,7 @@ async def search_org_users(
             not_deleted(OrgMembership),
             not_deleted(User),
             User.id.notin_(existing_member_ids),
+            User.id.notin_(admin_user_ids),
         )
     )
 
