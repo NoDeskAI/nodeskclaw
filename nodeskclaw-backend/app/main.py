@@ -507,9 +507,19 @@ if feature_gate.is_ee:
         from ee.backend.hooks.topology_audit import register_hooks as _register_audit_hooks
         _register_audit_hooks()
 
-        logging.getLogger(__name__).info("EE 模块已加载")
+        from ee.backend.hooks.operation_audit import register_hooks as _register_op_audit_hooks
+        _register_op_audit_hooks()
+
+        from ee.backend.middleware.audit_middleware import AuditMiddleware
+        app.add_middleware(AuditMiddleware)
+
+        logging.getLogger(__name__).info("EE 模块已加载（含操作审计）")
     except ImportError:
         logging.getLogger(__name__).warning("检测到 ee/ 目录但 EE 模块加载失败，以 CE 模式运行")
+
+if not feature_gate.is_ee:
+    from app.services.audit_handler import register_ce_audit_handler
+    register_ce_audit_handler()
 
 if settings.DEBUG:
     from app.api.llm_proxy import router as llm_proxy_router

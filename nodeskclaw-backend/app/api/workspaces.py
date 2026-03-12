@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import async_session_factory, get_current_org, get_db
 from app.models.instance import Instance
 from app.models.workspace_agent import WorkspaceAgent
@@ -93,6 +94,7 @@ async def create_workspace(
 ):
     user, org = org_ctx
     ws = await workspace_service.create_workspace(db, org.id, user.id, data)
+    await hooks.emit("operation_audit", action="workspace.created", target_type="workspace", target_id=getattr(ws, "id", "") or "", actor_id=user.id, org_id=org.id)
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -130,6 +132,7 @@ async def update_workspace(
     ws = await workspace_service.update_workspace(db, workspace_id, data)
     if ws is None:
         raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
+    await hooks.emit("operation_audit", action="workspace.updated", target_type="workspace", target_id=workspace_id, actor_id=user.id)
     return _ok(ws.model_dump(mode="json"))
 
 
@@ -146,6 +149,7 @@ async def delete_workspace(
         raise _error(400, 40030, "errors.workspace.delete_invalid", str(e))
     if not ok:
         raise _error(404, 40430, "errors.workspace.not_found", "办公室不存在")
+    await hooks.emit("operation_audit", action="workspace.deleted", target_type="workspace", target_id=workspace_id, actor_id=user.id)
     return _ok(message="已删除")
 
 
@@ -163,6 +167,7 @@ async def add_agent(
         agent = await workspace_service.add_agent(db, workspace_id, data, user.id)
     except ValueError as e:
         raise _error(400, 40031, "errors.workspace.add_agent_invalid", str(e))
+    await hooks.emit("operation_audit", action="workspace.agent_added", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": data.instance_id})
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -241,6 +246,7 @@ async def update_agent(
     agent = await workspace_service.update_agent(db, workspace_id, instance_id, data)
     if agent is None:
         raise _error(404, 40431, "errors.workspace.agent_not_found", "AI 员工不存在")
+    await hooks.emit("operation_audit", action="workspace.agent_updated", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": instance_id})
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -255,6 +261,7 @@ async def remove_agent(
     ok = await workspace_service.remove_agent(db, workspace_id, instance_id)
     if not ok:
         raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "AI 员工不在该办公室中")
+    await hooks.emit("operation_audit", action="workspace.agent_removed", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": instance_id})
     return _ok(message="已移除")
 
 
@@ -749,6 +756,7 @@ async def add_member(
         )
     except ValueError as e:
         raise _error(400, 40032, "errors.workspace.add_member_invalid", str(e))
+    await hooks.emit("operation_audit", action="workspace.member_added", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"member_user_id": data.user_id})
     return _ok(member.model_dump(mode="json"))
 
 
@@ -768,6 +776,7 @@ async def update_member(
     )
     if not ok:
         raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
+    await hooks.emit("operation_audit", action="workspace.member_updated", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"member_user_id": user_id})
     return _ok(message="已更新")
 
 
@@ -784,6 +793,7 @@ async def remove_member(
     )
     if not ok:
         raise _error(404, 40434, "errors.workspace.member_not_found", "成员不存在")
+    await hooks.emit("operation_audit", action="workspace.member_removed", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"member_user_id": user_id})
     return _ok(message="已移除")
 
 

@@ -47,6 +47,10 @@ def _org_id(org) -> str:
 
 def _actor(org_ctx) -> tuple[str, str]:
     """Return (actor_type, actor_id) from org_ctx (user, org) tuple."""
+    from app.core.security import get_auth_actor
+    auth_actor = get_auth_actor()
+    if auth_actor and auth_actor.actor_type == "agent":
+        return "agent", auth_actor.actor_id
     user, org = org_ctx
     if user is not None and hasattr(user, "id"):
         return "user", str(user.id)

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db
 from app.core.exceptions import NotFoundError
 from app.core.security import get_current_user
@@ -109,6 +110,7 @@ async def delete_instance(
 ):
     """删除实例。"""
     await instance_service.delete_instance(instance_id, db, delete_k8s)
+    await hooks.emit("operation_audit", action="instance.deleted", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "admin"})
     return ApiResponse(message="实例已删除")
 
 
@@ -125,6 +127,7 @@ async def scale_instance(
 ):
     """扩缩容。"""
     await instance_service.scale_instance(instance_id, body.replicas, db)
+    await hooks.emit("operation_audit", action="instance.scaled", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"replicas": body.replicas, "source": "admin"})
     return ApiResponse(message=f"已扩缩容至 {body.replicas} 副本")
 
 
@@ -137,6 +140,7 @@ async def restart_instance(
     """重启实例（scale 0 -> scale N）。"""
     logger.info("用户 %s (%s) 请求重启实例 %s", current_user.name, current_user.id, instance_id)
     await instance_service.restart_instance(instance_id, db)
+    await hooks.emit("operation_audit", action="instance.restart", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "admin"})
     return ApiResponse(message="已触发重启，实例将在数秒后恢复")
 
 
@@ -160,6 +164,7 @@ async def save_config(
 ):
     """保存实例配置变更到 pending_config（不立即生效）。"""
     data = await instance_service.save_config(instance_id, body, db)
+    await hooks.emit("operation_audit", action="instance.config_saved", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"source": "admin"})
     return ApiResponse(data=data)
 
 
@@ -171,6 +176,7 @@ async def apply_config(
 ):
     """将 pending_config 应用到 K8s，触发滚动更新。"""
     data = await instance_service.apply_config(instance_id, current_user.id, db)
+    await hooks.emit("operation_audit", action="instance.config_applied", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "admin"})
     return ApiResponse(data=data)
 
 
@@ -189,6 +195,7 @@ async def rollback_instance(
     data = await instance_service.rollback_instance(
         instance_id, body.target_revision, current_user.id, db
     )
+    await hooks.emit("operation_audit", action="instance.rolled_back", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"target_revision": body.target_revision, "source": "admin"})
     return ApiResponse(data=data)
 
 
@@ -200,6 +207,7 @@ async def sync_token(
 ):
     """从运行中的 Pod 获取 Gateway Token 并回填到 DB。"""
     token = await instance_service.sync_gateway_token(instance_id, db)
+    await hooks.emit("operation_audit", action="instance.token_synced", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"source": "admin"})
     return ApiResponse(data={"token": token})
 
 

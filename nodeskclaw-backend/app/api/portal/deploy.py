@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -49,6 +50,7 @@ async def deploy(
         slug_display = body.slug or body.name
         raise HTTPException(status_code=409, detail=f"实例标识 '{slug_display}' 已存在，请更换标识")
 
+    await hooks.emit("operation_audit", action="deploy.started", target_type="instance", target_id=ctx.instance_id, actor_id=current_user.id, org_id=effective_org_id, details={"deploy_id": deploy_id, "slug": body.slug or body.name, "source": "portal"})
     task = asyncio.create_task(
         deploy_service.execute_deploy_pipeline(ctx),
         name=f"deploy-{deploy_id}",
@@ -65,6 +67,7 @@ async def cancel_deploy_endpoint(
     _current_user: User = Depends(get_current_user),
 ):
     result = await deploy_service.cancel_deploy(deploy_id)
+    await hooks.emit("operation_audit", action="deploy.cancelled", target_type="instance", target_id=deploy_id, actor_id=_current_user.id, details={"deploy_id": deploy_id, "source": "portal"})
     logger.info("取消部署: deploy_id=%s, result=%s", deploy_id, result)
     return ApiResponse(data={"deploy_id": deploy_id, "message": result})
 

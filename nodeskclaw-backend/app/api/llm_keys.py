@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db, require_org_admin, require_org_member
 from app.core.exceptions import NotFoundError
 from app.core.security import get_current_user
@@ -119,6 +120,7 @@ async def create_org_llm_key(
     await db.commit()
     await db.refresh(key)
     logger.info("创建组织 LLM Key: org=%s provider=%s label=%s", org_id, body.provider, body.label)
+    await hooks.emit("operation_audit", action="llm_key.created", target_type="llm_key", target_id=key.id, actor_id=user.id, org_id=org_id)
     return ApiResponse(data=OrgLlmKeyInfo(
         id=key.id, org_id=key.org_id, provider=key.provider, label=key.label,
         api_key_masked=_mask_key(key.api_key), base_url=key.base_url,
@@ -148,6 +150,7 @@ async def update_org_llm_key(
         setattr(key, field, val)
     await db.commit()
     await db.refresh(key)
+    await hooks.emit("operation_audit", action="llm_key.updated", target_type="llm_key", target_id=key_id, actor_id=_auth[0].id, org_id=org_id)
     return ApiResponse(data=OrgLlmKeyInfo(
         id=key.id, org_id=key.org_id, provider=key.provider, label=key.label,
         api_key_masked=_mask_key(key.api_key), base_url=key.base_url,
@@ -175,6 +178,7 @@ async def delete_org_llm_key(
     key.soft_delete()
     await db.commit()
     logger.info("软删除组织 LLM Key: %s", key_id)
+    await hooks.emit("operation_audit", action="llm_key.deleted", target_type="llm_key", target_id=key_id, actor_id=_auth[0].id, org_id=org_id)
     return ApiResponse(message="已删除")
 
 
@@ -568,6 +572,7 @@ async def update_instance_llm_configs(
         "已同步 LLM 配置到 DB: instance=%s providers=%s",
         instance.name, [c.provider for c in body.configs],
     )
+    await hooks.emit("operation_audit", action="instance.llm_config_updated", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=instance.org_id)
     return ApiResponse(message="配置已写入")
 
 
@@ -586,6 +591,7 @@ async def restart_openclaw(
 
     from app.services.llm_config_service import restart_openclaw as _restart
     result_data = await _restart(instance, db)
+    await hooks.emit("operation_audit", action="instance.openclaw_restarted", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=instance.org_id)
     return ApiResponse(data=result_data)
 
 

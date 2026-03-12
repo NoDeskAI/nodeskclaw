@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.cluster import Cluster
@@ -123,6 +124,7 @@ async def delete_instance(
         instance_id, current_user, InstanceRole.admin, db
     )
     await instance_service.delete_instance(instance_id, db, delete_k8s)
+    await hooks.emit("operation_audit", action="instance.deleted", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "portal"})
     await _cascade_soft_delete_members(instance_id, db)
     return ApiResponse(message="实例已删除")
 
@@ -138,6 +140,7 @@ async def scale_instance(
         instance_id, current_user, InstanceRole.editor, db
     )
     await instance_service.scale_instance(instance_id, body.replicas, db)
+    await hooks.emit("operation_audit", action="instance.scaled", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"replicas": body.replicas, "source": "portal"})
     return ApiResponse(message=f"已扩缩容至 {body.replicas} 副本")
 
 
@@ -152,6 +155,7 @@ async def restart_instance(
     )
     logger.info("用户 %s (%s) 请求重启实例 %s", current_user.name, current_user.id, instance_id)
     await instance_service.restart_instance(instance_id, db)
+    await hooks.emit("operation_audit", action="instance.restart", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "portal"})
     return ApiResponse(message="已触发重启，实例将在数秒后恢复")
 
 
@@ -179,6 +183,7 @@ async def save_config(
         instance_id, current_user, InstanceRole.editor, db
     )
     data = await instance_service.save_config(instance_id, body, db)
+    await hooks.emit("operation_audit", action="instance.config_saved", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "portal"})
     return ApiResponse(data=data)
 
 
@@ -192,6 +197,7 @@ async def apply_config(
         instance_id, current_user, InstanceRole.editor, db
     )
     data = await instance_service.apply_config(instance_id, current_user.id, db)
+    await hooks.emit("operation_audit", action="instance.config_applied", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "portal"})
     return ApiResponse(data=data)
 
 
@@ -212,6 +218,7 @@ async def rollback_instance(
     data = await instance_service.rollback_instance(
         instance_id, body.target_revision, current_user.id, db
     )
+    await hooks.emit("operation_audit", action="instance.rolled_back", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"target_revision": body.target_revision, "source": "portal"})
     return ApiResponse(data=data)
 
 
@@ -225,6 +232,7 @@ async def sync_token(
         instance_id, current_user, InstanceRole.editor, db
     )
     token = await instance_service.sync_gateway_token(instance_id, db)
+    await hooks.emit("operation_audit", action="instance.token_synced", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"source": "portal"})
     return ApiResponse(data={"token": token})
 
 

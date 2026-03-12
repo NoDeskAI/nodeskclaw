@@ -7,6 +7,7 @@ EE 在加载时注册 handler。
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from collections import defaultdict
 from typing import Any, Callable
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 HookHandler = Callable[..., Any]
 
 _handlers: dict[str, list[HookHandler]] = defaultdict(list)
+
+_operation_audited: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_operation_audited", default=False,
+)
 
 
 def register(event: str, handler: HookHandler) -> None:
@@ -40,3 +45,20 @@ def clear(event: str | None = None) -> None:
         _handlers.pop(event, None)
     else:
         _handlers.clear()
+
+
+# ── 操作审计去重 contextvars ──────────────────────────────
+
+def mark_audited() -> None:
+    """标记当前请求已被精细审计，AuditMiddleware 将跳过。"""
+    _operation_audited.set(True)
+
+
+def is_audited() -> bool:
+    """检查当前请求是否已被精细审计。"""
+    return _operation_audited.get()
+
+
+def reset_audited() -> None:
+    """每个请求开始时重置审计标记。"""
+    _operation_audited.set(False)

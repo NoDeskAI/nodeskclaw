@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hooks
 from app.core.deps import get_db, require_feature, require_org_admin
 from app.core.security import decrypt_sensitive, encrypt_sensitive
 from app.models.base import not_deleted
@@ -93,7 +94,7 @@ async def add_required_gene(
     db.add(rg)
     await db.commit()
     await db.refresh(rg)
-
+    await hooks.emit("operation_audit", action="org.required_gene_added", target_type="organization", target_id=org_id, actor_id=_auth[0].id, org_id=org_id, details={"gene_id": body.gene_id})
     return ApiResponse(data=_to_info(rg, gene))
 
 
@@ -124,6 +125,7 @@ async def remove_required_gene(
 
     rg.soft_delete()
     await db.commit()
+    await hooks.emit("operation_audit", action="org.required_gene_removed", target_type="organization", target_id=org_id, actor_id=_auth[0].id, org_id=org_id, details={"required_gene_id": required_gene_id})
     return ApiResponse(message="已移除")
 
 
@@ -217,6 +219,7 @@ async def upsert_smtp_config(
 
     await db.commit()
     await db.refresh(cfg)
+    await hooks.emit("operation_audit", action="org.smtp_config_updated", target_type="organization", target_id=org_id, actor_id=_auth[0].id, org_id=org_id)
     return ApiResponse(data=_smtp_to_response(cfg))
 
 
