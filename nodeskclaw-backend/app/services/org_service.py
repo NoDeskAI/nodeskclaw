@@ -22,10 +22,19 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$")
 
 
 async def list_orgs(db: AsyncSession) -> list[OrgInfo]:
-    """列出所有组织（超管使用），附带成员数。"""
+    """列出所有组织（超管使用），附带成员数（排除 Admin 平台用户）。"""
+    admin_user_ids_corr = (
+        select(AdminMembership.user_id)
+        .where(AdminMembership.org_id == Organization.id, AdminMembership.deleted_at.is_(None))
+        .correlate(Organization)
+    )
     member_count_sub = (
         select(func.count(OrgMembership.id))
-        .where(OrgMembership.org_id == Organization.id, not_deleted(OrgMembership))
+        .where(
+            OrgMembership.org_id == Organization.id,
+            not_deleted(OrgMembership),
+            OrgMembership.user_id.notin_(admin_user_ids_corr),
+        )
         .correlate(Organization)
         .scalar_subquery()
         .label("member_count")
@@ -415,13 +424,22 @@ async def switch_org(user: User, org_id: str, db: AsyncSession) -> OrgInfo:
 
 
 async def list_user_orgs(user: User, db: AsyncSession) -> list[OrgInfo]:
-    """列出用户所属的所有组织，附带成员数。"""
+    """列出用户所属的所有组织，附带成员数（排除 Admin 平台用户）。"""
     if user.is_super_admin:
         return await list_orgs(db)
 
+    admin_user_ids_corr = (
+        select(AdminMembership.user_id)
+        .where(AdminMembership.org_id == Organization.id, AdminMembership.deleted_at.is_(None))
+        .correlate(Organization)
+    )
     member_count_sub = (
         select(func.count(OrgMembership.id))
-        .where(OrgMembership.org_id == Organization.id, not_deleted(OrgMembership))
+        .where(
+            OrgMembership.org_id == Organization.id,
+            not_deleted(OrgMembership),
+            OrgMembership.user_id.notin_(admin_user_ids_corr),
+        )
         .correlate(Organization)
         .scalar_subquery()
         .label("member_count")

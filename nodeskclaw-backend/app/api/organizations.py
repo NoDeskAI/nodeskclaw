@@ -82,9 +82,16 @@ async def _enrich_org_info(org: Organization, db: AsyncSession) -> OrgInfo:
         )
         cluster_name = result.scalar_one_or_none()
 
+    from app.models.admin_membership import AdminMembership
+    admin_user_ids_sub = (
+        select(AdminMembership.user_id)
+        .where(AdminMembership.org_id == org.id, AdminMembership.deleted_at.is_(None))
+    )
     member_count_result = await db.execute(
         select(func.count(OrgMembership.id)).where(
-            OrgMembership.org_id == org.id, not_deleted(OrgMembership)
+            OrgMembership.org_id == org.id,
+            not_deleted(OrgMembership),
+            OrgMembership.user_id.notin_(admin_user_ids_sub),
         )
     )
     info = OrgInfo.model_validate(org)

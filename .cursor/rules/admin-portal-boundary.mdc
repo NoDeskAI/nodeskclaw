@@ -1,0 +1,47 @@
+# Admin / Portal 用户体系边界
+
+## 核心认知
+
+**Admin 平台和 Portal 是两个完全独立的用户入口和身份体系，不要混为一谈。**
+
+| 维度 | Admin 平台 | Portal |
+|------|-----------|--------|
+| 前端 | `ee/nodeskclaw-frontend`（EE-only） | `nodeskclaw-portal`（CE + EE） |
+| 面向对象 | 平台运维 / 超管 | 组织内普通成员 |
+| 用户来源 | Admin 后台创建或分配 | Portal 注册或邀请 |
+| 关联表 | `AdminMembership` | `OrgMembership` |
+
+## 关键规则
+
+- **Admin 平台创建的用户全部是 Admin 用户**，不会是 Portal 用户
+- `AdminMembership` 记录的是 Admin 用户与组织的关联，这些用户在 Portal 视角中**不可见**
+- 任何涉及"面向 Portal 用户展示"的查询（成员列表、成员计数、协作者选择等），都**必须排除** `AdminMembership` 中的用户
+- Admin 用户虽然可能同时存在于 `OrgMembership` 表中（用于权限关联），但 Portal 的 UI 和统计数据不应包含他们
+
+## 实现要求
+
+### member_count 统计
+
+所有面向 Portal 用户的 `member_count` 计算必须排除 Admin 用户：
+
+```python
+admin_user_ids_sub = (
+    select(AdminMembership.user_id)
+    .where(AdminMembership.org_id == org_id, AdminMembership.deleted_at.is_(None))
+)
+count_query = select(func.count(OrgMembership.id)).where(
+    OrgMembership.org_id == org_id,
+    not_deleted(OrgMembership),
+    OrgMembership.user_id.notin_(admin_user_ids_sub),
+)
+```
+
+### 成员列表查询
+
+`list_members()` 已正确排除 Admin 用户。新增任何成员相关查询时，必须保持同样的过滤逻辑。
+
+## 严禁
+
+- **禁止将 Admin 用户和 Portal 用户混为一谈** — 它们是两个独立的身份体系
+- **禁止在 Portal 侧展示 Admin 用户** — 包括成员列表、成员计数、协作者下拉等
+- **禁止假设 Admin 用户 = 组织管理员** — Admin 是平台级概念，组织管理员是 `OrgRole.admin`
