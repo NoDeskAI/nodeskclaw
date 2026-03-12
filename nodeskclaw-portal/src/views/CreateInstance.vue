@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2, Plus, Link, Star, X } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Loader2, Rocket, Database, ChevronDown, RefreshCw, AlertCircle, Check, Brain, Key, Trash2, Plus, Link, Star, X, Cpu } from 'lucide-vue-next'
 import ModelSelect from '@/components/shared/ModelSelect.vue'
 import type { ModelItem } from '@/components/shared/ModelSelect.vue'
 import { pinyin } from 'pinyin-pro'
@@ -36,6 +36,18 @@ const storageGi = ref(20)
 const deploying = ref(false)
 const error = ref('')
 const currentStep = ref(1)
+
+// ── Engine selector ──
+interface EngineItem {
+  runtime_id: string
+  display_name: string
+  display_description: string
+  display_tags: string[]
+  display_powered_by: string
+  order: number
+}
+const engines = ref<EngineItem[]>([])
+const selectedRuntime = ref('openclaw')
 
 // ── Template ──
 import { useGeneStore } from '@/stores/gene'
@@ -300,10 +312,15 @@ watch(slug, () => {
 
 onMounted(async () => {
   try {
-    const [, clustersRes] = await Promise.all([
+    const [, clustersRes, enginesRes] = await Promise.all([
       fetchImageTags(),
       api.get('/clusters'),
+      api.get('/engines'),
     ])
+    engines.value = (enginesRes.data.data ?? []) as EngineItem[]
+    if (engines.value.length > 0 && !engines.value.find(e => e.runtime_id === selectedRuntime.value)) {
+      selectedRuntime.value = engines.value[0].runtime_id
+    }
     clusters.value = (clustersRes.data.data ?? []).filter((c: any) => c.status === 'connected')
   } catch {
     // ignore init errors
@@ -390,6 +407,7 @@ async function handleDeploy() {
       quota_cpu: res_spec.quota_cpu,
       quota_mem: res_spec.quota_mem,
       storage_size: `${storageGi.value}Gi`,
+      runtime: selectedRuntime.value,
       description: description.value || undefined,
       llm_configs: activeLlm.length > 0 ? activeLlm : undefined,
       template_id: selectedTemplate.value?.id || undefined,
@@ -632,6 +650,43 @@ async function handleDeploy() {
                 {{ label }}Gi
               </span>
             </div>
+          </div>
+        </div>
+
+        <!-- 工作引擎选择 -->
+        <div v-if="engines.length > 1" class="space-y-3">
+          <div class="flex items-center gap-2">
+            <Cpu class="w-4 h-4 text-blue-400" />
+            <label class="text-sm font-medium">{{ t('engine.title') }}</label>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('engine.subtitle') }}</p>
+          <div class="grid gap-3" :class="engines.length >= 3 ? 'grid-cols-3' : `grid-cols-${engines.length}`">
+            <button
+              v-for="eng in engines"
+              :key="eng.runtime_id"
+              :class="[
+                'relative p-4 rounded-xl border text-left transition-all',
+                selectedRuntime === eng.runtime_id
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'border-border bg-card hover:border-primary/20',
+              ]"
+              @click="selectedRuntime = eng.runtime_id"
+            >
+              <Check
+                v-if="selectedRuntime === eng.runtime_id"
+                class="absolute top-2.5 right-2.5 w-4 h-4 text-primary"
+              />
+              <div class="flex items-center gap-1.5">
+                <span class="font-medium text-sm">{{ eng.display_name }}</span>
+                <span
+                  v-for="tag in eng.display_tags"
+                  :key="tag"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary"
+                >{{ tag }}</span>
+              </div>
+              <div class="text-xs text-muted-foreground mt-1.5 leading-relaxed">{{ eng.display_description }}</div>
+              <div class="text-[10px] text-muted-foreground/60 mt-2">{{ t('engine.poweredBy') }} {{ eng.display_powered_by }}</div>
+            </button>
           </div>
         </div>
 

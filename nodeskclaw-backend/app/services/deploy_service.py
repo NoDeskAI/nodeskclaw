@@ -411,6 +411,7 @@ async def deploy_instance(
         llm_providers=[c.provider for c in req.llm_configs] if req.llm_configs else None,
         storage_class=req.storage_class,
         storage_size=req.storage_size,
+        runtime=req.runtime,
         status=InstanceStatus.deploying,
         created_by=user.id,
         org_id=org_id,

@@ -24,6 +24,7 @@ class InstanceInfo(BaseModel):
     service_type: str
     ingress_domain: str | None = None
     compute_provider: str = "k8s"
+    runtime: str = "openclaw"
     endpoint_url: str | None = None
     storage_class: str = "nas-subpath"
     storage_size: str = "80Gi"

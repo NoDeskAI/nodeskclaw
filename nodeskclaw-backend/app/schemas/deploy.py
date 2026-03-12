@@ -27,6 +27,7 @@ class DeployRequest(BaseModel):
     advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
     llm_configs: list[LlmConfigItem] | None = None
     template_id: str | None = None
+    runtime: str = "openclaw"
 
     @field_validator("storage_size")
     @classmethod

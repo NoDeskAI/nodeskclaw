@@ -355,7 +355,7 @@ async def add_agent(db: AsyncSession, workspace_id: str, data: AddAgentRequest, 
         hex_q=hex_q,
         hex_r=hex_r,
         name=data.display_name or inst.name,
-        metadata={"runtime": "openclaw", "instance_id": inst.id},
+        metadata={"runtime": inst.runtime, "instance_id": inst.id},
     )
 
     from app.services import corridor_router

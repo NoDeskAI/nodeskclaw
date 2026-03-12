@@ -1119,6 +1119,12 @@ const zhCN = {
     manualInputPlaceholder: "输入模型 ID，如 deepseek-chat",
     modelIdEmpty: "模型 ID 不能为空",
   },
+  engine: {
+    title: "工作引擎",
+    subtitle: "选择驱动 AI 员工的工作引擎",
+    poweredBy: "Powered by",
+    defaultTag: "默认",
+  },
   nav: {
     workspace: "办公室",
     geneMarket: "基因",

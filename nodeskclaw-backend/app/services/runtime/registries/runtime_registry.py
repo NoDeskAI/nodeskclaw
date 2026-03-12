@@ -16,6 +16,11 @@ class RuntimeSpec:
     description: str | None = None
     requires_companion: bool = False
     config_schema: dict | None = None
+    display_name: str = ""
+    display_description: str = ""
+    display_tags: tuple[str, ...] = ()
+    display_powered_by: str = ""
+    order: int = 0
 
 
 class RuntimeRegistry:
@@ -37,27 +42,42 @@ RUNTIME_REGISTRY = RuntimeRegistry()
 
 
 def _register_builtins() -> None:
-    from app.services.runtime.adapters.claude_code import ClaudeCodeAdapter
-    from app.services.runtime.adapters.generic_http import GenericHTTPAdapter
+    from app.services.runtime.adapters.nanobot import NanobotRuntimeAdapter
     from app.services.runtime.adapters.openclaw import OpenClawRuntimeAdapter
+    from app.services.runtime.adapters.zeroclaw import ZeroClawRuntimeAdapter
 
     RUNTIME_REGISTRY.register(RuntimeSpec(
         runtime_id="openclaw",
         adapter=OpenClawRuntimeAdapter(),
         description="OpenClaw runtime -- primary DeskClaw agent kernel.",
         requires_companion=False,
+        display_name="全能工作引擎",
+        display_description="支持工具调用、基因系统、多技能管理",
+        display_tags=("默认",),
+        display_powered_by="OpenClaw",
+        order=0,
     ))
     RUNTIME_REGISTRY.register(RuntimeSpec(
-        runtime_id="claude_code",
-        adapter=ClaudeCodeAdapter(),
-        description="Claude Code runtime -- CLI-based agent via Companion sidecar.",
-        requires_companion=True,
-    ))
-    RUNTIME_REGISTRY.register(RuntimeSpec(
-        runtime_id="generic_http",
-        adapter=GenericHTTPAdapter(),
-        description="Generic HTTP runtime -- OpenAI-compatible API endpoint.",
+        runtime_id="zeroclaw",
+        adapter=ZeroClawRuntimeAdapter(),
+        description="ZeroClaw runtime -- high-performance Rust-based agent kernel.",
         requires_companion=False,
+        display_name="高性能工作引擎",
+        display_description="Rust 构建，极速响应，适合高并发场景",
+        display_tags=(),
+        display_powered_by="ZeroClaw",
+        order=1,
+    ))
+    RUNTIME_REGISTRY.register(RuntimeSpec(
+        runtime_id="nanobot",
+        adapter=NanobotRuntimeAdapter(),
+        description="Nanobot runtime -- ultra-lightweight Python-based agent.",
+        requires_companion=False,
+        display_name="轻量工作引擎",
+        display_description="超轻量，快速部署，适合简单对话场景",
+        display_tags=(),
+        display_powered_by="Nanobot",
+        order=2,
     ))
 
 

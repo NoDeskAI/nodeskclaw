@@ -15,6 +15,7 @@ class RuntimeSession:
     workspace_id: str
     base_url: str
     token: str
+    system_prompt: str = ""
     extra: dict = field(default_factory=dict)
 
 
@@ -37,6 +38,8 @@ class RuntimeCapabilities:
     supports_multi_turn: bool = True
     supports_system_prompt: bool = True
     max_context_tokens: int = 128000
+    supports_native_sessions: bool = False
+    supports_memory: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -48,16 +51,28 @@ class AgentRuntimeAdapter(Protocol):
         *,
         base_url: str,
         token: str,
+        system_prompt: str = "",
         extra: dict | None = None,
     ) -> RuntimeSession: ...
 
     async def send_message(
         self,
         session: RuntimeSession,
-        messages: list[dict],
+        message: dict,
         *,
         stream: bool = True,
     ) -> AsyncIterator[ResponseChunk]: ...
+
+    async def get_history(
+        self,
+        session: RuntimeSession,
+        limit: int = 50,
+    ) -> list[dict]: ...
+
+    async def clear_history(
+        self,
+        session: RuntimeSession,
+    ) -> None: ...
 
     async def health_check(self, session: RuntimeSession) -> bool: ...
 

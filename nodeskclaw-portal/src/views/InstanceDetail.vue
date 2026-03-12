@@ -45,10 +45,18 @@ interface InstanceDetail {
   pods: { name: string; status: string; ready: boolean; restart_count: number }[]
   endpoint_url?: string | null
   compute_provider?: string
+  runtime?: string
 }
 
 const instance = ref<InstanceDetail | null>(null)
 const isDocker = computed(() => instance.value?.compute_provider === 'docker')
+
+const ENGINE_NAMES: Record<string, string> = {
+  openclaw: '全能工作引擎 (Powered by OpenClaw)',
+  zeroclaw: '高性能工作引擎 (Powered by ZeroClaw)',
+  nanobot: '轻量工作引擎 (Powered by Nanobot)',
+}
+const engineLabel = computed(() => ENGINE_NAMES[instance.value?.runtime ?? 'openclaw'] ?? instance.value?.runtime ?? 'openclaw')
 const loading = ref(true)
 const pageError = ref('')
 const gatewayToken = ref('')
@@ -289,6 +297,10 @@ async function handleDelete() {
           <div>
             <span class="text-muted-foreground">存储</span>
             <span class="ml-2">{{ instance.storage_size }}</span>
+          </div>
+          <div v-if="instance.runtime" class="col-span-2">
+            <span class="text-muted-foreground">{{ t('engine.title') }}</span>
+            <span class="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded">{{ engineLabel }}</span>
           </div>
           <div class="col-span-2">
             <span class="text-muted-foreground">创建时间</span>

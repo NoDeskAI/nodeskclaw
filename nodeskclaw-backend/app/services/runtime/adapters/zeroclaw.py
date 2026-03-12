@@ -1,4 +1,4 @@
-"""OpenClawRuntimeAdapter — communicates with OpenClaw instances via their chat completions API."""
+"""ZeroClawRuntimeAdapter — communicates with ZeroClaw instances via OpenAI-compatible API."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from typing import AsyncIterator
 import httpx
 
 from app.services.runtime.adapters.base import (
-    AgentRuntimeAdapter,
     ResponseChunk,
     RuntimeCapabilities,
     RuntimeSession,
@@ -18,10 +17,10 @@ from app.services.runtime.adapters.base import (
 logger = logging.getLogger(__name__)
 
 
-class OpenClawRuntimeAdapter:
-    """Adapter for OpenClaw runtime — the primary DeskClaw agent kernel."""
+class ZeroClawRuntimeAdapter:
+    """Adapter for ZeroClaw runtime — high-performance Rust-based agent kernel."""
 
-    runtime_id = "openclaw"
+    runtime_id = "zeroclaw"
 
     async def create_session(
         self,
@@ -55,50 +54,51 @@ class OpenClawRuntimeAdapter:
         headers = {
             "Authorization": f"Bearer {session.token}",
             "Content-Type": "application/json",
-            "X-OpenClaw-Session-Key": session.session_id,
+            "X-Session-Key": session.session_id,
         }
         messages: list[dict] = []
         if session.system_prompt:
             messages.append({"role": "system", "content": session.system_prompt})
         messages.append(message)
-        payload = {"model": "gpt-4", "messages": messages, "stream": stream}
+        payload = {"model": "default", "messages": messages, "stream": stream}
 
-        async with httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
-            timeout=120,
-        ) as client:
-            if not stream:
-                resp = await client.post(url, headers=headers, json=payload)
-                if resp.status_code != 200:
-                    yield ResponseChunk(is_error=True, error_message=f"HTTP {resp.status_code}")
-                    return
-                data = resp.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                yield ResponseChunk(content=content, is_done=True, raw=data)
-                return
-
-            async with client.stream("POST", url, headers=headers, json=payload) as resp:
-                if resp.status_code != 200:
-                    yield ResponseChunk(
-                        is_error=True,
-                        error_message=f"HTTP {resp.status_code}",
-                    )
-                    return
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    chunk_data = line[6:]
-                    if chunk_data == "[DONE]":
-                        yield ResponseChunk(is_done=True)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
+                timeout=120,
+            ) as client:
+                if not stream:
+                    resp = await client.post(url, headers=headers, json=payload)
+                    if resp.status_code != 200:
+                        yield ResponseChunk(is_error=True, error_message=f"HTTP {resp.status_code}")
                         return
-                    try:
-                        chunk = json.loads(chunk_data)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield ResponseChunk(content=content, raw=chunk)
-                    except json.JSONDecodeError:
-                        continue
+                    data = resp.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    yield ResponseChunk(content=content, is_done=True, raw=data)
+                    return
+
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    if resp.status_code != 200:
+                        yield ResponseChunk(is_error=True, error_message=f"HTTP {resp.status_code}")
+                        return
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        chunk_data = line[6:]
+                        if chunk_data == "[DONE]":
+                            yield ResponseChunk(is_done=True)
+                            return
+                        try:
+                            chunk = json.loads(chunk_data)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield ResponseChunk(content=content, raw=chunk)
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.error("ZeroClaw send_message failed: %s", e)
+            yield ResponseChunk(is_error=True, error_message=str(e))
 
     async def get_history(self, session: RuntimeSession, limit: int = 50) -> list[dict]:
         return []
@@ -122,7 +122,7 @@ class OpenClawRuntimeAdapter:
         return RuntimeCapabilities(
             runtime_id=self.runtime_id,
             supports_streaming=True,
-            supports_tool_use=True,
+            supports_tool_use=False,
             supports_multi_turn=True,
             supports_system_prompt=True,
             supports_native_sessions=True,

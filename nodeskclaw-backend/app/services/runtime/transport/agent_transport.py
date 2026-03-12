@@ -151,16 +151,14 @@ class AgentTransportAdapter:
         )
 
         user_content = f"[{data.sender.name}]: {data.content}"
-        messages = [
-            {"role": "system", "content": context_prompt},
-            {"role": "user", "content": user_content},
-        ]
+        new_message = {"role": "user", "content": user_content}
 
         session = await adapter.create_session(
             instance_id=target_node_id,
             workspace_id=workspace_id,
             base_url=base_url,
             token=token,
+            system_prompt=context_prompt,
         )
 
         from app.api.workspaces import broadcast_event
@@ -176,7 +174,7 @@ class AgentTransportAdapter:
         error_msg: str | None = None
 
         try:
-            async for chunk in adapter.send_message(session, messages, stream=True):
+            async for chunk in adapter.send_message(session, new_message, stream=True):
                 if chunk.is_error:
                     error_msg = chunk.error_message or "unknown_error"
                     break

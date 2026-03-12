@@ -88,7 +88,7 @@ nodeskclaw-backend/
 │   │   ├── summary_job.py        # 自动摘要生成
 │   │   ├── runtime/              # 运行时平台 v2（五层架构）
 │   │   │   ├── registries/       # 六大注册表（NodeType/Transport/Runtime/Compute/ContextBridge/Channel）
-│   │   │   ├── adapters/         # Agent 运行时适配器（OpenClaw/ClaudeCode/GenericHTTP）
+│   │   │   ├── adapters/         # Agent 运行时适配器（OpenClaw/ZeroClaw/Nanobot）
 │   │   │   ├── context_bridges/  # 上下文注入桥接（ChannelPlugin/SystemPrompt/MCP）
 │   │   │   ├── compute/          # 计算资源提供者（K8s/Docker/Process）
 │   │   │   ├── transport/        # 消息投递适配器（Agent/Channel）

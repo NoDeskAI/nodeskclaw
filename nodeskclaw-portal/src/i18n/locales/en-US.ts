@@ -1119,6 +1119,12 @@ const enUS = {
     manualInputPlaceholder: "Enter model ID, e.g. deepseek-chat",
     modelIdEmpty: "Model ID cannot be empty",
   },
+  engine: {
+    title: "Work Engine",
+    subtitle: "Select the engine that powers your AI employee",
+    poweredBy: "Powered by",
+    defaultTag: "Default",
+  },
   nav: {
     workspace: "Office",
     geneMarket: "Genes",

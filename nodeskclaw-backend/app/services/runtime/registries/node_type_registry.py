@@ -137,7 +137,7 @@ NODE_TYPE_REGISTRY.register(NodeTypeDefinitionSpec(
     is_addressable=True,
     can_originate=True,
     hooks=["on_message_received"],
-    description="AI agent node backed by a runtime (OpenClaw, ClaudeCode, etc.)",
+    description="AI agent node backed by a runtime (OpenClaw, ZeroClaw, Nanobot, etc.)",
 ))
 
 NODE_TYPE_REGISTRY.register(NodeTypeDefinitionSpec(

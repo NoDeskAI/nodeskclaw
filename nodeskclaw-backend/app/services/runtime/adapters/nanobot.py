@@ -1,10 +1,9 @@
-"""GenericHTTPAdapter — OpenAI-compatible HTTP API adapter for third-party agent runtimes."""
+"""NanobotRuntimeAdapter — communicates with Nanobot instances via OpenAI-compatible API."""
 
 from __future__ import annotations
 
 import json
 import logging
-import uuid
 from typing import AsyncIterator
 
 import httpx
@@ -18,10 +17,10 @@ from app.services.runtime.adapters.base import (
 logger = logging.getLogger(__name__)
 
 
-class GenericHTTPAdapter:
-    """Adapter for generic HTTP runtimes exposing OpenAI-compatible chat completions API."""
+class NanobotRuntimeAdapter:
+    """Adapter for Nanobot runtime — ultra-lightweight Python-based agent."""
 
-    runtime_id = "generic_http"
+    runtime_id = "nanobot"
 
     async def create_session(
         self,
@@ -30,32 +29,38 @@ class GenericHTTPAdapter:
         *,
         base_url: str,
         token: str,
+        system_prompt: str = "",
         extra: dict | None = None,
     ) -> RuntimeSession:
         return RuntimeSession(
-            session_id=str(uuid.uuid4()),
+            session_id=f"workspace:{workspace_id}",
             runtime_id=self.runtime_id,
             instance_id=instance_id,
             workspace_id=workspace_id,
             base_url=base_url,
             token=token,
+            system_prompt=system_prompt,
             extra=extra or {},
         )
 
     async def send_message(
         self,
         session: RuntimeSession,
-        messages: list[dict],
+        message: dict,
         *,
         stream: bool = True,
     ) -> AsyncIterator[ResponseChunk]:
         url = f"{session.base_url}/v1/chat/completions"
-        headers = {"Content-Type": "application/json"}
-        if session.token:
-            headers["Authorization"] = f"Bearer {session.token}"
-
-        model = session.extra.get("model", "gpt-4")
-        payload = {"model": model, "messages": messages, "stream": stream}
+        headers = {
+            "Authorization": f"Bearer {session.token}",
+            "Content-Type": "application/json",
+            "X-Session-Key": session.session_id,
+        }
+        messages: list[dict] = []
+        if session.system_prompt:
+            messages.append({"role": "system", "content": session.system_prompt})
+        messages.append(message)
+        payload = {"model": "default", "messages": messages, "stream": stream}
 
         try:
             async with httpx.AsyncClient(
@@ -92,16 +97,23 @@ class GenericHTTPAdapter:
                         except json.JSONDecodeError:
                             continue
         except Exception as e:
-            logger.error("GenericHTTP send_message failed: %s", e)
+            logger.error("Nanobot send_message failed: %s", e)
             yield ResponseChunk(is_error=True, error_message=str(e))
 
+    async def get_history(self, session: RuntimeSession, limit: int = 50) -> list[dict]:
+        return []
+
+    async def clear_history(self, session: RuntimeSession) -> None:
+        pass
+
     async def health_check(self, session: RuntimeSession) -> bool:
+        url = f"{session.base_url}/health"
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(verify=False, local_address="0.0.0.0"),
                 timeout=10,
             ) as client:
-                resp = await client.get(f"{session.base_url}/health")
+                resp = await client.get(url)
                 return resp.status_code == 200
         except Exception:
             return False
@@ -113,6 +125,7 @@ class GenericHTTPAdapter:
             supports_tool_use=False,
             supports_multi_turn=True,
             supports_system_prompt=True,
+            supports_native_sessions=True,
         )
 
     async def destroy_session(self, session: RuntimeSession) -> None:

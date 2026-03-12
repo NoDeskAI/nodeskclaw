@@ -110,7 +110,13 @@ async def list_runtime_adapters(org_ctx=Depends(get_current_org)):
         runtimes.append({
             "runtime_id": spec.runtime_id,
             "description": spec.description,
+            "display_name": spec.display_name,
+            "display_description": spec.display_description,
+            "display_tags": list(spec.display_tags),
+            "display_powered_by": spec.display_powered_by,
+            "order": spec.order,
         })
+    runtimes.sort(key=lambda r: r["order"])
     return _ok(runtimes)
 
 
