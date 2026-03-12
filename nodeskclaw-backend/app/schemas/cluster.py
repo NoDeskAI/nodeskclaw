@@ -7,8 +7,9 @@ from pydantic import BaseModel
 
 class ClusterCreate(BaseModel):
     name: str
+    compute_provider: str = "k8s"
+    kubeconfig: str | None = None
     provider: str = "vke"
-    kubeconfig: str  # plaintext, encrypted by backend
     ingress_class: str = "nginx"
     proxy_endpoint: str | None = None
 

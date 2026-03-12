@@ -1,9 +1,12 @@
 """Unified exception handling."""
 
+import logging
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AppException(Exception):
@@ -135,6 +138,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Unhandled exception")
         return JSONResponse(
             status_code=500,
             content={

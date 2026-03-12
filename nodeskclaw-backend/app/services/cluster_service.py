@@ -29,32 +29,17 @@ async def list_clusters(db: AsyncSession) -> list[ClusterInfo]:
 async def create_cluster(
     data: ClusterCreate, user: User, db: AsyncSession, org_id: str | None = None,
 ) -> ClusterInfo:
+    """统一集群创建入口，根据 compute_provider 分支处理 k8s / docker。"""
+    compute = data.compute_provider or "k8s"
+
     if not feature_gate.is_enabled("multi_cluster"):
         count_result = await db.execute(
-            select(func.count(Cluster.id)).where(
-                Cluster.deleted_at.is_(None),
-                Cluster.compute_provider == "k8s",
-            )
+            select(func.count(Cluster.id)).where(Cluster.deleted_at.is_(None))
         )
         if count_result.scalar_one() >= 1:
             raise ConflictError(
                 message="已配置集群，当前仅支持单集群",
                 message_key="errors.cluster.single_cluster_limit",
-            )
-
-    # CE 互斥：当前组织已有 Docker 集群时拒绝创建 K8s 集群
-    if org_id:
-        docker_exists = await db.execute(
-            select(Cluster.id).where(
-                Cluster.org_id == org_id,
-                Cluster.compute_provider == "docker",
-                Cluster.deleted_at.is_(None),
-            )
-        )
-        if docker_exists.scalar_one_or_none():
-            raise ConflictError(
-                message="当前组织已启用 Docker 运行环境，无法同时添加 K8s 集群",
-                message_key="errors.cluster.docker_k8s_mutual_exclusive",
             )
 
     name_query = select(Cluster).where(
@@ -65,6 +50,15 @@ async def create_cluster(
     existing = await db.execute(name_query)
     if existing.scalar_one_or_none():
         raise ConflictError(f"集群名称 '{data.name}' 已存在")
+
+    if compute == "docker":
+        return await _create_docker_cluster(data.name, user, org_id, db)
+
+    if not data.kubeconfig:
+        raise BadRequestError(
+            message="K8s 集群必须提供 KubeConfig",
+            message_key="errors.cluster.kubeconfig_required",
+        )
 
     api_server_url, auth_type = _parse_kubeconfig_meta(data.kubeconfig)
 
@@ -180,42 +174,10 @@ async def update_kubeconfig(cluster_id: str, kubeconfig: str, db: AsyncSession) 
     return ClusterInfo.model_validate(cluster)
 
 
-async def create_docker_cluster(
-    name: str, user: User, org_id: str, db: AsyncSession,
+async def _create_docker_cluster(
+    name: str, user: User, org_id: str | None, db: AsyncSession,
 ) -> ClusterInfo:
-    """创建 Docker 运行环境（特殊集群）。org_id 必填。"""
-    if not org_id:
-        raise BadRequestError("Docker 集群必须归属组织")
-
-    # 互斥：当前组织已有 K8s 集群时拒绝
-    k8s_exists = await db.execute(
-        select(Cluster.id).where(
-            Cluster.org_id == org_id,
-            Cluster.compute_provider == "k8s",
-            Cluster.deleted_at.is_(None),
-        )
-    )
-    if k8s_exists.scalar_one_or_none():
-        raise ConflictError(
-            message="当前组织已有 K8s 集群，无法同时启用 Docker 运行环境",
-            message_key="errors.cluster.docker_k8s_mutual_exclusive",
-        )
-
-    # 唯一性：每个组织只能有一个 Docker 集群
-    docker_exists = await db.execute(
-        select(Cluster.id).where(
-            Cluster.org_id == org_id,
-            Cluster.compute_provider == "docker",
-            Cluster.deleted_at.is_(None),
-        )
-    )
-    if docker_exists.scalar_one_or_none():
-        raise ConflictError(
-            message="当前组织已有 Docker 运行环境",
-            message_key="errors.cluster.docker_already_exists",
-        )
-
-    # Docker 环境检查
+    """内部: 创建 Docker 运行环境集群。"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "docker", "compose", "version",

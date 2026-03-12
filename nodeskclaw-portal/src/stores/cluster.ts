@@ -90,7 +90,7 @@ export const useClusterStore = defineStore('cluster', () => {
     }
   }
 
-  async function createCluster(payload: { name: string; kubeconfig: string; provider?: string }) {
+  async function createCluster(payload: { name: string; compute_provider?: string; kubeconfig?: string; provider?: string }) {
     const res = await api.post('/clusters', payload)
     const created: ClusterInfo = res.data.data
     clusters.value.unshift(created)
@@ -132,13 +132,6 @@ export const useClusterStore = defineStore('cluster', () => {
     return updated
   }
 
-  async function createDockerCluster(name = 'local-docker') {
-    const res = await api.post('/clusters/docker', { name })
-    const created: ClusterInfo = res.data.data
-    clusters.value.unshift(created)
-    return created
-  }
-
   async function fetchCluster(id: string) {
     const res = await api.get(`/clusters/${id}`)
     currentCluster.value = res.data.data
@@ -163,7 +156,6 @@ export const useClusterStore = defineStore('cluster', () => {
     overviewLoading,
     fetchClusters,
     createCluster,
-    createDockerCluster,
     updateCluster,
     deleteCluster,
     testConnection,
