@@ -513,6 +513,13 @@ if feature_gate.is_ee:
         from ee.backend.middleware.audit_middleware import AuditMiddleware
         app.add_middleware(AuditMiddleware)
 
+        try:
+            from ee.backend.hooks.member_hook import EEMemberHookProvider
+            from app.services.member_hooks import register_member_hook
+            register_member_hook(EEMemberHookProvider())
+        except ImportError:
+            pass
+
         logging.getLogger(__name__).info("EE 模块已加载（含操作审计）")
     except ImportError:
         logging.getLogger(__name__).warning("检测到 ee/ 目录但 EE 模块加载失败，以 CE 模式运行")

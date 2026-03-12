@@ -10,6 +10,7 @@ from app.core.deps import (
     get_db,
     require_feature,
     require_org_admin,
+    require_org_member,
     require_super_admin_dep,
 )
 from app.core.security import get_current_user
@@ -198,21 +199,19 @@ async def feishu_org_setup(
 
 # ── 成员管理 ─────────────────────────────────────────────
 
-@router.get("/{org_id}/members", response_model=ApiResponse[list[MemberInfo]],
-            dependencies=[Depends(require_feature("multi_org"))])
+@router.get("/{org_id}/members", response_model=ApiResponse[list[MemberInfo]])
 async def list_members(
     org_id: str,
     db: AsyncSession = Depends(get_db),
-    _org_ctx: tuple = Depends(require_org_admin),
+    _org_ctx: tuple = Depends(require_org_member),
     current_user: User = Depends(get_current_user),
 ):
-    """列出组织成员（组织管理员+）。"""
+    """列出组织成员（组织成员+）。"""
     data = await org_service.list_members(org_id, db, current_user_id=current_user.id)
     return ApiResponse(data=data)
 
 
-@router.post("/{org_id}/members", response_model=ApiResponse[MemberInfo],
-             dependencies=[Depends(require_feature("multi_org"))])
+@router.post("/{org_id}/members", response_model=ApiResponse[MemberInfo])
 async def add_member(
     org_id: str,
     body: AddMemberRequest,
@@ -225,8 +224,7 @@ async def add_member(
     return ApiResponse(data=data)
 
 
-@router.put("/{org_id}/members/{membership_id}", response_model=ApiResponse[MemberInfo],
-            dependencies=[Depends(require_feature("multi_org"))])
+@router.put("/{org_id}/members/{membership_id}", response_model=ApiResponse[MemberInfo])
 async def update_member_role(
     org_id: str,
     membership_id: str,
@@ -240,8 +238,7 @@ async def update_member_role(
     return ApiResponse(data=data)
 
 
-@router.delete("/{org_id}/members/{membership_id}", response_model=ApiResponse,
-               dependencies=[Depends(require_feature("multi_org"))])
+@router.delete("/{org_id}/members/{membership_id}", response_model=ApiResponse)
 async def remove_member(
     org_id: str,
     membership_id: str,
@@ -249,13 +246,24 @@ async def remove_member(
     _org_ctx: tuple = Depends(require_org_admin),
 ):
     """移除成员（组织管理员+）。"""
+    ms = (await db.execute(
+        select(OrgMembership).where(OrgMembership.id == membership_id, OrgMembership.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    removed_user_id = ms.user_id if ms else None
+
     await org_service.remove_member(org_id, membership_id, db)
     await hooks.emit("operation_audit", action="org.member_removed", target_type="org_membership", target_id=membership_id, actor_id=_org_ctx[0].id, org_id=org_id)
+
+    if removed_user_id:
+        from app.services.member_hooks import get_member_hook
+        try:
+            await get_member_hook().on_member_removed(org_id, removed_user_id)
+        except Exception:
+            pass
     return ApiResponse(message="成员已移除")
 
 
-@router.post("/{org_id}/members/{user_id}/reset-password", response_model=ApiResponse[ResetPasswordResponse],
-             dependencies=[Depends(require_feature("multi_org"))])
+@router.post("/{org_id}/members/{user_id}/reset-password", response_model=ApiResponse[ResetPasswordResponse])
 async def reset_member_password(
     org_id: str,
     user_id: str,

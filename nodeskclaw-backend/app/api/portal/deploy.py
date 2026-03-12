@@ -8,9 +8,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import status as http_status
+from sqlalchemy import select
+
 from app.core import hooks
 from app.core.deps import get_db
 from app.core.security import get_current_user
+from app.models.org_membership import OrgMembership
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.deploy import DeployProgress, DeployRequest, PrecheckResult
@@ -38,6 +42,22 @@ async def deploy(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not current_user.is_super_admin:
+        org_id_check = body.org_id or current_user.current_org_id
+        if org_id_check:
+            ms = (await db.execute(
+                select(OrgMembership).where(
+                    OrgMembership.user_id == current_user.id,
+                    OrgMembership.org_id == org_id_check,
+                    OrgMembership.deleted_at.is_(None),
+                )
+            )).scalar_one_or_none()
+            if not ms or ms.role != "admin":
+                raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={
+                    "error_code": 40320, "message_key": "errors.rbac.admin_required",
+                    "message": "Only organization admins can deploy instances",
+                })
+
     effective_org_id = body.org_id or current_user.current_org_id
     if not effective_org_id:
         raise HTTPException(status_code=400, detail="缺少目标组织，无法部署")

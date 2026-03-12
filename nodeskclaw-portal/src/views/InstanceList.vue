@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Loader2, Server, RefreshCw, Package, Dna, X, Container } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
+import { useAuthStore } from '@/stores/auth'
 import { useGeneStore } from '@/stores/gene'
 import { useClusterStore } from '@/stores/cluster'
 import BaseTooltip from '@/components/shared/BaseTooltip.vue'
@@ -43,9 +44,11 @@ function getRoleLabel(role: string | null): string {
 
 const router = useRouter()
 const { t, locale } = useI18n()
+const authStore = useAuthStore()
 const geneStore = useGeneStore()
 const clusterStore = useClusterStore()
 
+const isOrgAdmin = computed(() => authStore.user?.portal_org_role === 'admin')
 const hasCluster = computed(() => clusterStore.clusters.length > 0)
 const loading = ref(true)
 const instances = ref<InstanceInfo[]>([])
@@ -145,7 +148,7 @@ onMounted(() => {
           <RefreshCw class="w-4 h-4" />
           {{ t('instanceList.refresh') }}
         </button>
-        <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+        <BaseTooltip v-if="isOrgAdmin" :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
           <button
             class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             :disabled="!hasCluster"
@@ -155,7 +158,7 @@ onMounted(() => {
             {{ t('instanceList.createInstance') }}
           </button>
         </BaseTooltip>
-        <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+        <BaseTooltip v-if="isOrgAdmin" :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
           <button
             class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
             :disabled="!hasCluster"
@@ -239,7 +242,7 @@ onMounted(() => {
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
         {{ t('instanceList.emptyDescription') }}
       </p>
-      <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+      <BaseTooltip v-if="isOrgAdmin" :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
         <button
           class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           :disabled="!hasCluster"

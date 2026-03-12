@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import HTTPException, status as http_status
+
 from app.core import hooks
 from app.core.deps import get_db
 from app.core.security import get_current_user
@@ -16,6 +18,7 @@ from app.models.cluster import Cluster
 from app.models.instance import Instance
 from app.models.instance_member import InstanceMember, InstanceRole
 from app.models.base import not_deleted
+from app.models.org_membership import OrgMembership
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.deploy import DeployRecordInfo
@@ -28,6 +31,29 @@ from app.services.k8s.k8s_client import K8sClient
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _require_org_admin_role(user: User, db: AsyncSession) -> None:
+    """Verify the current user is an org admin. Raises 403 if not."""
+    if user.is_super_admin:
+        return
+    if not user.current_org_id:
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={
+            "error_code": 40320, "message_key": "errors.rbac.admin_required",
+            "message": "Only organization admins can perform this action",
+        })
+    ms = (await db.execute(
+        select(OrgMembership).where(
+            OrgMembership.user_id == user.id,
+            OrgMembership.org_id == user.current_org_id,
+            OrgMembership.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not ms or ms.role != "admin":
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail={
+            "error_code": 40320, "message_key": "errors.rbac.admin_required",
+            "message": "Only organization admins can perform this action",
+        })
 
 
 @router.get("/check-slug", response_model=ApiResponse[dict])
@@ -120,6 +146,7 @@ async def delete_instance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await _require_org_admin_role(current_user, db)
     await instance_member_service.check_instance_access(
         instance_id, current_user, InstanceRole.admin, db
     )
@@ -136,6 +163,7 @@ async def scale_instance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await _require_org_admin_role(current_user, db)
     await instance_member_service.check_instance_access(
         instance_id, current_user, InstanceRole.editor, db
     )
@@ -150,6 +178,7 @@ async def restart_instance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await _require_org_admin_role(current_user, db)
     await instance_member_service.check_instance_access(
         instance_id, current_user, InstanceRole.editor, db
     )

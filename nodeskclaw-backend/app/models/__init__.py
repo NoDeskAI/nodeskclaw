@@ -21,6 +21,7 @@ from app.models.gene import (  # noqa: F401
 )
 from app.models.idempotency_cache import IdempotencyCache  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
+from app.models.invitation import Invitation  # noqa: F401
 from app.models.instance_template import InstanceTemplate  # noqa: F401
 from app.models.instance_mcp_server import InstanceMcpServer  # noqa: F401
 from app.models.instance_member import InstanceMember  # noqa: F401

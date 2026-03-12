@@ -90,6 +90,7 @@ const ceRoutes: RouteRecordRaw[] = [
       { path: 'clusters', name: 'OrgSettingsClusters', component: () => import('@/views/OrgSettingsClusters.vue'), meta: { ceOnly: true } },
       { path: 'genes', name: 'OrgSettingsGenes', component: () => import('@/views/OrgSettingsGenes.vue') },
       { path: 'smtp', name: 'OrgSettingsSmtp', component: () => import('@/views/OrgSettingsSmtp.vue'), meta: { ceOnly: true } },
+      { path: 'members', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue') },
       ...eeOrgSettingsChildren,
     ],
   },
@@ -127,6 +128,12 @@ const ceRoutes: RouteRecordRaw[] = [
     path: '/create',
     redirect: '/workspace/create',
   },
+  {
+    path: '/invite/:token',
+    name: 'AcceptInvite',
+    component: () => import('@/views/AcceptInvite.vue'),
+    meta: { requiresAuth: false },
+  },
 ]
 
 const routes: RouteRecordRaw[] = [...ceRoutes, ...eePortalRoutes]
@@ -139,9 +146,10 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('portal_token')
   const isLoginPage = to.path === '/login' || to.path.startsWith('/login/callback/')
+  const isInvitePage = to.path.startsWith('/invite/')
   const isSetupPage = to.path === '/setup-org'
 
-  if (isLoginPage) {
+  if (isLoginPage || isInvitePage) {
     return next()
   }
 
