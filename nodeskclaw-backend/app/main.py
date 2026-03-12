@@ -139,6 +139,27 @@ async def lifespan(app: FastAPI):
         finally:
             await _target_conn.close()
 
+    # ── 自动迁移（Alembic upgrade head，幂等）──
+    async def _auto_migrate():
+        from alembic.config import Config
+        from alembic import command
+
+        def _run():
+            backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            cfg = Config(os.path.join(backend_root, "alembic.ini"))
+            cfg.set_main_option("script_location", os.path.join(backend_root, "alembic"))
+            command.upgrade(cfg, "head")
+
+        await asyncio.to_thread(_run)
+
+    try:
+        logger.info("正在执行数据库迁移 (alembic upgrade head) ...")
+        await _auto_migrate()
+        logger.info("数据库迁移完成")
+    except Exception:
+        logger.exception("数据库迁移失败，应用无法启动")
+        raise
+
     # ── 种子数据（幂等，每次启动执行）──
     from app.startup.seed import run_seed
     _seed_credentials = await run_seed(async_session_factory, is_ee=_fg.is_ee)
