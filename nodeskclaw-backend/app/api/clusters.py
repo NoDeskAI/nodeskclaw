@@ -10,6 +10,7 @@ from app.core.deps import get_current_org, get_db
 from app.core.exceptions import NotFoundError
 from app.core.security import get_current_user
 from app.models.cluster import Cluster
+from app.models.user import User
 from app.schemas.cluster import ClusterCreate, ClusterInfo, ClusterUpdate, ConnectionTestResult
 from app.schemas.common import ApiResponse
 from app.services import cluster_service
