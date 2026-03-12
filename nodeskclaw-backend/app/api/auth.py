@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.core import hooks
 from app.core.deps import get_db, require_feature, require_super_admin_dep
 from app.core.security import get_current_user, get_current_user_unchecked
+from app.models.admin_membership import AdminMembership
 from app.models.user import User
 from app.schemas.auth import (
     AccountLoginRequest,
@@ -171,8 +172,13 @@ async def list_staff(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_super_admin_dep),
 ):
-    """列出运维人员（is_super_admin=True）。"""
-    stmt = select(User).options(selectinload(User.oauth_connections)).where(User.deleted_at.is_(None), User.is_super_admin.is_(True))
+    """列出运维人员（is_super_admin=True 且有活跃 AdminMembership）。"""
+    admin_user_ids = select(AdminMembership.user_id).where(AdminMembership.deleted_at.is_(None))
+    stmt = select(User).options(selectinload(User.oauth_connections)).where(
+        User.deleted_at.is_(None),
+        User.is_super_admin.is_(True),
+        User.id.in_(admin_user_ids),
+    )
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -209,6 +215,19 @@ async def update_staff(
 
     if is_super_admin is not None:
         user.is_super_admin = is_super_admin
+        if is_super_admin:
+            existing_am = await db.execute(
+                select(AdminMembership).where(
+                    AdminMembership.user_id == user.id,
+                    AdminMembership.deleted_at.is_(None),
+                )
+            )
+            if existing_am.scalar_one_or_none() is None:
+                db.add(AdminMembership(
+                    user_id=user.id,
+                    org_id=current_user.current_org_id,
+                    role="admin",
+                ))
     if is_active is not None:
         user.is_active = is_active
 
