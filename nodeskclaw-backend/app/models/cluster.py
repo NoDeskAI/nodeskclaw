@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -14,6 +14,7 @@ class ClusterProvider(str, Enum):
     ack = "ack"
     tke = "tke"
     custom = "custom"
+    docker = "docker"
 
 
 class ClusterStatus(str, Enum):
@@ -24,9 +25,16 @@ class ClusterStatus(str, Enum):
 
 class Cluster(BaseModel):
     __tablename__ = "clusters"
+    __table_args__ = (
+        Index(
+            "uq_clusters_name_org", "name", "org_id",
+            unique=True, postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
-    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
     provider: Mapped[str] = mapped_column(String(16), default=ClusterProvider.vke, nullable=False)
+    compute_provider: Mapped[str] = mapped_column(String(32), default="k8s", nullable=False)
     kubeconfig_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     auth_type: Mapped[str] = mapped_column(String(32), default="token", nullable=False)
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

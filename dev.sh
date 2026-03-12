@@ -33,8 +33,8 @@ usage() {
 
 服务端口:
   backend    http://localhost:8000
-  portal     http://localhost:5174
-  admin(EE)  http://localhost:5173
+  portal     http://localhost:4517
+  admin(EE)  http://localhost:4518
 EOF
   exit 0
 }
@@ -176,9 +176,9 @@ echo "${BOLD}========================================${RESET}"
 echo "${BOLD} NoDeskClaw 本地开发环境 (${MODE_UPPER})${RESET}"
 echo "${BOLD}========================================${RESET}"
 echo "  ${BLUE}Backend${RESET}  http://localhost:8000"
-echo "  ${GREEN}Portal${RESET}   http://localhost:5174"
+echo "  ${GREEN}Portal${RESET}   http://localhost:4517"
 if [ "$MODE" = "ee" ]; then
-  echo "  ${YELLOW}Admin${RESET}    http://localhost:5173"
+  echo "  ${YELLOW}Admin${RESET}    http://localhost:4518"
 fi
 echo "${BOLD}========================================${RESET}"
 echo "  Ctrl+C 停止所有服务"

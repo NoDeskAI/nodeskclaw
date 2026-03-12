@@ -244,8 +244,9 @@ async def require_org_member(
 def require_org_role(min_role: str):
     """工厂函数：生成要求当前用户在 admin_memberships 中至少拥有 min_role 的依赖。
 
-    用于 admin_router 的 include_router(dependencies=[...])，
-    super_admin 自动放行。返回 (user, org)。
+    用于 admin_router 的 include_router(dependencies=[...])。
+    严格要求 AdminMembership，is_super_admin 不再自动放行。
+    返回 (user, org)。
     """
     from app.models.org_membership import ADMIN_ROLE_LEVEL
 
@@ -259,17 +260,6 @@ def require_org_role(min_role: str):
         from app.models.organization import Organization
 
         target_org_id = user.current_org_id
-
-        if user.is_super_admin and target_org_id:
-            result = await db.execute(
-                select(Organization).where(
-                    Organization.id == target_org_id,
-                    Organization.deleted_at.is_(None),
-                )
-            )
-            org = result.scalar_one_or_none()
-            if org:
-                return user, org
 
         if target_org_id is None:
             raise HTTPException(

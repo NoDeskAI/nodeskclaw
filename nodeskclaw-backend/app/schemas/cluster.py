@@ -24,6 +24,7 @@ class ClusterInfo(BaseModel):
     id: str
     name: str
     provider: str
+    compute_provider: str = "k8s"
     auth_type: str
     ingress_class: str = "nginx"
     proxy_endpoint: str | None = None

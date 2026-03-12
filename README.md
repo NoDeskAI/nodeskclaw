@@ -78,7 +78,7 @@ cp .env.example .env
 | `ENCRYPTION_KEY` | KubeConfig AES key (32-byte base64) |
 | `FEISHU_APP_ID` | Feishu App ID |
 | `FEISHU_APP_SECRET` | Feishu App Secret |
-| `FEISHU_REDIRECT_URI` | `http://localhost:5173/api/v1/auth/feishu/callback` |
+| `FEISHU_REDIRECT_URI` | `http://localhost:4518/api/v1/auth/feishu/callback` |
 
 ### 2. One-command Start
 
@@ -93,8 +93,8 @@ The script handles dependency installation, starts all services with colored log
 
 | Mode | Services | Ports |
 |------|----------|-------|
-| CE | backend + portal | 8000, 5174 |
-| EE | backend + portal + admin | 8000, 5174, 5173 |
+| CE | backend + portal | 8000, 4517 |
+| EE | backend + portal + admin | 8000, 4517, 4518 |
 
 ### Manual Start (alternative)
 
@@ -118,7 +118,7 @@ cd nodeskclaw-portal
 npm install && npm run dev
 ```
 
-Portal at `http://localhost:5174` | `/api` auto-proxy to backend.
+Portal at `http://localhost:4517` | `/api` auto-proxy to backend.
 
 **Frontend (Admin, EE-only):**
 
@@ -127,15 +127,15 @@ cd ee/nodeskclaw-frontend
 npm install && npm run dev
 ```
 
-Admin at `http://localhost:5173` | `/api` and `/stream` auto-proxy to backend.
+Admin at `http://localhost:4518` | `/api` and `/stream` auto-proxy to backend.
 
 </details>
 
 ### 3. Go
 
-Open `http://localhost:5174` (Portal) or `http://localhost:5173` (Admin, EE), sign in.
+Open `http://localhost:4517` (Portal) or `http://localhost:4518` (Admin, EE), sign in.
 
-> Feishu redirect URL: `http://localhost:5173/api/v1/auth/feishu/callback`
+> Feishu redirect URL: `http://localhost:4518/api/v1/auth/feishu/callback`
 
 ## Documentation
 

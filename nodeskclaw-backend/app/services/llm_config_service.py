@@ -19,7 +19,7 @@ from app.models.user_llm_key import UserLlmKey
 from app.schemas.llm import OpenClawConfigResponse, OpenClawProviderEntry
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
-from app.services.nfs_mount import PodFS, remote_fs
+from app.services.nfs_mount import RemoteFS, remote_fs
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ def _set_default_agent_model(config: dict, providers: dict) -> None:
     defaults["model"] = {"primary": first_provider}
 
 
-async def _read_config_file(fs: PodFS) -> dict | None:
+async def _read_config_file(fs: RemoteFS) -> dict | None:
     """Read openclaw.json from Pod via exec.
 
     Returns:
@@ -232,7 +232,7 @@ async def _read_config_file(fs: PodFS) -> dict | None:
         ) from e
 
 
-async def _write_config_file(fs: PodFS, data: dict) -> None:
+async def _write_config_file(fs: RemoteFS, data: dict) -> None:
     """Write openclaw.json to Pod via exec."""
     await fs.write_text(
         str(OPENCLAW_CONFIG_REL),
@@ -570,7 +570,7 @@ def _get_plugin_source_dir() -> Path:
     )
 
 
-async def _deploy_plugin_files(fs: PodFS, plugin_source: Path) -> None:
+async def _deploy_plugin_files(fs: RemoteFS, plugin_source: Path) -> None:
     """Copy channel plugin files to the Pod (.openclaw/extensions/)."""
     target_base = f".openclaw/extensions/{CHANNEL_PLUGIN_DIR}"
     await fs.mkdir(f"{target_base}/src")
@@ -823,7 +823,7 @@ def _get_learning_plugin_source_dir() -> Path:
     )
 
 
-async def _deploy_learning_plugin_files(fs: PodFS, plugin_source: Path) -> None:
+async def _deploy_learning_plugin_files(fs: RemoteFS, plugin_source: Path) -> None:
     target_base = f".openclaw/extensions/{LEARNING_PLUGIN_DIR}"
     await fs.mkdir(f"{target_base}/src")
 
@@ -901,7 +901,11 @@ async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
 
     Strategy: try graceful SIGTERM first; if exec fails (pod crashed / not ready),
     fall back to Deployment rolling restart.
+    Docker: delegate to DockerComputeProvider.restart_instance.
     """
+    if instance.compute_provider == "docker":
+        return await _restart_openclaw_docker(instance)
+
     k8s = await _get_k8s_client(instance, db)
     if k8s is None:
         return {"status": "error", "message": "集群不可用"}
@@ -944,6 +948,20 @@ async def restart_openclaw(instance: Instance, db: AsyncSession) -> dict:
                     return {"status": "ok", "message": "重启完成"}
 
     return {"status": "timeout", "message": "重启超时（60s），请检查实例状态"}
+
+
+async def _restart_openclaw_docker(instance: Instance) -> dict:
+    """Restart an OpenClaw Docker container."""
+    from app.services.instance_service import _build_docker_handle, _get_docker_provider
+    try:
+        provider = _get_docker_provider()
+        handle = _build_docker_handle(instance)
+        await provider.restart_instance(handle)
+        logger.info("Docker 实例 %s OpenClaw 重启完成", instance.name)
+        return {"status": "ok", "message": "重启完成"}
+    except Exception as e:
+        logger.error("Docker 实例 %s 重启失败: %s", instance.name, e)
+        return {"status": "error", "message": f"Docker 重启失败: {e}"}
 
 
 async def repair_channel_account_urls(db: AsyncSession) -> dict:

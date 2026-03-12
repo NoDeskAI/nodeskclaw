@@ -81,3 +81,15 @@ class ComputeProvider(Protocol):
     ) -> ComputeHandle:
         """Update compute resources (e.g., image version, resources, runtime)."""
         ...
+
+    async def restart_instance(
+        self, handle: ComputeHandle,
+    ) -> None:
+        """Restart compute resources."""
+        ...
+
+    async def scale_instance(
+        self, handle: ComputeHandle, replicas: int,
+    ) -> ComputeHandle:
+        """Scale compute resources."""
+        ...

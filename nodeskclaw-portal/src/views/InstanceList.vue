@@ -2,10 +2,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, Loader2, Server, RefreshCw, Package, Dna, X } from 'lucide-vue-next'
+import { Plus, Loader2, Server, RefreshCw, Package, Dna, X, Container } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useGeneStore } from '@/stores/gene'
+import { useClusterStore } from '@/stores/cluster'
+import BaseTooltip from '@/components/shared/BaseTooltip.vue'
 import type { TemplateItem } from '@/stores/gene'
 
 interface InstanceInfo {
@@ -23,6 +25,7 @@ interface InstanceInfo {
   created_at: string
   updated_at: string
   my_role: string | null
+  compute_provider?: string
 }
 
 const roleLabels: Record<string, string> = {
@@ -41,6 +44,9 @@ function getRoleLabel(role: string | null): string {
 const router = useRouter()
 const { t, locale } = useI18n()
 const geneStore = useGeneStore()
+const clusterStore = useClusterStore()
+
+const hasCluster = computed(() => clusterStore.clusters.length > 0)
 const loading = ref(true)
 const instances = ref<InstanceInfo[]>([])
 const error = ref('')
@@ -117,7 +123,10 @@ function formatTime(iso: string) {
   })
 }
 
-onMounted(fetchInstances)
+onMounted(() => {
+  fetchInstances()
+  clusterStore.fetchClusters()
+})
 </script>
 
 <template>
@@ -136,20 +145,26 @@ onMounted(fetchInstances)
           <RefreshCw class="w-4 h-4" />
           {{ t('instanceList.refresh') }}
         </button>
-        <button
-          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-          @click="router.push('/instances/create')"
-        >
-          <Plus class="w-4 h-4" />
-          {{ t('instanceList.createInstance') }}
-        </button>
-        <button
-          class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          @click="openTemplateSelector"
-        >
-          <Package class="w-4 h-4" />
-          {{ t('instanceList.createFromTemplate') }}
-        </button>
+        <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+          <button
+            class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            :disabled="!hasCluster"
+            @click="router.push('/instances/create')"
+          >
+            <Plus class="w-4 h-4" />
+            {{ t('instanceList.createInstance') }}
+          </button>
+        </BaseTooltip>
+        <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+          <button
+            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+            :disabled="!hasCluster"
+            @click="openTemplateSelector"
+          >
+            <Package class="w-4 h-4" />
+            {{ t('instanceList.createFromTemplate') }}
+          </button>
+        </BaseTooltip>
       </div>
     </div>
 
@@ -224,12 +239,15 @@ onMounted(fetchInstances)
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
         {{ t('instanceList.emptyDescription') }}
       </p>
-      <button
-        class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        @click="router.push('/instances/create')"
-      >
-        {{ t('instanceList.createFirst') }}
-      </button>
+      <BaseTooltip :text="!hasCluster ? t('instanceList.noClusterHint') : ''">
+        <button
+          class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          :disabled="!hasCluster"
+          @click="router.push('/instances/create')"
+        >
+          {{ t('instanceList.createFirst') }}
+        </button>
+      </BaseTooltip>
     </div>
 
     <!-- Instance table -->
@@ -250,7 +268,18 @@ onMounted(fetchInstances)
             class="border-b border-border last:border-b-0 hover:bg-accent/50 cursor-pointer transition-colors"
             @click="router.push(`/instances/${inst.id}`)"
           >
-            <td class="px-4 py-3 font-medium">{{ inst.name }}</td>
+            <td class="px-4 py-3 font-medium">
+              <span class="inline-flex items-center gap-1.5">
+                {{ inst.name }}
+                <span
+                  v-if="inst.compute_provider === 'docker'"
+                  class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-400"
+                >
+                  <Container class="w-3 h-3" />
+                  Docker
+                </span>
+              </span>
+            </td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center gap-1.5">
                 <span

@@ -76,6 +76,35 @@ def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
+def _build_docker_handle(instance: Instance) -> "ComputeHandle":
+    from app.services.runtime.compute.base import ComputeHandle
+    env_vars = json.loads(instance.env_vars) if instance.env_vars else {}
+    advanced = json.loads(instance.advanced_config) if instance.advanced_config else {}
+    return ComputeHandle(
+        provider="docker", instance_id=instance.id,
+        namespace=instance.namespace, endpoint=instance.ingress_domain or "",
+        status=instance.status,
+        extra={"compose_path": advanced.get("compose_path", ""), "slug": instance.slug},
+    )
+
+
+def _get_docker_provider():
+    from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
+    spec = COMPUTE_REGISTRY.get("docker")
+    if spec and spec.provider:
+        return spec.provider
+    from app.services.runtime.compute.docker_provider import DockerComputeProvider
+    return DockerComputeProvider()
+
+
+def _compute_endpoint_url(instance: Instance) -> str | None:
+    if instance.compute_provider == "docker" and instance.ingress_domain:
+        return f"http://{instance.ingress_domain}"
+    elif instance.ingress_domain:
+        return f"https://{instance.ingress_domain}"
+    return None
+
+
 def _normalize_gateway_env_vars(env_vars: dict[str, str], token: str) -> dict[str, str]:
     """统一实例访问令牌相关环境变量。"""
     normalized = dict(env_vars)
@@ -150,6 +179,7 @@ async def list_instances(
         ]
         info = InstanceInfo.model_validate(i)
         info.workspaces = workspaces
+        info.endpoint_url = _compute_endpoint_url(i)
         items.append(info)
     return items
 
@@ -188,8 +218,11 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
     )
     cluster = cluster_result.scalar_one_or_none()
 
+    info_base = InstanceInfo.model_validate(instance)
+    info_base.endpoint_url = _compute_endpoint_url(instance)
+
     detail = InstanceDetail(
-        **InstanceInfo.model_validate(instance).model_dump(),
+        **info_base.model_dump(),
         cpu_request=instance.cpu_request,
         cpu_limit=instance.cpu_limit,
         mem_request=instance.mem_request,
@@ -198,7 +231,29 @@ async def get_instance_detail(instance_id: str, db: AsyncSession) -> InstanceDet
     )
     detail.workspaces = workspaces
 
-    if cluster and cluster.kubeconfig_encrypted:
+    if instance.compute_provider == "docker":
+        provider = _get_docker_provider()
+        handle = _build_docker_handle(instance)
+        try:
+            status = await provider.get_status(handle)
+            detail.pods = [{
+                "name": instance.slug,
+                "status": "Running" if status == "running" else status.capitalize(),
+                "ready": status == "running",
+                "node": "localhost",
+                "ip": "127.0.0.1",
+                "restart_count": 0,
+                "containers": [{
+                    "name": instance.slug,
+                    "image": f"deskclaw:{instance.image_version}",
+                    "ready": status == "running",
+                    "restart_count": 0,
+                    "state": status,
+                }],
+            }]
+        except Exception as e:
+            logger.warning("Failed to get Docker status for instance %s: %s", instance_id, e)
+    elif cluster and cluster.kubeconfig_encrypted:
         try:
             api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
             k8s = K8sClient(api_client)
@@ -265,37 +320,45 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
         await sse_listener_manager.disconnect(instance_id)
 
     if delete_k8s:
-        cluster_result = await db.execute(
-            select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
-        )
-        cluster = cluster_result.scalar_one_or_none()
-        if cluster and cluster.kubeconfig_encrypted:
+        if instance.compute_provider == "docker":
             try:
-                api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
-                k8s = K8sClient(api_client)
-                ns = instance.namespace
-                try:
-                    await k8s.core.delete_namespace(ns)
-                    logger.info("已删除命名空间 %s（实例 %s）", ns, instance.name)
-                except Exception:
-                    logger.warning("删除命名空间 %s 失败，可能已不存在", ns)
-                _fire_task(_deferred_pv_cleanup(k8s, ns))
+                provider = _get_docker_provider()
+                handle = _build_docker_handle(instance)
+                await provider.destroy_instance(handle)
+                logger.info("已销毁 Docker 容器（实例 %s）", instance.name)
             except Exception as e:
-                logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
-
-            # 清理 infra 网关集群上的代理 Ingress
-            if cluster and cluster.proxy_endpoint:
+                logger.warning("删除实例 %s 的 Docker 资源失败: %s", instance.name, e)
+        else:
+            cluster_result = await db.execute(
+                select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+            )
+            cluster = cluster_result.scalar_one_or_none()
+            if cluster and cluster.kubeconfig_encrypted:
                 try:
-                    from app.services.k8s.client_manager import GATEWAY_NS
-                    gateway_api = await k8s_manager.get_gateway_client()
-                    gateway_k8s = K8sClient(gateway_api)
-                    inst_name = instance.name
-                    await gateway_k8s.networking.delete_namespaced_ingress(
-                        f"proxy-{inst_name}", GATEWAY_NS,
-                    )
-                    logger.info("已清理网关代理 Ingress: proxy-%s", inst_name)
-                except Exception:
-                    logger.debug("清理网关代理 Ingress 失败（可能不存在）")
+                    api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
+                    k8s = K8sClient(api_client)
+                    ns = instance.namespace
+                    try:
+                        await k8s.core.delete_namespace(ns)
+                        logger.info("已删除命名空间 %s（实例 %s）", ns, instance.name)
+                    except Exception:
+                        logger.warning("删除命名空间 %s 失败，可能已不存在", ns)
+                    _fire_task(_deferred_pv_cleanup(k8s, ns))
+                except Exception as e:
+                    logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
+
+                if cluster and cluster.proxy_endpoint:
+                    try:
+                        from app.services.k8s.client_manager import GATEWAY_NS
+                        gateway_api = await k8s_manager.get_gateway_client()
+                        gateway_k8s = K8sClient(gateway_api)
+                        inst_name = instance.name
+                        await gateway_k8s.networking.delete_namespaced_ingress(
+                            f"proxy-{inst_name}", GATEWAY_NS,
+                        )
+                        logger.info("已清理网关代理 Ingress: proxy-%s", inst_name)
+                    except Exception:
+                        logger.debug("清理网关代理 Ingress 失败（可能不存在）")
 
     # 逻辑删除实例
     instance.soft_delete()
@@ -310,6 +373,15 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
 
 async def scale_instance(instance_id: str, replicas: int, db: AsyncSession):
     instance = await get_instance(instance_id, db)
+
+    if instance.compute_provider == "docker":
+        provider = _get_docker_provider()
+        handle = _build_docker_handle(instance)
+        await provider.scale_instance(handle, replicas)
+        instance.replicas = replicas
+        await db.commit()
+        return
+
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
@@ -327,6 +399,25 @@ async def scale_instance(instance_id: str, replicas: int, db: AsyncSession):
 
 async def restart_instance(instance_id: str, db: AsyncSession):
     instance = await get_instance(instance_id, db)
+
+    if instance.compute_provider == "docker":
+        provider = _get_docker_provider()
+        handle = _build_docker_handle(instance)
+        prev_status = instance.status
+        instance.status = InstanceStatus.restarting
+        await db.commit()
+        try:
+            await provider.restart_instance(handle)
+            instance.status = InstanceStatus.running
+            await db.commit()
+            logger.info("Docker 实例 %s 重启完成", instance.name)
+        except Exception as e:
+            logger.error("Docker 重启失败: instance=%s error=%s", instance.name, e)
+            instance.status = prev_status
+            await db.commit()
+            raise
+        return
+
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
@@ -433,6 +524,12 @@ async def get_pod_logs(
     instance_id: str, pod_name: str, db: AsyncSession, container: str | None = None, tail_lines: int = 200
 ) -> str:
     instance = await get_instance(instance_id, db)
+
+    if instance.compute_provider == "docker":
+        provider = _get_docker_provider()
+        handle = _build_docker_handle(instance)
+        return await provider.get_logs(handle, tail=tail_lines)
+
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
@@ -588,64 +685,92 @@ async def _execute_config_update(
     await db.commit()
     await db.refresh(instance)
 
-    # 执行 K8s 滚动更新
-    try:
-        api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
-        k8s = K8sClient(api_client)
+    if instance.compute_provider == "docker":
+        try:
+            provider = _get_docker_provider()
+            handle = _build_docker_handle(instance)
+            from app.services.runtime.compute.base import InstanceComputeConfig
+            new_config = InstanceComputeConfig(
+                instance_id=instance.id,
+                name=_k8s_name(instance),
+                slug=instance.slug,
+                namespace=instance.namespace,
+                image_version=instance.image_version,
+                replicas=instance.replicas,
+                cpu_request=instance.cpu_request,
+                cpu_limit=instance.cpu_limit,
+                mem_request=instance.mem_request,
+                mem_limit=instance.mem_limit,
+                env_vars=json.loads(instance.env_vars) if instance.env_vars else {},
+                advanced_config=json.loads(instance.advanced_config) if instance.advanced_config else {},
+            )
+            await provider.update_instance(handle, new_config)
+            instance.status = InstanceStatus.running
+            instance.current_revision = next_rev
+            record.status = DeployStatus.success
+            record.finished_at = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.exception("Docker 配置更新失败: %s", instance.name)
+            instance.status = InstanceStatus.failed
+            record.status = DeployStatus.failed
+            record.message = str(e)[:500]
+            record.finished_at = datetime.now(timezone.utc)
+    else:
+        try:
+            api_client = await k8s_manager.get_or_create(cluster.id, cluster.kubeconfig_encrypted)
+            k8s = K8sClient(api_client)
 
-        # Patch deployment
-        from app.services.config_service import get_config
+            from app.services.config_service import get_config
 
-        image_registry = await get_config("image_registry", db) or "openclaw"
-        image = f"{image_registry}:{instance.image_version}"
-        patch_body = {
-            "spec": {
-                "replicas": instance.replicas,
-                "template": {
-                    "metadata": {
-                        "annotations": {
-                            "nodeskclaw/updatedAt": datetime.now(timezone.utc).isoformat()
-                        }
+            image_registry = await get_config("image_registry", db) or "openclaw"
+            image = f"{image_registry}:{instance.image_version}"
+            patch_body = {
+                "spec": {
+                    "replicas": instance.replicas,
+                    "template": {
+                        "metadata": {
+                            "annotations": {
+                                "nodeskclaw/updatedAt": datetime.now(timezone.utc).isoformat()
+                            }
+                        },
+                        "spec": {
+                            "containers": [{
+                                "name": _k8s_name(instance),
+                                "image": image,
+                                "resources": {
+                                    "requests": {"cpu": instance.cpu_request, "memory": instance.mem_request},
+                                    "limits": {"cpu": instance.cpu_limit, "memory": instance.mem_limit},
+                                },
+                            }]
+                        },
                     },
-                    "spec": {
-                        "containers": [{
-                            "name": _k8s_name(instance),
-                            "image": image,
-                            "resources": {
-                                "requests": {"cpu": instance.cpu_request, "memory": instance.mem_request},
-                                "limits": {"cpu": instance.cpu_limit, "memory": instance.mem_limit},
-                            },
-                        }]
-                    },
-                },
+                }
             }
-        }
-        k_name = _k8s_name(instance)
-        await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
+            k_name = _k8s_name(instance)
+            await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
 
-        # Update ConfigMap if env_vars changed
-        if req.env_vars is not None:
-            labels = build_labels(k_name, instance.id, instance.image_version)
-            cm = build_configmap(f"{k_name}-config", instance.namespace, req.env_vars, labels)
-            try:
-                await k8s.core.replace_namespaced_config_map(
-                    f"{k_name}-config", instance.namespace, cm
-                )
-            except Exception:
-                await k8s.create_or_skip(
-                    k8s.core.create_namespaced_config_map, instance.namespace, cm
-                )
+            if req.env_vars is not None:
+                labels = build_labels(k_name, instance.id, instance.image_version)
+                cm = build_configmap(f"{k_name}-config", instance.namespace, req.env_vars, labels)
+                try:
+                    await k8s.core.replace_namespaced_config_map(
+                        f"{k_name}-config", instance.namespace, cm
+                    )
+                except Exception:
+                    await k8s.create_or_skip(
+                        k8s.core.create_namespaced_config_map, instance.namespace, cm
+                    )
 
-        instance.status = InstanceStatus.running
-        instance.current_revision = next_rev
-        record.status = DeployStatus.success
-        record.finished_at = datetime.now(timezone.utc)
-    except Exception as e:
-        logger.exception("配置更新失败: %s", instance.name)
-        instance.status = InstanceStatus.failed
-        record.status = DeployStatus.failed
-        record.message = str(e)[:500]
-        record.finished_at = datetime.now(timezone.utc)
+            instance.status = InstanceStatus.running
+            instance.current_revision = next_rev
+            record.status = DeployStatus.success
+            record.finished_at = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.exception("配置更新失败: %s", instance.name)
+            instance.status = InstanceStatus.failed
+            record.status = DeployStatus.failed
+            record.message = str(e)[:500]
+            record.finished_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(instance)

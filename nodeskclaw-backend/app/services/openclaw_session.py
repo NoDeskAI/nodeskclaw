@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app.services.nfs_mount import PodFS
+from app.services.nfs_mount import RemoteFS
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ SKILLS_EXTRA_DIR = "/root/.openclaw/skills"
 _SESSIONS_REL = ".openclaw/agents/main/sessions/sessions.json"
 
 
-async def _write_sessions_json(fs: PodFS, path: str, store: dict) -> None:
+async def _write_sessions_json(fs: RemoteFS, path: str, store: dict) -> None:
     payload = json.dumps(store, indent=2, ensure_ascii=False)
     json.loads(payload)
     await fs.write_text(path, payload + "\n")
 
 
-async def invalidate_skill_snapshots(fs: PodFS) -> None:
+async def invalidate_skill_snapshots(fs: RemoteFS) -> None:
     """Clear cached skillsSnapshot from all OpenClaw sessions."""
     raw = await fs.read_text(_SESSIONS_REL)
     if raw is None:
@@ -46,7 +46,7 @@ async def invalidate_skill_snapshots(fs: PodFS) -> None:
 
 
 async def inject_evolution_notification(
-    fs: PodFS,
+    fs: RemoteFS,
     gene_name: str,
     action: str,
 ) -> None:
@@ -160,7 +160,7 @@ async def inject_evolution_notification(
         logger.warning("Failed to inject evolution notifications: %s", e)
 
 
-async def ensure_skills_discovery(fs: PodFS) -> None:
+async def ensure_skills_discovery(fs: RemoteFS) -> None:
     """Ensure openclaw.json has skills.load.extraDirs pointing to custom skills dir."""
     raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}

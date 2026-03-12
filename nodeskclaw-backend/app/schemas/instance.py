@@ -23,6 +23,8 @@ class InstanceInfo(BaseModel):
     status: str
     service_type: str
     ingress_domain: str | None = None
+    compute_provider: str = "k8s"
+    endpoint_url: str | None = None
     storage_class: str = "nas-subpath"
     storage_size: str = "80Gi"
     advanced_config: str | None = None

@@ -15,13 +15,15 @@ logger = logging.getLogger(__name__)
 
 async def run_seed(
     session_factory: async_sessionmaker[AsyncSession], *, is_ee: bool = False,
-) -> dict[str, str] | None:
-    """Run all seed tasks. Returns admin credentials dict if password was generated."""
-    admin_credentials = await _seed_initial_admin(session_factory)
+) -> dict[str, dict[str, str] | None]:
+    """Run all seed tasks. Returns dict with 'ce_admin' and 'ee_admin' credentials."""
     await _seed_default_org_and_templates(session_factory, is_ee=is_ee)
-    await _ensure_admin_memberships(session_factory)
+    ce_creds = await _seed_initial_admin(session_factory)
+    ee_creds = None
+    if is_ee:
+        ee_creds = await _seed_ee_platform_admin(session_factory)
     await _ensure_workspace_schedules(session_factory)
-    return admin_credentials
+    return {"ce_admin": ce_creds, "ee_admin": ee_creds}
 
 
 async def _seed_initial_admin(
@@ -189,30 +191,124 @@ async def _seed_default_org_and_templates(
         logger.info("种子数据：预设办公室模板已就绪")
 
 
-async def _ensure_admin_memberships(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    async with session_factory() as db:
-        from app.models.admin_membership import AdminMembership
-        from app.models.user import User
+async def _seed_ee_platform_admin(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, str] | None:
+    """Create the EE Admin platform administrator (separate from CE Portal admin)."""
+    account = settings.INIT_EE_ADMIN_ACCOUNT.strip()
+    if not account:
+        return None
 
-        super_admins = await db.execute(
-            select(User).where(
-                User.is_super_admin.is_(True),
-                User.current_org_id.isnot(None),
-                User.deleted_at.is_(None),
-            )
+    if account == settings.INIT_ADMIN_ACCOUNT.strip():
+        logger.warning(
+            "INIT_EE_ADMIN_ACCOUNT \u4e0e INIT_ADMIN_ACCOUNT \u76f8\u540c\uff08%s\uff09\uff0c\u8df3\u8fc7 EE \u7ba1\u7406\u5458\u521b\u5efa",
+            account,
         )
-        for u in super_admins.scalars().all():
-            existing = await db.execute(
+        return None
+
+    from app.models.admin_membership import AdminMembership
+    from app.models.org_membership import OrgMembership, OrgRole
+    from app.models.organization import Organization
+    from app.models.user import User, UserRole
+    from app.services.auth_service import _hash_password
+
+    async with session_factory() as db:
+        result = await db.execute(
+            select(User).where(User.username == account, User.deleted_at.is_(None))
+        )
+        admin = result.scalar_one_or_none()
+
+        plain_password: str | None = None
+
+        if admin is None:
+            plain_password = secrets.token_urlsafe(9)
+            admin = User(
+                name="DeskClaw Admin",
+                username=account,
+                email="deskclaw-admin@deskclaw.com",
+                role=UserRole.admin,
+                is_super_admin=True,
+                is_active=True,
+                must_change_password=True,
+                password_hash=_hash_password(plain_password),
+            )
+            db.add(admin)
+            await db.flush()
+
+            org_result = await db.execute(
+                select(Organization).where(Organization.deleted_at.is_(None)).limit(1)
+            )
+            default_org = org_result.scalar_one_or_none()
+            if default_org is not None:
+                admin.current_org_id = default_org.id
+                db.add(OrgMembership(
+                    user_id=admin.id, org_id=default_org.id, role=OrgRole.admin,
+                ))
+                db.add(AdminMembership(
+                    user_id=admin.id, org_id=default_org.id, role="admin",
+                ))
+
+            await db.commit()
+            logger.info("\u79cd\u5b50\u6570\u636e\uff1a\u5df2\u521b\u5efa EE \u5e73\u53f0\u7ba1\u7406\u5458 [%s]", account)
+
+        elif settings.RESET_EE_ADMIN_PASSWORD:
+            plain_password = secrets.token_urlsafe(9)
+            admin.password_hash = _hash_password(plain_password)
+            admin.must_change_password = True
+            await db.commit()
+            logger.info(
+                "\u79cd\u5b50\u6570\u636e\uff1a\u5df2\u91cd\u7f6e EE \u5e73\u53f0\u7ba1\u7406\u5458 [%s] \u5bc6\u7801\uff08RESET_EE_ADMIN_PASSWORD=True\uff09",
+                account,
+            )
+
+        elif admin.must_change_password:
+            plain_password = secrets.token_urlsafe(9)
+            admin.password_hash = _hash_password(plain_password)
+            await db.commit()
+            logger.info(
+                "\u79cd\u5b50\u6570\u636e\uff1aEE \u5e73\u53f0\u7ba1\u7406\u5458 [%s] \u5c1a\u672a\u6539\u5bc6\uff0c\u5df2\u91cd\u65b0\u751f\u6210\u968f\u673a\u5bc6\u7801",
+                account,
+            )
+
+        if admin.current_org_id is None:
+            org_result = await db.execute(
+                select(Organization).where(Organization.deleted_at.is_(None)).limit(1)
+            )
+            default_org = org_result.scalar_one_or_none()
+            if default_org is not None:
+                admin.current_org_id = default_org.id
+                existing_om = await db.execute(
+                    select(OrgMembership).where(
+                        OrgMembership.user_id == admin.id,
+                        OrgMembership.org_id == default_org.id,
+                        OrgMembership.deleted_at.is_(None),
+                    )
+                )
+                if existing_om.scalar_one_or_none() is None:
+                    db.add(OrgMembership(
+                        user_id=admin.id, org_id=default_org.id, role=OrgRole.admin,
+                    ))
+                await db.commit()
+                logger.info("\u79cd\u5b50\u6570\u636e\uff1a\u4e3a EE \u5e73\u53f0\u7ba1\u7406\u5458\u8865\u5efa\u7ec4\u7ec7\u5173\u8054")
+
+        if admin.current_org_id is not None:
+            existing_am = await db.execute(
                 select(AdminMembership).where(
-                    AdminMembership.user_id == u.id,
-                    AdminMembership.org_id == u.current_org_id,
+                    AdminMembership.user_id == admin.id,
+                    AdminMembership.org_id == admin.current_org_id,
                     AdminMembership.deleted_at.is_(None),
                 )
             )
-            if existing.scalar_one_or_none() is None:
-                db.add(AdminMembership(user_id=u.id, org_id=u.current_org_id, role="admin"))
-                logger.info("种子数据：为超管用户 %s 创建 AdminMembership(admin)", u.name)
-        await db.commit()
+            if existing_am.scalar_one_or_none() is None:
+                db.add(AdminMembership(
+                    user_id=admin.id, org_id=admin.current_org_id, role="admin",
+                ))
+                await db.commit()
+                logger.info("\u79cd\u5b50\u6570\u636e\uff1a\u4e3a EE \u5e73\u53f0\u7ba1\u7406\u5458\u8865\u5efa AdminMembership")
+
+        if plain_password:
+            return {"account": account, "password": plain_password}
+        return None
 
 
 async def _ensure_workspace_schedules(session_factory: async_sessionmaker[AsyncSession]) -> None:

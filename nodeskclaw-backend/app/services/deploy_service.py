@@ -146,24 +146,40 @@ async def cancel_deploy(deploy_id: str) -> str:
         if task and not task.done():
             task.cancel()
 
-        # 3. 立即清理 K8s namespace
+        # 3. 清理资源（K8s namespace 或 Docker container）
         ns_cleaned = False
         try:
-            cluster_result = await db.execute(
-                select(Cluster).where(Cluster.id == instance.cluster_id)
-            )
-            cluster = cluster_result.scalar_one_or_none()
-            if cluster and cluster.kubeconfig_encrypted:
-                api_client = await k8s_manager.get_or_create(
-                    cluster.id, cluster.kubeconfig_encrypted
+            if instance.compute_provider == "docker":
+                from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
+                from app.services.runtime.compute.base import ComputeHandle
+                docker_spec = COMPUTE_REGISTRY.get("docker")
+                if docker_spec and docker_spec.provider:
+                    adv = _json.loads(instance.advanced_config) if instance.advanced_config else {}
+                    handle = ComputeHandle(
+                        provider="docker", instance_id=instance.id,
+                        namespace=instance.namespace, endpoint=instance.ingress_domain or "",
+                        status=instance.status,
+                        extra={"compose_path": adv.get("compose_path", ""), "slug": instance.slug},
+                    )
+                    await docker_spec.provider.destroy_instance(handle)
+                    ns_cleaned = True
+                    logger.info("取消部署，已清理 Docker 容器: %s", instance.slug)
+            else:
+                cluster_result = await db.execute(
+                    select(Cluster).where(Cluster.id == instance.cluster_id)
                 )
-                k8s = K8sClient(api_client)
-                await k8s.core.delete_namespace(instance.namespace)
-                ns_cleaned = True
-                logger.info("取消部署，已清理命名空间: %s", instance.namespace)
-                _schedule_pv_cleanup(k8s, instance.namespace)
+                cluster = cluster_result.scalar_one_or_none()
+                if cluster and cluster.kubeconfig_encrypted:
+                    api_client = await k8s_manager.get_or_create(
+                        cluster.id, cluster.kubeconfig_encrypted
+                    )
+                    k8s = K8sClient(api_client)
+                    await k8s.core.delete_namespace(instance.namespace)
+                    ns_cleaned = True
+                    logger.info("取消部署，已清理命名空间: %s", instance.namespace)
+                    _schedule_pv_cleanup(k8s, instance.namespace)
         except Exception:
-            logger.warning("取消部署，清理命名空间 %s 失败", instance.namespace)
+            logger.warning("取消部署，清理资源失败: %s", instance.namespace)
 
         # 4. 更新 DB：标记失败 + 软删除
         record.status = DeployStatus.failed
@@ -222,11 +238,27 @@ async def precheck(req: DeployRequest, db: AsyncSession) -> PrecheckResult:
         return PrecheckResult(passed=False, items=items)
     items.append(PrecheckItem(name="集群", status="pass", message=f"集群 {cluster.name} 可用"))
 
-    # Check cluster connection
-    if cluster.status != "connected":
-        items.append(PrecheckItem(name="连接", status="fail", message="集群未连接"))
-        return PrecheckResult(passed=False, items=items)
-    items.append(PrecheckItem(name="连接", status="pass", message="集群已连接"))
+    if cluster.compute_provider == "docker":
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "compose", "version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            if proc.returncode == 0:
+                items.append(PrecheckItem(name="Docker", status="pass", message=stdout.decode().strip()))
+            else:
+                items.append(PrecheckItem(name="Docker", status="fail", message="Docker Compose 不可用"))
+                return PrecheckResult(passed=False, items=items)
+        except Exception:
+            items.append(PrecheckItem(name="Docker", status="fail", message="Docker 环境检查失败"))
+            return PrecheckResult(passed=False, items=items)
+    else:
+        if cluster.status != "connected":
+            items.append(PrecheckItem(name="连接", status="fail", message="集群未连接"))
+            return PrecheckResult(passed=False, items=items)
+        items.append(PrecheckItem(name="连接", status="pass", message="集群已连接"))
 
     # Check name uniqueness（仅检查未删除的实例，已删除的名称可复用）
     existing = await db.execute(
@@ -318,6 +350,33 @@ async def deploy_instance(
 
     namespace = req.namespace or auto_ns
 
+    is_docker = cluster.compute_provider == "docker"
+
+    # Docker: 分配宿主机端口
+    docker_host_port: int | None = None
+    if is_docker:
+        from app.services.docker_constants import DOCKER_BASE_PORT
+        used_ports: set[int] = set()
+        port_result = await db.execute(
+            select(Instance.env_vars).where(
+                Instance.compute_provider == "docker",
+                Instance.deleted_at.is_(None),
+            )
+        )
+        for row in port_result.scalars().all():
+            if row:
+                try:
+                    ev = _json.loads(row)
+                    p = ev.get("DOCKER_HOST_PORT")
+                    if p:
+                        used_ports.add(int(p))
+                except (ValueError, TypeError):
+                    pass
+        docker_host_port = DOCKER_BASE_PORT
+        while docker_host_port in used_ports:
+            docker_host_port += 1
+        namespace = f"docker-{slug}"
+
     # 自动注入 OPENCLAW_GATEWAY_TOKEN（用户未提供时自动生成）
     env_vars = dict(req.env_vars) if req.env_vars else {}
     if "OPENCLAW_GATEWAY_TOKEN" not in env_vars:
@@ -326,6 +385,9 @@ async def deploy_instance(
 
     env_vars.setdefault("NODESKCLAW_API_URL", settings.AGENT_API_BASE_URL)
     env_vars.setdefault("NODESKCLAW_TOKEN", gateway_token)
+
+    if docker_host_port is not None:
+        env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
 
     # 创建实例记录
     instance = Instance(
@@ -339,8 +401,9 @@ async def deploy_instance(
         cpu_limit=req.cpu_limit,
         mem_request=req.mem_request,
         mem_limit=req.mem_limit,
-        service_type="ClusterIP",
-        ingress_domain=None,
+        service_type="ClusterIP" if not is_docker else "docker",
+        ingress_domain=f"localhost:{docker_host_port}" if is_docker else None,
+        compute_provider="docker" if is_docker else "k8s",
         proxy_token=gateway_token,
         wp_api_key=f"nodeskclaw-wp-{_secrets.token_hex(32)}",
         env_vars=_json.dumps(env_vars),
@@ -478,10 +541,14 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
         _unregister_deploy_task(ctx.record_id)
 
 
+DOCKER_DEPLOY_STEPS = ["环境预检查", "启动容器", "部署完成"]
+
+
 async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
     """非 K8s 环境：通过 COMPUTE_REGISTRY 查找对应 provider 并委托部署。"""
     from app.core.deps import async_session_factory
     from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
+    from app.services.runtime.compute.base import InstanceComputeConfig
 
     spec = COMPUTE_REGISTRY.get(ctx.compute_provider)
     if spec is None or spec.provider is None:
@@ -490,28 +557,42 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
         return
 
     provider = spec.provider
-    config = {
-        "instance_id": ctx.instance_id,
-        "name": ctx.name,
-        "namespace": ctx.namespace,
-        "image": f"openclaw:{ctx.image_version}",
-        "image_version": ctx.image_version,
-        "replicas": ctx.replicas,
-        "cpu_request": ctx.cpu_request,
-        "cpu_limit": ctx.cpu_limit,
-        "mem_request": ctx.mem_request,
-        "mem_limit": ctx.mem_limit,
-        "storage_size": ctx.storage_size,
-        "env_vars": ctx.env_vars or {},
-        "advanced_config": ctx.advanced_config or {},
-    }
+    total = len(DOCKER_DEPLOY_STEPS)
+    step_names = list(DOCKER_DEPLOY_STEPS)
+
+    config = InstanceComputeConfig(
+        instance_id=ctx.instance_id,
+        name=ctx.name,
+        slug=ctx.name,
+        namespace=ctx.namespace,
+        image_version=ctx.image_version,
+        replicas=ctx.replicas,
+        cpu_request=ctx.cpu_request,
+        cpu_limit=ctx.cpu_limit,
+        mem_request=ctx.mem_request,
+        mem_limit=ctx.mem_limit,
+        storage_class=ctx.storage_class,
+        storage_size=ctx.storage_size,
+        env_vars=ctx.env_vars or {},
+        advanced_config=ctx.advanced_config or {},
+    )
 
     event_bus.publish(
         "deploy_progress",
         DeployProgress(
-            deploy_id=ctx.record_id, step=1, total_steps=3,
-            current_step=f"启动 {ctx.compute_provider} 部署", status="in_progress",
+            deploy_id=ctx.record_id, step=1, total_steps=total,
+            current_step=step_names[0], status="in_progress",
             message=None, percent=10,
+            step_names=step_names,
+        ).model_dump(),
+    )
+
+    event_bus.publish(
+        "deploy_progress",
+        DeployProgress(
+            deploy_id=ctx.record_id, step=2, total_steps=total,
+            current_step=step_names[1], status="in_progress",
+            message=None, percent=40,
         ).model_dump(),
     )
 
@@ -524,7 +605,7 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
         event_bus.publish(
             "deploy_progress",
             DeployProgress(
-                deploy_id=ctx.record_id, step=3, total_steps=3,
+                deploy_id=ctx.record_id, step=total, total_steps=total,
                 current_step="失败", status="failed",
                 message=str(e)[:200], percent=100,
             ).model_dump(),
@@ -540,13 +621,19 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
         inst_result = await db.execute(select(Instance).where(Instance.id == ctx.instance_id))
         instance = inst_result.scalar_one()
         instance.status = InstanceStatus.running
+
+        if hasattr(result, "extra") and result.extra.get("compose_path"):
+            adv = _json.loads(instance.advanced_config) if instance.advanced_config else {}
+            adv["compose_path"] = result.extra["compose_path"]
+            instance.advanced_config = _json.dumps(adv)
+
         await db.commit()
 
     event_bus.publish(
         "deploy_progress",
         DeployProgress(
-            deploy_id=ctx.record_id, step=3, total_steps=3,
-            current_step="完成", status="success",
+            deploy_id=ctx.record_id, step=total, total_steps=total,
+            current_step=step_names[-1], status="success",
             message="部署成功", percent=100,
         ).model_dump(),
     )

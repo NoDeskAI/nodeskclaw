@@ -192,7 +192,7 @@ API 路由同时挂载在两个前缀下：
 | operator | 20 | 运维操作：部署、重启、扩缩容、配置变更 |
 | admin | 30 | 完全权限：集群管理、系统设置、基因运营、成员管理 |
 
-`is_super_admin` 绕过所有管理平台权限检查。无 `AdminMembership` 记录的用户无法访问管理平台。
+Admin 后台权限**严格依赖 `AdminMembership`**，`is_super_admin` 不再自动放行。CE Portal 超管和 EE Admin 平台管理员是**独立的账号体系**，由不同的种子函数分别初始化。
 
 启动后访问 `http://localhost:8000/docs` 查看完整 API 文档（Swagger UI）。
 
@@ -289,8 +289,10 @@ deploy_service 根据 Instance.compute_provider 字段分发部署：
 | compute_provider | 实现 | 场景 |
 |------------------|------|------|
 | k8s（默认） | 内置 K8s 部署管道 + rolling update | 生产环境 |
-| docker | DockerComputeProvider | 本地开发/测试 |
+| docker | DockerComputeProvider | 本地开发/测试（端口 13000 起，数据在 ~/.nodeskclaw/docker-instances/） |
 | process | ProcessComputeProvider | 单机调试 |
+
+Docker 部署常量定义在 `app/services/docker_constants.py`。远程文件操作通过 `DockerFS`（主机直接读写）或 `PodFS`（kubectl exec）完成，由 `remote_fs()` 按 `compute_provider` 自动分发。
 
 ### Agent 生命周期
 
@@ -353,6 +355,13 @@ CE 超管配置（可选）：
 |------|------|
 | `INIT_ADMIN_ACCOUNT` | 超管的 username，默认 `admin`。留空则跳过自动创建 |
 | `RESET_ADMIN_PASSWORD` | 设为 `true` 后重启可强制重置超管密码。默认 `false` |
+
+EE 平台管理员配置（仅 EE 模式生效）：
+
+| 变量 | 说明 |
+|------|------|
+| `INIT_EE_ADMIN_ACCOUNT` | EE Admin 后台管理员 username，默认 `deskclaw-admin`。留空跳过，不能与 `INIT_ADMIN_ACCOUNT` 相同 |
+| `RESET_EE_ADMIN_PASSWORD` | 设为 `true` 后重启可强制重置 EE 管理员密码。默认 `false` |
 
 可选项：
 
@@ -481,10 +490,10 @@ uv run alembic merge -m "merge branches" <rev1> <rev2>
 
 首次启动时自动创建（幂等，每次启动检查）：
 
-- **CE 超管用户**（见下方"CE 超管初始化"）
 - 默认组织（Default Organization）
+- **CE 超管用户**（见下方"CE 超管初始化"）
+- **EE 平台管理员**（仅 EE 模式，见下方"EE 平台管理员初始化"）
 - 预设工作区模板（软件研发团队、内容工作室、研究实验室）
-- 超管用户的 AdminMembership 记录
 - 工作区定时器（任务巡检）
 
 种子数据逻辑位于 `app/startup/seed.py`。
@@ -517,6 +526,30 @@ CE 版本通过 `INIT_ADMIN_ACCOUNT` 配置项自动创建超管账号。
 | 存在 + `RESET_ADMIN_PASSWORD=true` | 强制重置密码 |
 | 存在 + 尚未改密（`must_change_password=true`） | 重新生成随机密码（确保 Console 输出最新可用密码） |
 | 存在 + 已改密 | 不做任何操作 |
+
+### EE 平台管理员初始化
+
+EE 版本通过 `INIT_EE_ADMIN_ACCOUNT` 配置项创建独立的 Admin 后台管理员。该账号与 CE 超管是**不同的 User 记录**，拥有独立密码。
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `INIT_EE_ADMIN_ACCOUNT` | `deskclaw-admin` | Admin 后台管理员 username，留空则跳过 |
+| `RESET_EE_ADMIN_PASSWORD` | `false` | 设为 `true` 后重启会强制重置管理员密码 |
+
+#### 权限体系
+
+- **CE Portal 超管**（`is_super_admin=True`，无 AdminMembership）：只能访问 Portal
+- **EE 平台管理员**（`is_super_admin=True` + `AdminMembership`）：可访问 Admin 后台 + 组织管理
+
+Admin 后台权限**仅依赖 AdminMembership**，`is_super_admin` 不作为 Admin 访问旁路。
+
+#### 升级/降级
+
+| 场景 | 行为 |
+|------|------|
+| CE -> EE | 自动创建 EE 管理员，CE 超管无法访问 Admin 后台 |
+| EE -> CE | Admin 前端不部署，EE 管理员记录留存无害 |
+| EE -> CE -> EE | 识别已有 EE 管理员，跳过重复创建 |
 
 ### 软删除
 

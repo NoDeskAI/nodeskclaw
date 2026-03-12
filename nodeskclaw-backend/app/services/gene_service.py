@@ -47,7 +47,7 @@ from app.services.genehub_converter import (
     genehub_genome_to_local,
     genehub_tags_to_local,
 )
-from app.services.nfs_mount import PodFS, SkillScanError, remote_fs
+from app.services.nfs_mount import RemoteFS, SkillScanError, remote_fs
 from app.services.openclaw_session import (
     ensure_skills_discovery,
     inject_evolution_notification,
@@ -1504,7 +1504,7 @@ def _get_learning_plugin_url(instance: Instance) -> str | None:
 
 
 async def _write_skill_file(
-    fs: PodFS,
+    fs: RemoteFS,
     skill_name: str,
     content: str,
     description: str = "",
@@ -1519,7 +1519,7 @@ async def _write_skill_file(
     await fs.write_text(f"{SKILLS_DIR_REL}/{skill_name}/SKILL.md", content)
 
 
-async def _merge_openclaw_config(fs: PodFS, patch: dict) -> None:
+async def _merge_openclaw_config(fs: RemoteFS, patch: dict) -> None:
     raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}
     if raw is not None:
@@ -1540,7 +1540,7 @@ async def _merge_openclaw_config(fs: PodFS, patch: dict) -> None:
     )
 
 
-async def _append_tool_allow(fs: PodFS, tool_names: list[str]) -> None:
+async def _append_tool_allow(fs: RemoteFS, tool_names: list[str]) -> None:
     """Deduplicate-append tool names to openclaw.json tools.allow array."""
     raw = await fs.read_text(OPENCLAW_CONFIG_REL)
     existing: dict = {}
@@ -1564,7 +1564,7 @@ async def _append_tool_allow(fs: PodFS, tool_names: list[str]) -> None:
     await fs.write_text(OPENCLAW_CONFIG_REL, json.dumps(existing, indent=2, ensure_ascii=False))
 
 
-async def _apply_engineering_actions(fs: PodFS, manifest: dict) -> None:
+async def _apply_engineering_actions(fs: RemoteFS, manifest: dict) -> None:
     """Execute all engineering actions from a gene manifest."""
     openclaw_config = manifest.get("openclaw_config")
     if openclaw_config:
@@ -1575,7 +1575,7 @@ async def _apply_engineering_actions(fs: PodFS, manifest: dict) -> None:
         await _append_tool_allow(fs, tool_allow)
 
 
-async def _remove_skill_file(fs: PodFS, skill_name: str) -> None:
+async def _remove_skill_file(fs: RemoteFS, skill_name: str) -> None:
     await fs.remove(f"{SKILLS_DIR_REL}/{skill_name}")
 
 

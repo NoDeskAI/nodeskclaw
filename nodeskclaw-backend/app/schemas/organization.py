@@ -39,12 +39,17 @@ class OrgInfo(BaseModel):
     max_mem_total: str
     max_storage_total: str
     cluster_id: str | None = None
+    cluster_name: str | None = None
     is_active: bool
     member_count: int = 0
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class OrgNameUpdate(BaseModel):
+    name: str
 
 
 class MemberInfo(BaseModel):

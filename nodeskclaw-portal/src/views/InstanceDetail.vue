@@ -43,9 +43,12 @@ interface InstanceDetail {
   created_at: string
   workspaces?: { id: string; name: string }[]
   pods: { name: string; status: string; ready: boolean; restart_count: number }[]
+  endpoint_url?: string | null
+  compute_provider?: string
 }
 
 const instance = ref<InstanceDetail | null>(null)
+const isDocker = computed(() => instance.value?.compute_provider === 'docker')
 const loading = ref(true)
 const pageError = ref('')
 const gatewayToken = ref('')
@@ -291,12 +294,21 @@ async function handleDelete() {
             <span class="text-muted-foreground">创建时间</span>
             <span class="ml-2">{{ new Date(instance.created_at).toLocaleString('zh-CN') }}</span>
           </div>
+          <div v-if="instance.endpoint_url" class="col-span-2">
+            <span class="text-muted-foreground">访问地址</span>
+            <a
+              :href="instance.endpoint_url"
+              target="_blank"
+              rel="noopener"
+              class="ml-2 text-primary hover:underline font-mono text-xs"
+            >{{ instance.endpoint_url }}</a>
+          </div>
         </div>
       </div>
 
-      <!-- Pod 状态 -->
+      <!-- Pod / 容器状态 -->
       <div v-if="instance.pods?.length" class="p-4 rounded-xl border border-border bg-card">
-        <h2 class="text-sm font-medium mb-3">Pod 状态</h2>
+        <h2 class="text-sm font-medium mb-3">{{ isDocker ? '容器状态' : 'Pod 状态' }}</h2>
         <div class="space-y-2">
           <div
             v-for="pod in instance.pods"
@@ -422,7 +434,7 @@ async function handleDelete() {
             <div v-else class="text-sm text-muted-foreground space-y-2">
               <p>确定删除AI 员工「<span class="text-foreground font-medium">{{ instanceBasic?.name }}</span>」？</p>
               <ul class="list-disc list-inside space-y-1 text-xs">
-                <li>AI 员工及其 K8s 资源将被永久删除</li>
+                <li>AI 员工及其{{ isDocker ? '容器' : ' K8s' }}资源将被永久删除</li>
                 <li>所有对话记录和办公室数据将丢失</li>
                 <li>此操作不可恢复</li>
               </ul>

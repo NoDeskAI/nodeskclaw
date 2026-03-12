@@ -78,7 +78,7 @@ cp .env.example .env
 | `ENCRYPTION_KEY` | KubeConfig AES 密钥（32 字节 base64） |
 | `FEISHU_APP_ID` | 飞书应用 App ID |
 | `FEISHU_APP_SECRET` | 飞书应用 App Secret |
-| `FEISHU_REDIRECT_URI` | `http://localhost:5173/api/v1/auth/feishu/callback` |
+| `FEISHU_REDIRECT_URI` | `http://localhost:4518/api/v1/auth/feishu/callback` |
 
 ### 2. 启动后端
 
@@ -97,7 +97,7 @@ cd nodeskclaw-portal
 npm install && npm run dev
 ```
 
-Portal 地址 `http://localhost:5174` | `/api` 自动代理到后端。
+Portal 地址 `http://localhost:4517` | `/api` 自动代理到后端。
 
 ### 4. 启动前端（Admin，EE-only）
 
@@ -106,13 +106,13 @@ cd ee/nodeskclaw-frontend
 npm install && npm run dev
 ```
 
-Admin 地址 `http://localhost:5173` | `/api` 和 `/stream` 自动代理到后端。
+Admin 地址 `http://localhost:4518` | `/api` 和 `/stream` 自动代理到后端。
 
 ### 5. 开始使用
 
-打开 `http://localhost:5174`（Portal）或 `http://localhost:5173`（Admin，EE）登录。
+打开 `http://localhost:4517`（Portal）或 `http://localhost:4518`（Admin，EE）登录。
 
-> 飞书回调地址：`http://localhost:5173/api/v1/auth/feishu/callback`
+> 飞书回调地址：`http://localhost:4518/api/v1/auth/feishu/callback`
 
 ## 文档
 

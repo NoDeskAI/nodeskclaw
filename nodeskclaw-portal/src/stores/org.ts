@@ -13,6 +13,7 @@ export interface OrgInfo {
   max_mem_total: string
   max_storage_total: string
   cluster_id: string | null
+  cluster_name?: string | null
   is_active: boolean
   member_count: number
   created_at: string
@@ -65,6 +66,21 @@ export const useOrgStore = defineStore('org', () => {
     } catch (e) {
       console.warn('[orgStore] fetchMyOrg 失败:', e)
     }
+  }
+
+  async function fetchCurrentOrg() {
+    try {
+      const res = await api.get('/orgs/current')
+      currentOrg.value = res.data.data
+    } catch (e) {
+      console.warn('[orgStore] fetchCurrentOrg 失败:', e)
+    }
+  }
+
+  async function updateOrgName(name: string) {
+    const res = await api.put('/orgs/current/name', { name })
+    currentOrg.value = res.data.data
+    return res.data.data
   }
 
   // ── 成员管理 ──
@@ -120,6 +136,8 @@ export const useOrgStore = defineStore('org', () => {
     usage,
     loading,
     fetchMyOrg,
+    fetchCurrentOrg,
+    updateOrgName,
     fetchMembers,
     addMember,
     updateMemberRole,

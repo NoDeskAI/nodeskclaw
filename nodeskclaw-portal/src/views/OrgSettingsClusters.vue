@@ -9,6 +9,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import {
   Server,
+  Container,
   Plus,
   Loader2,
   Plug,
@@ -28,11 +29,15 @@ const { isEnabled: isMultiCluster } = useFeature('multi_cluster')
 
 const loading = ref(true)
 const testingId = ref<string | null>(null)
+const addingDocker = ref(false)
 
 const showAddDialog = ref(false)
 const addForm = ref({ name: '', kubeconfig: '' })
 const adding = ref(false)
 const nameAutoFilled = ref(false)
+
+const hasDocker = computed(() => clusterStore.clusters.some(c => c.compute_provider === 'docker'))
+const hasK8s = computed(() => clusterStore.clusters.some(c => c.compute_provider === 'k8s'))
 
 const showRenameDialog = ref(false)
 const renameForm = ref({ id: '', name: '' })
@@ -165,8 +170,24 @@ async function handleKubeconfigUpdate() {
   }
 }
 
+async function handleAddDocker() {
+  addingDocker.value = true
+  try {
+    await clusterStore.createDockerCluster()
+    toast.success(t('clusters.dockerAddSuccess'))
+  } catch (e) {
+    toast.error(resolveApiErrorMessage(e, t('clusters.dockerAddFailed')))
+  } finally {
+    addingDocker.value = false
+  }
+}
+
 function goToDetail(id: string) {
   router.push({ name: 'ClusterDetail', params: { id } })
+}
+
+function isDockerCluster(cluster: ClusterInfo) {
+  return cluster.compute_provider === 'docker'
 }
 
 function statusDotClass(status: string) {
@@ -184,14 +205,26 @@ function statusDotClass(status: string) {
         <h2 class="text-base font-semibold">{{ t('clusters.title') }}</h2>
         <p class="text-sm text-muted-foreground mt-0.5">{{ t('clusters.subtitle') }}</p>
       </div>
-      <button
-        v-if="canAddCluster && displayMode !== 'setup'"
-        class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        @click="showAddDialog = true"
-      >
-        <Plus class="w-4 h-4" />
-        {{ t('clusters.addCluster') }}
-      </button>
+      <div v-if="canAddCluster && displayMode !== 'setup'" class="flex items-center gap-2">
+        <button
+          v-if="!hasDocker"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          @click="showAddDialog = true"
+        >
+          <Plus class="w-4 h-4" />
+          {{ t('clusters.addK8sCluster') }}
+        </button>
+        <button
+          v-if="!hasK8s"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+          :disabled="addingDocker"
+          @click="handleAddDocker"
+        >
+          <Loader2 v-if="addingDocker" class="w-4 h-4 animate-spin" />
+          <Container v-else class="w-4 h-4" />
+          {{ t('clusters.addDockerRuntime') }}
+        </button>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -201,49 +234,80 @@ function statusDotClass(status: string) {
 
     <!-- Setup Wizard (0 clusters) -->
     <template v-else-if="displayMode === 'setup'">
-      <div class="p-6 rounded-xl border border-border bg-card space-y-5">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Server class="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 class="font-semibold">{{ t('clusters.setupTitle') }}</h3>
-            <p class="text-sm text-muted-foreground">{{ t('clusters.setupDesc') }}</p>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <div>
-            <label class="block text-sm text-muted-foreground mb-1">KubeConfig</label>
-            <textarea
-              v-model="addForm.kubeconfig"
-              rows="8"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-              :placeholder="t('clusters.kubeconfigPlaceholder')"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-muted-foreground mb-1">{{ t('clusters.clusterName') }}</label>
-            <input
-              v-model="addForm.name"
-              type="text"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              :placeholder="t('clusters.namePlaceholder')"
-            />
-            <p v-if="nameAutoFilled" class="text-xs text-muted-foreground mt-1">{{ t('clusters.nameAutoFilled') }}</p>
+      <div class="space-y-4">
+        <!-- Docker Runtime Option -->
+        <div class="p-6 rounded-xl border border-border bg-card space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Container class="w-5 h-5 text-blue-500" />
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold">{{ t('clusters.dockerSetupTitle') }}</h3>
+              <p class="text-sm text-muted-foreground">{{ t('clusters.dockerSetupDesc') }}</p>
+            </div>
+            <button
+              class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              :disabled="addingDocker"
+              @click="handleAddDocker"
+            >
+              <Loader2 v-if="addingDocker" class="w-4 h-4 animate-spin" />
+              <ArrowRight v-else class="w-4 h-4" />
+              {{ t('clusters.dockerSetupSubmit') }}
+            </button>
           </div>
         </div>
 
-        <div class="flex justify-end">
-          <button
-            class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            :disabled="!addForm.kubeconfig.trim() || !addForm.name.trim() || adding"
-            @click="handleAdd"
-          >
-            <Loader2 v-if="adding" class="w-4 h-4 animate-spin" />
-            <ArrowRight v-else class="w-4 h-4" />
-            {{ t('clusters.setupSubmit') }}
-          </button>
+        <div class="flex items-center gap-3 px-2">
+          <div class="flex-1 border-t border-border" />
+          <span class="text-xs text-muted-foreground">{{ t('common.or') }}</span>
+          <div class="flex-1 border-t border-border" />
+        </div>
+
+        <!-- K8s Cluster Option -->
+        <div class="p-6 rounded-xl border border-border bg-card space-y-5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Server class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 class="font-semibold">{{ t('clusters.setupTitle') }}</h3>
+              <p class="text-sm text-muted-foreground">{{ t('clusters.setupDesc') }}</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm text-muted-foreground mb-1">KubeConfig</label>
+              <textarea
+                v-model="addForm.kubeconfig"
+                rows="8"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                :placeholder="t('clusters.kubeconfigPlaceholder')"
+              />
+            </div>
+            <div>
+              <label class="block text-sm text-muted-foreground mb-1">{{ t('clusters.clusterName') }}</label>
+              <input
+                v-model="addForm.name"
+                type="text"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                :placeholder="t('clusters.namePlaceholder')"
+              />
+              <p v-if="nameAutoFilled" class="text-xs text-muted-foreground mt-1">{{ t('clusters.nameAutoFilled') }}</p>
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              :disabled="!addForm.kubeconfig.trim() || !addForm.name.trim() || adding"
+              @click="handleAdd"
+            >
+              <Loader2 v-if="adding" class="w-4 h-4 animate-spin" />
+              <ArrowRight v-else class="w-4 h-4" />
+              {{ t('clusters.setupSubmit') }}
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -253,8 +317,9 @@ function statusDotClass(status: string) {
       <div class="p-5 rounded-xl border border-border bg-card space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Server class="w-5 h-5 text-primary" />
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center" :class="isDockerCluster(singleCluster) ? 'bg-blue-500/10' : 'bg-primary/10'">
+              <Container v-if="isDockerCluster(singleCluster)" class="w-5 h-5 text-blue-500" />
+              <Server v-else class="w-5 h-5 text-primary" />
             </div>
             <div>
               <div class="flex items-center gap-2">
@@ -262,12 +327,13 @@ function statusDotClass(status: string) {
                 <span class="w-2 h-2 rounded-full" :class="statusDotClass(singleCluster.status)" />
                 <span class="text-xs text-muted-foreground">{{ t(`clusters.status.${singleCluster.status}`) }}</span>
               </div>
-              <p class="text-xs text-muted-foreground mt-0.5">{{ singleCluster.api_server_url || '-' }}</p>
+              <p v-if="isDockerCluster(singleCluster)" class="text-xs text-muted-foreground mt-0.5">{{ t('clusters.dockerRuntimeLabel') }}</p>
+              <p v-else class="text-xs text-muted-foreground mt-0.5">{{ singleCluster.api_server_url || '-' }}</p>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-4 text-xs text-muted-foreground">
+        <div v-if="!isDockerCluster(singleCluster)" class="flex items-center gap-4 text-xs text-muted-foreground">
           <span v-if="singleCluster.k8s_version">K8s {{ singleCluster.k8s_version }}</span>
           <span>{{ t(`clusters.provider.${singleCluster.provider}`) }}</span>
           <span>{{ t(`clusters.authType.${singleCluster.auth_type}`) }}</span>
@@ -283,12 +349,14 @@ function statusDotClass(status: string) {
             <Plug v-else class="w-3.5 h-3.5" />
             {{ t('clusters.testConnection') }}
           </button>
-          <button
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
-            @click="openKubeconfigUpdate(singleCluster)"
-          >
-            {{ t('clusters.updateKubeconfig') }}
-          </button>
+          <template v-if="!isDockerCluster(singleCluster)">
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
+              @click="openKubeconfigUpdate(singleCluster)"
+            >
+              {{ t('clusters.updateKubeconfig') }}
+            </button>
+          </template>
           <button
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-red-400 hover:bg-red-500/10 transition-colors"
             @click="handleDelete(singleCluster)"
@@ -298,6 +366,7 @@ function statusDotClass(status: string) {
           </button>
           <div class="flex-1" />
           <button
+            v-if="!isDockerCluster(singleCluster)"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             @click="goToDetail(singleCluster.id)"
           >
@@ -306,6 +375,10 @@ function statusDotClass(status: string) {
           </button>
         </div>
       </div>
+
+      <!-- Mutual exclusivity hint -->
+      <p v-if="hasDocker" class="text-xs text-muted-foreground mt-3">{{ t('clusters.dockerMutualHint') }}</p>
+      <p v-if="hasK8s" class="text-xs text-muted-foreground mt-3">{{ t('clusters.k8sMutualHint') }}</p>
     </template>
 
     <!-- Multi-cluster List -->
@@ -320,11 +393,12 @@ function statusDotClass(status: string) {
           v-for="cluster in clusterStore.clusters"
           :key="cluster.id"
           class="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:border-primary/20 transition-colors cursor-pointer"
-          @click="goToDetail(cluster.id)"
+          @click="!isDockerCluster(cluster) && goToDetail(cluster.id)"
         >
           <div class="flex items-center gap-3 min-w-0">
-            <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <Server class="w-4 h-4 text-primary" />
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="isDockerCluster(cluster) ? 'bg-blue-500/10' : 'bg-primary/10'">
+              <Container v-if="isDockerCluster(cluster)" class="w-4 h-4 text-blue-500" />
+              <Server v-else class="w-4 h-4 text-primary" />
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -332,9 +406,14 @@ function statusDotClass(status: string) {
                 <span class="w-2 h-2 rounded-full shrink-0" :class="statusDotClass(cluster.status)" />
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                <span class="truncate">{{ cluster.api_server_url || '-' }}</span>
-                <span v-if="cluster.k8s_version" class="shrink-0">{{ cluster.k8s_version }}</span>
-                <span class="shrink-0 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-[10px]">{{ cluster.provider }}</span>
+                <template v-if="isDockerCluster(cluster)">
+                  <span>{{ t('clusters.dockerRuntimeLabel') }}</span>
+                </template>
+                <template v-else>
+                  <span class="truncate">{{ cluster.api_server_url || '-' }}</span>
+                  <span v-if="cluster.k8s_version" class="shrink-0">{{ cluster.k8s_version }}</span>
+                  <span class="shrink-0 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-[10px]">{{ cluster.provider }}</span>
+                </template>
               </div>
             </div>
           </div>
@@ -350,6 +429,7 @@ function statusDotClass(status: string) {
               <Plug v-else class="w-4 h-4" />
             </button>
             <button
+              v-if="!isDockerCluster(cluster)"
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               :title="t('clusters.rename')"
               @click="openRename(cluster)"

@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     INIT_ADMIN_ACCOUNT: str = "admin"  # 默认超管 username，留空则跳过自动创建
     RESET_ADMIN_PASSWORD: bool = False  # 设为 True 后重启强制重置超管密码
 
+    # ── EE 平台管理员 ─────────────────────────────────────
+    INIT_EE_ADMIN_ACCOUNT: str = "deskclaw-admin"  # EE Admin 后台管理员 username，留空则跳过
+    RESET_EE_ADMIN_PASSWORD: bool = False  # 设为 True 后重启强制重置 EE 管理员密码
+
     # ── Encryption (AES-256-GCM for KubeConfig) ─────────
     ENCRYPTION_KEY: str = "change-me-32-bytes-base64-key__="
 
@@ -95,7 +99,7 @@ class Settings(BaseSettings):
     TOS_KEY_PREFIX: str = ""
 
     # ── CORS ─────────────────────────────────────────────
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:4517", "http://localhost:4518"]
 
 
 settings = Settings()

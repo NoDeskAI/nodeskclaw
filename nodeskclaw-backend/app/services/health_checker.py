@@ -52,6 +52,7 @@ class HealthChecker:
             result = await db.execute(
                 select(Cluster).where(
                     Cluster.status == ClusterStatus.connected,
+                    Cluster.compute_provider != "docker",
                     Cluster.deleted_at.is_(None),
                 )
             )

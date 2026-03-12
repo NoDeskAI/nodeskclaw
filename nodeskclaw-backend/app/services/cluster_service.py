@@ -1,11 +1,12 @@
 """Cluster service: CRUD, KubeConfig encryption, connection test."""
 
+import asyncio
 import logging
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.core.feature_gate import feature_gate
 from app.core.security import decrypt_kubeconfig, encrypt_kubeconfig
 from app.models.cluster import Cluster, ClusterStatus
@@ -25,10 +26,15 @@ async def list_clusters(db: AsyncSession) -> list[ClusterInfo]:
     return [ClusterInfo.model_validate(c) for c in clusters]
 
 
-async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> ClusterInfo:
+async def create_cluster(
+    data: ClusterCreate, user: User, db: AsyncSession, org_id: str | None = None,
+) -> ClusterInfo:
     if not feature_gate.is_enabled("multi_cluster"):
         count_result = await db.execute(
-            select(func.count(Cluster.id)).where(Cluster.deleted_at.is_(None))
+            select(func.count(Cluster.id)).where(
+                Cluster.deleted_at.is_(None),
+                Cluster.compute_provider == "k8s",
+            )
         )
         if count_result.scalar_one() >= 1:
             raise ConflictError(
@@ -36,19 +42,36 @@ async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> C
                 message_key="errors.cluster.single_cluster_limit",
             )
 
-    # Check name uniqueness（已删除的名称可复用）
-    existing = await db.execute(
-        select(Cluster).where(Cluster.name == data.name, Cluster.deleted_at.is_(None))
+    # CE 互斥：当前组织已有 Docker 集群时拒绝创建 K8s 集群
+    if org_id:
+        docker_exists = await db.execute(
+            select(Cluster.id).where(
+                Cluster.org_id == org_id,
+                Cluster.compute_provider == "docker",
+                Cluster.deleted_at.is_(None),
+            )
+        )
+        if docker_exists.scalar_one_or_none():
+            raise ConflictError(
+                message="当前组织已启用 Docker 运行环境，无法同时添加 K8s 集群",
+                message_key="errors.cluster.docker_k8s_mutual_exclusive",
+            )
+
+    name_query = select(Cluster).where(
+        Cluster.name == data.name, Cluster.deleted_at.is_(None),
     )
+    if org_id:
+        name_query = name_query.where(Cluster.org_id == org_id)
+    existing = await db.execute(name_query)
     if existing.scalar_one_or_none():
         raise ConflictError(f"集群名称 '{data.name}' 已存在")
 
-    # Parse kubeconfig for api_server_url and auth_type
     api_server_url, auth_type = _parse_kubeconfig_meta(data.kubeconfig)
 
     cluster = Cluster(
         name=data.name,
         provider=data.provider,
+        compute_provider="k8s",
         kubeconfig_encrypted=encrypt_kubeconfig(data.kubeconfig),
         auth_type=auth_type,
         api_server_url=api_server_url,
@@ -56,6 +79,7 @@ async def create_cluster(data: ClusterCreate, user: User, db: AsyncSession) -> C
         proxy_endpoint=data.proxy_endpoint,
         status=ClusterStatus.disconnected,
         created_by=user.id,
+        org_id=org_id,
     )
     db.add(cluster)
     await db.commit()
@@ -156,9 +180,80 @@ async def update_kubeconfig(cluster_id: str, kubeconfig: str, db: AsyncSession) 
     return ClusterInfo.model_validate(cluster)
 
 
+async def create_docker_cluster(
+    name: str, user: User, org_id: str, db: AsyncSession,
+) -> ClusterInfo:
+    """创建 Docker 运行环境（特殊集群）。org_id 必填。"""
+    if not org_id:
+        raise BadRequestError("Docker 集群必须归属组织")
+
+    # 互斥：当前组织已有 K8s 集群时拒绝
+    k8s_exists = await db.execute(
+        select(Cluster.id).where(
+            Cluster.org_id == org_id,
+            Cluster.compute_provider == "k8s",
+            Cluster.deleted_at.is_(None),
+        )
+    )
+    if k8s_exists.scalar_one_or_none():
+        raise ConflictError(
+            message="当前组织已有 K8s 集群，无法同时启用 Docker 运行环境",
+            message_key="errors.cluster.docker_k8s_mutual_exclusive",
+        )
+
+    # 唯一性：每个组织只能有一个 Docker 集群
+    docker_exists = await db.execute(
+        select(Cluster.id).where(
+            Cluster.org_id == org_id,
+            Cluster.compute_provider == "docker",
+            Cluster.deleted_at.is_(None),
+        )
+    )
+    if docker_exists.scalar_one_or_none():
+        raise ConflictError(
+            message="当前组织已有 Docker 运行环境",
+            message_key="errors.cluster.docker_already_exists",
+        )
+
+    # Docker 环境检查
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "compose", "version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0:
+            raise RuntimeError(stderr.decode().strip() or "docker compose 不可用")
+    except FileNotFoundError:
+        raise BadRequestError("Docker 未安装或不在 PATH 中")
+    except asyncio.TimeoutError:
+        raise BadRequestError("Docker 环境检查超时")
+
+    cluster = Cluster(
+        name=name or "local-docker",
+        provider="docker",
+        compute_provider="docker",
+        kubeconfig_encrypted="",
+        auth_type="none",
+        status=ClusterStatus.connected,
+        health_status="healthy",
+        created_by=user.id,
+        org_id=org_id,
+    )
+    db.add(cluster)
+    await db.commit()
+    await db.refresh(cluster)
+    return ClusterInfo.model_validate(cluster)
+
+
 async def test_connection(cluster_id: str, db: AsyncSession) -> ConnectionTestResult:
-    """Test cluster connectivity using kubernetes-asyncio."""
+    """Test cluster connectivity."""
     cluster = await get_cluster(cluster_id, db)
+
+    if cluster.compute_provider == "docker":
+        return await _test_docker_connection(cluster, db)
+
     kubeconfig_plain = decrypt_kubeconfig(cluster.kubeconfig_encrypted)
 
     try:
@@ -175,7 +270,6 @@ async def test_connection(cluster_id: str, db: AsyncSession) -> ConnectionTestRe
             core_api = CoreV1Api(api_client)
             nodes = await core_api.list_node()
 
-        # Update cluster status
         cluster.status = ClusterStatus.connected
         cluster.k8s_version = info.git_version
         cluster.health_status = "healthy"
@@ -186,6 +280,34 @@ async def test_connection(cluster_id: str, db: AsyncSession) -> ConnectionTestRe
             version=info.git_version,
             nodes=len(nodes.items),
         )
+    except Exception as e:
+        cluster.status = ClusterStatus.disconnected
+        cluster.health_status = "unhealthy"
+        await db.commit()
+        return ConnectionTestResult(ok=False, message=str(e))
+
+
+async def _test_docker_connection(
+    cluster: Cluster, db: AsyncSession,
+) -> ConnectionTestResult:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "compose", "version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0:
+            cluster.status = ClusterStatus.disconnected
+            cluster.health_status = "unhealthy"
+            await db.commit()
+            return ConnectionTestResult(ok=False, message=stderr.decode().strip())
+
+        version_str = stdout.decode().strip()
+        cluster.status = ClusterStatus.connected
+        cluster.health_status = "healthy"
+        await db.commit()
+        return ConnectionTestResult(ok=True, version=version_str)
     except Exception as e:
         cluster.status = ClusterStatus.disconnected
         cluster.health_status = "unhealthy"

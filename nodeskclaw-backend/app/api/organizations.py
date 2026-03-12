@@ -1,12 +1,21 @@
 """Organization management endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import hooks
-from app.core.deps import get_db, require_feature, require_org_admin, require_super_admin_dep
+from app.core.deps import (
+    get_current_org,
+    get_db,
+    require_feature,
+    require_org_admin,
+    require_super_admin_dep,
+)
 from app.core.security import get_current_user
+from app.models.base import not_deleted
+from app.models.org_membership import OrgMembership
+from app.models.organization import Organization
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.organization import (
@@ -15,6 +24,7 @@ from app.schemas.organization import (
     OAuthOrgSetupRequest,
     OrgCreate,
     OrgInfo,
+    OrgNameUpdate,
     OrgUpdate,
     ResetPasswordResponse,
     UpdateMemberRoleRequest,
@@ -58,6 +68,54 @@ async def list_my_organizations(
 ):
     """列出当前用户所属的所有组织。"""
     data = await org_service.list_user_orgs(current_user, db)
+    return ApiResponse(data=data)
+
+
+async def _enrich_org_info(org: Organization, db: AsyncSession) -> OrgInfo:
+    """补充 cluster_name 和 member_count。"""
+    cluster_name = None
+    if org.cluster_id:
+        from app.models.cluster import Cluster
+        result = await db.execute(
+            select(Cluster.name).where(Cluster.id == org.cluster_id, not_deleted(Cluster))
+        )
+        cluster_name = result.scalar_one_or_none()
+
+    member_count_result = await db.execute(
+        select(func.count(OrgMembership.id)).where(
+            OrgMembership.org_id == org.id, not_deleted(OrgMembership)
+        )
+    )
+    info = OrgInfo.model_validate(org)
+    info.cluster_name = cluster_name
+    info.member_count = member_count_result.scalar_one() or 0
+    return info
+
+
+# ── 当前组织（CE/EE 通用，不受 feature gate 限制） ──────────
+
+@router.get("/current", response_model=ApiResponse[OrgInfo])
+async def get_current_organization(
+    db: AsyncSession = Depends(get_db),
+    org_ctx: tuple = Depends(get_current_org),
+):
+    """获取当前用户所在组织的详情。"""
+    _user, org = org_ctx
+    data = await _enrich_org_info(org, db)
+    return ApiResponse(data=data)
+
+
+@router.put("/current/name", response_model=ApiResponse[OrgInfo])
+async def update_current_org_name(
+    body: OrgNameUpdate,
+    db: AsyncSession = Depends(get_db),
+    org_ctx: tuple = Depends(require_org_admin),
+):
+    """组织管理员修改当前组织名称。"""
+    _user, org = org_ctx
+    await org_service.update_org(org.id, OrgUpdate(name=body.name), db)
+    await db.refresh(org)
+    data = await _enrich_org_info(org, db)
     return ApiResponse(data=data)
 
 

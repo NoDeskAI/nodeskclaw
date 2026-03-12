@@ -299,10 +299,104 @@ async def _find_running_pod(
     return usable[0]["name"], container
 
 
+class DockerFS:
+    """Host filesystem proxy for Docker instances — files at DOCKER_DATA_DIR/{slug}/data/."""
+
+    def __init__(self, slug: str):
+        from app.services.docker_constants import DOCKER_DATA_DIR
+        self._slug = slug
+        self._base = DOCKER_DATA_DIR / slug / "data"
+        import os
+        os.makedirs(str(self._base), exist_ok=True)
+
+    def _resolve(self, remote_path: str) -> "pathlib.Path":
+        import pathlib
+        if remote_path.startswith("/root/.openclaw/"):
+            rel = remote_path[len("/root/.openclaw/"):]
+        elif remote_path.startswith("/root/.openclaw"):
+            rel = remote_path[len("/root/.openclaw"):]
+        else:
+            rel = remote_path.lstrip("/")
+        return self._base / rel
+
+    async def read_text(self, remote_path: str) -> str:
+        p = self._resolve(remote_path)
+        if not p.exists():
+            raise NFSMountError(f"文件不存在: {remote_path}")
+        return p.read_text(encoding="utf-8")
+
+    async def write_text(self, remote_path: str, content: str) -> None:
+        p = self._resolve(remote_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    async def write_binary(self, remote_path: str, data: bytes) -> None:
+        p = self._resolve(remote_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+
+    async def remove(self, remote_path: str) -> None:
+        p = self._resolve(remote_path)
+        if p.exists():
+            p.unlink()
+
+    async def exists(self, remote_path: str) -> bool:
+        return self._resolve(remote_path).exists()
+
+    async def mkdir(self, remote_path: str) -> None:
+        p = self._resolve(remote_path)
+        p.mkdir(parents=True, exist_ok=True)
+
+    async def list_dir(self, remote_path: str) -> list[str]:
+        p = self._resolve(remote_path)
+        if not p.exists():
+            return []
+        return [f.name for f in p.iterdir()]
+
+    async def scan_skills(self) -> list[dict]:
+        """Scan skills directory — mirrors PodFS.scan_skills interface."""
+        skills_dir = self._base / "skills"
+        if not skills_dir.exists():
+            return []
+        results = []
+        for skill_path in skills_dir.iterdir():
+            if not skill_path.is_dir():
+                continue
+            skill_md = skill_path / "SKILL.md"
+            results.append({
+                "name": skill_path.name,
+                "has_skill_md": skill_md.exists(),
+            })
+        return results
+
+    async def exec_command(self, cmd: list[str]) -> str:
+        """Run a command inside the Docker container via docker exec."""
+        import asyncio
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "exec", self._slug, *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            raise NFSMountError(f"docker exec 失败 (rc={proc.returncode}): {stdout.decode()[:500]}")
+        return stdout.decode() if stdout else ""
+
+
+RemoteFS = PodFS | DockerFS
+
+
 @asynccontextmanager
-async def remote_fs(instance: Instance, db: AsyncSession) -> AsyncIterator[PodFS]:
-    """Yield a PodFS connected to the instance's running Pod."""
-    k8s = await _get_k8s_client(instance, db)
-    pod_name, container = await _find_running_pod(k8s, instance)
-    logger.debug("remote_fs: pod=%s container=%s ns=%s", pod_name, container, instance.namespace)
-    yield PodFS(k8s, instance.namespace, pod_name, container)
+async def remote_fs(instance: Instance, db: AsyncSession) -> AsyncIterator[RemoteFS]:
+    """Yield a filesystem proxy connected to the instance.
+
+    Docker instances use DockerFS (direct host path access).
+    K8s instances use PodFS (kubectl exec).
+    """
+    if instance.compute_provider == "docker":
+        yield DockerFS(instance.slug)
+    else:
+        k8s = await _get_k8s_client(instance, db)
+        pod_name, container = await _find_running_pod(k8s, instance)
+        logger.debug("remote_fs: pod=%s container=%s ns=%s", pod_name, container, instance.namespace)
+        yield PodFS(k8s, instance.namespace, pod_name, container)

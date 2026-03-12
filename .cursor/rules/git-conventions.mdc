@@ -1,10 +1,78 @@
 ---
-description: Git 提交规范
+description: Git 规范（分支命名 / PR 标题 / Commit Message）
 globs: 
 alwaysApply: true
 ---
 
-# Git 提交规范
+# Git 规范
+
+## 分支命名规范
+
+**格式：`<type>/<kebab-case-description>`**
+
+### 分支前缀
+
+常用前缀与 commit type 取交集：
+
+- `feat` - 新功能
+- `fix` - 修复 bug
+- `refactor` - 重构、优化
+- `chore` - 构建过程或辅助工具的变动
+- `docs` - 文档
+- `perf` - 性能优化
+- `test` - 测试
+- `build` - 打包
+
+`style` 和 `revert` 不作为分支前缀——纯格式改动合入 `chore/`，回退操作直接在原分支提交。
+
+### description 规则
+
+- 使用 kebab-case（小写英文 + 连字符），2-5 个词
+- 必须描述分支做什么，让人一眼看懂
+
+### 特殊分支
+
+- `main` — 主分支
+- `release-<version>` — 发布分支（如 `release-0.1.0`）
+
+### 示例
+
+```
+feat/operation-audit
+fix/deploy-env-serialize
+refactor/ce-ee-split
+chore/upgrade-fastapi
+docs/add-contributing-guide
+```
+
+### 禁止
+
+- **无意义名称**（`cccc`、`test123`、`temp`、`my-branch`）
+- **纯日期名称**（`chore/openclaw-2026.3.8`）— 看不出做了什么
+- **`feature/` 全称** — 统一用 `feat/`
+- **中文、大写、下划线** — 只允许小写英文字母、数字和连字符
+
+## PR 标题规范
+
+**格式与 commit message 一致：`<type>(<scope>): <中文描述>`**
+
+- PR 标题应能概括整个 PR 的变更目标
+- 当 PR 包含多个 commit 时，标题描述整体目标而非单个 commit
+- scope 选填，与 commit message 的 scope 规则相同
+
+### 示例
+
+```
+feat(backend): CE 操作审计系统 — Hook 埋点 + 持久化 + AuthActor 识别
+fix(portal): 修复实例列表分页后状态丢失问题
+refactor(deploy): 部署流程拆分为独立 service 模块
+```
+
+### 禁止
+
+- **无意义标题**（`update`、`fix bug`、`WIP`）
+- **纯日期/版本号标题**（`openclaw-2026.3.11`）
+- **与分支名相同但无额外信息**（`feat/operation-audit` 直接当标题）
 
 ## 自动提交（最高优先级）
 

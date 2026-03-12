@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import hooks
-from app.core.deps import get_db
+from app.core.deps import get_current_org, get_db
 from app.core.exceptions import NotFoundError
 from app.core.security import get_current_user
 from app.models.cluster import Cluster
@@ -35,10 +35,29 @@ async def create_cluster(
     body: ClusterCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    org_id: str | None = Depends(get_current_org),
 ):
-    """添加集群。"""
-    data = await cluster_service.create_cluster(body, current_user, db)
+    """添加 K8s 集群。"""
+    data = await cluster_service.create_cluster(body, current_user, db, org_id=org_id)
     await hooks.emit("operation_audit", action="cluster.created", target_type="cluster", target_id=data.id, actor_id=current_user.id, org_id=current_user.current_org_id)
+    return ApiResponse(data=data)
+
+
+class DockerClusterBody(BaseModel):
+    name: str = "local-docker"
+
+
+@router.post("/docker", response_model=ApiResponse[ClusterInfo])
+async def create_docker_cluster(
+    body: DockerClusterBody = DockerClusterBody(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_id: str | None = Depends(get_current_org),
+):
+    """添加 Docker 运行环境。"""
+    data = await cluster_service.create_docker_cluster(
+        body.name, current_user, org_id, db,
+    )
     return ApiResponse(data=data)
 
 

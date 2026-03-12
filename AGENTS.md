@@ -141,7 +141,33 @@ docker build --platform linux/amd64 -t my-image:latest .
 
 例外（可直接修）：明显拼写错误、导入缺失、lint 错误、用户明确说"直接修"。
 
-## Git 提交规范
+## Git 规范
+
+### 分支命名
+
+格式：`<type>/<kebab-case-description>`
+
+- 前缀：`feat`、`fix`、`refactor`、`chore`、`docs`、`perf`、`test`、`build`
+- description 使用 kebab-case，2-5 个词，描述分支做什么
+- 特殊分支：`main`、`release-<version>`
+
+```
+feat/operation-audit
+fix/deploy-env-serialize
+refactor/ce-ee-split
+chore/upgrade-fastapi
+```
+
+禁止无意义名称（`cccc`、`temp`）、纯日期名称（`chore/openclaw-2026.3.8`）、`feature/` 全称、中文/大写/下划线。
+
+### PR 标题
+
+格式与 commit message 一致：`<type>(<scope>): <中文描述>`，概括整个 PR 的变更目标。
+
+```
+feat(backend): CE 操作审计系统 — Hook 埋点 + 持久化 + AuthActor 识别
+fix(portal): 修复实例列表分页后状态丢失问题
+```
 
 ### 自动提交
 

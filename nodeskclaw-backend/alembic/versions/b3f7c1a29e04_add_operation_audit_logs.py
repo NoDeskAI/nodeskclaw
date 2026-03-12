@@ -1,7 +1,7 @@
 """add_operation_audit_logs
 
 Revision ID: b3f7c1a29e04
-Revises: a349ffaba48f
+Revises: 8a8b875bb810
 Create Date: 2026-03-11 18:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = 'b3f7c1a29e04'
-down_revision: Union[str, Sequence[str], None] = 'a349ffaba48f'
+down_revision: Union[str, Sequence[str], None] = '8a8b875bb810'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

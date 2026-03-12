@@ -14,17 +14,25 @@ const deployId = route.params.deployId as string
 const instanceName = (route.query.name as string) || ''
 const instanceId = (route.query.instanceId as string) || ''
 
-const PORTAL_STEPS_BASE = [
+const K8S_PORTAL_STEPS = [
   '预检查',
   '创建相关前置资源',
   '部署AI 员工',
   '等待就绪',
 ]
 
+const K8S_BACKEND_STEP_COUNT = 9
+let useDirectMapping = false
+
 function buildPortalSteps(backendStepNames: string[]): string[] {
-  const portal = [...PORTAL_STEPS_BASE]
-  if (backendStepNames.length > 9) {
-    for (const name of backendStepNames.slice(9)) {
+  if (backendStepNames.length < K8S_BACKEND_STEP_COUNT) {
+    useDirectMapping = true
+    return [...backendStepNames]
+  }
+  useDirectMapping = false
+  const portal = [...K8S_PORTAL_STEPS]
+  if (backendStepNames.length > K8S_BACKEND_STEP_COUNT) {
+    for (const name of backendStepNames.slice(K8S_BACKEND_STEP_COUNT)) {
       portal.push(name)
     }
   }
@@ -32,11 +40,12 @@ function buildPortalSteps(backendStepNames: string[]): string[] {
 }
 
 function backendStepToPortalIndex(backendStep: number): number {
+  if (useDirectMapping) return backendStep - 1
   if (backendStep <= 1) return 0
   if (backendStep <= 4) return 1
   if (backendStep <= 8) return 2
   if (backendStep === 9) return 3
-  return 3 + (backendStep - 9)
+  return 3 + (backendStep - K8S_BACKEND_STEP_COUNT)
 }
 
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'

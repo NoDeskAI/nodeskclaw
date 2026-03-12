@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
 
     # ── 种子数据（幂等，每次启动执行）──
     from app.startup.seed import run_seed
-    _admin_credentials = await run_seed(async_session_factory, is_ee=_fg.is_ee)
+    _seed_credentials = await run_seed(async_session_factory, is_ee=_fg.is_ee)
 
     # 预热 K8s 连接池：从 DB 加载所有已连接集群
     async with async_session_factory() as db:
@@ -400,13 +400,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Runtime v2 启动部分失败（非致命）: %s", e)
 
-    if _admin_credentials:
+    _ce_creds = _seed_credentials.get("ce_admin")
+    _ee_creds = _seed_credentials.get("ee_admin")
+    if _ce_creds:
+        _ce_label = "Portal 超管初始账号" if _fg.is_ee else "超管初始账号"
         print(
             "\n"
             "========================================\n"
-            "  CE 超级管理员初始密码\n"
-            f"  账号: {_admin_credentials['account']}\n"
-            f"  密码: {_admin_credentials['password']}\n"
+            f"  {_ce_label}\n"
+            f"  账号: {_ce_creds['account']}\n"
+            f"  密码: {_ce_creds['password']}\n"
+            "  请登录后立即修改密码\n"
+            "========================================",
+            flush=True,
+        )
+    if _ee_creds:
+        print(
+            "\n"
+            "========================================\n"
+            "  Admin 平台管理员初始账号\n"
+            f"  账号: {_ee_creds['account']}\n"
+            f"  密码: {_ee_creds['password']}\n"
             "  请登录后立即修改密码\n"
             "========================================",
             flush=True,

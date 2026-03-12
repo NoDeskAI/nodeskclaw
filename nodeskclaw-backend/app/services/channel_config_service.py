@@ -14,7 +14,7 @@ from app.services.llm_config_service import (
     _write_config_file,
     restart_openclaw,
 )
-from app.services.nfs_mount import PodFS, remote_fs
+from app.services.nfs_mount import RemoteFS, remote_fs
 
 logger = logging.getLogger(__name__)
 
@@ -270,14 +270,19 @@ _DISCOVER_SCRIPT = textwrap.dedent("""\
 async def discover_available_channels(
     instance: Instance, db: AsyncSession,
 ) -> list[dict]:
-    """Scan Pod for available channel plugins and return metadata list."""
+    """Scan Pod/container for available channel plugins and return metadata list."""
     async with remote_fs(instance, db) as fs:
         try:
-            raw = await fs._k8s.exec_in_pod(
-                fs._ns, fs._pod,
-                ["node", "-e", _DISCOVER_SCRIPT],
-                container=fs._container,
-            )
+            if instance.compute_provider == "docker":
+                from app.services.nfs_mount import DockerFS
+                assert isinstance(fs, DockerFS)
+                raw = await fs.exec_command(["node", "-e", _DISCOVER_SCRIPT])
+            else:
+                raw = await fs._k8s.exec_in_pod(
+                    fs._ns, fs._pod,
+                    ["node", "-e", _DISCOVER_SCRIPT],
+                    container=fs._container,
+                )
         except Exception as e:
             logger.error("Channel discovery exec failed: %s", e)
             raise AppException(
@@ -507,11 +512,18 @@ async def install_npm_channel(
 
     async with remote_fs(instance, db) as fs:
         try:
-            output = await fs._k8s.exec_in_pod(
-                fs._ns, fs._pod,
-                ["npx", "openclaw", "plugins", "install", package_name.strip()],
-                container=fs._container,
-            )
+            if instance.compute_provider == "docker":
+                from app.services.nfs_mount import DockerFS
+                assert isinstance(fs, DockerFS)
+                output = await fs.exec_command(
+                    ["npx", "openclaw", "plugins", "install", package_name.strip()],
+                )
+            else:
+                output = await fs._k8s.exec_in_pod(
+                    fs._ns, fs._pod,
+                    ["npx", "openclaw", "plugins", "install", package_name.strip()],
+                    container=fs._container,
+                )
         except Exception as e:
             logger.error("npm channel install failed: %s", e)
             raise AppException(

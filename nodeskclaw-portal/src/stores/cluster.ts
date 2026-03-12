@@ -6,6 +6,7 @@ export interface ClusterInfo {
   id: string
   name: string
   provider: string
+  compute_provider: string
   auth_type: string
   ingress_class: string
   proxy_endpoint: string | null
@@ -131,6 +132,13 @@ export const useClusterStore = defineStore('cluster', () => {
     return updated
   }
 
+  async function createDockerCluster(name = 'local-docker') {
+    const res = await api.post('/clusters/docker', { name })
+    const created: ClusterInfo = res.data.data
+    clusters.value.unshift(created)
+    return created
+  }
+
   async function fetchCluster(id: string) {
     const res = await api.get(`/clusters/${id}`)
     currentCluster.value = res.data.data
@@ -155,6 +163,7 @@ export const useClusterStore = defineStore('cluster', () => {
     overviewLoading,
     fetchClusters,
     createCluster,
+    createDockerCluster,
     updateCluster,
     deleteCluster,
     testConnection,

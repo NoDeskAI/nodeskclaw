@@ -44,14 +44,14 @@ uv run ruff check --fix . # 自动修复
 # 管理前端（EE-only）
 cd ee/nodeskclaw-frontend
 npm install
-npm run dev               # 开发服务器 http://localhost:5173
+npm run dev               # 开发服务器 http://localhost:4518
 npm run build             # 构建生产版本
 npm run lint              # ESLint 检查
 
 # 用户门户
 cd nodeskclaw-portal
 npm install
-npm run dev               # 开发服务器 http://localhost:5174
+npm run dev               # 开发服务器 http://localhost:4517
 npm run build
 npm run test              # 运行测试（vitest）
 npm run test -- --run src/components/xxx.spec.ts  # 运行单个测试
@@ -125,7 +125,10 @@ kubectl get deploy -n <namespace> --context <context-name>
 - `.cursor/rules/*.mdc` 禁止包含 IP、域名、Token、密钥等敏感信息
 - 代码中发现真人信息必须立即替换并提交
 
-### Git 提交规范
+### Git 规范
+
+- **分支命名**：`<type>/<kebab-case-description>`（如 `feat/operation-audit`、`fix/deploy-env-serialize`），禁止无意义名称和纯日期名称
+- **PR 标题**：与 commit message 格式一致 `<type>(<scope>): <中文描述>`，概括整个 PR 的变更目标
 
 ```
 <type>(<scope>): <subject>
