@@ -76,7 +76,7 @@ def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
-def _build_docker_handle(instance: Instance) -> "ComputeHandle":
+def _build_docker_handle(instance: "Instance") -> "ComputeHandle":  # noqa: F821
     from app.services.runtime.compute.base import ComputeHandle
     env_vars = json.loads(instance.env_vars) if instance.env_vars else {}
     advanced = json.loads(instance.advanced_config) if instance.advanced_config else {}

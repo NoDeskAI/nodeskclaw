@@ -309,7 +309,7 @@ class DockerFS:
         import os
         os.makedirs(str(self._base), exist_ok=True)
 
-    def _resolve(self, remote_path: str) -> "pathlib.Path":
+    def _resolve(self, remote_path: str) -> "pathlib.Path":  # noqa: F821
         import pathlib
         if remote_path.startswith("/root/.openclaw/"):
             rel = remote_path[len("/root/.openclaw/"):]
