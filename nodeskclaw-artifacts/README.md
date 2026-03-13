@@ -197,4 +197,4 @@ kubectl get sc nas-subpath
 - **ee/nodeskclaw-frontend** -- NoDeskClaw 管理平台前端（EE-only），开发阶段无需独立镜像
 - **本目录** -- 被 NoDeskClaw 部署到 K8s 的 DeskClaw 实例镜像
 
-详细的镜像设计文档见 `docs/DeskClaw镜像构建规范.md`。
+详细的镜像设计文档见 EE 私有仓库 `ee/docs/DeskClaw镜像构建规范.md`。

@@ -14,7 +14,7 @@ DeskClaw（曾用名 NoDeskClaw）— DeskClaw 实例可视化管理平台，通
 NoDeskClaw/
 ├── nodeskclaw-portal/              # 用户门户前端（CE + EE，Vue 3 + Tailwind CSS）
 ├── nodeskclaw-backend/             # 后端 API 服务（Python 3.12 + FastAPI）
-├── nodeskclaw-llm-proxy/          # LLM Proxy 服务（Go）
+├── nodeskclaw-llm-proxy/          # LLM Proxy 服务（Python + FastAPI）
 ├── nodeskclaw-artifacts/          # 镜像构建 & 部署制品
 ├── openclaw-channel-nodeskclaw/   # DeskClaw channel plugin
 ├── features.yaml                   # CE/EE Feature 定义
@@ -46,7 +46,6 @@ cd ee/nodeskclaw-frontend
 npm install
 npm run dev               # 开发服务器 http://localhost:4518
 npm run build             # 构建生产版本
-npm run lint              # ESLint 检查
 
 # 用户门户
 cd nodeskclaw-portal
@@ -56,7 +55,6 @@ npm run build
 npm run test              # 运行测试（vitest）
 npm run test -- --run src/components/xxx.spec.ts  # 运行单个测试
 npm run test:watch        # 监听模式
-npm run lint              # ESLint 检查
 ```
 
 ## i18n 国际化
