@@ -1,0 +1,74 @@
+# =============================================================================
+# ZeroClaw 安全层镜像 — 多阶段 Rust 源码构建
+#
+# Stage 1: git clone zeroclaw + COPY security-layer → cargo build --release
+# Stage 2: debian slim + COPY binary
+#
+# 构建上下文: 项目根目录 (../../)
+# =============================================================================
+
+# ── Stage 1: Rust Builder ────────────────────────────────────────────────────
+
+FROM rust:1.82-slim-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+ARG ZEROCLAW_REPO=https://github.com/nicholasgasior/zeroclaw.git
+ARG ZEROCLAW_REF=main
+
+RUN git clone --depth 1 --branch ${ZEROCLAW_REF} ${ZEROCLAW_REPO} /opt/zeroclaw-src
+
+COPY zeroclaw-security-layer/ /opt/zeroclaw-security-layer/
+
+# 取消注释 Cargo.toml 中的 zeroclaw 依赖，替换为本地 path 引用
+RUN cd /opt/zeroclaw-security-layer && \
+    sed -i \
+      -e 's|^# \[dependencies\.zeroclaw\]|[dependencies.zeroclaw]|' \
+      -e 's|^# git = .*|path = "/opt/zeroclaw-src"|' \
+      -e '/^# branch = /d' \
+      Cargo.toml
+
+# BuildKit cache mount: Cargo registry + target 缓存，增量编译只重新编译变更的 crate
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/opt/zeroclaw-security-layer/target \
+    cd /opt/zeroclaw-security-layer && \
+    cargo build --release && \
+    cp target/release/libzeroclaw_security_layer.* /tmp/ || true
+
+# 同时构建 zeroclaw 本体（从源码，包含安全层集成）
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/opt/zeroclaw-src/target \
+    cd /opt/zeroclaw-src && \
+    cargo build --release && \
+    cp target/release/zeroclaw /tmp/zeroclaw
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/zeroclaw
+
+COPY --from=builder /tmp/zeroclaw /opt/zeroclaw/zeroclaw
+RUN chmod +x /opt/zeroclaw/zeroclaw
+
+ARG IMAGE_VERSION=latest
+RUN echo "${IMAGE_VERSION}" > /opt/zeroclaw/.zeroclaw-version
+
+# 复用 base 镜像的 entrypoint（从构建上下文获取）
+COPY nodeskclaw-artifacts/zeroclaw-image/docker-entrypoint.sh /opt/zeroclaw/docker-entrypoint.sh
+RUN chmod +x /opt/zeroclaw/docker-entrypoint.sh
+
+ENV PATH="/opt/zeroclaw:${PATH}"
+ENV SECURITY_LAYER_ENABLED=true
+
+EXPOSE 8080
+WORKDIR /opt/zeroclaw
+
+ENTRYPOINT ["/opt/zeroclaw/docker-entrypoint.sh"]
+CMD ["zeroclaw", "gateway", "--port", "8080"]
