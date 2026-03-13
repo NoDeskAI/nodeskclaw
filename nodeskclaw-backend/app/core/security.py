@@ -273,10 +273,18 @@ async def get_current_user_or_agent(
 # ── KubeConfig AES-256-GCM Encryption ────────────────────
 
 def _get_aes_key() -> bytes:
-    """Derive 32-byte AES key from settings."""
-    key = settings.ENCRYPTION_KEY.encode("utf-8")
-    # Pad or truncate to 32 bytes
-    return key[:32].ljust(32, b"0")
+    """Derive 32-byte AES key from settings using HKDF."""
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives import hashes
+
+    raw = settings.ENCRYPTION_KEY.encode("utf-8")
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b"nodeskclaw-aes-key",
+    )
+    return hkdf.derive(raw)
 
 
 def encrypt_sensitive(plaintext: str) -> str:

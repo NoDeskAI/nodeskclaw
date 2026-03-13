@@ -6,6 +6,7 @@ import {
   ExternalLink, ArrowLeft, ChevronDown, ChevronRight, Square,
 } from 'lucide-vue-next'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { getToken } from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -155,7 +156,7 @@ function updateSteps(backendStep: number, status: string, message?: string, logs
 }
 
 function subscribeSSE() {
-  const token = localStorage.getItem('portal_token')
+  const token = getToken()
   abortCtrl = new AbortController()
 
   sseTimeout = setTimeout(() => {

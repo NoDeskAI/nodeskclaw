@@ -74,7 +74,8 @@ async def system_capabilities():
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
 api_router.include_router(org_router, prefix="/orgs", tags=["组织"])
 api_router.include_router(org_settings_router, prefix="/orgs", tags=["组织设置"])
-api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
+api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"],
+    dependencies=[Depends(require_org_admin)])
 api_router.include_router(portal_deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
 api_router.include_router(portal_instance_router, prefix="/instances", tags=["实例"])

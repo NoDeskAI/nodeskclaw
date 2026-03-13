@@ -38,41 +38,45 @@ warn() { echo -e "${YELLOW}[ WARN ]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR ]${NC} $*" >&2; }
 
 # ── 组件配置查表（兼容 bash 3.x / macOS）─────────────────
-ALL_COMPONENTS="backend admin portal"
+ALL_COMPONENTS="backend admin portal llm-proxy"
 
 get_image_name() {
   case "$1" in
-    backend) echo "nodeskclaw-backend" ;;
-    admin)   echo "nodeskclaw-admin" ;;
-    portal)  echo "nodeskclaw-portal" ;;
-    *)       return 1 ;;
+    backend)   echo "nodeskclaw-backend" ;;
+    admin)     echo "nodeskclaw-admin" ;;
+    portal)    echo "nodeskclaw-portal" ;;
+    llm-proxy) echo "nodeskclaw-llm-proxy" ;;
+    *)         return 1 ;;
   esac
 }
 
 get_build_context() {
   case "$1" in
-    backend) echo "$PROJECT_ROOT" ;;
-    admin)   echo "$PROJECT_ROOT/ee/nodeskclaw-frontend" ;;
-    portal)  echo "$PROJECT_ROOT/nodeskclaw-portal" ;;
-    *)       return 1 ;;
+    backend)   echo "$PROJECT_ROOT" ;;
+    admin)     echo "$PROJECT_ROOT/ee/nodeskclaw-frontend" ;;
+    portal)    echo "$PROJECT_ROOT/nodeskclaw-portal" ;;
+    llm-proxy) echo "$PROJECT_ROOT/nodeskclaw-llm-proxy" ;;
+    *)         return 1 ;;
   esac
 }
 
 get_dockerfile() {
   case "$1" in
-    backend) echo "$PROJECT_ROOT/nodeskclaw-backend/Dockerfile" ;;
-    admin)   echo "$PROJECT_ROOT/ee/nodeskclaw-frontend/Dockerfile" ;;
-    portal)  echo "$PROJECT_ROOT/nodeskclaw-portal/Dockerfile" ;;
-    *)       return 1 ;;
+    backend)   echo "$PROJECT_ROOT/nodeskclaw-backend/Dockerfile" ;;
+    admin)     echo "$PROJECT_ROOT/ee/nodeskclaw-frontend/Dockerfile" ;;
+    portal)    echo "$PROJECT_ROOT/nodeskclaw-portal/Dockerfile" ;;
+    llm-proxy) echo "$PROJECT_ROOT/nodeskclaw-llm-proxy/Dockerfile" ;;
+    *)         return 1 ;;
   esac
 }
 
 get_k8s_deployment() {
   case "$1" in
-    backend) echo "nodeskclaw-backend" ;;
-    admin)   echo "nodeskclaw-admin" ;;
-    portal)  echo "nodeskclaw-portal" ;;
-    *)       return 1 ;;
+    backend)   echo "nodeskclaw-backend" ;;
+    admin)     echo "nodeskclaw-admin" ;;
+    portal)    echo "nodeskclaw-portal" ;;
+    llm-proxy) echo "nodeskclaw-llm-proxy" ;;
+    *)         return 1 ;;
   esac
 }
 
@@ -85,7 +89,7 @@ NO_CACHE=""
 KUBE_CONTEXT=""
 
 usage() {
-  echo "用法: $0 <backend|admin|portal|all> --context <kubectl-context> [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
+  echo "用法: $0 <backend|admin|portal|llm-proxy|all> --context <kubectl-context> [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
   exit 1
 }
 
@@ -126,7 +130,7 @@ fi
 # ── 确定构建目标列表 ─────────────────────────────────────
 TARGETS=()
 if [[ "$TARGET" == "all" ]]; then
-  TARGETS=(backend admin portal)
+  TARGETS=(backend admin portal llm-proxy)
 elif get_image_name "$TARGET" >/dev/null 2>&1; then
   TARGETS=("$TARGET")
 else
@@ -196,6 +200,11 @@ EODF
     return 0
   fi
 
+  if [[ "$component" == "llm-proxy" && ! -f "$dockerfile" ]]; then
+    warn "[$component] Dockerfile 不存在: $dockerfile，跳过"
+    return 0
+  fi
+
   log "[$component] 构建镜像: $image"
   if ! docker build --platform linux/amd64 \
     $NO_CACHE \
@@ -232,7 +241,16 @@ deploy_to_k8s() {
 
   if ! $KUBECTL -n "$NAMESPACE" get deployment "$deployment" &>/dev/null; then
     warn "[$component] Deployment 不存在，执行首次部署..."
-    $KUBECTL apply -f "$SCRIPT_DIR/k8s/${component}.yaml"
+    local k8s_path="$SCRIPT_DIR/k8s/${component}.yaml"
+    if [[ "$component" == "llm-proxy" ]]; then
+      k8s_path="$PROJECT_ROOT/nodeskclaw-llm-proxy/deploy/deployment.yaml"
+    fi
+    if [[ -f "$k8s_path" ]]; then
+      $KUBECTL apply -f "$k8s_path"
+    else
+      err "[$component] K8s 清单不存在: $k8s_path"
+      return 1
+    fi
   fi
 
   $KUBECTL -n "$NAMESPACE" set image "deployment/$deployment" "$container=$image"

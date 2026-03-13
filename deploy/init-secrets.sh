@@ -86,7 +86,7 @@ $KUBECTL -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
   --from-env-file="$CLEAN_ENV" \
   --dry-run=client -o yaml | $KUBECTL apply -f -
 
-ok "Secret $SECRET_NAME 已创建/更新 (${#LITERAL_ARGS[@]} 个变量)"
+ok "Secret $SECRET_NAME 已创建/更新"
 
 # ── 应用 K8s 部署清单 ───────────────────────────────────
 log "应用 K8s 部署清单..."

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/services/api'
+import api, { getToken } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 export interface AgentBrief {
@@ -698,7 +698,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const { data } = await api.post('/workspaces/sse-token')
       token = data?.data?.sse_token || ''
     } catch { /* ignore */ }
-    if (!token) token = localStorage.getItem('portal_token') || ''
+    if (!token) token = getToken() || ''
 
     let sseUrl = `/api/v1/workspaces/${workspaceId}/events?token=${token}`
     if (_lastEventId) {
@@ -912,7 +912,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('portal_token') || ''}`,
+        Authorization: `Bearer ${getToken() || ''}`,
       },
       body: JSON.stringify({ message, history }),
     })

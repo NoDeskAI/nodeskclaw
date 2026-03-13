@@ -268,6 +268,14 @@ async def _handle_non_stream(
 
     resp_body = resp.content
 
+    if resp.status_code >= 400:
+        logger.warning(
+            "Upstream %s returned %d for instance=%s provider=%s url=%s body=%s",
+            method, resp.status_code,
+            instance.id if instance else "?", provider, url,
+            resp_body[:500] if resp_body else "(empty)",
+        )
+
     if is_org_key and org_key_id and resp.status_code < 400:
         usage = _parse_usage_from_response(resp_body)
         if usage:

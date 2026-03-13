@@ -5,7 +5,7 @@ import {
   ChevronRight, Download, File, FileCode, FileText,
   Folder, Loader2, Pencil, Save, Search, X,
 } from 'lucide-vue-next'
-import api from '@/services/api'
+import api, { getToken } from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 
@@ -214,7 +214,7 @@ function cancelConfirm() {
 function downloadFile(item: FileItem) {
   const filePath = `${currentPath.value}/${item.name}`
   const url = `/api/v1/instances/${instanceId.value}/files/download?path=${encodeURIComponent(filePath)}`
-  const token = localStorage.getItem('portal_token')
+  const token = getToken()
   if (token) {
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.blob())

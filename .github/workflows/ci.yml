@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint:
+    name: Backend Lint (ruff)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  backend-test:
+    name: Backend Tests (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
+        continue-on-error: true
+      - run: pip install pytest pytest-asyncio
+      - run: pytest tests/ -x -q --tb=short
+        continue-on-error: true
+
+  portal-typecheck:
+    name: Portal Type Check (vue-tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx vue-tsc --noEmit
+        continue-on-error: true
+
+  portal-lint:
+    name: Portal Lint (ESLint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx eslint src/
+        continue-on-error: true
+
+  portal-build:
+    name: Portal Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run build
+
+  portal-test:
+    name: Portal Tests (vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nodeskclaw-portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run test
+        continue-on-error: true

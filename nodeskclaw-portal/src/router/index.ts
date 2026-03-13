@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { i18n } from '@/i18n'
+import { getToken } from '@/services/api'
 import { eePortalRoutes, eeOrgSettingsChildren } from '@/router/ee-stub'
 
 const ceRoutes: RouteRecordRaw[] = [
@@ -144,7 +145,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, _from, next) => {
-  const token = localStorage.getItem('portal_token')
+  const token = getToken()
   const isLoginPage = to.path === '/login' || to.path.startsWith('/login/callback/')
   const isInvitePage = to.path.startsWith('/invite/')
   const isSetupPage = to.path === '/setup-org'

@@ -30,8 +30,8 @@ export function startSSEServer(): void {
       return;
     }
 
-    res.writeHead(404);
-    res.end();
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Not Found", path: req.url }));
   });
 
   server.listen(SSE_PORT, () => {

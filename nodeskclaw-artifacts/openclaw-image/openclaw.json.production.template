@@ -1,7 +1,10 @@
 {
-  // OpenClaw 开发环境配置模板（生产环境请使用 openclaw.json.production.template）
+  // OpenClaw 生产环境配置模板
   // 由 docker-entrypoint.sh 通过 envsubst 替换 ${} 占位符后生成 openclaw.json
   // 完整 schema: src/config/zod-schema.ts (OpenClawSchema)
+  //
+  // 与开发模板的区别: 关闭了 allowInsecureAuth、dangerouslyAllowHostHeaderOriginFallback、
+  // dangerouslyDisableDeviceAuth 等不安全选项
 
   "gateway": {
     "port": ${OPENCLAW_GATEWAY_PORT},
@@ -12,9 +15,9 @@
     },
     "controlUi": {
       "enabled": true,
-      "allowInsecureAuth": true,
-      "dangerouslyAllowHostHeaderOriginFallback": true,
-      "dangerouslyDisableDeviceAuth": true
+      "allowInsecureAuth": false,
+      "dangerouslyAllowHostHeaderOriginFallback": false,
+      "dangerouslyDisableDeviceAuth": false
     }
   },
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/services/api'
+import api, { getToken, getRefreshToken, setTokens as setStorageTokens, clearTokens } from '@/services/api'
 
 export interface OAuthConnectionInfo {
   provider: string
@@ -36,8 +36,8 @@ export interface SystemInfo {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('portal_token'))
-  const refreshToken = ref<string | null>(localStorage.getItem('portal_refresh_token'))
+  const token = ref<string | null>(getToken())
+  const refreshToken = ref<string | null>(getRefreshToken())
   const user = ref<PortalUser | null>(null)
   const lastOAuthProvider = ref<string | null>(sessionStorage.getItem('oauth_provider'))
   const systemInfo = ref<SystemInfo | null>(null)
@@ -47,8 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
   function setTokens(access: string, refresh: string) {
     token.value = access
     refreshToken.value = refresh
-    localStorage.setItem('portal_token', access)
-    localStorage.setItem('portal_refresh_token', refresh)
+    setStorageTokens(access, refresh)
   }
 
   function clearAuth() {
@@ -56,8 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = null
     user.value = null
     lastOAuthProvider.value = null
-    localStorage.removeItem('portal_token')
-    localStorage.removeItem('portal_refresh_token')
+    clearTokens()
     sessionStorage.removeItem('oauth_provider')
   }
 

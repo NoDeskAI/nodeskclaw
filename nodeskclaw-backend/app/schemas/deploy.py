@@ -8,26 +8,26 @@ from app.schemas.llm import LlmConfigItem
 
 
 class DeployRequest(BaseModel):
-    cluster_id: str
-    name: str
-    slug: str | None = Field(None, max_length=63)
-    namespace: str | None = None  # auto-generated if not provided
-    org_id: str | None = None  # 管理端显式传入；Portal 不传时 fallback 到 current_user
-    image_version: str
-    replicas: int = 1
-    cpu_request: str = "500m"
-    cpu_limit: str = "2000m"
-    mem_request: str = "2Gi"
-    mem_limit: str = "2Gi"
-    env_vars: dict[str, str] = {}
-    quota_cpu: str = "4"
-    quota_mem: str = "8Gi"
-    storage_class: str = "nas-subpath"
+    cluster_id: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
+    slug: str | None = Field(None, max_length=63, pattern=r"^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$")
+    namespace: str | None = Field(default=None, max_length=63)
+    org_id: str | None = Field(default=None, max_length=100)
+    image_version: str = Field(min_length=1, max_length=200)
+    replicas: int = Field(default=1, ge=1, le=10)
+    cpu_request: str = Field(default="500m", max_length=20)
+    cpu_limit: str = Field(default="2000m", max_length=20)
+    mem_request: str = Field(default="2Gi", max_length=20)
+    mem_limit: str = Field(default="2Gi", max_length=20)
+    env_vars: dict[str, str] = Field(default_factory=dict, max_length=50)
+    quota_cpu: str = Field(default="4", max_length=20)
+    quota_mem: str = Field(default="8Gi", max_length=20)
+    storage_class: str = Field(default="nas-subpath", max_length=100)
     storage_size: str = "80Gi"
-    advanced_config: dict | None = None  # Volume/Sidecar/Init/Network
+    advanced_config: dict | None = None
     llm_configs: list[LlmConfigItem] | None = None
-    template_id: str | None = None
-    runtime: str = "openclaw"
+    template_id: str | None = Field(default=None, max_length=100)
+    runtime: str = Field(default="openclaw", max_length=50)
 
     @field_validator("storage_size")
     @classmethod
