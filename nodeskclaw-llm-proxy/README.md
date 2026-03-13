@@ -46,23 +46,41 @@ uv run uvicorn app.main:app --port 8080 --reload
 
 ## 构建部署
 
+### 使用 deploy.sh（推荐）
+
+```bash
+# 构建 + 推送 + 部署
+./nodeskclaw-llm-proxy/deploy.sh --context <CTX>
+
+# 部署到指定 namespace
+./nodeskclaw-llm-proxy/deploy.sh --context <CTX> --namespace nodeskclaw-staging
+
+# 仅构建推送，不更新 K8s
+./nodeskclaw-llm-proxy/deploy.sh --context <CTX> --build-only
+
+# 使用指定 tag 更新 K8s（不重新构建）
+./nodeskclaw-llm-proxy/deploy.sh --context <CTX> --deploy-only --tag v0.1.0-beta.1
+```
+
+`deploy.sh` 从 `deploy/.env.local` 读取 REGISTRY 配置。
+
+### 手动部署
+
 ```bash
 # 1. 构建并推送镜像
 ./build-and-push.sh
 
 # 2. 创建 K8s Secret（修改 secret.yaml.example 为实际值）
 cp deploy/secret.yaml.example deploy/secret.yaml
-# 编辑 deploy/secret.yaml 填入 DATABASE_URL
-kubectl apply -f deploy/secret.yaml
+kubectl --context <CTX> -n <NS> apply -f deploy/secret.yaml
 
 # 3. 部署 Clash 配置 + Deployment + Service
-kubectl apply -f deploy/clash-config.yaml
-kubectl apply -f deploy/deployment.yaml
-kubectl apply -f deploy/service.yaml
-
-# 4. 配置私网 DNS 解析到 Service ClusterIP
-kubectl get svc -n nodeskclaw-system nodeskclaw-llm-proxy
+kubectl --context <CTX> -n <NS> apply -f deploy/clash-config.yaml
+kubectl --context <CTX> -n <NS> apply -f deploy/deployment.yaml
+kubectl --context <CTX> -n <NS> apply -f deploy/service.yaml
 ```
+
+K8s 清单不包含 `namespace` 字段，由 `kubectl -n <NS>` 在运行时指定。
 
 ## 依赖关系
 
