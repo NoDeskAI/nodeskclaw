@@ -34,7 +34,7 @@ DeskClaw 是 AI 员工的可视化编排平台。通过赛博办公室（Cyber W
 DeskClaw/
 ├── nodeskclaw-portal/             # 用户门户 -- Vue 3 + Tailwind CSS（CE + EE）
 ├── nodeskclaw-backend/            # API 服务 -- Python 3.12 + FastAPI + SQLAlchemy
-├── nodeskclaw-llm-proxy/          # LLM 代理 -- Go
+├── nodeskclaw-llm-proxy/          # LLM 代理 -- Python + FastAPI
 ├── nodeskclaw-artifacts/          # Docker 镜像与部署制品
 ├── openclaw-channel-nodeskclaw/   # 工作区 Agent 通道插件
 ├── features.yaml                  # CE/EE 功能注册表
@@ -80,7 +80,28 @@ cp .env.example .env
 | `FEISHU_APP_SECRET` | 飞书应用 App Secret |
 | `FEISHU_REDIRECT_URI` | `http://localhost:4518/api/v1/auth/feishu/callback` |
 
-### 2. 启动后端
+### 2. 一键启动
+
+```bash
+./dev.sh          # 自动检测：ee/ 目录存在则 EE 模式，否则 CE 模式
+./dev.sh ce       # 强制 CE 模式（后端 + Portal）
+./dev.sh ee       # 强制 EE 模式（后端 + Portal + Admin）
+./dev.sh --fresh  # 强制重新安装所有依赖
+```
+
+脚本自动安装依赖、启动所有服务（带颜色日志前缀），Ctrl+C 统一退出。
+
+| 模式 | 服务 | 端口 |
+|------|------|------|
+| CE | 后端 + Portal | 8000, 4517 |
+| EE | 后端 + Portal + Admin | 8000, 4517, 4518 |
+
+### 手动启动（替代方式）
+
+<details>
+<summary>逐个启动各服务</summary>
+
+**后端：**
 
 ```bash
 cd nodeskclaw-backend
@@ -90,7 +111,7 @@ uv run uvicorn app.main:app --reload --port 8000
 
 API 地址 `http://localhost:8000` | Swagger 文档 `http://localhost:8000/docs` | 首次启动自动迁移数据库。
 
-### 3. 启动前端（Portal）
+**Portal 前端：**
 
 ```bash
 cd nodeskclaw-portal
@@ -99,7 +120,7 @@ npm install && npm run dev
 
 Portal 地址 `http://localhost:4517` | `/api` 自动代理到后端。
 
-### 4. 启动前端（Admin，EE-only）
+**Admin 前端（EE-only）：**
 
 ```bash
 cd ee/nodeskclaw-frontend
@@ -108,7 +129,9 @@ npm install && npm run dev
 
 Admin 地址 `http://localhost:4518` | `/api` 和 `/stream` 自动代理到后端。
 
-### 5. 开始使用
+</details>
+
+### 3. 开始使用
 
 打开 `http://localhost:4517`（Portal）或 `http://localhost:4518`（Admin，EE）登录。
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class WorkspaceBrief(BaseModel):
@@ -41,13 +41,13 @@ class InstanceInfo(BaseModel):
 
 class UpdateConfigRequest(BaseModel):
     """实例配置修改请求（滚动更新）。"""
-    image_version: str | None = None
-    cpu_request: str | None = None
-    cpu_limit: str | None = None
-    mem_request: str | None = None
-    mem_limit: str | None = None
-    env_vars: dict[str, str] | None = None
-    replicas: int | None = None
+    image_version: str | None = Field(default=None, max_length=100)
+    cpu_request: str | None = Field(default=None, max_length=20)
+    cpu_limit: str | None = Field(default=None, max_length=20)
+    mem_request: str | None = Field(default=None, max_length=20)
+    mem_limit: str | None = Field(default=None, max_length=20)
+    env_vars: dict[str, str] | None = Field(default=None, max_length=200)
+    replicas: int | None = Field(default=None, ge=0, le=10)
     advanced_config: dict | None = None
 
 

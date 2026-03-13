@@ -24,7 +24,7 @@ onMounted(async () => {
 
   try {
     const data = await authStore.oauthLogin(provider, code)
-    if (data.needs_org_setup) {
+    if (data.needs_org_setup && router.hasRoute('OrgSetup')) {
       router.replace('/setup-org')
     } else {
       router.replace('/')

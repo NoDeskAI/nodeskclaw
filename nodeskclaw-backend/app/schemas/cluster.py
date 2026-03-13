@@ -2,23 +2,23 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ClusterCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=100)
     compute_provider: str = "k8s"
-    kubeconfig: str | None = None
-    provider: str = "vke"
-    ingress_class: str = "nginx"
-    proxy_endpoint: str | None = None
+    kubeconfig: str | None = Field(default=None, max_length=65536)
+    provider: str = Field(default="vke", max_length=50)
+    ingress_class: str = Field(default="nginx", max_length=100)
+    proxy_endpoint: str | None = Field(default=None, max_length=2048)
 
 
 class ClusterUpdate(BaseModel):
-    name: str | None = None
-    provider: str | None = None
-    ingress_class: str | None = None
-    proxy_endpoint: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    provider: str | None = Field(default=None, max_length=50)
+    ingress_class: str | None = Field(default=None, max_length=100)
+    proxy_endpoint: str | None = Field(default=None, max_length=2048)
 
 
 class ClusterInfo(BaseModel):

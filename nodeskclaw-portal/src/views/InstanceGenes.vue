@@ -11,7 +11,7 @@ import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import GeneMarketDialog from '@/components/gene/GeneMarketDialog.vue'
 import api from '@/services/api'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -229,7 +229,7 @@ async function handleCreate() {
 }
 
 function renderMd(src: string): string {
-  return marked.parse(src, { async: false }) as string
+  return renderMarkdown(src)
 }
 
 onMounted(async () => {

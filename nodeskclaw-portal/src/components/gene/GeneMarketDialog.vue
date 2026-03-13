@@ -25,7 +25,7 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-vue-next'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem } from '@/stores/gene'
 import api from '@/services/api'
@@ -324,7 +324,7 @@ const toolAllowList = computed(() => {
 const descriptionHtml = computed(() => {
   const d = detailGene.value?.description
   if (!d) return ''
-  return marked(d) as string
+  return renderMarkdown(d)
 })
 
 const skillContentRaw = computed(() => {
@@ -345,7 +345,7 @@ const skillContentHtml = computed(() => {
   const fmHtml = fm
     ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">${t('gene.frontmatterLabel')}</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
     : ''
-  return fmHtml + (marked(body) as string)
+  return fmHtml + renderMarkdown(body)
 })
 
 const hasFrontmatter = computed(() => {
@@ -366,7 +366,7 @@ const activeGenomeGeneContentHtml = computed(() => {
   const fmHtml = fm
     ? `<div class="not-prose mb-4 rounded-lg border border-border bg-muted/30 p-4"><div class="text-xs font-medium text-muted-foreground mb-2">${t('gene.frontmatterLabel')}</div><pre class="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">${fm.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`
     : ''
-  return fmHtml + (marked(body) as string)
+  return fmHtml + renderMarkdown(body)
 })
 
 const activeGenomeGeneHasFrontmatter = computed(() => {

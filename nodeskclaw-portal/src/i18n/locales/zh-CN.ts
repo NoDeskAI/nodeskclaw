@@ -843,6 +843,7 @@ const zhCN = {
     inactive: "已停用",
     editName: "修改组织名称",
     nameUpdated: "组织名称已更新",
+    nameUpdateFailed: "组织名称更新失败",
     basicInfo: "基本信息",
     relatedInfo: "关联信息",
   },

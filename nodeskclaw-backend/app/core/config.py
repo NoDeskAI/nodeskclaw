@@ -1,10 +1,13 @@
 """Application settings loaded from environment variables."""
 
+import logging
 import re
 import socket
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -34,6 +37,28 @@ class Settings(BaseSettings):
         base_url, sep, db_name = self.DATABASE_URL.rpartition("/")
         if sep:
             self.DATABASE_URL = f"{base_url}/{db_name}_{suffix}"
+        return self
+
+    _INSECURE_DEFAULTS = frozenset({
+        "change-me-in-production",
+        "change-me-32-bytes-base64-key__=",
+    })
+
+    @model_validator(mode="after")
+    def _check_insecure_defaults(self) -> "Settings":
+        if self.DEBUG:
+            return self
+        issues: list[str] = []
+        if self.JWT_SECRET in self._INSECURE_DEFAULTS:
+            issues.append("JWT_SECRET")
+        if self.ENCRYPTION_KEY in self._INSECURE_DEFAULTS:
+            issues.append("ENCRYPTION_KEY")
+        if issues:
+            msg = (
+                f"{', '.join(issues)} 仍为默认值，生产环境存在严重安全风险。"
+                " 请在 .env 中设置安全的随机值。"
+            )
+            raise ValueError(msg)
         return self
 
     # ── JWT ──────────────────────────────────────────────

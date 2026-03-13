@@ -34,7 +34,7 @@ Runtime auto-detection via `FeatureGate` -- if `ee/` exists it runs as EE, other
 DeskClaw/
 ├── nodeskclaw-portal/             # User Portal -- Vue 3 + Tailwind CSS (CE + EE)
 ├── nodeskclaw-backend/            # API Server -- Python 3.12 + FastAPI + SQLAlchemy
-├── nodeskclaw-llm-proxy/          # LLM Proxy -- Go
+├── nodeskclaw-llm-proxy/          # LLM Proxy -- Python + FastAPI
 ├── nodeskclaw-artifacts/          # Docker images & deploy manifests
 ├── openclaw-channel-nodeskclaw/   # Workspace Agent channel plugin
 ├── features.yaml                  # CE/EE feature registry
