@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nanobot-security-layer"
+version = "0.1.0"
+description = "Thin WebSocket client that patches nanobot tool execution for backend security evaluation"
+requires-python = ">=3.11"
+dependencies = [
+    "websockets>=13.0",
+]

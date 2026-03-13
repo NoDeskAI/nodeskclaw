@@ -1,0 +1,19 @@
+# =============================================================================
+# OpenClaw 安全层镜像
+# 基于 base 镜像追加安全层插件，不修改任何 base 层内容
+# 构建上下文: 项目根目录 (../../)
+# =============================================================================
+
+ARG BASE_TAG=latest
+ARG BASE_REGISTRY=<YOUR_REGISTRY>/<YOUR_NAMESPACE>/nodeskclaw-openclaw-base
+
+FROM ${BASE_REGISTRY}:${BASE_TAG}
+
+# ---------- 安全层插件 ----------
+COPY openclaw-security-layer/ /root/.openclaw/extensions/openclaw-security-layer/
+
+# OpenClaw extension 机制自动扫描 extensions/ 下的插件目录并加载 index.ts
+# 不需要额外的编译步骤——OpenClaw 原生支持 TypeScript 插件
+
+ENV SECURITY_LAYER_ENABLED=true
+# SECURITY_WS_ENDPOINT 由 K8s Deployment 环境变量注入

@@ -31,6 +31,7 @@ from app.core.deps import require_ce_edition, require_org_admin, require_org_rol
 from app.core.feature_gate import feature_gate
 from app.core.config import settings
 
+from app.api.security_ws import router as security_ws_router
 from app.api.engines import router as engine_router
 from app.api.invitations import invite_router, invite_public_router
 from app.api.portal.instances import router as portal_instance_router
@@ -97,6 +98,7 @@ api_router.include_router(gene_router, tags=["基因进化"])
 api_router.include_router(engine_router, prefix="/engines", tags=["工作引擎"])
 api_router.include_router(invite_router, prefix="/orgs", tags=["邀请"])
 api_router.include_router(invite_public_router, prefix="/invite", tags=["邀请（公开）"])
+api_router.include_router(security_ws_router, tags=["安全评估"])
 
 # ── 管理平台 Admin API（/api/v1/admin）─────────────────────
 # Admin 使用原有路由模块，通过 dependencies 注入角色检查。
