@@ -58,7 +58,7 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npx vue-tsc --noEmit
-        continue-on-error: true
+
 
   portal-lint:
     name: Portal Lint (ESLint)
