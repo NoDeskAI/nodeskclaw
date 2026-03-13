@@ -63,27 +63,27 @@ if ! $KUBECTL get namespace "$NAMESPACE" &>/dev/null; then
 fi
 ok "Namespace $NAMESPACE 就绪"
 
-# ── 创建/更新后端 Secret ─────────────────────────────────
-log "从 $ENV_FILE 创建 Secret: $SECRET_NAME"
+# ── 预处理 .env（剥离注释和空行，生成干净的 env file）────
+CLEAN_ENV=$(mktemp)
+trap 'rm -f "$CLEAN_ENV"' EXIT
 
-LITERAL_ARGS=()
 while IFS= read -r line; do
-  line="${line%%#*}"
-  line="$(echo "$line" | xargs)"
-  [[ -z "$line" ]] && continue
-  [[ "$line" != *"="* ]] && continue
-  key="${line%%=*}"
-  value="${line#*=}"
-  LITERAL_ARGS+=("--from-literal=$key=$value")
-done < "$ENV_FILE"
+  stripped="${line%%#*}"
+  stripped="$(echo "$stripped" | xargs)"
+  [[ -z "$stripped" || "$stripped" != *"="* ]] && continue
+  echo "$stripped"
+done < "$ENV_FILE" > "$CLEAN_ENV"
 
-if [[ ${#LITERAL_ARGS[@]} -eq 0 ]]; then
+if [[ ! -s "$CLEAN_ENV" ]]; then
   err ".env 文件中没有有效的键值对"
   exit 1
 fi
 
+# ── 创建/更新后端 Secret ─────────────────────────────────
+log "从 $ENV_FILE 创建 Secret: $SECRET_NAME"
+
 $KUBECTL -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
-  "${LITERAL_ARGS[@]}" \
+  --from-env-file="$CLEAN_ENV" \
   --dry-run=client -o yaml | $KUBECTL apply -f -
 
 ok "Secret $SECRET_NAME 已创建/更新 (${#LITERAL_ARGS[@]} 个变量)"
