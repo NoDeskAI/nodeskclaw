@@ -16,3 +16,6 @@ tracing = "0.1"
 # ZeroClaw as path dependency — resolved at Docker build time
 # [dependencies.zeroclaw]
 # path = "../zeroclaw"
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
