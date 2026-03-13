@@ -1,0 +1,18 @@
+[package]
+name = "zeroclaw-security-layer"
+version = "0.1.0"
+edition = "2021"
+description = "Tool execution security pipeline for ZeroClaw (build-time trait wrapper)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+regex = "1"
+tracing = "0.1"
+
+# ZeroClaw as path dependency — resolved at Docker build time
+# The exact path is set by the Dockerfile build context
+# [dependencies.zeroclaw]
+# path = "../zeroclaw"
