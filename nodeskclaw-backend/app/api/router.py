@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
+from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.genes import router as gene_router
 from app.api.clusters import router as cluster_router
@@ -76,6 +77,7 @@ async def system_capabilities():
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
 api_router.include_router(org_router, prefix="/orgs", tags=["组织"])
 api_router.include_router(org_settings_router, prefix="/orgs", tags=["组织设置"])
+api_router.include_router(audit_router, prefix="/orgs", tags=["操作审计"])
 api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"])
 api_router.include_router(portal_deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
