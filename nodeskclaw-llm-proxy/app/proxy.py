@@ -270,10 +270,9 @@ async def _handle_non_stream(
 
     if resp.status_code >= 400:
         logger.warning(
-            "Upstream %s returned %d for instance=%s provider=%s url=%s body=%s",
+            "Upstream %s returned %d for instance=%s provider=%s",
             method, resp.status_code,
-            instance.id if instance else "?", provider, url,
-            resp_body[:500] if resp_body else "(empty)",
+            instance.id if instance else "?", provider,
         )
 
     if is_org_key and org_key_id and resp.status_code < 400:

@@ -84,7 +84,8 @@ class Settings(BaseSettings):
     FEISHU_APP_ID: str = ""
     FEISHU_APP_SECRET: str = ""
     FEISHU_REDIRECT_URI: str = ""
-    FEISHU_VERIFICATION_TOKEN: str = ""  # Webhook 签名验证 token，留空则跳过校验
+    FEISHU_VERIFICATION_TOKEN: str = ""  # Webhook URL 验证 token（challenge 校验）
+    FEISHU_ENCRYPT_KEY: str = ""  # Webhook 签名验证密钥（X-Lark-Signature 校验），留空则跳过签名校验
 
     # ── 飞书 SSO（Portal 应用，可选） ─────────────────────
     FEISHU_APP_ID_PORTAL: str = ""

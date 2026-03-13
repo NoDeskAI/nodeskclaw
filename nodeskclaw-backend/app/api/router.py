@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import router as auth_router
 from app.api.genes import router as gene_router
-from app.api.clusters import router as cluster_router
+from app.api.clusters import read_router as cluster_read_router, write_router as cluster_write_router
 from app.api.deploy import router as deploy_router
 from app.api.events import router as events_router
 from app.api.instances import (
@@ -74,7 +74,8 @@ async def system_capabilities():
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
 api_router.include_router(org_router, prefix="/orgs", tags=["组织"])
 api_router.include_router(org_settings_router, prefix="/orgs", tags=["组织设置"])
-api_router.include_router(cluster_router, prefix="/clusters", tags=["集群"],
+api_router.include_router(cluster_read_router, prefix="/clusters", tags=["集群"])
+api_router.include_router(cluster_write_router, prefix="/clusters", tags=["集群"],
     dependencies=[Depends(require_org_admin)])
 api_router.include_router(portal_deploy_router, prefix="/deploy", tags=["部署"])
 api_router.include_router(events_router, prefix="/events", tags=["事件"])
@@ -135,7 +136,10 @@ admin_router.include_router(deploy_router, prefix="/deploy",
     dependencies=[Depends(require_org_role("operator"))])
 
 # admin 级别（集群、配置、基因、密钥等）
-admin_router.include_router(cluster_router, prefix="/clusters",
+admin_router.include_router(cluster_read_router, prefix="/clusters",
+    tags=["Admin - 集群"],
+    dependencies=[Depends(require_org_role("admin"))])
+admin_router.include_router(cluster_write_router, prefix="/clusters",
     tags=["Admin - 集群"],
     dependencies=[Depends(require_org_role("admin"))])
 admin_router.include_router(settings_router, prefix="/settings",

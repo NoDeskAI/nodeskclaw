@@ -36,14 +36,12 @@ jobs:
         working-directory: nodeskclaw-backend
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
-        continue-on-error: true
-      - run: pip install pytest pytest-asyncio
-      - run: pytest tests/ -x -q --tb=short
-        continue-on-error: true
+      - run: uv sync
+      - run: uv run pytest tests/ -x -q --tb=short
 
   portal-typecheck:
     name: Portal Type Check (vue-tsc)
@@ -73,7 +71,6 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npx eslint src/
-        continue-on-error: true
 
   portal-build:
     name: Portal Build
@@ -102,4 +99,3 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npm run test
-        continue-on-error: true

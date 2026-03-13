@@ -17,10 +17,11 @@ from app.services import cluster_service
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
 
-router = APIRouter()
+read_router = APIRouter()
+write_router = APIRouter()
 
 
-@router.get("", response_model=ApiResponse[list[ClusterInfo]])
+@read_router.get("", response_model=ApiResponse[list[ClusterInfo]])
 async def list_clusters(
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
@@ -30,7 +31,7 @@ async def list_clusters(
     return ApiResponse(data=data)
 
 
-@router.post("", response_model=ApiResponse[ClusterInfo])
+@write_router.post("", response_model=ApiResponse[ClusterInfo])
 async def create_cluster(
     body: ClusterCreate,
     db: AsyncSession = Depends(get_db),
@@ -43,7 +44,7 @@ async def create_cluster(
     return ApiResponse(data=data)
 
 
-@router.get("/{cluster_id}", response_model=ApiResponse[ClusterInfo])
+@read_router.get("/{cluster_id}", response_model=ApiResponse[ClusterInfo])
 async def get_cluster(
     cluster_id: str,
     db: AsyncSession = Depends(get_db),
@@ -54,7 +55,7 @@ async def get_cluster(
     return ApiResponse(data=ClusterInfo.model_validate(cluster))
 
 
-@router.put("/{cluster_id}", response_model=ApiResponse[ClusterInfo])
+@write_router.put("/{cluster_id}", response_model=ApiResponse[ClusterInfo])
 async def update_cluster(
     cluster_id: str,
     body: ClusterUpdate,
@@ -67,7 +68,7 @@ async def update_cluster(
     return ApiResponse(data=data)
 
 
-@router.delete("/{cluster_id}", response_model=ApiResponse)
+@write_router.delete("/{cluster_id}", response_model=ApiResponse)
 async def delete_cluster(
     cluster_id: str,
     db: AsyncSession = Depends(get_db),
@@ -79,7 +80,7 @@ async def delete_cluster(
     return ApiResponse(message="集群已删除")
 
 
-@router.get("/{cluster_id}/health", response_model=ApiResponse[dict])
+@read_router.get("/{cluster_id}/health", response_model=ApiResponse[dict])
 async def cluster_health(
     cluster_id: str,
     db: AsyncSession = Depends(get_db),
@@ -92,7 +93,7 @@ async def cluster_health(
     return ApiResponse(data=data)
 
 
-@router.get("/{cluster_id}/overview", response_model=ApiResponse[dict])
+@read_router.get("/{cluster_id}/overview", response_model=ApiResponse[dict])
 async def cluster_overview(
     cluster_id: str,
     db: AsyncSession = Depends(get_db),
@@ -167,7 +168,7 @@ async def cluster_overview(
     })
 
 
-@router.post("/{cluster_id}/test", response_model=ApiResponse[ConnectionTestResult])
+@write_router.post("/{cluster_id}/test", response_model=ApiResponse[ConnectionTestResult])
 async def test_connection(
     cluster_id: str,
     db: AsyncSession = Depends(get_db),
@@ -182,7 +183,7 @@ class KubeconfigBody(BaseModel):
     kubeconfig: str
 
 
-@router.post("/{cluster_id}/kubeconfig", response_model=ApiResponse[ClusterInfo])
+@write_router.post("/{cluster_id}/kubeconfig", response_model=ApiResponse[ClusterInfo])
 async def update_kubeconfig(
     cluster_id: str,
     body: KubeconfigBody,

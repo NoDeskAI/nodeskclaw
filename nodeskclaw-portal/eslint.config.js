@@ -26,7 +26,7 @@ export default [
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'vue/multi-word-component-names': 'off',
-      'vue/no-v-html': 'off',
+      'vue/no-v-html': 'warn',
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',
       'vue/html-self-closing': 'off',

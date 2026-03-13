@@ -13,20 +13,27 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 def _verify_feishu_signature(request: Request, body_bytes: bytes) -> None:
-    """Verify Feishu webhook request signature when FEISHU_VERIFICATION_TOKEN is set."""
-    token = settings.FEISHU_VERIFICATION_TOKEN
-    if not token:
-        return
+    """Verify Feishu webhook request signature.
+
+    Uses FEISHU_ENCRYPT_KEY for X-Lark-Signature HMAC verification (official algorithm:
+    sha256(timestamp + nonce + encrypt_key + body)), falls back to FEISHU_VERIFICATION_TOKEN
+    for body-level token matching (challenge / URL verification).
+    """
+    encrypt_key = settings.FEISHU_ENCRYPT_KEY
+    verification_token = settings.FEISHU_VERIFICATION_TOKEN
 
     timestamp = request.headers.get("X-Lark-Request-Timestamp", "")
     nonce = request.headers.get("X-Lark-Request-Nonce", "")
     signature = request.headers.get("X-Lark-Signature", "")
 
-    if signature:
-        raw = f"{timestamp}{nonce}{token}".encode() + body_bytes
+    if signature and encrypt_key:
+        raw = f"{timestamp}{nonce}{encrypt_key}".encode() + body_bytes
         expected = hashlib.sha256(raw).hexdigest()
         if signature != expected:
             raise HTTPException(status_code=403, detail="Invalid webhook signature")
+        return
+
+    if not verification_token:
         return
 
     try:
@@ -35,7 +42,7 @@ def _verify_feishu_signature(request: Request, body_bytes: bytes) -> None:
         raise HTTPException(status_code=400, detail="Invalid request body")
 
     body_token = body_json.get("token", "")
-    if body_token != token:
+    if body_token != verification_token:
         raise HTTPException(status_code=403, detail="Invalid verification token")
 
 

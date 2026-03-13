@@ -287,6 +287,28 @@ def _get_aes_key() -> bytes:
     return hkdf.derive(raw)
 
 
+def _get_aes_key_legacy() -> bytes:
+    """Legacy key derivation: truncate/pad to 32 bytes. Kept for decrypting old data."""
+    raw = settings.ENCRYPTION_KEY.encode("utf-8")
+    return raw[:32].ljust(32, b"0")
+
+
+def _decrypt_with_fallback(encrypted: str) -> str:
+    """Try HKDF key first, fall back to legacy key for pre-migration data."""
+    raw = base64.b64decode(encrypted)
+    nonce, ciphertext = raw[:12], raw[12:]
+
+    for key in (_get_aes_key(), _get_aes_key_legacy()):
+        try:
+            aesgcm = AESGCM(key)
+            plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+            return plaintext.decode("utf-8")
+        except Exception:
+            continue
+
+    raise ValueError("Decryption failed with both HKDF and legacy keys")
+
+
 def encrypt_sensitive(plaintext: str) -> str:
     """Encrypt arbitrary sensitive data with AES-256-GCM, return base64(nonce + ciphertext)."""
     key = _get_aes_key()
@@ -298,12 +320,7 @@ def encrypt_sensitive(plaintext: str) -> str:
 
 def decrypt_sensitive(encrypted: str) -> str:
     """Decrypt base64(nonce + ciphertext) back to plaintext."""
-    key = _get_aes_key()
-    raw = base64.b64decode(encrypted)
-    nonce, ciphertext = raw[:12], raw[12:]
-    aesgcm = AESGCM(key)
-    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-    return plaintext.decode("utf-8")
+    return _decrypt_with_fallback(encrypted)
 
 
 def encrypt_kubeconfig(plaintext: str) -> str:
@@ -317,9 +334,4 @@ def encrypt_kubeconfig(plaintext: str) -> str:
 
 def decrypt_kubeconfig(encrypted: str) -> str:
     """Decrypt base64(nonce + ciphertext) back to KubeConfig plaintext."""
-    key = _get_aes_key()
-    raw = base64.b64decode(encrypted)
-    nonce, ciphertext = raw[:12], raw[12:]
-    aesgcm = AESGCM(key)
-    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-    return plaintext.decode("utf-8")
+    return _decrypt_with_fallback(encrypted)

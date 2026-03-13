@@ -6,7 +6,10 @@ import { i18n } from '@/i18n'
 let lastBackendWarningAt = 0
 const BACKEND_WARNING_COOLDOWN = 15_000
 let isRefreshing = false
-let pendingRequests: Array<(token: string) => void> = []
+let pendingRequests: Array<{
+  resolve: (token: string) => void
+  reject: (error: unknown) => void
+}> = []
 
 export function getToken(): string | null {
   return localStorage.getItem('portal_token')
@@ -75,10 +78,13 @@ api.interceptors.response.use(
       const refreshTokenValue = getRefreshToken()
       if (refreshTokenValue) {
         if (isRefreshing) {
-          return new Promise((resolve) => {
-            pendingRequests.push((newToken: string) => {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`
-              resolve(api(originalRequest))
+          return new Promise((resolve, reject) => {
+            pendingRequests.push({
+              resolve: (newToken: string) => {
+                originalRequest.headers.Authorization = `Bearer ${newToken}`
+                resolve(api(originalRequest))
+              },
+              reject,
             })
           })
         }
@@ -94,12 +100,13 @@ api.interceptors.response.use(
           if (data?.access_token) {
             setTokens(data.access_token, data.refresh_token || refreshTokenValue)
             originalRequest.headers.Authorization = `Bearer ${data.access_token}`
-            pendingRequests.forEach((cb) => cb(data.access_token))
+            pendingRequests.forEach((p) => p.resolve(data.access_token))
             pendingRequests = []
             return api(originalRequest)
           }
-        } catch {
-          // refresh failed, fall through to logout
+        } catch (refreshError) {
+          pendingRequests.forEach((p) => p.reject(refreshError))
+          pendingRequests = []
         } finally {
           isRefreshing = false
         }
