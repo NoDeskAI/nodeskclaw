@@ -13,9 +13,11 @@ futures-util = "0.3"
 async-trait = "0.1"
 tracing = "0.1"
 
-# ZeroClaw as path dependency — resolved at Docker build time
+# ZeroClaw — Docker build 时通过 ARG 传入 git URL/ref，sed 取消注释
+# 本地开发无需此依赖（安全层 Tool trait 自包含），仅生产构建时启用
 # [dependencies.zeroclaw]
-# path = "../zeroclaw"
+# git = "https://github.com/nicholasgasior/zeroclaw.git"
+# branch = "main"
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
