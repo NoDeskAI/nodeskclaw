@@ -145,7 +145,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "code": 50000,
                 "error_code": 50000,
                 "message_key": "errors.system.internal_error",
-                "message": f"服务器内部错误: {exc}",
+                "message": "服务器内部错误",
                 "data": None,
             },
         )

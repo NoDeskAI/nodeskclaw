@@ -860,6 +860,7 @@ const enUS = {
     inactive: "Inactive",
     editName: "Edit Organization Name",
     nameUpdated: "Organization name updated",
+    nameUpdateFailed: "Failed to update organization name",
     basicInfo: "Basic Info",
     relatedInfo: "Related Info",
   },

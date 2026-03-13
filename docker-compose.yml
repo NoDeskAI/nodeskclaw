@@ -2,8 +2,8 @@ version: "3.8"
 services:
   backend:
     build:
-      context: ./nodeskclaw-backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: nodeskclaw-backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:

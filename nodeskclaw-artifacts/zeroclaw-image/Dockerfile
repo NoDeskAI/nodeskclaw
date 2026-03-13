@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
-ARG ZEROCLAW_VERSION=latest
-ARG IMAGE_VERSION=latest
+ARG ZEROCLAW_VERSION=v0.1.0
+ARG IMAGE_VERSION=v0.1.0
 ARG TARGETARCH=amd64
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

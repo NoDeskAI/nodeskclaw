@@ -45,7 +45,7 @@ if [[ -z "$KUBE_CONTEXT" ]]; then
   err "必须指定 --context 参数"
   echo ""
   echo "可用上下文:"
-  kubectl config get-contexts -o name 2>/dev/null | while read -r ctx; do echo "  $ctx"; done
+  kubectl config get-contexts -o name 2>/dev/null | sed 's/^/  /'
   echo ""
   echo "用法: $0 --context <ctx> [--namespace NS] [--env-file path/to/.env]"
   exit 1
@@ -71,30 +71,32 @@ if ! $KUBECTL get namespace "$NAMESPACE" &>/dev/null; then
 fi
 ok "Namespace $NAMESPACE 就绪"
 
-# ── 创建/更新后端 Secret ─────────────────────────────────
-log "从 $ENV_FILE 创建 Secret: $SECRET_NAME"
+# ── 预处理 .env（剥离注释和空行，生成干净的 env file）────
+CLEAN_ENV=$(mktemp)
+trap 'rm -f "$CLEAN_ENV"' EXIT
 
-LITERAL_ARGS=()
 while IFS= read -r line; do
-  line="${line%%#*}"
-  line="$(echo "$line" | xargs)"
-  [[ -z "$line" ]] && continue
-  [[ "$line" != *"="* ]] && continue
-  key="${line%%=*}"
-  value="${line#*=}"
-  LITERAL_ARGS+=("--from-literal=$key=$value")
-done < "$ENV_FILE"
+  stripped="${line%%#*}"
+  stripped="$(echo "$stripped" | xargs)"
+  [[ -z "$stripped" || "$stripped" != *"="* ]] && continue
+  echo "$stripped"
+done < "$ENV_FILE" > "$CLEAN_ENV"
 
-if [[ ${#LITERAL_ARGS[@]} -eq 0 ]]; then
+if [[ ! -s "$CLEAN_ENV" ]]; then
   err ".env 文件中没有有效的键值对"
   exit 1
 fi
 
+ENV_COUNT=$(wc -l < "$CLEAN_ENV" | xargs)
+
+# ── 创建/更新后端 Secret ─────────────────────────────────
+log "从 $ENV_FILE 创建 Secret: $SECRET_NAME"
+
 $KUBECTL -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
-  "${LITERAL_ARGS[@]}" \
+  --from-env-file="$CLEAN_ENV" \
   --dry-run=client -o yaml | $KUBECTL apply -f -
 
-ok "Secret $SECRET_NAME 已创建/更新 (${#LITERAL_ARGS[@]} 个变量)"
+ok "Secret $SECRET_NAME 已创建/更新 ($ENV_COUNT 个变量)"
 
 # ── 应用 K8s 部署清单（Deployment + Service，不含 Ingress）──
 log "应用 K8s 部署清单（Deployment + Service）..."

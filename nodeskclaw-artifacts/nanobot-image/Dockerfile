@@ -1,7 +1,7 @@
 FROM python:3.13-slim-bookworm
 
-ARG NANOBOT_VERSION=latest
-ARG IMAGE_VERSION=latest
+ARG NANOBOT_VERSION=0.1.4
+ARG IMAGE_VERSION=v0.1.4
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gettext-base && \

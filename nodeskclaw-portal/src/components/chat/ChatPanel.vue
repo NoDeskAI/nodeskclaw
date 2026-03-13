@@ -14,11 +14,9 @@ import { Send, Loader2, Bot, User, AtSign, Slash, RotateCw, Trash2, Activity, XC
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
-import { marked } from 'marked'
+import { renderMarkdown as renderMd } from '@/utils/markdown'
 import { AgentMention } from './extensions/agentMention'
 import { SlashCommand } from './extensions/slashCommand'
-
-marked.setOptions({ breaks: true, gfm: true })
 
 const props = withDefaults(defineProps<{
   workspaceId: string
@@ -555,7 +553,7 @@ const GENE_SLUG_RE = /`([a-z][a-z0-9-]*(?:-[a-z0-9]+)*)`/g
 
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  let html = marked.parse(content) as string
+  let html = renderMd(content)
   html = html.replace(GENE_SLUG_RE, (_match, slug) => {
     return `<a href="/gene-market" class="gene-slug-link" data-gene-slug="${slug}">${slug}</a>`
   })

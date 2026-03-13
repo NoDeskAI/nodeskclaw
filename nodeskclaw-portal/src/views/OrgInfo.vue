@@ -42,7 +42,7 @@ async function saveName() {
     toast.success(t('orgSettings.nameUpdated'))
     editing.value = false
   } catch (e: unknown) {
-    toast.error(resolveApiErrorMessage(e, t))
+    toast.error(resolveApiErrorMessage(e, t('orgSettings.nameUpdateFailed')))
   } finally {
     saving.value = false
   }

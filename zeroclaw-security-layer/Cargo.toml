@@ -1,0 +1,23 @@
+[package]
+name = "zeroclaw-security-layer"
+version = "0.1.0"
+edition = "2021"
+description = "Thin WebSocket client that wraps ZeroClaw tool execution for backend security evaluation"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+async-trait = "0.1"
+tracing = "0.1"
+
+# ZeroClaw — Docker build 时通过 ARG 传入 git URL/ref，sed 取消注释
+# 本地开发无需此依赖（安全层 Tool trait 自包含），仅生产构建时启用
+# [dependencies.zeroclaw]
+# git = "https://github.com/nicholasgasior/zeroclaw.git"
+# branch = "main"
+
+[dev-dependencies]
+tracing-subscriber = "0.3"

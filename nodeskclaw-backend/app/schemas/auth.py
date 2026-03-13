@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class OAuthCallbackRequest(BaseModel):
@@ -80,22 +80,22 @@ class UserInfo(BaseModel):
 
 
 class AccountLoginRequest(BaseModel):
-    account: str
-    password: str
+    account: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
 
 
 class VerificationCodeSendRequest(BaseModel):
-    account: str
+    account: str = Field(min_length=1, max_length=200)
 
 
 class VerificationCodeLoginRequest(BaseModel):
-    account: str
-    code: str
+    account: str = Field(min_length=1, max_length=200)
+    code: str = Field(min_length=4, max_length=10)
 
 
 class ChangePasswordRequest(BaseModel):
-    old_password: str | None = None
-    new_password: str
+    old_password: str | None = Field(default=None, max_length=200)
+    new_password: str = Field(min_length=6, max_length=200)
 
 
 class LoginResponse(BaseModel):
