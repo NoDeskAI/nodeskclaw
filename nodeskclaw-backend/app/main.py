@@ -171,13 +171,16 @@ async def lifespan(app: FastAPI):
 
         await asyncio.to_thread(_run)
 
-    try:
-        logger.info("正在执行数据库迁移 (alembic upgrade head) ...")
-        await _auto_migrate()
-        logger.info("数据库迁移完成")
-    except Exception:
-        logger.exception("数据库迁移失败，应用无法启动")
-        raise
+    if os.environ.get("SKIP_AUTO_MIGRATE") == "1":
+        logger.info("SKIP_AUTO_MIGRATE=1，跳过自动迁移")
+    else:
+        try:
+            logger.info("正在执行数据库迁移 (alembic upgrade head) ...")
+            await _auto_migrate()
+            logger.info("数据库迁移完成")
+        except Exception:
+            logger.exception("数据库迁移失败，应用无法启动")
+            raise
 
     # ── 种子数据（幂等，每次启动执行）──
     from app.startup.seed import run_seed
