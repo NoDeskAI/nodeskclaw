@@ -172,7 +172,7 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     if (!isSetupPage && !to.meta.allowNoOrg && to.path !== '/force-change-password') {
-      if (authStore.user && !authStore.user.current_org_id) {
+      if (authStore.user && !authStore.user.current_org_id && router.hasRoute('OrgSetup')) {
         return next('/setup-org')
       }
     }
