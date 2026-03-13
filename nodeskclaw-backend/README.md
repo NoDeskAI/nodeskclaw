@@ -26,6 +26,7 @@ nodeskclaw-backend/
 │   │   └── seed.py          # 幂等种子数据
 │   ├── api/                  # 路由层
 │   │   ├── router.py         # 路由聚合
+│   │   ├── audit.py          # 操作审计日志查询、导出
 │   │   ├── auth.py           # OAuth 登录、回调、token 刷新
 │   │   ├── clusters.py       # 集群 CRUD
 │   │   ├── deploy.py         # 部署操作
@@ -174,6 +175,8 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/instances/{id}/files` | 实例文件 | 列出实例目录文件（instance admin） |
 | `/api/v1/instances/{id}/files/content` | 实例文件 | 读取/写入文件内容（GET 读、PUT 写） |
 | `/api/v1/instances/{id}/files/download` | 实例文件 | 下载文件 |
+| `/api/v1/orgs/{org_id}/audit-logs` | 操作审计 | 审计日志分页查询（筛选：action/target_type/from_time/to_time） |
+| `/api/v1/orgs/{org_id}/audit-logs/export` | 操作审计 | 审计日志导出（CSV/JSON，最多 50000 条） |
 
 ### Per-engine 镜像仓库配置
 
