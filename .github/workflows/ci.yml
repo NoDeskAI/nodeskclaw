@@ -36,6 +36,7 @@ jobs:
         working-directory: nodeskclaw-backend
     env:
       DEBUG: "true"
+      DATABASE_URL: "postgresql+asyncpg://ci:ci@localhost:5432/ci_test"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
