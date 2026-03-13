@@ -16,6 +16,11 @@ def register_builtin(plugin_id: str, cls: type) -> None:
     BUILTIN_PLUGINS[plugin_id] = cls
 
 
+def _ensure_builtins_registered() -> None:
+    if not BUILTIN_PLUGINS:
+        import app.services.security.plugins  # noqa: F401
+
+
 async def create_plugins(config: list[dict[str, Any]]) -> list[SecurityPlugin]:
     """Instantiate and initialize plugins from configuration.
 
@@ -25,6 +30,7 @@ async def create_plugins(config: list[dict[str, Any]]) -> list[SecurityPlugin]:
         {"id": "dlp-scanner", "enabled": true, "priority": 20, "config": {...}},
     ]
     """
+    _ensure_builtins_registered()
     plugins: list[SecurityPlugin] = []
 
     for entry in config:
