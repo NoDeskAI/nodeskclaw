@@ -4,7 +4,7 @@ import { X, Save, Loader2, Pencil, Eye, Wifi, WifiOff, Circle } from 'lucide-vue
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFeature } from '@/composables/useFeature'
 import { useI18n } from 'vue-i18n'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 import TaskKanban from './TaskKanban.vue'
 import ObjectivePanel from './ObjectivePanel.vue'
 import RoiDashboard from './RoiDashboard.vue'
@@ -44,7 +44,7 @@ const fullContent = computed(() => store.blackboard?.content || '')
 
 function renderMd(raw: string): string {
   if (!raw.trim()) return `<p class="text-muted-foreground text-sm">${t('blackboard.noContent')}</p>`
-  return marked.parse(raw) as string
+  return renderMarkdown(raw)
 }
 
 const notesHtml = computed(() => renderMd(fullContent.value))
