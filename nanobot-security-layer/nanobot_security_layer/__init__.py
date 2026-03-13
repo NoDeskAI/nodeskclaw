@@ -1,4 +1,4 @@
-"""nanobot tool execution security pipeline."""
+"""nanobot tool execution security layer — thin WebSocket client."""
 
 from .injector import inject_security_layer
 

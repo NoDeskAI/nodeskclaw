@@ -1,12 +1,5 @@
-/// Unified SecurityPlugin protocol — Rust edition.
-///
-/// Field semantics and naming are identical to the TypeScript
-/// (openclaw-security-layer) and Python (nanobot-security-layer)
-/// versions for cross-runtime consistency.
-use std::collections::HashMap;
-
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -43,23 +36,16 @@ pub struct Finding {
     pub detail: Option<HashMap<String, serde_json::Value>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ExecutionContext {
-    pub tool_name: String,
-    pub params: serde_json::Value,
-    pub session_id: Option<String>,
-    pub run_id: Option<String>,
-    pub tool_call_id: Option<String>,
-    pub timestamp: f64,
-    pub metadata: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BeforeResult {
     pub action: BeforeAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_params: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub findings: Option<Vec<Finding>>,
 }
 
@@ -75,20 +61,16 @@ impl Default for BeforeResult {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ExecutionResult {
-    pub success: bool,
-    pub output: String,
-    pub error: Option<String>,
-    pub duration_ms: Option<f64>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AfterResult {
     pub action: AfterAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub findings: Option<Vec<Finding>>,
 }
 
@@ -104,38 +86,37 @@ impl Default for AfterResult {
     }
 }
 
-#[async_trait]
-pub trait SecurityPlugin: Send + Sync {
-    fn id(&self) -> &str;
-    fn priority(&self) -> i32;
-
-    async fn initialize(&mut self, config: serde_json::Value) -> Result<(), Box<dyn std::error::Error>>;
-    async fn destroy(&mut self) -> Result<(), Box<dyn std::error::Error>>;
-
-    async fn before_execute(&self, ctx: &ExecutionContext) -> BeforeResult;
-    async fn after_execute(&self, ctx: &ExecutionContext, result: &ExecutionResult) -> AfterResult;
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PluginEntry {
+#[derive(Debug, Serialize)]
+pub struct WsRequest {
+    #[serde(rename = "type")]
+    pub msg_type: String,
     pub id: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_priority")]
-    pub priority: i32,
+    pub ctx: WsContext,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec_result: Option<WsExecResult>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WsContext {
+    pub tool_name: String,
+    pub params: serde_json::Value,
+    pub agent_instance_id: String,
+    pub workspace_id: String,
+    pub timestamp: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WsExecResult {
+    pub result: Option<String>,
+    pub error: Option<String>,
+    pub duration_ms: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WsResponse {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub id: String,
     #[serde(default)]
-    pub config: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SecurityConfig {
-    pub plugins: Vec<PluginEntry>,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_priority() -> i32 {
-    100
+    pub result: Option<serde_json::Value>,
 }

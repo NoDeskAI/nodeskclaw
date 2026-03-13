@@ -1,76 +1,51 @@
-"""Monkey-patch nanobot's ToolRegistry.execute to run security pipeline."""
+"""Monkey-patch nanobot's ToolRegistry.execute to route through backend security evaluation."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from functools import wraps
-from typing import Any, Callable, Coroutine
+from typing import Any
 
-from .loader import create_plugins, load_security_config
-from .pipeline import SecurityPipeline
-from .types import AfterAction, BeforeAction, ExecutionContext, ExecutionResult
+from .types import AfterAction, BeforeAction
+from .ws_client import connect, evaluate_after, evaluate_before
 
 logger = logging.getLogger("nanobot_security_layer")
 
-_pipeline: SecurityPipeline | None = None
-_initialized = False
-
-
-def _get_pipeline() -> SecurityPipeline:
-    global _pipeline, _initialized
-    if _pipeline is None:
-        _pipeline = SecurityPipeline()
-    if not _initialized:
-        _initialized = True
-        config = load_security_config()
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(_async_init(_pipeline, config))
-        else:
-            loop.run_until_complete(_async_init(_pipeline, config))
-    return _pipeline
-
-
-async def _async_init(pipeline: SecurityPipeline, config: Any) -> None:
-    plugins = await create_plugins(config)
-    for p in plugins:
-        pipeline.add_plugin(p)
-    logger.info("Security pipeline ready (%d plugins active)", len(plugins))
-
 
 def inject_security_layer() -> None:
-    """Monkey-patch ToolRegistry.execute with security pipeline wrapper.
+    """Monkey-patch ToolRegistry.execute with security WebSocket client wrapper.
 
     Call this ONCE before nanobot starts (e.g. in startup.py).
-    The patch is applied at the class level, so all ToolRegistry instances
-    created afterwards will use the secured execute method.
+    When SECURITY_LAYER_ENABLED=false, this is a no-op.
     """
+    if os.environ.get("SECURITY_LAYER_ENABLED", "true") == "false":
+        logger.info("Security layer disabled via SECURITY_LAYER_ENABLED=false")
+        return
+
     try:
         from nanobot.agent.tools.registry import ToolRegistry
     except ImportError:
-        logger.error("Cannot import nanobot.agent.tools.registry — is nanobot-ai installed?")
+        logger.error("Cannot import nanobot.agent.tools.registry -- is nanobot-ai installed?")
         return
 
     if getattr(ToolRegistry.execute, "_security_patched", False):
         logger.warning("ToolRegistry.execute already patched, skipping")
         return
 
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        asyncio.ensure_future(connect())
+    else:
+        loop.run_until_complete(connect())
+
     original_execute = ToolRegistry.execute
 
     @wraps(original_execute)
     async def secured_execute(self: Any, name: str, params: dict[str, Any]) -> str:
-        pipeline = _get_pipeline()
-
-        ctx = ExecutionContext(
-            tool_name=name,
-            params=dict(params) if params else {},
-            timestamp=time.time(),
-            metadata={},
-        )
-
-        before = await pipeline.run_before(ctx)
+        before = await evaluate_before(name, dict(params) if params else {})
 
         if before.action == BeforeAction.DENY:
             msg = before.message or before.reason or "Blocked by security policy"
@@ -82,13 +57,13 @@ def inject_security_layer() -> None:
         result = await original_execute(self, name, execute_params)
         duration_ms = (time.monotonic() - t0) * 1000
 
-        exec_result = ExecutionResult(
-            result=result,
-            error=result if isinstance(result, str) and result.startswith("Error") else None,
+        after = await evaluate_after(
+            name,
+            dict(params) if params else {},
+            exec_result=result,
+            exec_error=result if isinstance(result, str) and result.startswith("Error") else None,
             duration_ms=duration_ms,
         )
-
-        after = await pipeline.run_after(ctx, exec_result)
 
         if after.action == AfterAction.REDACT and after.modified_result is not None:
             result = after.modified_result
@@ -99,4 +74,4 @@ def inject_security_layer() -> None:
 
     secured_execute._security_patched = True  # type: ignore[attr-defined]
     ToolRegistry.execute = secured_execute  # type: ignore[assignment]
-    logger.info("ToolRegistry.execute patched with security pipeline")
+    logger.info("ToolRegistry.execute patched with security WebSocket client")

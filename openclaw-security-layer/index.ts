@@ -1,43 +1,31 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
-import { SecurityPipeline } from "./src/pipeline.js";
-import { loadSecurityConfig, createPlugins } from "./src/loader.js";
-import type { ExecutionContext, ExecutionResult } from "./src/types.js";
+import { connect, disconnect, evaluateBefore, evaluateAfter } from "./src/ws-client.js";
 
-let pipeline: SecurityPipeline | null = null;
+const ENABLED = (process.env.SECURITY_LAYER_ENABLED ?? "true") !== "false";
 
 const plugin = {
   id: "security-layer",
   name: "Security Layer",
-  description: "Tool execution security pipeline: policy gate, DLP, audit, approval",
+  description: "Thin WebSocket client that delegates tool execution security to centralized backend",
   configSchema: emptyPluginConfigSchema(),
 
   register(api: OpenClawPluginApi) {
-    const config = loadSecurityConfig();
-    pipeline = new SecurityPipeline();
+    if (!ENABLED) {
+      console.error("[SecurityLayer] Disabled via SECURITY_LAYER_ENABLED=false");
+      return;
+    }
 
-    createPlugins(config)
-      .then((plugins) => {
-        for (const p of plugins) pipeline!.addPlugin(p);
-        console.error(`[SecurityLayer] Pipeline ready (${plugins.length} plugins active)`);
-      })
-      .catch((err) => {
-        console.error("[SecurityLayer] Failed to initialize pipeline:", err);
-      });
+    connect();
+    console.error("[SecurityLayer] Thin client registered, connecting to backend");
 
     api.on("before_tool_call", async (event) => {
-      if (!pipeline) return {};
-
-      const ctx: ExecutionContext = {
+      const result = await evaluateBefore({
         toolName: event.toolName,
         params: (event.params ?? {}) as Record<string, unknown>,
         runId: event.runId,
         toolCallId: event.toolCallId,
-        timestamp: Date.now(),
-        metadata: {},
-      };
-
-      const result = await pipeline.runBefore(ctx);
+      });
 
       if (result.action === "deny") {
         return {
@@ -54,24 +42,19 @@ const plugin = {
     });
 
     api.on("after_tool_call", async (event) => {
-      if (!pipeline) return;
-
-      const ctx: ExecutionContext = {
-        toolName: event.toolName,
-        params: (event.params ?? {}) as Record<string, unknown>,
-        runId: event.runId,
-        toolCallId: event.toolCallId,
-        timestamp: Date.now(),
-        metadata: {},
-      };
-
-      const execResult: ExecutionResult = {
-        result: event.result,
-        error: event.error,
-        durationMs: event.durationMs,
-      };
-
-      await pipeline.runAfter(ctx, execResult);
+      await evaluateAfter(
+        {
+          toolName: event.toolName,
+          params: (event.params ?? {}) as Record<string, unknown>,
+          runId: event.runId,
+          toolCallId: event.toolCallId,
+        },
+        {
+          result: event.result,
+          error: event.error,
+          durationMs: event.durationMs,
+        },
+      );
     });
   },
 };
