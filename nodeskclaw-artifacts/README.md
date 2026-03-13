@@ -18,12 +18,14 @@ nodeskclaw-artifacts/
 │   ├── Dockerfile               # 基于 debian:bookworm-slim，下载预编译二进制
 │   ├── docker-entrypoint.sh     # 容器入口脚本
 │   ├── build-and-push.sh        # 构建推送脚本
+│   ├── check-update.sh          # 版本检测脚本（查询 GitHub Releases 最新版、自动更新 Dockerfile）
 │   └── README.md                # 构建说明
 ├── nanobot-image/               # Nanobot 轻量工作引擎镜像
 │   ├── Dockerfile               # 基于 python:3.13-slim-bookworm，pip install nanobot-ai
 │   ├── nanobot.yaml.template    # Nanobot 配置模板
 │   ├── docker-entrypoint.sh     # 容器入口脚本
 │   ├── build-and-push.sh        # 构建推送脚本
+│   ├── check-update.sh          # 版本检测脚本（查询 PyPI 最新稳定版、自动更新 Dockerfile）
 │   └── README.md                # 构建说明
 ├── ingress-controller/          # Nginx Ingress Controller 部署清单
 │   ├── deploy.yaml              # 完整 K8s 资源（Namespace、RBAC、Deployment、Service）
@@ -78,7 +80,15 @@ cd nodeskclaw-artifacts/openclaw-image
 
 ### 版本自动检测
 
-项目配置了 GitHub Actions 定时工作流（`.github/workflows/check-openclaw-update.yml`），每天自动检查 npm 上是否有新的 DeskClaw 稳定版本。发现新版本时自动创建 PR，人工审核后合并。
+项目配置了 GitHub Actions 定时工作流（`.github/workflows/check-runtime-updates.yml`），每天自动检查三个工作引擎的最新版本：
+
+| Runtime | 包来源 | 版本检查方式 |
+|---------|--------|-------------|
+| OpenClaw | npm `openclaw` | `npm view` 过滤 `YYYY.M.DD` 格式稳定版 |
+| Nanobot | PyPI `nanobot-ai` | PyPI JSON API 过滤 `X.Y.Z` 格式稳定版 |
+| ZeroClaw | GitHub `nicholasgasior/zeroclaw` | GitHub Releases API 获取最新 release tag |
+
+发现新版本时自动创建对应 PR，人工审核后合并。三个 runtime 的检测作为独立 Job 并行运行，互不影响。
 
 ### 镜像内文件说明
 

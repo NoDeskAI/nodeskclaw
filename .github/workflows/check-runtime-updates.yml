@@ -1,0 +1,249 @@
+name: 检测工作引擎版本更新
+
+on:
+  schedule:
+    # 每天 UTC 08:00（北京时间 16:00）
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ──────────────────────────────────────────────
+  # OpenClaw — npm registry
+  # ──────────────────────────────────────────────
+  check-openclaw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 读取当前版本
+        id: current
+        run: |
+          VERSION=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' nodeskclaw-artifacts/openclaw-image/Dockerfile)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "当前版本: ${VERSION}"
+
+      - name: 查询 npm 最新稳定版
+        id: latest
+        run: |
+          LATEST=$(npm view openclaw versions --json 2>/dev/null | node -e "
+            const versions = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const stable = versions.filter(v => /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(v));
+            if (stable.length > 0) console.log(stable[stable.length - 1]);
+          ")
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "最新稳定版: ${LATEST}"
+
+      - name: 对比版本
+        id: compare
+        run: |
+          if [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "已是最新版本，无需更新"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "发现新版本: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: 更新 Dockerfile
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          sed -i "s/ARG OPENCLAW_VERSION=${CURRENT}/ARG OPENCLAW_VERSION=${LATEST}/" nodeskclaw-artifacts/openclaw-image/Dockerfile
+          sed -i "s/ARG IMAGE_VERSION=v${CURRENT}/ARG IMAGE_VERSION=v${LATEST}/" nodeskclaw-artifacts/openclaw-image/Dockerfile
+          echo "Dockerfile 已更新"
+          grep -E 'ARG (OPENCLAW_VERSION|IMAGE_VERSION)=' nodeskclaw-artifacts/openclaw-image/Dockerfile
+
+      - name: 创建 Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          branch: chore/openclaw-${{ steps.latest.outputs.version }}
+          commit-message: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
+          title: "chore(openclaw): 升级 OpenClaw 至 ${{ steps.latest.outputs.version }}"
+          body: |
+            ## OpenClaw 版本更新
+
+            | 项目 | 值 |
+            |------|-----|
+            | 当前版本 | `${{ steps.current.outputs.version }}` |
+            | 最新版本 | `${{ steps.latest.outputs.version }}` |
+            | Release | https://github.com/openclaw/openclaw/releases/tag/v${{ steps.latest.outputs.version }} |
+
+            ---
+
+            **此 PR 由 GitHub Actions 自动创建。**
+
+            合并后请在云平台持续交付流水线中触发镜像构建，或本地执行 `build-and-push.sh` 构建并推送新镜像。
+          labels: |
+            dependencies
+
+  # ──────────────────────────────────────────────
+  # Nanobot — PyPI registry
+  # ──────────────────────────────────────────────
+  check-nanobot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 读取当前版本
+        id: current
+        run: |
+          VERSION=$(sed -n 's/^ARG NANOBOT_VERSION=//p' nodeskclaw-artifacts/nanobot-image/Dockerfile)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "当前版本: ${VERSION}"
+
+      - name: 查询 PyPI 最新稳定版
+        id: latest
+        run: |
+          LATEST=$(curl -sS https://pypi.org/pypi/nanobot-ai/json | python3 -c "
+          import json, sys, re
+          data = json.load(sys.stdin)
+          versions = list(data['releases'].keys())
+          stable = [v for v in versions if re.match(r'^\d+\.\d+\.\d+$', v)]
+          stable.sort(key=lambda v: list(map(int, v.split('.'))))
+          print(stable[-1] if stable else '')
+          ")
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "最新稳定版: ${LATEST}"
+
+      - name: 对比版本
+        id: compare
+        run: |
+          if [ -z "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "无法获取最新版本，跳过"
+          elif [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "已是最新版本，无需更新"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "发现新版本: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: 更新 Dockerfile
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          sed -i "s/ARG NANOBOT_VERSION=${CURRENT}/ARG NANOBOT_VERSION=${LATEST}/" nodeskclaw-artifacts/nanobot-image/Dockerfile
+          sed -i "s/ARG IMAGE_VERSION=v${CURRENT}/ARG IMAGE_VERSION=v${LATEST}/" nodeskclaw-artifacts/nanobot-image/Dockerfile
+          echo "Dockerfile 已更新"
+          grep -E 'ARG (NANOBOT_VERSION|IMAGE_VERSION)=' nodeskclaw-artifacts/nanobot-image/Dockerfile
+
+      - name: 创建 Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          branch: chore/nanobot-${{ steps.latest.outputs.version }}
+          commit-message: "chore(nanobot): 升级 Nanobot 至 ${{ steps.latest.outputs.version }}"
+          title: "chore(nanobot): 升级 Nanobot 至 ${{ steps.latest.outputs.version }}"
+          body: |
+            ## Nanobot 版本更新
+
+            | 项目 | 值 |
+            |------|-----|
+            | 当前版本 | `${{ steps.current.outputs.version }}` |
+            | 最新版本 | `${{ steps.latest.outputs.version }}` |
+            | PyPI | https://pypi.org/project/nanobot-ai/${{ steps.latest.outputs.version }}/ |
+
+            ---
+
+            **此 PR 由 GitHub Actions 自动创建。**
+
+            合并后请在云平台持续交付流水线中触发镜像构建，或本地执行 `build-and-push.sh` 构建并推送新镜像。
+          labels: |
+            dependencies
+
+  # ──────────────────────────────────────────────
+  # ZeroClaw — GitHub Releases
+  # ──────────────────────────────────────────────
+  check-zeroclaw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 读取当前版本
+        id: current
+        run: |
+          VERSION=$(sed -n 's/^ARG ZEROCLAW_VERSION=//p' nodeskclaw-artifacts/zeroclaw-image/Dockerfile)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "当前版本: ${VERSION}"
+
+      - name: 查询 GitHub 最新 Release
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST=$(gh api repos/nicholasgasior/zeroclaw/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          if [ -z "${LATEST}" ]; then
+            echo "无法获取最新 release（仓库可能不存在或无 release），跳过"
+          fi
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "最新版本: ${LATEST:-N/A}"
+
+      - name: 对比版本
+        id: compare
+        run: |
+          if [ -z "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "无法获取最新版本，跳过"
+          elif [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "已是最新版本，无需更新"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "发现新版本: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: 更新 Dockerfile
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          sed -i "s/ARG ZEROCLAW_VERSION=${CURRENT}/ARG ZEROCLAW_VERSION=${LATEST}/" nodeskclaw-artifacts/zeroclaw-image/Dockerfile
+          sed -i "s/ARG IMAGE_VERSION=${CURRENT}/ARG IMAGE_VERSION=${LATEST}/" nodeskclaw-artifacts/zeroclaw-image/Dockerfile
+          echo "Dockerfile 已更新"
+          grep -E 'ARG (ZEROCLAW_VERSION|IMAGE_VERSION)=' nodeskclaw-artifacts/zeroclaw-image/Dockerfile
+
+      - name: 创建 Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          branch: chore/zeroclaw-${{ steps.latest.outputs.version }}
+          commit-message: "chore(zeroclaw): 升级 ZeroClaw 至 ${{ steps.latest.outputs.version }}"
+          title: "chore(zeroclaw): 升级 ZeroClaw 至 ${{ steps.latest.outputs.version }}"
+          body: |
+            ## ZeroClaw 版本更新
+
+            | 项目 | 值 |
+            |------|-----|
+            | 当前版本 | `${{ steps.current.outputs.version }}` |
+            | 最新版本 | `${{ steps.latest.outputs.version }}` |
+            | Release | https://github.com/nicholasgasior/zeroclaw/releases/tag/${{ steps.latest.outputs.version }} |
+
+            ---
+
+            **此 PR 由 GitHub Actions 自动创建。**
+
+            合并后请在云平台持续交付流水线中触发镜像构建，或本地执行 `build-and-push.sh` 构建并推送新镜像。
+          labels: |
+            dependencies
