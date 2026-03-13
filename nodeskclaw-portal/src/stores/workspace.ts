@@ -667,7 +667,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   let externalCallback: ChatSSECallback | null = null
   let _reconnectAttempts = 0
   let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  let _lastEventId = ''
+  const _lastEventId = ''
   const _recentMessageIds = new Set<string>()
   const _MAX_DEDUP_IDS = 1000
 

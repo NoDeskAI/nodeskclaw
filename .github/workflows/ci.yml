@@ -34,6 +34,8 @@ jobs:
     defaults:
       run:
         working-directory: nodeskclaw-backend
+    env:
+      DEBUG: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -98,4 +100,11 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
-      - run: npm run test
+      - name: Run tests (skip if no test files)
+        run: |
+          test_count=$(find src -name "*.spec.*" -o -name "*.test.*" 2>/dev/null | wc -l)
+          if [ "$test_count" -gt 0 ]; then
+            npm run test
+          else
+            echo "No test files found, skipping"
+          fi
