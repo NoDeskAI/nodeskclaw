@@ -50,6 +50,7 @@ print_build_summary() {
   local version="$2"
   local registry="$3"
   local platform="${4:-linux/amd64}"
+  local mode="${5:-base}"
 
   echo ""
   echo "=========================================="
@@ -58,6 +59,7 @@ print_build_summary() {
   echo "  版本:   ${version}"
   echo "  仓库:   ${registry}"
   echo "  平台:   ${platform}"
+  echo "  模式:   ${mode}"
   echo "=========================================="
   echo ""
 }
@@ -74,11 +76,13 @@ print_done() {
 }
 
 # ── 解析通用参数 ─────────────────────────────────
-# 调用后设置: VERSION, BUILD_ONLY, SKIP_VERIFY
+# 调用后设置: VERSION, BUILD_ONLY, SKIP_VERIFY, WITH_SECURITY, BASE_TAG
 parse_common_args() {
   VERSION=""
   BUILD_ONLY=false
   SKIP_VERIFY=false
+  WITH_SECURITY=false
+  BASE_TAG=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -94,11 +98,24 @@ parse_common_args() {
         SKIP_VERIFY=true
         shift
         ;;
+      --with-security)
+        WITH_SECURITY=true
+        shift
+        ;;
+      --base-tag)
+        BASE_TAG="$2"
+        shift 2
+        ;;
       *)
         echo "未知参数: $1"
-        echo "用法: $0 [--version <version>] [--build-only] [--skip-verify]"
+        echo "用法: $0 [--version <ver>] [--build-only] [--skip-verify] [--with-security] [--base-tag <tag>]"
         exit 1
         ;;
     esac
   done
+
+  if [ "${WITH_SECURITY}" = true ] && [ -z "${BASE_TAG}" ]; then
+    log_error "--with-security 需要 --base-tag 指定 base 镜像 tag"
+    exit 1
+  fi
 }
