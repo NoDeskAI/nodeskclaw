@@ -458,6 +458,7 @@ const enUS = {
     mentionAgent: "{'@'} Mention AI Employee",
     slashCommand: "/ Command",
     immediate: "Immediate",
+    newMessages: "New messages",
     attachFile: "Attach file",
     fileUploadDisabled: "Object storage not configured for this organization, file upload unavailable",
     fileTooLarge: "File size cannot exceed {size}MB",

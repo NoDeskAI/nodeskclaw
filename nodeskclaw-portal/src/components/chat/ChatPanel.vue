@@ -229,7 +229,7 @@ function insertSystemMessage(content: string, persist = true) {
       created_at: new Date().toISOString(),
     })
   }
-  scrollToBottom()
+  scrollToBottom(true)
 }
 
 function executeSlashCommand(name: string, arg?: string) {
@@ -380,7 +380,7 @@ async function sendMessage() {
     fileIds,
     attachments,
   )
-  scrollToBottom()
+  scrollToBottom(true)
 }
 
 // ── Editor ────────────────────────────────────────────
@@ -586,18 +586,47 @@ async function handleFeedback(msg: GroupChatMessage, type: 'up' | 'down') {
   }
 }
 
-// ── Misc ──────────────────────────────────────────
-function scrollToBottom() {
+// ── Auto-scroll ──────────────────────────────────
+const isUserNearBottom = ref(true)
+const hasNewMessages = ref(false)
+const SCROLL_THRESHOLD = 80
+
+function checkScrollPosition() {
+  const el = messagesEl.value
+  if (!el) return
+  const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  isUserNearBottom.value = distanceFromBottom <= SCROLL_THRESHOLD
+  if (isUserNearBottom.value) {
+    hasNewMessages.value = false
+  }
+}
+
+function scrollToBottom(force = false) {
   nextTick(() => {
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    if (!messagesEl.value) return
+    if (force || isUserNearBottom.value) {
+      messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      hasNewMessages.value = false
+    } else {
+      hasNewMessages.value = true
+    }
   })
 }
 
-watch(messages, scrollToBottom, { deep: true })
+function jumpToBottom() {
+  if (messagesEl.value) {
+    messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  }
+  hasNewMessages.value = false
+  isUserNearBottom.value = true
+}
+
+watch(messages, () => scrollToBottom(false), { deep: true })
 
 onMounted(() => {
   store.fetchChatHistory(props.workspaceId)
   store.fetchSystemCapabilities()
+  nextTick(() => scrollToBottom(true))
 })
 
 function formatTime(dateStr: string): string {
@@ -620,7 +649,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 <template>
   <div class="flex flex-col flex-1 min-h-0">
     <!-- Messages -->
-    <div ref="messagesEl" class="messages-scroll flex-1 px-4 py-3 space-y-3 min-h-0">
+    <div ref="messagesEl" class="messages-scroll flex-1 px-4 py-3 space-y-3 min-h-0 relative" @scroll="checkScrollPosition">
       <div
         v-if="messages.length === 0"
         class="flex items-center justify-center h-full text-muted-foreground text-sm"
@@ -748,6 +777,18 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
         </div>
       </div>
     </div>
+
+    <!-- New messages indicator -->
+    <Transition name="slide-up">
+      <button
+        v-if="hasNewMessages"
+        class="new-messages-btn"
+        @click="jumpToBottom"
+      >
+        <span class="new-messages-arrow">↓</span>
+        {{ t('chat.newMessages') }}
+      </button>
+    </Transition>
 
     <!-- Typing indicator -->
     <div v-if="typingNames" class="px-4 py-1 text-xs text-muted-foreground shrink-0">
@@ -1010,6 +1051,46 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 .messages-scroll {
   overflow-y: scroll;
   overflow-x: hidden;
+}
+
+.new-messages-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  cursor: pointer;
+  border: none;
+  z-index: 10;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.new-messages-btn:hover {
+  background: hsl(var(--primary) / 0.9);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+.new-messages-arrow {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 
 .chat-markdown {
