@@ -1,6 +1,6 @@
-# NoDeskClaw LLM Proxy
+# DeskClaw LLM Proxy
 
-独立的 LLM 请求代理服务，负责 Working Plan 模式下的 API 请求转发、鉴权和用量记录。
+DeskClaw LLM 代理 -- AI 经营伙伴的智力供给中枢。负责大语言模型 API 的请求转发、鉴权、额度检查和用量记录，确保每位 AI 经营者获得所需的推理能力。
 
 ## 功能
 

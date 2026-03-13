@@ -1,6 +1,6 @@
-# NoDeskClaw Backend
+# DeskClaw Backend
 
-NoDeskClaw 管理平台后端服务，基于 FastAPI 构建，提供集群管理、实例部署、OAuth SSO 登录（飞书等可扩展）、镜像仓库管理等 API。
+DeskClaw 后端服务 -- 人与 AI 共同经营的 API 中枢。驱动组织运转、AI 经营伙伴的部署编排、赛博办公室消息总线、基因能力分发等核心经营逻辑。基于 FastAPI 构建，提供集群管理、实例部署、OAuth SSO 登录（飞书等可扩展）、镜像仓库管理等 API。
 
 ## 技术栈
 

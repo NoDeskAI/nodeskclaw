@@ -1,6 +1,6 @@
-# nodeskclaw-artifacts
+# DeskClaw Artifacts
 
-NoDeskClaw 部署到 K8s 的制品仓库 -- 存放 Docker 镜像构建文件和集群基础设施部署清单。
+DeskClaw 部署制品 -- AI 经营伙伴的运行基础设施。包含 DeskClaw 工作引擎镜像、K8s 集群部署清单、存储配置等，让 AI 从构建到上线经营的全链路自动化。
 
 ## 目录结构
 
