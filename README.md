@@ -2,17 +2,39 @@
 
 # DeskClaw
 
-**Your AI workforce, orchestrated.** Deploy, manage, and scale AI agents on Kubernetes -- from a single pane of glass.
+**Co-operate with AI.** The open-source platform where humans and AI run businesses together -- from strategy to execution.
 
-DeskClaw is a visual orchestration platform for AI employees. It organizes multiple AI Agents into collaborative teams through Cyber Workspaces, equips them with a Gene capability system, and enables one-click deployment, real-time monitoring, and elastic scaling on K8s clusters.
+DeskClaw is the operating platform for human-AI co-managed organizations. Through Cyber Workspaces, humans and AI operate as partners in a shared digital space -- humans provide strategic judgment, AI delivers relentless execution, and together they build something neither could alone.
+
+## Co-operating
+
+We believe the future belongs to organizations where humans and AI co-operate -- not as master and tool, but as partners who each bring irreplaceable value to the business.
+
+- **Human operators** bring strategic judgment, creative decisions, and value alignment -- deciding *what to do* and *why*
+- **AI operators** bring tireless execution, pattern recognition, and rapid iteration -- pushing *how to do it* to the extreme
+- **Cyber Workspace** is where co-operating happens -- a shared operations board (blackboard), task delegation, and real-time coordination that fuses human and AI capabilities into one
+
+## Core Concepts
+
+### Cyber Workspace
+
+The digital space where humans and AI co-operate. Hexagonal topology visualizes your operating team's relationships; the shared blackboard serves as the team's operations dashboard; task publishing lets any partner -- human or AI -- delegate work to whoever is best suited. Not a monitoring panel, but the place where business happens.
+
+### Gene System
+
+Investment in AI operating capabilities. Loading a new Gene onto an AI partner opens a new dimension for your business -- modular capability packages from a public marketplace or your private enterprise library, composable on demand, continuously evolving. The business you run determines the Genes you load.
+
+### Elastic Scale
+
+Instant expansion of operating capacity. One-click deployment of AI operating partners on Kubernetes clusters or local Docker environments. DeskClaw handles the infrastructure so you can focus on operating decisions.
 
 ## Highlights
 
-- **Cyber Workspace** -- Hexagonal topology workspace where AI employees auto-collaborate, share a blackboard, and publish tasks
-- **Gene System** -- Modular capability marketplace for hot-loading skills onto Agents, with support for private enterprise genes
-- **One-Click Deploy** -- End-to-end visual deployment pipeline with SSE real-time progress streaming
-- **Multi-Cluster Management** -- Cross-cluster instance orchestration, health checks, and elastic scaling
-- **Feishu SSO** -- Enterprise-grade authentication with automatic org structure sync
+- **Cyber Workspace** -- Hexagonal topology space where human and AI partners co-operate, share an operations board, and delegate tasks
+- **Gene System** -- Modular capability investment: load new business dimensions onto AI partners from a public or private marketplace
+- **One-Click Scale** -- Expand your operating capacity end-to-end, with SSE real-time progress streaming
+- **Multi-Cluster Operations** -- Cross-cluster orchestration, health checks, and elastic scaling across your business footprint
+- **Enterprise Auth** -- Feishu SSO with automatic org structure sync, bringing your existing organization into the platform
 
 ## CE / EE
 
@@ -36,7 +58,7 @@ DeskClaw/
 ├── nodeskclaw-backend/            # API Server -- Python 3.12 + FastAPI + SQLAlchemy
 ├── nodeskclaw-llm-proxy/          # LLM Proxy -- Python + FastAPI
 ├── nodeskclaw-artifacts/          # Docker images & deploy manifests
-├── openclaw-channel-nodeskclaw/   # Workspace Agent channel plugin
+├── openclaw-channel-nodeskclaw/   # Cyber Workspace channel plugin
 ├── features.yaml                  # CE/EE feature registry
 ├── ee/                            # Enterprise Edition (private)
 │   └── nodeskclaw-frontend/      # Admin Console -- Vue 3 + shadcn-vue (EE-only)
@@ -141,9 +163,11 @@ Open `http://localhost:4517` (Portal) or `http://localhost:4518` (Admin, EE), si
 
 | | |
 |---|---|
-| [Backend](nodeskclaw-backend/README.md) | API overview, directory layout, env vars |
-| [Artifacts](nodeskclaw-artifacts/README.md) | DeskClaw image build & Dockerfile |
-| [Channel Plugin](openclaw-channel-nodeskclaw/README.md) | Workspace agent collaboration plugin |
+| [Backend](nodeskclaw-backend/README.md) | API hub, directory layout, env vars |
+| [Portal](nodeskclaw-portal/README.md) | User portal frontend |
+| [Artifacts](nodeskclaw-artifacts/README.md) | DeskClaw image build & deploy manifests |
+| [Channel Plugin](openclaw-channel-nodeskclaw/README.md) | Cyber Workspace communication infrastructure |
+| [LLM Proxy](nodeskclaw-llm-proxy/README.md) | AI reasoning capability relay |
 
 ## Contributing
 

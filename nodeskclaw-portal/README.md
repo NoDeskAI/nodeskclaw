@@ -1,6 +1,6 @@
-# nodeskclaw-portal
+# DeskClaw Portal
 
-NoDeskClaw 用户门户前端，基于 Vue 3 + Vite + TypeScript + Tailwind CSS 构建。
+DeskClaw 用户门户 -- 经营者的统一入口。在这里创建赛博办公室、组建人机经营团队、实时掌握经营动态。基于 Vue 3 + Vite + TypeScript + Tailwind CSS 构建。
 
 ## 技术栈
 

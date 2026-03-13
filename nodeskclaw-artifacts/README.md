@@ -1,30 +1,33 @@
-# nodeskclaw-artifacts
+# DeskClaw Artifacts
 
-NoDeskClaw 部署到 K8s 的制品仓库 -- 存放 Docker 镜像构建文件和集群基础设施部署清单。
+DeskClaw 部署制品 -- AI 经营伙伴的运行基础设施。包含 DeskClaw 工作引擎镜像、K8s 集群部署清单、存储配置等，让 AI 从构建到上线经营的全链路自动化。
 
 ## 目录结构
 
 ```
 nodeskclaw-artifacts/
-├── common.sh                    # 公共构建函数（日志、Docker 操作、参数解析）
+├── common.sh                    # 公共构建函数（日志、Docker 操作、参数解析、--with-security 支持）
 ├── openclaw-image/              # OpenClaw 工作引擎镜像
-│   ├── Dockerfile               # 基于 node:22-bookworm-slim，npm 全局安装 openclaw
+│   ├── Dockerfile               # Base 镜像: node:22-bookworm-slim + npm 全局安装 openclaw
+│   ├── Dockerfile.security      # 安全层镜像: FROM base + COPY TypeScript 插件到 extensions/
 │   ├── docker-entrypoint.sh     # 容器启动脚本（配置生成 + 凭证注入 + 前台启动）
 │   ├── init-container.sh        # Init Container 脚本（PVC 数据初始化 + 版本升级）
 │   ├── openclaw.json.template   # 配置模板，启动时 envsubst 替换占位符
-│   ├── build-and-push.sh        # 一键构建推送脚本（支持版本参数、npm 校验）
+│   ├── build-and-push.sh        # 一键构建推送脚本（支持 --with-security）
 │   └── check-update.sh          # 版本检测脚本（查询 npm 最新稳定版、自动更新 Dockerfile）
 ├── zeroclaw-image/              # ZeroClaw 高性能工作引擎镜像
-│   ├── Dockerfile               # 基于 debian:bookworm-slim，下载预编译二进制
+│   ├── Dockerfile               # Base 镜像: debian:bookworm-slim + 预编译二进制下载
+│   ├── Dockerfile.security      # 安全层镜像: 多阶段 Rust 源码构建（git clone + cargo build）
 │   ├── docker-entrypoint.sh     # 容器入口脚本
-│   ├── build-and-push.sh        # 构建推送脚本
+│   ├── build-and-push.sh        # 构建推送脚本（支持 --with-security）
 │   ├── check-update.sh          # 版本检测脚本（查询 GitHub Releases 最新版、自动更新 Dockerfile）
 │   └── README.md                # 构建说明
 ├── nanobot-image/               # Nanobot 轻量工作引擎镜像
-│   ├── Dockerfile               # 基于 python:3.13-slim-bookworm，pip install nanobot-ai
+│   ├── Dockerfile               # Base 镜像: python:3.13-slim-bookworm + pip install nanobot-ai
+│   ├── Dockerfile.security      # 安全层镜像: FROM base + pip install 安全层 + startup wrapper
 │   ├── nanobot.yaml.template    # Nanobot 配置模板
 │   ├── docker-entrypoint.sh     # 容器入口脚本
-│   ├── build-and-push.sh        # 构建推送脚本
+│   ├── build-and-push.sh        # 构建推送脚本（支持 --with-security）
 │   ├── check-update.sh          # 版本检测脚本（查询 PyPI 最新稳定版、自动更新 Dockerfile）
 │   └── README.md                # 构建说明
 ├── ingress-controller/          # Nginx Ingress Controller 部署清单
@@ -69,6 +72,33 @@ cd nodeskclaw-artifacts/openclaw-image
 ```
 
 脚本自动完成：npm 版本校验 → `docker build --platform linux/amd64` → 打 `v{version}` + `latest` tag → 推送 → 验证。
+
+### 安全层镜像构建
+
+每个 Runtime 支持 `--with-security` 模式，在 base 镜像基础上追加安全层：
+
+```bash
+# 1. 先构建 base 镜像
+cd openclaw-image && ./build-and-push.sh --version 2026.2.26 --build-only
+# 2. 再构建安全层镜像（FROM base）
+./build-and-push.sh --with-security --base-tag v2026.2.26 --build-only
+
+# Nanobot
+cd ../nanobot-image && ./build-and-push.sh --version 0.1.0 --build-only
+./build-and-push.sh --with-security --base-tag v0.1.0 --build-only
+
+# ZeroClaw（安全层模式为 Rust 源码构建，耗时较长）
+cd ../zeroclaw-image && ./build-and-push.sh --version v0.1.0 --build-only
+ZEROCLAW_REPO=https://github.com/nicholasgasior/zeroclaw.git ZEROCLAW_REF=main \
+  ./build-and-push.sh --with-security --base-tag v0.1.0 --build-only
+```
+
+安全层镜像 Tag 格式: `v{VERSION}-sec`（如 `v2026.2.26-sec`）。
+
+| 模式 | Dockerfile | 构建上下文 | 说明 |
+|------|-----------|-----------|------|
+| Base | `Dockerfile` | 当前目录 | 现有逻辑不变 |
+| Security | `Dockerfile.security` | 项目根目录 | FROM base + 安全层 |
 
 也可以通过 GitHub Actions 手动触发构建工作流（见 `.github/workflows/build-openclaw-image.yml`）。
 

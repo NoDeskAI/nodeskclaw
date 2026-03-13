@@ -4,13 +4,14 @@
 #
 # 功能:
 #   1. 从 .env 文件创建后端 K8s Secret
-#   2. 应用全部 K8s 部署清单
+#   2. 应用 Deployment + Service 清单（不含 Ingress）
 #
 # 用法:
-#   ./deploy/init-secrets.sh --context <k8s-context> [--env-file path/to/.env]
+#   ./deploy/init-secrets.sh --context <ctx> [--namespace NS] [--env-file path/to/.env]
 #
 # 前置条件:
-#   - cr-pull-secret 已在 nodeskclaw-system 中创建
+#   - kubectl 已配置正确的集群上下文
+#   - cr-pull-secret 已在目标 namespace 中创建
 # ============================================================
 set -euo pipefail
 
@@ -32,17 +33,21 @@ err() { echo -e "${RED}[ERR ]${NC} $*" >&2; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --context) KUBE_CONTEXT="$2"; shift ;;
-    --env-file) ENV_FILE="$2"; shift ;;
+    --context)   KUBE_CONTEXT="$2"; shift ;;
+    --namespace) NAMESPACE="$2"; shift ;;
+    --env-file)  ENV_FILE="$2"; shift ;;
     *) err "未知参数: $1"; exit 1 ;;
   esac
   shift
 done
 
 if [[ -z "$KUBE_CONTEXT" ]]; then
-  err "必须通过 --context 指定 K8s 集群上下文"
+  err "必须指定 --context 参数"
+  echo ""
   echo "可用上下文:"
   kubectl config get-contexts -o name 2>/dev/null | sed 's/^/  /'
+  echo ""
+  echo "用法: $0 --context <ctx> [--namespace NS] [--env-file path/to/.env]"
   exit 1
 fi
 
@@ -54,6 +59,9 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "  cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env"
   exit 1
 fi
+
+log "集群: $KUBE_CONTEXT"
+log "Namespace: $NAMESPACE"
 
 # ── 确保 Namespace 存在 ──────────────────────────────────
 log "检查 Namespace: $NAMESPACE"
@@ -79,6 +87,8 @@ if [[ ! -s "$CLEAN_ENV" ]]; then
   exit 1
 fi
 
+ENV_COUNT=$(wc -l < "$CLEAN_ENV" | xargs)
+
 # ── 创建/更新后端 Secret ─────────────────────────────────
 log "从 $ENV_FILE 创建 Secret: $SECRET_NAME"
 
@@ -86,18 +96,24 @@ $KUBECTL -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
   --from-env-file="$CLEAN_ENV" \
   --dry-run=client -o yaml | $KUBECTL apply -f -
 
-ok "Secret $SECRET_NAME 已创建/更新"
+ok "Secret $SECRET_NAME 已创建/更新 ($ENV_COUNT 个变量)"
 
-# ── 应用 K8s 部署清单 ───────────────────────────────────
-log "应用 K8s 部署清单..."
-$KUBECTL apply -f "$SCRIPT_DIR/k8s/"
-ok "部署清单已应用"
+# ── 应用 K8s 部署清单（Deployment + Service，不含 Ingress）──
+log "应用 K8s 部署清单（Deployment + Service）..."
+for f in backend.yaml admin.yaml portal.yaml; do
+  if [[ -f "$SCRIPT_DIR/k8s/$f" ]]; then
+    $KUBECTL -n "$NAMESPACE" apply -f "$SCRIPT_DIR/k8s/$f"
+    ok "$f"
+  fi
+done
+log "Ingress 需要单独配置域名后手动 apply:"
+log "  $KUBECTL -n $NAMESPACE apply -f $SCRIPT_DIR/k8s/ingress.yaml"
 
 # ── 结果 ─────────────────────────────────────────────────
 echo ""
 log "初始化完成。接下来请运行部署脚本构建并推送镜像:"
 echo ""
-echo "  ./deploy/deploy.sh all"
+echo "  ./deploy/deploy.sh all --context $KUBE_CONTEXT --namespace $NAMESPACE"
 echo ""
 log "当前 Deployment 状态:"
 $KUBECTL -n "$NAMESPACE" get deployments -l 'app in (nodeskclaw-backend, nodeskclaw-admin, nodeskclaw-portal)' 2>/dev/null || true

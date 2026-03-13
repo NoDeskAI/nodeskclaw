@@ -1,23 +1,25 @@
 # deploy/ — CI/CD 构建部署脚本
 
-NoDeskClaw 前后端的镜像构建、推送和 K8s 部署更新工具集。
+DeskClaw 前后端的镜像构建、推送和 K8s 部署更新工具集。
 
 ## 目录结构
 
 ```
 deploy/
 ├── deploy.sh         # 统一构建推送部署脚本
+├── release.sh        # 发布工作流（staging -> release -> promote）
 ├── init-secrets.sh   # 首次部署初始化（创建 K8s Secret + 应用清单）
 ├── k8s/
 │   ├── backend.yaml  # 后端 Deployment + Service
 │   ├── admin.yaml    # Admin 前端 Deployment + Service
-│   └── portal.yaml   # Portal 前端 Deployment + Service
+│   ├── portal.yaml   # Portal 前端 Deployment + Service
+│   └── ingress.yaml  # Ingress（需手动配置域名后 apply）
 └── README.md
 ```
 
 ## 部署架构
 
-三个独立镜像，各自有 Deployment + ClusterIP Service，部署在 `nodeskclaw-system` Namespace：
+三个独立镜像，各自有 Deployment + ClusterIP Service：
 
 | 组件 | 镜像名 | 端口 | 说明 |
 |------|--------|------|------|
@@ -27,34 +29,40 @@ deploy/
 
 镜像仓库：`<YOUR_REGISTRY>/<YOUR_NAMESPACE>/`
 
+K8s YAML 清单不包含 `namespace` 字段，由 `kubectl -n <NS>` 在运行时指定目标 Namespace。
+
 ## 用法
 
 ### 首次部署
 
 ```bash
-# 1. 确保 kubectl 指向正确的 VKE 集群
-# 2. 确保 cr-pull-secret 已在 nodeskclaw-system 中创建
-# 3. 初始化（从 .env 创建 Secret + 应用 K8s 清单）
-./deploy/init-secrets.sh
+# 1. 初始化（从 .env 创建 Secret + 应用 Deployment/Service 清单）
+./deploy/init-secrets.sh --context <CTX>
 
-# 4. 构建、推送、部署全部组件
-./deploy/deploy.sh all
+# 2. 手动配置 Ingress 域名后 apply
+kubectl --context <CTX> -n <NS> apply -f deploy/k8s/ingress.yaml
+
+# 3. 构建、推送、部署全部组件
+./deploy/deploy.sh all --context <CTX>
 ```
 
 ### 日常更新
 
 ```bash
-# 更新后端
-./deploy/deploy.sh backend
+./deploy/deploy.sh backend --context <CTX>
+./deploy/deploy.sh admin --context <CTX>
+./deploy/deploy.sh portal --context <CTX>
+./deploy/deploy.sh all --context <CTX>
+```
 
-# 更新 Admin 前端
-./deploy/deploy.sh admin
+### 多 Namespace 部署
 
-# 更新 Portal 前端
-./deploy/deploy.sh portal
+```bash
+# 部署到 staging 环境
+./deploy/deploy.sh all --context <CTX> --namespace nodeskclaw-staging
 
-# 全量更新
-./deploy/deploy.sh all
+# 部署到 production 环境（默认）
+./deploy/deploy.sh all --context <CTX> --namespace nodeskclaw-system
 ```
 
 ### 高级用法
@@ -64,22 +72,42 @@ deploy/
 ./deploy/deploy.sh backend --build-only
 
 # 仅更新 K8s 到指定标签（不重新构建）
-./deploy/deploy.sh admin --deploy-only --tag 20260218-b0f6ad1
+./deploy/deploy.sh admin --deploy-only --tag v0.1.0-beta.1 --context <CTX>
 
 # 构建时不使用 Docker 缓存
-./deploy/deploy.sh portal --no-cache
+./deploy/deploy.sh portal --no-cache --context <CTX>
+```
+
+### 版本发布工作流
+
+使用 `release.sh` 管理完整的 staging -> release -> promote 流程：
+
+```bash
+# 1. 构建并部署到 staging
+./deploy/release.sh staging v0.1.0-beta.1 --context <CTX>
+
+# 2. 测试通过后，创建 GitHub Pre-release
+./deploy/release.sh release v0.1.0-beta.1
+
+# 3. 升级生产环境
+./deploy/release.sh promote v0.1.0-beta.1 --context <CTX>
+
+# 完整流程（每步需确认）
+./deploy/release.sh full v0.1.0-beta.1 --context <CTX>
 ```
 
 ### 镜像标签格式
 
-`YYYYMMDD-<git-short-hash>`，例如 `20260218-b0f6ad1`
+- 日常更新：`YYYYMMDD-<git-short-hash>`（如 `20260218-b0f6ad1`）
+- 版本发布：语义化版本（如 `v0.1.0-beta.1`、`v0.1.0`）
 
 ## 前提条件
 
 - Docker Desktop 运行中，且能访问 Docker Hub（拉取基础镜像）
 - 已登录容器镜像仓库：`docker login <YOUR_REGISTRY>`
-- `kubectl` 已配置正确的 VKE 集群上下文
-- `nodeskclaw-system` Namespace 和 `cr-pull-secret` 已存在
+- `kubectl` 已配置正确的集群上下文
+- 目标 Namespace 和 `cr-pull-secret` 已存在
+- `gh` CLI 已安装并认证（`release.sh` 需要）
 - 创建本地部署配置 `deploy/.env.local`（已被 `.gitignore` 忽略），填写真实镜像仓库地址：
   ```bash
   # deploy/.env.local

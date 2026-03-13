@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nodeskclaw-llm-proxy
-  namespace: nodeskclaw-system
   labels:
     app: nodeskclaw-llm-proxy
 spec:

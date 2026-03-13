@@ -125,7 +125,10 @@ async function handleTest(id: string) {
   try {
     const result = await clusterStore.testConnection(id)
     if (result.ok) {
-      toast.success(t('clusters.testSuccess', { version: result.version ?? '' }))
+      const msg = result.nodes != null
+        ? t('clusters.testSuccessK8s', { version: result.version ?? '', nodes: result.nodes })
+        : t('clusters.testSuccess', { version: result.version ?? '' })
+      toast.success(msg)
     } else {
       toast.error(t('clusters.testFailed', { message: result.message ?? '' }))
     }

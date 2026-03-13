@@ -1,6 +1,6 @@
-# DeskClaw Channel Plugin: NoDeskClaw
+# DeskClaw Channel Plugin: Cyber Workspace
 
-DeskClaw 赛博办公室 AI 员工协同通信的 DeskClaw channel plugin。让 AI 员工能通过 `send` 工具主动与办公室中的其他 AI 员工协同。
+赛博办公室经营通道 -- 让 AI 经营伙伴在赛博办公室中互相对话、委派业务、协同经营的 DeskClaw channel plugin。这是人机共营团队实时沟通的通信基础设施。
 
 ## 用途
 

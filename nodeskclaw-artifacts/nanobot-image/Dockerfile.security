@@ -1,0 +1,21 @@
+# =============================================================================
+# Nanobot 安全层镜像
+# 基于 base 镜像追加安全层（pip install + CMD 替换为 startup wrapper）
+# 构建上下文: 项目根目录 (../../)
+# =============================================================================
+
+ARG BASE_TAG=latest
+ARG BASE_REGISTRY=<YOUR_REGISTRY>/<YOUR_NAMESPACE>/nodeskclaw-nanobot-base
+
+FROM ${BASE_REGISTRY}:${BASE_TAG}
+
+# ---------- 安全层 ----------
+COPY nanobot-security-layer/ /tmp/nanobot-security-layer/
+RUN pip install --no-cache-dir /tmp/nanobot-security-layer/ && \
+    rm -rf /tmp/nanobot-security-layer/
+
+ENV SECURITY_LAYER_ENABLED=true
+
+# startup.py: inject_security_layer() -> nanobot CLI main()
+# 通过 startup wrapper 启动，在同一进程内完成 monkey-patch 后运行 nanobot
+CMD ["python", "-m", "nanobot_security_layer.startup", "gateway", "--config", "/opt/nanobot/nanobot.yaml"]

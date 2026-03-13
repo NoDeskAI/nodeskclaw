@@ -447,7 +447,23 @@ async def lifespan(app: FastAPI):
             flush=True,
         )
 
+    # ── Security Pipeline 初始化 ─────────────────────
+    from app.services.security.pipeline import SecurityPipeline
+    from app.services.security.loader import create_plugins
+    from app.api.security_ws import set_pipeline
+
+    _security_pipeline = SecurityPipeline()
+    _security_plugins = await create_plugins([])
+    for _sp in _security_plugins:
+        _security_pipeline.add_plugin(_sp)
+    set_pipeline(_security_pipeline)
+    logger.info("Security Pipeline 已初始化 (%d plugins)", _security_pipeline.plugin_count)
+
     yield
+
+    # ── Security Pipeline 销毁 ────────────────────────
+    await _security_pipeline.destroy()
+    set_pipeline(None)
 
     # ── Runtime Platform v2 Shutdown ─────────────────
     try:

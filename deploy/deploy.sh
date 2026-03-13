@@ -16,6 +16,7 @@
 #   --build-only    仅构建+推送镜像，不更新 K8s
 #   --deploy-only   仅更新 K8s (需要 --tag 指定镜像标签)
 #   --tag TAG       指定镜像标签 (默认自动生成)
+#   --namespace NS  指定目标 Namespace（默认 nodeskclaw-system）
 #   --no-cache      docker build 不使用缓存
 # ============================================================
 set -euo pipefail
@@ -85,11 +86,12 @@ TARGET=""
 BUILD_ONLY=false
 DEPLOY_ONLY=false
 CUSTOM_TAG=""
+CUSTOM_NS=""
 NO_CACHE=""
 KUBE_CONTEXT=""
 
 usage() {
-  echo "用法: $0 <backend|admin|portal|llm-proxy|all> --context <kubectl-context> [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
+  echo "用法: $0 <backend|admin|portal|llm-proxy|all> --context <kubectl-context> [--namespace NS] [--build-only] [--deploy-only] [--tag TAG] [--no-cache]"
   exit 1
 }
 
@@ -99,6 +101,7 @@ TARGET="$1"; shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --context)     KUBE_CONTEXT="$2"; shift ;;
+    --namespace)   CUSTOM_NS="$2"; shift ;;
     --build-only)  BUILD_ONLY=true ;;
     --deploy-only) DEPLOY_ONLY=true ;;
     --tag)         CUSTOM_TAG="$2"; shift ;;
@@ -121,6 +124,8 @@ if [[ "$BUILD_ONLY" != true && -z "$KUBE_CONTEXT" ]]; then
   echo ""
   usage
 fi
+
+[[ -n "$CUSTOM_NS" ]] && NAMESPACE="$CUSTOM_NS"
 
 KUBECTL="kubectl"
 if [[ -n "$KUBE_CONTEXT" ]]; then
@@ -147,6 +152,7 @@ fi
 
 log "镜像标签: $TAG"
 log "目标组件: ${TARGETS[*]}"
+log "Namespace: $NAMESPACE"
 [[ -n "$KUBE_CONTEXT" ]] && log "K8s 上下文: $KUBE_CONTEXT"
 echo ""
 
@@ -246,7 +252,7 @@ deploy_to_k8s() {
       k8s_path="$PROJECT_ROOT/nodeskclaw-llm-proxy/deploy/deployment.yaml"
     fi
     if [[ -f "$k8s_path" ]]; then
-      $KUBECTL apply -f "$k8s_path"
+      $KUBECTL -n "$NAMESPACE" apply -f "$k8s_path"
     else
       err "[$component] K8s 清单不存在: $k8s_path"
       return 1
@@ -291,6 +297,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 log "部署摘要"
 echo "  标签: $TAG"
 echo "  仓库: $REGISTRY"
+echo "  Namespace: $NAMESPACE"
 [[ -n "$KUBE_CONTEXT" ]] && echo "  集群: $KUBE_CONTEXT"
 for t in "${TARGETS[@]}"; do
   local_failed=false
