@@ -1,4 +1,4 @@
-FROM rust:1.77-slim-bookworm AS builder
+FROM rust:1.82-slim-bookworm AS builder
 
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev && \
