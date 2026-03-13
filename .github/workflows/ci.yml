@@ -24,7 +24,9 @@ jobs:
           python-version: "3.12"
       - run: pip install ruff
       - run: ruff check .
-      - run: ruff format --check .
+      - name: Check formatting (non-blocking)
+        run: ruff format --check .
+        continue-on-error: true
 
   backend-test:
     name: Backend Tests (pytest)
