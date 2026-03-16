@@ -3,6 +3,7 @@
 from app.models.admin_membership import AdminMembership  # noqa: F401
 from app.models.base import Base, BaseModel  # noqa: F401
 from app.models.blackboard import Blackboard  # noqa: F401
+from app.models.blackboard_file import BlackboardFile  # noqa: F401
 from app.models.blackboard_post import BlackboardPost  # noqa: F401
 from app.models.blackboard_reply import BlackboardReply  # noqa: F401
 from app.models.circuit_state import CircuitState  # noqa: F401
