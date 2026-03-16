@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db
 from app.core.security import get_auth_actor
 from app.schemas.workspace import (
+    FileWriteRequest,
+    MkdirRequest,
     PostCreate,
     PostUpdate,
     ReplyCreate,
@@ -200,3 +202,92 @@ async def unread_count(
         db, workspace_id, reader_type, reader_id,
     )
     return _ok({"count": count})
+
+
+# ── Shared Files ──────────────────────────────────────
+
+@router.get("/{workspace_id}/blackboard/files")
+async def list_files(
+    workspace_id: str,
+    parent_path: str = Query("/"),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    files = await workspace_service.list_shared_files(db, workspace_id, parent_path)
+    return _ok([f.model_dump(mode="json") for f in files])
+
+
+@router.post("/{workspace_id}/blackboard/files/mkdir")
+async def mkdir(
+    workspace_id: str,
+    data: MkdirRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    utype, uid, uname = _caller_info()
+    info = await workspace_service.create_shared_directory(
+        db, workspace_id, utype, uid, uname, data,
+    )
+    _broadcast(workspace_id, "file:created", info.model_dump(mode="json"))
+    return _ok(info.model_dump(mode="json"))
+
+
+@router.post("/{workspace_id}/blackboard/files/upload")
+async def upload_file(
+    workspace_id: str,
+    data: FileWriteRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    utype, uid, uname = _caller_info()
+    info = await workspace_service.upload_shared_file(
+        db, workspace_id, utype, uid, uname, data,
+    )
+    _broadcast(workspace_id, "file:uploaded", info.model_dump(mode="json"))
+    return _ok(info.model_dump(mode="json"))
+
+
+@router.get("/{workspace_id}/blackboard/files/{file_id}/url")
+async def get_file_url(
+    workspace_id: str,
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    url = await workspace_service.get_shared_file_url(db, workspace_id, file_id)
+    if url is None:
+        return _ok(None, "not found")
+    return _ok({"url": url})
+
+
+@router.get("/{workspace_id}/blackboard/files/{file_id}/content")
+async def read_file_content(
+    workspace_id: str,
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    result = await workspace_service.read_shared_file(db, workspace_id, file_id)
+    if result is None:
+        return _ok(None, "not found")
+    b64, ct = result
+    return _ok({"content": b64, "content_type": ct})
+
+
+@router.delete("/{workspace_id}/blackboard/files/{file_id}")
+async def delete_file(
+    workspace_id: str,
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    ok = await workspace_service.delete_shared_file(db, workspace_id, file_id)
+    if ok:
+        _broadcast(workspace_id, "file:deleted", {"file_id": file_id})
+    return _ok({"deleted": ok})
