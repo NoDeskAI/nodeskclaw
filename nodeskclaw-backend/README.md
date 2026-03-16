@@ -167,6 +167,9 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/workspaces/{ws}/events?token=` | SSE | 实时事件流（query param JWT 认证） |
 | `/api/v1/workspaces/sse-token` | SSE | 签发 5 分钟短时效 SSE token |
 | `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
+| `/api/v1/workspaces/{ws}/blackboard/posts` | 黑板讨论区 | 帖子 CRUD、置顶、已读标记、未读计数 |
+| `/api/v1/workspaces/{ws}/blackboard/posts/{id}/replies` | 黑板讨论区 | 帖子回复 |
+| `/api/v1/workspaces/{ws}/blackboard/files` | 共享文件 | TOS 共享文件列表、上传、下载、删除、创建目录 |
 | `/api/v1/enterprise-files/agents` | 企业空间 | 列出可浏览的 Agent 实例 |
 | `/api/v1/enterprise-files/agents/{id}/files` | 企业空间 | 列出 Agent 目录文件（query: path） |
 | `/api/v1/enterprise-files/agents/{id}/files/content` | 企业空间 | 读取文件内容（仅文本） |
