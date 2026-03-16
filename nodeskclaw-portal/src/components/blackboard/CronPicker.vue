@@ -43,9 +43,13 @@ const weekDays = computed(() => [
   { value: 6, label: t('blackboard.cronSat') },
 ])
 
-function isValidField(val: string, min: number, max: number): boolean {
+function normalizeField(val: string): string {
   const v = val.trim()
-  if (!v) return false
+  return v === '' ? '*' : v
+}
+
+function isValidField(val: string, min: number, max: number): boolean {
+  const v = normalizeField(val)
   if (v === '*') return true
   if (/^\*\/\d+$/.test(v)) {
     const n = parseInt(v.slice(2))
@@ -70,7 +74,7 @@ const isValid = computed(() => {
 
 const customPreview = computed(() => {
   if (mode.value !== 'custom') return ''
-  return `${customMinute.value} ${customHour.value} ${customDom.value} * ${customDow.value}`
+  return `${normalizeField(customMinute.value)} ${normalizeField(customHour.value)} ${normalizeField(customDom.value)} * ${normalizeField(customDow.value)}`
 })
 
 defineExpose({ isValid })
@@ -93,7 +97,7 @@ function buildCron(): string {
       return `${parseInt(m)} ${parseInt(h)} ${days} * *`
     }
     case 'custom':
-      return `${customMinute.value.trim()} ${customHour.value.trim()} ${customDom.value.trim()} * ${customDow.value.trim()}`
+      return `${normalizeField(customMinute.value)} ${normalizeField(customHour.value)} ${normalizeField(customDom.value)} * ${normalizeField(customDow.value)}`
   }
 }
 
@@ -151,6 +155,23 @@ function parseCron(expr: string) {
 
 let skipEmit = false
 
+function populateCustomFromExpr(expr: string) {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length >= 5) {
+    customMinute.value = parts[0]
+    customHour.value = parts[1]
+    customDom.value = parts[2]
+    customDow.value = parts[4]
+  }
+}
+
+function switchMode(m: CronMode) {
+  if (m === 'custom' && mode.value !== 'custom') {
+    populateCustomFromExpr(props.modelValue)
+  }
+  mode.value = m
+}
+
 watch([mode, hourlyInterval, dailyTime, weeklyDay, weeklyTime, monthlyDays, monthlyTime, customMinute, customHour, customDom, customDow], () => {
   if (skipEmit) return
   emit('update:modelValue', buildCron())
@@ -194,7 +215,7 @@ function toggleMonthDay(day: number) {
         :class="mode === m.key
           ? 'bg-primary text-primary-foreground'
           : 'bg-muted text-muted-foreground hover:text-foreground'"
-        @click="mode = m.key"
+        @click="switchMode(m.key)"
       >
         {{ t(m.labelKey) }}
       </button>
@@ -295,37 +316,38 @@ function toggleMonthDay(day: number) {
     </div>
 
     <div v-else-if="mode === 'custom'" class="space-y-3">
+      <p class="text-xs text-muted-foreground">{{ t('blackboard.cronCustomHint') }}</p>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronMinuteField') }}</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronMinuteField') }} <span class="text-muted-foreground/60">(0-59)</span></label>
           <input
             v-model="customMinute"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="0-59, */N, *"
+            placeholder="* = 每分钟"
           />
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronHourField') }}</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronHourField') }} <span class="text-muted-foreground/60">(0-23)</span></label>
           <input
             v-model="customHour"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="0-23, */N, *"
+            placeholder="* = 每小时"
           />
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronDayField') }}</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronDayField') }} <span class="text-muted-foreground/60">(1-31)</span></label>
           <input
             v-model="customDom"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="1-31, *"
+            placeholder="* = 每天"
           />
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronWeekdayField') }}</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronWeekdayField') }} <span class="text-muted-foreground/60">(0-6)</span></label>
           <input
             v-model="customDow"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="0-6, *"
+            placeholder="* = 不限"
           />
         </div>
       </div>
