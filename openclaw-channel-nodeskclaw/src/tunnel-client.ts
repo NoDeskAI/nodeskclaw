@@ -287,6 +287,7 @@ export class TunnelClient {
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let dataAccum = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -297,35 +298,58 @@ export class TunnelClient {
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-          if (data === "[DONE]") {
-            this.send({
-              id: crypto.randomUUID(),
-              type: "chat.response.done",
-              replyTo: msg.id,
-              traceId: msg.traceId,
-              payload: {},
-              ts: Date.now(),
-            });
-            return;
+          if (line.startsWith("data: ")) {
+            const part = line.slice(6);
+            dataAccum = dataAccum ? dataAccum + "\n" + part : part;
+            continue;
           }
-          try {
-            const chunk = JSON.parse(data);
-            const content =
-              chunk?.choices?.[0]?.delta?.content ?? "";
-            if (content) {
+          if (line.trim() === "" && dataAccum) {
+            if (dataAccum === "[DONE]") {
               this.send({
                 id: crypto.randomUUID(),
-                type: "chat.response.chunk",
+                type: "chat.response.done",
                 replyTo: msg.id,
                 traceId: msg.traceId,
-                payload: { content },
+                payload: {},
                 ts: Date.now(),
               });
+              return;
             }
-          } catch {}
+            try {
+              const chunk = JSON.parse(dataAccum);
+              const content =
+                chunk?.choices?.[0]?.delta?.content ?? "";
+              if (content) {
+                this.send({
+                  id: crypto.randomUUID(),
+                  type: "chat.response.chunk",
+                  replyTo: msg.id,
+                  traceId: msg.traceId,
+                  payload: { content },
+                  ts: Date.now(),
+                });
+              }
+            } catch {}
+            dataAccum = "";
+          }
         }
+      }
+
+      if (dataAccum && dataAccum !== "[DONE]") {
+        try {
+          const chunk = JSON.parse(dataAccum);
+          const content = chunk?.choices?.[0]?.delta?.content ?? "";
+          if (content) {
+            this.send({
+              id: crypto.randomUUID(),
+              type: "chat.response.chunk",
+              replyTo: msg.id,
+              traceId: msg.traceId,
+              payload: { content },
+              ts: Date.now(),
+            });
+          }
+        } catch {}
       }
 
       this.send({

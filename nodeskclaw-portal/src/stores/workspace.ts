@@ -726,7 +726,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       const { data } = await api.post('/workspaces/sse-token')
       token = data?.data?.sse_token || ''
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn('[SSE] Failed to get SSE token, falling back to portal token', err)
+    }
     if (!token) token = localStorage.getItem('portal_token') || ''
 
     let sseUrl = `/api/v1/workspaces/${workspaceId}/events?token=${token}`
