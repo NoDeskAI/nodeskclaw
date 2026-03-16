@@ -371,6 +371,65 @@ function createGeneDiscoveryTool(cfg: ToolConfig): AnyAgentTool {
   };
 }
 
+function createSharedFilesTool(cfg: ToolConfig): AnyAgentTool {
+  return {
+    name: "nodeskclaw_shared_files",
+    description:
+      "Manage shared files in the workspace blackboard: list, read, write, delete files, create directories.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list_files", "read_file", "write_file", "delete_file", "mkdir"],
+          description: "Which file operation to perform.",
+        },
+        parent_path: { type: "string", description: "list_files / write_file / mkdir: directory path (default '/')." },
+        file_id: { type: "string", description: "read_file / delete_file: target file ID." },
+        filename: { type: "string", description: "write_file: file name." },
+        content: { type: "string", description: "write_file: base64-encoded file content." },
+        content_type: { type: "string", description: "write_file: MIME type (default 'application/octet-stream')." },
+        name: { type: "string", description: "mkdir: directory name." },
+      },
+      required: ["action"],
+    },
+    execute: async (_toolCallId, args) => {
+      const p = args as Record<string, unknown>;
+      const ws = cfg.workspaceId;
+      switch (p.action) {
+        case "list_files": {
+          const pp = p.parent_path ? `?parent_path=${encodeURIComponent(p.parent_path as string)}` : "";
+          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/blackboard/files${pp}`));
+        }
+        case "read_file":
+          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/blackboard/files/${p.file_id}/content`));
+        case "write_file":
+          return jsonResult(
+            await apiFetch(cfg, `/workspaces/${ws}/blackboard/files/upload`, "POST", {
+              parent_path: p.parent_path || "/",
+              filename: p.filename,
+              content: p.content,
+              content_type: p.content_type || "application/octet-stream",
+            }),
+          );
+        case "delete_file":
+          return jsonResult(
+            await apiFetch(cfg, `/workspaces/${ws}/blackboard/files/${p.file_id}`, "DELETE"),
+          );
+        case "mkdir":
+          return jsonResult(
+            await apiFetch(cfg, `/workspaces/${ws}/blackboard/files/mkdir`, "POST", {
+              parent_path: p.parent_path || "/",
+              name: p.name,
+            }),
+          );
+        default:
+          return jsonResult({ error: `Unknown action: ${p.action}` });
+      }
+    },
+  };
+}
+
 export function createNoDeskClawTools(config: OpenClawConfig, sessionWorkspaceId?: string): AnyAgentTool[] {
   const cfg = resolveToolConfig(config, sessionWorkspaceId);
   return [
@@ -379,5 +438,6 @@ export function createNoDeskClawTools(config: OpenClawConfig, sessionWorkspaceId
     createPerformanceTool(cfg),
     createProposalsTool(cfg),
     createGeneDiscoveryTool(cfg),
+    createSharedFilesTool(cfg),
   ];
 }

@@ -38,6 +38,7 @@ const plugin = {
         "nodeskclaw_performance",
         "nodeskclaw_proposals",
         "nodeskclaw_gene_discovery",
+        "nodeskclaw_shared_files",
       ],
     });
   },
