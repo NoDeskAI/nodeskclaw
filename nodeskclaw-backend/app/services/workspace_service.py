@@ -1,28 +1,38 @@
 """Workspace CRUD + Agent management + Blackboard service."""
 
 import asyncio
+import base64
 import logging
+import re
 from typing import Coroutine
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.blackboard import Blackboard
+from app.models.blackboard_file import BlackboardFile
+from app.models.blackboard_post import BlackboardPost
+from app.models.blackboard_reply import BlackboardReply
 from app.models.instance import Instance
+from app.models.post_read import PostRead
 from app.models.workspace import Workspace
 from app.models.workspace_agent import WorkspaceAgent
-from app.services.runtime import node_card as node_card_service
 from app.models.workspace_member import WorkspaceMember, WorkspaceRole
 from app.models.workspace_objective import WorkspaceObjective
 from app.models.workspace_schedule import WorkspaceSchedule
 from app.models.workspace_task import WorkspaceTask
+from app.services import storage_service
+from app.services.runtime import node_card as node_card_service
 from app.schemas.workspace import (
     AddAgentRequest,
     AgentBrief,
     BlackboardInfo,
     BlackboardSectionPatch,
     BlackboardUpdate,
+    FileInfo,
+    FileWriteRequest,
     MentionInfo,
+    MkdirRequest,
     ObjectiveCreate,
     ObjectiveInfo,
     ObjectiveUpdate,
@@ -1185,12 +1195,6 @@ async def remove_workspace_member(
 
 # ── Blackboard Posts (BBS) ────────────────────────────
 
-import re
-
-from app.models.blackboard_post import BlackboardPost
-from app.models.blackboard_reply import BlackboardReply
-from app.models.post_read import PostRead
-
 MENTION_PATTERN = re.compile(r"@(agent|human):([a-f0-9\-]{36})")
 
 
@@ -1445,13 +1449,6 @@ async def get_unread_count(
 
 
 # ── Blackboard Shared Files (TOS-backed) ─────────────
-
-import base64
-
-from app.models.blackboard_file import BlackboardFile
-from app.schemas.workspace import FileInfo, FileWriteRequest, MkdirRequest
-from app.services import storage_service
-
 
 def _validate_path(path: str) -> str:
     if not path.startswith("/"):

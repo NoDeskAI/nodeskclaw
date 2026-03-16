@@ -124,7 +124,7 @@ class ObjectiveInfo(BaseModel):
     progress: float = 0.0
     obj_type: str = "objective"
     parent_id: str | None = None
-    children: list["ObjectiveInfo"] = []
+    children: list[ObjectiveInfo] = []
     created_by: str | None = None
     created_at: datetime
     updated_at: datetime
