@@ -336,10 +336,10 @@ async function sendMessage() {
     return
   }
 
-  if (text.startsWith('/')) {
-    const words = text.split(/\s+/)
-    const cmd = words[0].slice(1)
-    const arg = words.slice(1).join(' ').replace(/^@/, '')
+  const slashMatch = text.match(/^\/([a-zA-Z]+)(?:\s|$)/)
+  if (slashMatch) {
+    const cmd = slashMatch[1]
+    const arg = text.slice(slashMatch[0].length).trim().replace(/^@/, '')
     executeSlashCommand(cmd, arg || undefined)
     return
   }
