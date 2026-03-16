@@ -657,7 +657,13 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
             if ctx.has_llm_configs:
                 await sync_openclaw_llm_config(instance, db)
         except Exception as e:
-            logger.warning("Docker 部署后注入配置失败（非致命）: %s", e)
+            logger.warning(
+                "Docker 部署后注入配置失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
+                ctx.record_id,
+                ctx.instance_id,
+                e,
+                exc_info=True,
+            )
 
     event_bus.publish(
         "deploy_progress",
