@@ -22,9 +22,16 @@ from app.schemas.workspace import (
     BlackboardInfo,
     BlackboardSectionPatch,
     BlackboardUpdate,
+    MentionInfo,
     ObjectiveCreate,
     ObjectiveInfo,
     ObjectiveUpdate,
+    PostCreate,
+    PostInfo,
+    PostListItem,
+    PostUpdate,
+    ReplyCreate,
+    ReplyInfo,
     TaskCreate,
     TaskInfo,
     TaskUpdate,
@@ -1174,3 +1181,264 @@ async def remove_workspace_member(
     wm.soft_delete()
     await db.commit()
     return True
+
+
+# ── Blackboard Posts (BBS) ────────────────────────────
+
+import re
+
+from app.models.blackboard_post import BlackboardPost
+from app.models.blackboard_reply import BlackboardReply
+from app.models.post_read import PostRead
+
+MENTION_PATTERN = re.compile(r"@(agent|human):([a-f0-9\-]{36})")
+
+
+def _parse_mentions(content: str) -> list[MentionInfo]:
+    return [
+        MentionInfo(type=m.group(1), id=m.group(2))
+        for m in MENTION_PATTERN.finditer(content)
+    ]
+
+
+def _reply_to_info(r: BlackboardReply) -> ReplyInfo:
+    return ReplyInfo(
+        id=r.id,
+        post_id=r.post_id,
+        content=r.content,
+        author_type=r.author_type,
+        author_id=r.author_id,
+        author_name=r.author_name,
+        created_at=r.created_at,
+    )
+
+
+def _post_to_info(p: BlackboardPost, *, include_replies: bool = False) -> PostInfo:
+    replies = []
+    if include_replies and p.replies:
+        replies = [
+            _reply_to_info(r) for r in p.replies if r.deleted_at is None
+        ]
+    return PostInfo(
+        id=p.id,
+        workspace_id=p.workspace_id,
+        title=p.title,
+        content=p.content,
+        author_type=p.author_type,
+        author_id=p.author_id,
+        author_name=p.author_name,
+        is_pinned=p.is_pinned,
+        reply_count=p.reply_count,
+        replies=replies,
+        mentions=_parse_mentions(p.content),
+        created_at=p.created_at,
+        updated_at=p.updated_at,
+        last_reply_at=p.last_reply_at,
+    )
+
+
+def _post_to_list_item(p: BlackboardPost) -> PostListItem:
+    return PostListItem(
+        id=p.id,
+        workspace_id=p.workspace_id,
+        title=p.title,
+        author_type=p.author_type,
+        author_id=p.author_id,
+        author_name=p.author_name,
+        is_pinned=p.is_pinned,
+        reply_count=p.reply_count,
+        created_at=p.created_at,
+        last_reply_at=p.last_reply_at,
+    )
+
+
+async def list_posts(
+    db: AsyncSession,
+    workspace_id: str,
+    page: int = 1,
+    size: int = 20,
+) -> tuple[list[PostListItem], int]:
+    base = select(BlackboardPost).where(
+        BlackboardPost.workspace_id == workspace_id,
+        BlackboardPost.deleted_at.is_(None),
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
+
+    q = base.order_by(
+        BlackboardPost.is_pinned.desc(),
+        BlackboardPost.last_reply_at.desc().nullslast(),
+        BlackboardPost.created_at.desc(),
+    ).offset((page - 1) * size).limit(size)
+    rows = (await db.execute(q)).scalars().all()
+    return [_post_to_list_item(p) for p in rows], total
+
+
+async def get_post(
+    db: AsyncSession, workspace_id: str, post_id: str,
+) -> PostInfo | None:
+    result = await db.execute(
+        select(BlackboardPost).where(
+            BlackboardPost.id == post_id,
+            BlackboardPost.workspace_id == workspace_id,
+            BlackboardPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None:
+        return None
+    return _post_to_info(post, include_replies=True)
+
+
+async def create_post(
+    db: AsyncSession,
+    workspace_id: str,
+    author_type: str,
+    author_id: str,
+    author_name: str,
+    data: PostCreate,
+) -> tuple[PostInfo, list[MentionInfo]]:
+    post = BlackboardPost(
+        workspace_id=workspace_id,
+        title=data.title,
+        content=data.content,
+        author_type=author_type,
+        author_id=author_id,
+        author_name=author_name,
+    )
+    db.add(post)
+    await db.commit()
+    await db.refresh(post)
+    mentions = _parse_mentions(data.content)
+    return _post_to_info(post), mentions
+
+
+async def update_post(
+    db: AsyncSession,
+    workspace_id: str,
+    post_id: str,
+    author_id: str,
+    data: PostUpdate,
+) -> PostInfo | None:
+    result = await db.execute(
+        select(BlackboardPost).where(
+            BlackboardPost.id == post_id,
+            BlackboardPost.workspace_id == workspace_id,
+            BlackboardPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None or post.author_id != author_id:
+        return None
+    if data.title is not None:
+        post.title = data.title
+    if data.content is not None:
+        post.content = data.content
+    await db.commit()
+    await db.refresh(post)
+    return _post_to_info(post, include_replies=True)
+
+
+async def delete_post(
+    db: AsyncSession, workspace_id: str, post_id: str,
+) -> bool:
+    result = await db.execute(
+        select(BlackboardPost).where(
+            BlackboardPost.id == post_id,
+            BlackboardPost.workspace_id == workspace_id,
+            BlackboardPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None:
+        return False
+    post.soft_delete()
+    await db.commit()
+    return True
+
+
+async def pin_post(
+    db: AsyncSession, workspace_id: str, post_id: str, pinned: bool,
+) -> PostInfo | None:
+    result = await db.execute(
+        select(BlackboardPost).where(
+            BlackboardPost.id == post_id,
+            BlackboardPost.workspace_id == workspace_id,
+            BlackboardPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None:
+        return None
+    post.is_pinned = pinned
+    await db.commit()
+    await db.refresh(post)
+    return _post_to_info(post)
+
+
+async def create_reply(
+    db: AsyncSession,
+    post_id: str,
+    author_type: str,
+    author_id: str,
+    author_name: str,
+    data: ReplyCreate,
+) -> tuple[ReplyInfo, BlackboardPost, list[MentionInfo]] | None:
+    result = await db.execute(
+        select(BlackboardPost).where(
+            BlackboardPost.id == post_id,
+            BlackboardPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None:
+        return None
+
+    reply = BlackboardReply(
+        post_id=post_id,
+        content=data.content,
+        author_type=author_type,
+        author_id=author_id,
+        author_name=author_name,
+    )
+    db.add(reply)
+    post.reply_count = (post.reply_count or 0) + 1
+    post.last_reply_at = func.now()
+    await db.commit()
+    await db.refresh(reply)
+    await db.refresh(post)
+
+    mentions = _parse_mentions(data.content)
+    return _reply_to_info(reply), post, mentions
+
+
+async def mark_post_read(
+    db: AsyncSession, post_id: str, reader_type: str, reader_id: str,
+) -> None:
+    existing = await db.execute(
+        select(PostRead).where(
+            PostRead.post_id == post_id,
+            PostRead.reader_id == reader_id,
+            PostRead.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return
+    db.add(PostRead(post_id=post_id, reader_type=reader_type, reader_id=reader_id))
+    await db.commit()
+
+
+async def get_unread_count(
+    db: AsyncSession, workspace_id: str, reader_type: str, reader_id: str,
+) -> int:
+    total_posts = select(BlackboardPost.id).where(
+        BlackboardPost.workspace_id == workspace_id,
+        BlackboardPost.deleted_at.is_(None),
+    )
+    read_posts = select(PostRead.post_id).where(
+        PostRead.reader_id == reader_id,
+        PostRead.deleted_at.is_(None),
+    )
+    unread = select(func.count()).select_from(
+        total_posts.except_(read_posts).subquery()
+    )
+    return (await db.execute(unread)).scalar() or 0

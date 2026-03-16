@@ -1,5 +1,7 @@
 """Pydantic schemas for Workspace, Blackboard, Agent, Chat, and Webhook APIs."""
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -229,3 +231,63 @@ class WorkspaceMessageInfo(BaseModel):
     created_at: datetime
 
 
+# ── Blackboard BBS Posts ──────────────────────────────
+
+class PostCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=256)
+    content: str = Field(min_length=1)
+
+
+class PostUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1, max_length=256)
+    content: str | None = Field(None, min_length=1)
+
+
+class ReplyCreate(BaseModel):
+    content: str = Field(min_length=1)
+
+
+class MentionInfo(BaseModel):
+    type: str
+    id: str
+    name: str | None = None
+
+
+class ReplyInfo(BaseModel):
+    id: str
+    post_id: str
+    content: str
+    author_type: str
+    author_id: str
+    author_name: str
+    created_at: datetime
+
+
+class PostInfo(BaseModel):
+    id: str
+    workspace_id: str
+    title: str
+    content: str
+    author_type: str
+    author_id: str
+    author_name: str
+    is_pinned: bool
+    reply_count: int
+    replies: list[ReplyInfo] = []
+    mentions: list[MentionInfo] = []
+    created_at: datetime
+    updated_at: datetime
+    last_reply_at: datetime | None = None
+
+
+class PostListItem(BaseModel):
+    id: str
+    workspace_id: str
+    title: str
+    author_type: str
+    author_id: str
+    author_name: str
+    is_pinned: bool
+    reply_count: int
+    created_at: datetime
+    last_reply_at: datetime | None = None
