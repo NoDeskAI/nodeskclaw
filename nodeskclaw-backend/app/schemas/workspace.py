@@ -291,3 +291,32 @@ class PostListItem(BaseModel):
     reply_count: int
     created_at: datetime
     last_reply_at: datetime | None = None
+
+
+# ── Blackboard Shared Files ───────────────────────────
+
+class FileInfo(BaseModel):
+    id: str
+    workspace_id: str
+    parent_path: str
+    name: str
+    is_directory: bool
+    file_size: int
+    content_type: str
+    uploader_type: str
+    uploader_id: str
+    uploader_name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class FileWriteRequest(BaseModel):
+    parent_path: str = Field("/", max_length=1024)
+    content: str = Field(..., description="Base64-encoded file content")
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_type: str = "application/octet-stream"
+
+
+class MkdirRequest(BaseModel):
+    parent_path: str = Field("/", max_length=1024)
+    name: str = Field(..., min_length=1, max_length=255)

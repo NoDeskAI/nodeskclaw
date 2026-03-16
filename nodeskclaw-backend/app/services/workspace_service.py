@@ -1442,3 +1442,218 @@ async def get_unread_count(
         total_posts.except_(read_posts).subquery()
     )
     return (await db.execute(unread)).scalar() or 0
+
+
+# ── Blackboard Shared Files (TOS-backed) ─────────────
+
+import base64
+
+from app.models.blackboard_file import BlackboardFile
+from app.schemas.workspace import FileInfo, FileWriteRequest, MkdirRequest
+from app.services import storage_service
+
+
+def _validate_path(path: str) -> str:
+    if not path.startswith("/"):
+        path = "/" + path
+    if not path.endswith("/"):
+        path += "/"
+    if ".." in path:
+        raise ValueError("Path must not contain '..'")
+    return path
+
+
+def _file_to_info(f: BlackboardFile) -> FileInfo:
+    return FileInfo(
+        id=f.id,
+        workspace_id=f.workspace_id,
+        parent_path=f.parent_path,
+        name=f.name,
+        is_directory=f.is_directory,
+        file_size=f.file_size,
+        content_type=f.content_type,
+        uploader_type=f.uploader_type,
+        uploader_id=f.uploader_id,
+        uploader_name=f.uploader_name,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
+    )
+
+
+async def list_shared_files(
+    db: AsyncSession, workspace_id: str, parent_path: str = "/",
+) -> list[FileInfo]:
+    parent_path = _validate_path(parent_path)
+    rows = (await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.parent_path == parent_path,
+            BlackboardFile.deleted_at.is_(None),
+        ).order_by(
+            BlackboardFile.is_directory.desc(),
+            BlackboardFile.name.asc(),
+        )
+    )).scalars().all()
+    return [_file_to_info(f) for f in rows]
+
+
+async def create_shared_directory(
+    db: AsyncSession,
+    workspace_id: str,
+    uploader_type: str,
+    uploader_id: str,
+    uploader_name: str,
+    data: MkdirRequest,
+) -> FileInfo:
+    parent_path = _validate_path(data.parent_path)
+    existing = (await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.parent_path == parent_path,
+            BlackboardFile.name == data.name,
+            BlackboardFile.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        return _file_to_info(existing)
+    d = BlackboardFile(
+        workspace_id=workspace_id,
+        parent_path=parent_path,
+        name=data.name,
+        is_directory=True,
+        uploader_type=uploader_type,
+        uploader_id=uploader_id,
+        uploader_name=uploader_name,
+    )
+    db.add(d)
+    await db.commit()
+    await db.refresh(d)
+    return _file_to_info(d)
+
+
+async def upload_shared_file(
+    db: AsyncSession,
+    workspace_id: str,
+    uploader_type: str,
+    uploader_id: str,
+    uploader_name: str,
+    data: FileWriteRequest,
+) -> FileInfo:
+    parent_path = _validate_path(data.parent_path)
+    file_bytes = base64.b64decode(data.content)
+    tos_key = await storage_service.upload_file(
+        file_bytes, data.filename, data.content_type,
+        workspace_id,
+    )
+    existing = (await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.parent_path == parent_path,
+            BlackboardFile.name == data.filename,
+            BlackboardFile.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+
+    if existing is not None:
+        if existing.tos_key:
+            await storage_service.delete_file(existing.tos_key)
+        existing.tos_key = tos_key
+        existing.file_size = len(file_bytes)
+        existing.content_type = data.content_type
+        existing.uploader_type = uploader_type
+        existing.uploader_id = uploader_id
+        existing.uploader_name = uploader_name
+        await db.commit()
+        await db.refresh(existing)
+        return _file_to_info(existing)
+
+    f = BlackboardFile(
+        workspace_id=workspace_id,
+        parent_path=parent_path,
+        name=data.filename,
+        is_directory=False,
+        file_size=len(file_bytes),
+        content_type=data.content_type,
+        tos_key=tos_key,
+        uploader_type=uploader_type,
+        uploader_id=uploader_id,
+        uploader_name=uploader_name,
+    )
+    db.add(f)
+    await db.commit()
+    await db.refresh(f)
+    return _file_to_info(f)
+
+
+async def get_shared_file_url(
+    db: AsyncSession, workspace_id: str, file_id: str,
+) -> str | None:
+    result = await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.id == file_id,
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.is_directory.is_(False),
+            BlackboardFile.deleted_at.is_(None),
+        )
+    )
+    f = result.scalar_one_or_none()
+    if f is None or not f.tos_key:
+        return None
+    return await storage_service.get_presigned_url(f.tos_key)
+
+
+async def read_shared_file(
+    db: AsyncSession, workspace_id: str, file_id: str,
+) -> tuple[str, str] | None:
+    """Return (base64_content, content_type) for agent tool read_file."""
+    result = await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.id == file_id,
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.is_directory.is_(False),
+            BlackboardFile.deleted_at.is_(None),
+        )
+    )
+    f = result.scalar_one_or_none()
+    if f is None or not f.tos_key:
+        return None
+
+    url = await storage_service.get_presigned_url(f.tos_key, expires=300)
+    import httpx
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+    return base64.b64encode(resp.content).decode(), f.content_type
+
+
+async def delete_shared_file(
+    db: AsyncSession, workspace_id: str, file_id: str,
+) -> bool:
+    result = await db.execute(
+        select(BlackboardFile).where(
+            BlackboardFile.id == file_id,
+            BlackboardFile.workspace_id == workspace_id,
+            BlackboardFile.deleted_at.is_(None),
+        )
+    )
+    f = result.scalar_one_or_none()
+    if f is None:
+        return False
+    if f.is_directory:
+        children = (await db.execute(
+            select(BlackboardFile).where(
+                BlackboardFile.workspace_id == workspace_id,
+                BlackboardFile.parent_path == f.parent_path + f.name + "/",
+                BlackboardFile.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        for child in children:
+            if child.tos_key:
+                await storage_service.delete_file(child.tos_key)
+            child.soft_delete()
+    else:
+        if f.tos_key:
+            await storage_service.delete_file(f.tos_key)
+    f.soft_delete()
+    await db.commit()
+    return True
