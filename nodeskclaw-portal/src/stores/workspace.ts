@@ -842,6 +842,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       })
     }
 
+    for (const evtName of ['post:created', 'post:updated', 'post:deleted', 'post:pinned', 'reply:created', 'file:created', 'file:uploaded', 'file:deleted']) {
+      eventSource.addEventListener(evtName, (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          externalCallback?.(evtName, data)
+        } catch { /* ignore */ }
+      })
+    }
+
     eventSource.addEventListener('system:info', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)

@@ -10,6 +10,9 @@ import ObjectivePanel from './ObjectivePanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
 import RoiDashboard from './RoiDashboard.vue'
 import TopologyGraph from './TopologyGraph.vue'
+import PostList from './PostList.vue'
+import PostDetail from './PostDetail.vue'
+import SharedFileBrowser from './SharedFileBrowser.vue'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -24,11 +27,13 @@ const { t } = useI18n()
 const store = useWorkspaceStore()
 const { isEnabled: isPerformanceEnabled } = useFeature('performance_analytics')
 
-type TabKey = 'objectives-tasks' | 'status' | 'notes-perf' | 'topology'
+type TabKey = 'objectives-tasks' | 'status' | 'notes-perf' | 'topology' | 'posts' | 'files'
 const activeTab = ref<TabKey>('objectives-tasks')
 
 const tabs: { key: TabKey; labelKey: string }[] = [
   { key: 'objectives-tasks', labelKey: 'blackboard.tabObjectivesTasks' },
+  { key: 'posts', labelKey: 'blackboard.tabPosts' },
+  { key: 'files', labelKey: 'blackboard.tabFiles' },
   { key: 'status', labelKey: 'blackboard.tabStatus' },
   { key: 'notes-perf', labelKey: 'blackboard.tabNotesPerf' },
   { key: 'topology', labelKey: 'blackboard.tabTopology' },
@@ -37,6 +42,7 @@ const tabs: { key: TabKey; labelKey: string }[] = [
 const editing = ref(false)
 const draft = ref('')
 const saving = ref(false)
+const selectedPostId = ref<string | null>(null)
 const taskKanbanRef = ref<InstanceType<typeof TaskKanban> | null>(null)
 const objectivePanelRef = ref<InstanceType<typeof ObjectivePanel> | null>(null)
 const roiDashboardRef = ref<InstanceType<typeof RoiDashboard> | null>(null)
@@ -58,6 +64,7 @@ const topoEdges = computed(() => store.topology?.edges || [])
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     editing.value = false
+    selectedPostId.value = null
     activeTab.value = 'objectives-tasks'
   }
 })
@@ -130,7 +137,7 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
             :class="activeTab === tab.key
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="activeTab = tab.key; editing = false"
+            @click="activeTab = tab.key; editing = false; selectedPostId = null"
           >
             {{ t(tab.labelKey) }}
           </button>
@@ -198,6 +205,24 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
               />
             </div>
             <div v-else class="prose prose-sm prose-invert max-w-none" v-html="notesHtml" />
+          </template>
+
+          <template v-if="activeTab === 'posts'">
+            <PostDetail
+              v-if="selectedPostId"
+              :workspace-id="workspaceId"
+              :post-id="selectedPostId"
+              @back="selectedPostId = null"
+            />
+            <PostList
+              v-else
+              :workspace-id="workspaceId"
+              @select="selectedPostId = $event"
+            />
+          </template>
+
+          <template v-if="activeTab === 'files'">
+            <SharedFileBrowser :workspace-id="workspaceId" />
           </template>
 
           <template v-if="activeTab === 'topology'">
