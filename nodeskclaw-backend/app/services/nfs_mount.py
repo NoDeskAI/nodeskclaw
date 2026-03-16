@@ -323,10 +323,11 @@ class DockerFS:
             rel = remote_path.lstrip("/")
         return self._base / rel
 
-    async def read_text(self, remote_path: str) -> str:
+    async def read_text(self, remote_path: str) -> str | None:
         p = self._resolve(remote_path)
         if not p.exists():
-            raise NFSMountError(f"文件不存在: {remote_path}")
+            # Align behavior with PodFS: missing file -> None
+            return None
         return p.read_text(encoding="utf-8")
 
     async def write_text(self, remote_path: str, content: str) -> None:
