@@ -44,6 +44,22 @@ def _caller_info() -> tuple[str, str, str]:
     return actor.actor_type, actor.actor_id, actor.actor_name
 
 
+async def _notify_mentions(
+    workspace_id: str,
+    mentions: list,
+    author_name: str,
+    context: str,
+    db: AsyncSession,
+) -> None:
+    from app.services import collaboration_service
+    agent_ids = [m.id for m in mentions if m.type == "agent"]
+    if agent_ids:
+        msg = f"{author_name} mentioned you in {context}"
+        await collaboration_service.send_system_message_to_agents(
+            workspace_id, agent_ids, msg, db,
+        )
+
+
 # ── Posts ─────────────────────────────────────────────
 
 @router.get("/{workspace_id}/blackboard/posts")
@@ -72,6 +88,11 @@ async def create_post(
         db, workspace_id, author_type, author_id, author_name, data,
     )
     _broadcast(workspace_id, "post:created", post_info.model_dump(mode="json"))
+    if mentions:
+        await _notify_mentions(
+            workspace_id, mentions, author_name,
+            f"a post: {data.title}", db,
+        )
     return _ok(post_info.model_dump(mode="json"))
 
 
@@ -172,6 +193,11 @@ async def create_reply(
         "post_id": post_id,
         "reply": reply_info.model_dump(mode="json"),
     })
+    if mentions:
+        await _notify_mentions(
+            workspace_id, mentions, author_name,
+            f"a reply on: {post.title}", db,
+        )
     return _ok(reply_info.model_dump(mode="json"))
 
 
