@@ -648,6 +648,17 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
 
         await db.commit()
 
+        from app.services.llm_config_service import (
+            ensure_openclaw_gateway_config,
+            sync_openclaw_llm_config,
+        )
+        try:
+            await ensure_openclaw_gateway_config(instance, db)
+            if ctx.has_llm_configs:
+                await sync_openclaw_llm_config(instance, db)
+        except Exception as e:
+            logger.warning("Docker 部署后注入配置失败（非致命）: %s", e)
+
     event_bus.publish(
         "deploy_progress",
         DeployProgress(

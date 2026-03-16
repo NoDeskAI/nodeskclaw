@@ -24,6 +24,19 @@ def _parse_cpu(cpu_str: str) -> float:
     return float(s)
 
 
+def _parse_mem(mem_str: str) -> str:
+    """Convert K8s-style memory (e.g. '2Gi', '512Mi') to Docker format ('2g', '512m')."""
+    s = mem_str.strip()
+    lower = s.lower()
+    if lower.endswith("gi"):
+        return s[:-2] + "g"
+    if lower.endswith("mi"):
+        return s[:-2] + "m"
+    if lower.endswith("ki"):
+        return s[:-2] + "k"
+    return s
+
+
 def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
     """Generate a docker-compose service definition with full resource config."""
     host_port = config.env_vars.get("DOCKER_HOST_PORT", "3000")
@@ -40,7 +53,7 @@ def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
     }
 
     if config.mem_limit:
-        main_service["mem_limit"] = config.mem_limit
+        main_service["mem_limit"] = _parse_mem(config.mem_limit)
     if config.cpu_limit:
         try:
             main_service["cpus"] = _parse_cpu(config.cpu_limit)
