@@ -3,6 +3,8 @@
 from app.models.admin_membership import AdminMembership  # noqa: F401
 from app.models.base import Base, BaseModel  # noqa: F401
 from app.models.blackboard import Blackboard  # noqa: F401
+from app.models.blackboard_post import BlackboardPost  # noqa: F401
+from app.models.blackboard_reply import BlackboardReply  # noqa: F401
 from app.models.circuit_state import CircuitState  # noqa: F401
 from app.models.cluster import Cluster  # noqa: F401
 from app.models.corridor import CorridorHex, HexConnection  # noqa: F401
@@ -31,6 +33,7 @@ from app.models.message_schema import MessageSchema  # noqa: F401
 from app.models.node_card import NodeCard  # noqa: F401
 from app.models.node_type import NodeTypeDefinition  # noqa: F401
 from app.models.org_llm_key import OrgLlmKey  # noqa: F401
+from app.models.post_read import PostRead  # noqa: F401
 from app.models.org_required_gene import OrgRequiredGene  # noqa: F401
 from app.models.org_smtp_config import OrgSmtpConfig  # noqa: F401
 from app.models.oauth_connection import UserOAuthConnection  # noqa: F401
