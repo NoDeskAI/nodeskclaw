@@ -58,21 +58,27 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
   return {
     name: "nodeskclaw_blackboard",
     description:
-      "Read/write workspace blackboard: list or create tasks, update task status, archive tasks, read objectives.",
+      "Workspace blackboard operations: tasks, objectives, and BBS discussion posts.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["get_blackboard", "list_tasks", "create_task", "update_task", "archive_task", "get_objectives"],
+          enum: [
+            "get_blackboard", "list_tasks", "create_task", "update_task", "archive_task",
+            "get_objectives",
+            "list_posts", "create_post", "get_post", "reply_post",
+          ],
           description: "Which blackboard operation to perform.",
         },
-        title: { type: "string", description: "Task title (create_task)." },
+        title: { type: "string", description: "Task/post title (create_task, create_post)." },
         description: { type: "string", description: "Task description (create_task / update_task)." },
+        content: { type: "string", description: "Post/reply body in Markdown (create_post, reply_post). Use @agent:{id} or @human:{id} to mention." },
         priority: { type: "string", enum: ["urgent", "high", "medium", "low"], description: "create_task." },
         assignee_id: { type: "string", description: "create_task: assign to agent instance ID." },
         estimated_value: { type: "number", description: "create_task: estimated monetary value." },
         task_id: { type: "string", description: "update_task / archive_task: target task ID." },
+        post_id: { type: "string", description: "get_post / reply_post: target post ID." },
         status: {
           type: "string",
           enum: ["pending", "in_progress", "done", "blocked"],
@@ -82,6 +88,7 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
         token_cost: { type: "number", description: "update_task: tokens consumed for this task." },
         blocker_reason: { type: "string", description: "update_task: reason when status is blocked." },
         filter_status: { type: "string", description: "list_tasks: filter by status (pending/in_progress/done/blocked)." },
+        page: { type: "number", description: "list_posts: page number (default 1)." },
       },
       required: ["action"],
     },
@@ -126,6 +133,25 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
           );
         case "get_objectives":
           return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/blackboard/objectives`));
+        case "list_posts": {
+          const pg = p.page ? `?page=${p.page}` : "";
+          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/blackboard/posts${pg}`));
+        }
+        case "create_post":
+          return jsonResult(
+            await apiFetch(cfg, `/workspaces/${ws}/blackboard/posts`, "POST", {
+              title: p.title,
+              content: p.content,
+            }),
+          );
+        case "get_post":
+          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/blackboard/posts/${p.post_id}`));
+        case "reply_post":
+          return jsonResult(
+            await apiFetch(cfg, `/workspaces/${ws}/blackboard/posts/${p.post_id}/replies`, "POST", {
+              content: p.content,
+            }),
+          );
         default:
           return jsonResult({ error: `Unknown action: ${p.action}` });
       }

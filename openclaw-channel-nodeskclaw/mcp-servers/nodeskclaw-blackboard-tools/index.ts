@@ -30,6 +30,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     { name: "update_task", description: "Update an existing task (status, value, etc.)", inputSchema: { type: "object", properties: { task_id: { type: "string" }, status: { type: "string", enum: ["pending", "in_progress", "done", "blocked"] }, description: { type: "string" }, title: { type: "string" }, priority: { type: "string", enum: ["urgent", "high", "medium", "low"] }, actual_value: { type: "number", description: "Actual output value after completion" }, token_cost: { type: "number", description: "Tokens consumed" }, blocker_reason: { type: "string", description: "Reason when blocked" }, estimated_value: { type: "number" } }, required: ["task_id"] } },
     { name: "archive_task", description: "Archive a completed task", inputSchema: { type: "object", properties: { task_id: { type: "string" } }, required: ["task_id"] } },
     { name: "get_objectives", description: "Read current OKR objectives and progress", inputSchema: { type: "object", properties: {} } },
+    { name: "list_posts", description: "List BBS discussion posts (newest first)", inputSchema: { type: "object", properties: { page: { type: "number", description: "Page number (default 1)" } } } },
+    { name: "create_post", description: "Create a new BBS discussion post. Use @agent:{id} or @human:{id} to mention.", inputSchema: { type: "object", properties: { title: { type: "string" }, content: { type: "string", description: "Markdown body" } }, required: ["title", "content"] } },
+    { name: "get_post", description: "Get a post and its replies by ID", inputSchema: { type: "object", properties: { post_id: { type: "string" } }, required: ["post_id"] } },
+    { name: "reply_post", description: "Reply to a BBS post. Use @agent:{id} or @human:{id} to mention.", inputSchema: { type: "object", properties: { post_id: { type: "string" }, content: { type: "string", description: "Markdown reply body" } }, required: ["post_id", "content"] } },
   ],
 }));
 
@@ -64,6 +68,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       break;
     case "get_objectives":
       result = await apiFetch(`/workspaces/${ws}/blackboard/objectives`);
+      break;
+    case "list_posts": {
+      const pg = p.page ? `?page=${p.page}` : "";
+      result = await apiFetch(`/workspaces/${ws}/blackboard/posts${pg}`);
+      break;
+    }
+    case "create_post":
+      result = await apiFetch(`/workspaces/${ws}/blackboard/posts`, "POST", {
+        title: p.title, content: p.content,
+      });
+      break;
+    case "get_post":
+      result = await apiFetch(`/workspaces/${ws}/blackboard/posts/${p.post_id}`);
+      break;
+    case "reply_post":
+      result = await apiFetch(`/workspaces/${ws}/blackboard/posts/${p.post_id}/replies`, "POST", {
+        content: p.content,
+      });
       break;
     default:
       return { content: [{ type: "text", text: `Unknown tool: ${name}` }] };
