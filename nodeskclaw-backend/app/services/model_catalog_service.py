@@ -30,6 +30,7 @@ PROVIDER_BASE_URLS: dict[str, str] = {
 }
 
 PROVIDER_API_TYPE: dict[str, str] = {
+    "gemini": "google-generative-ai",
     "minimax-openai": "openai-completions",
     "minimax-anthropic": "anthropic-messages",
 }

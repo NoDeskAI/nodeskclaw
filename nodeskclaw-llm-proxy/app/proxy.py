@@ -27,7 +27,7 @@ PROVIDER_DEFAULTS: dict[str, dict] = {
     "minimax-anthropic": {"base_url": "https://api.minimaxi.com/anthropic", "auth_type": "bearer"},
 }
 
-_OPENAI_STREAM_PROVIDERS = {"openai", "openrouter", "minimax-openai", "gemini"}
+_OPENAI_STREAM_PROVIDERS = {"openai", "openrouter", "minimax-openai"}
 
 _http_client: httpx.AsyncClient | None = None
 

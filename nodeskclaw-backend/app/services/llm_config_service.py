@@ -36,7 +36,7 @@ def _strip_jsonc(text: str) -> str:
 PROVIDER_BASE_URLS: dict[str, str] = {
     "openai": "https://api.openai.com/v1",
     "anthropic": "https://api.anthropic.com",
-    "gemini": "https://generativelanguage.googleapis.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com",
     "openrouter": "https://openrouter.ai/api/v1",
     "minimax-openai": "https://api.minimaxi.com/v1",
     "minimax-anthropic": "https://api.minimaxi.com/anthropic",
@@ -45,6 +45,7 @@ PROVIDER_BASE_URLS: dict[str, str] = {
 BUILTIN_PROVIDERS = {"openai", "anthropic", "gemini", "openrouter"}
 
 PROVIDER_API_TYPE: dict[str, str] = {
+    "gemini": "google-generative-ai",
     "minimax-openai": "openai-completions",
     "minimax-anthropic": "anthropic-messages",
 }
@@ -95,9 +96,9 @@ def _build_providers_config(
                 logger.error("LLM_PROXY_URL 未配置，Working Plan 模式无法生成 proxy URL")
                 continue
             api_type = PROVIDER_API_TYPE.get(provider)
-            is_anthropic_style = api_type == "anthropic-messages"
+            skip_v1 = api_type in ("anthropic-messages", "google-generative-ai")
             entry = {
-                "baseUrl": f"{proxy_url}/{provider}" if is_anthropic_style else f"{proxy_url}/{provider}/v1",
+                "baseUrl": f"{proxy_url}/{provider}" if skip_v1 else f"{proxy_url}/{provider}/v1",
                 "apiKey": wp_api_key,
             }
 
