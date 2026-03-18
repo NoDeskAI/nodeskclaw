@@ -19,10 +19,9 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from app.services.runtime.messaging.envelope import MessageEnvelope
 from app.services.runtime.transport.base import DeliveryResult
 from app.services.tunnel.protocol import TunnelMessage, TunnelMessageType
+from app.services.workspace_message_service import MAX_COLLABORATION_DEPTH
 
 logger = logging.getLogger(__name__)
-
-from app.services.workspace_message_service import MAX_COLLABORATION_DEPTH
 
 NO_REPLY_BUFFER_SIZE = 30
 AUTH_TIMEOUT_S = 10
@@ -75,7 +74,7 @@ class _InstanceConnection:
         self._pending_responses[request_id] = fut
         return fut
 
-    def register_stream(self, request_id: str) -> "asyncio.Queue[TunnelMessage]":
+    def register_stream(self, request_id: str) -> asyncio.Queue[TunnelMessage]:
         q: asyncio.Queue[TunnelMessage] = asyncio.Queue()
         self._stream_queues[request_id] = q
         return q
