@@ -19,7 +19,6 @@ from app.services.runtime.messaging.envelope import (
     MessageSender,
     SenderType,
 )
-from app.services.runtime.transport.base import DeliveryResult
 from app.services.tunnel.adapter import TunnelAdapter
 
 
@@ -111,8 +110,8 @@ async def test_context_prompt_receives_workspace_name():
         await adapter._do_deliver(envelope, TARGET_NODE_ID, WORKSPACE_ID, db, time.monotonic())
 
     mock_build.assert_called_once()
-    kwargs = mock_build.call_args
-    assert kwargs[1]["workspace_name"] == "Dev Office"
+    _, call_kwargs = mock_build.call_args
+    assert call_kwargs["workspace_name"] == "Dev Office"
 
 
 @pytest.mark.asyncio
@@ -136,7 +135,8 @@ async def test_context_prompt_receives_members():
     ), patch("app.api.workspaces.broadcast_event"):
         await adapter._do_deliver(envelope, TARGET_NODE_ID, WORKSPACE_ID, db, time.monotonic())
 
-    members_arg = mock_build.call_args[1]["members"]
+    _, call_kwargs = mock_build.call_args
+    members_arg = call_kwargs["members"]
     assert len(members_arg) == 3
     assert {"type": "agent", "name": "Alice"} in members_arg
     assert {"type": "human", "name": "Admin"} in members_arg
@@ -163,7 +163,8 @@ async def test_context_prompt_receives_recent_messages():
     ), patch("app.api.workspaces.broadcast_event"):
         await adapter._do_deliver(envelope, TARGET_NODE_ID, WORKSPACE_ID, db, time.monotonic())
 
-    assert mock_build.call_args[1]["recent_messages"] is fake_msgs
+    _, call_kwargs = mock_build.call_args
+    assert call_kwargs["recent_messages"] is fake_msgs
 
 
 @pytest.mark.asyncio
@@ -186,7 +187,8 @@ async def test_workspace_not_found_falls_back_to_empty():
     ), patch("app.api.workspaces.broadcast_event"):
         await adapter._do_deliver(envelope, TARGET_NODE_ID, WORKSPACE_ID, db, time.monotonic())
 
-    assert mock_build.call_args[1]["workspace_name"] == ""
+    _, call_kwargs = mock_build.call_args
+    assert call_kwargs["workspace_name"] == ""
 
 
 @pytest.mark.asyncio
@@ -214,9 +216,10 @@ async def test_no_reply_path_also_gets_context():
     assert result.success is True
     assert result.extra.get("no_reply") is True
     mock_build.assert_called_once()
-    assert mock_build.call_args[1]["workspace_name"] == "Dev Office"
-    assert len(mock_build.call_args[1]["members"]) == 3
-    assert len(mock_build.call_args[1]["recent_messages"]) == 1
+    _, call_kwargs = mock_build.call_args
+    assert call_kwargs["workspace_name"] == "Dev Office"
+    assert len(call_kwargs["members"]) == 3
+    assert len(call_kwargs["recent_messages"]) == 1
 
 
 @pytest.mark.asyncio

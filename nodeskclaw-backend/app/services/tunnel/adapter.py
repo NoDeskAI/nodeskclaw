@@ -11,6 +11,7 @@ import json
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
@@ -28,6 +29,15 @@ AUTH_TIMEOUT_S = 10
 PING_INTERVAL_S = 30
 PING_TIMEOUT_S = 45
 MENTION_ALL_SENTINEL = "__all__"
+_WS_CONTEXT_TTL = 5.0
+
+
+@dataclass
+class _WorkspaceContext:
+    workspace_name: str
+    members: list[dict[str, str]]
+    recent_messages: list
+    fetched_at: float
 
 
 def _parse_delegation(response: str) -> tuple[str, str] | None:
@@ -101,6 +111,7 @@ class TunnelAdapter:
         self._connections: dict[str, _InstanceConnection] = {}
         self._ping_tasks: dict[str, asyncio.Task] = {}
         self._stats = {"total_connections": 0, "total_messages_in": 0, "total_messages_out": 0}
+        self._ws_context_cache: dict[str, _WorkspaceContext] = {}
 
     @property
     def connected_instances(self) -> set[str]:
@@ -311,6 +322,50 @@ class TunnelAdapter:
                 return await self._do_deliver(envelope, target_node_id, workspace_id, db, start)
         return await self._do_deliver(envelope, target_node_id, workspace_id, db, start)
 
+    async def _fetch_workspace_context(
+        self, workspace_id: str, db: Any,
+    ) -> _WorkspaceContext:
+        now = time.monotonic()
+        cached = self._ws_context_cache.get(workspace_id)
+        if cached and (now - cached.fetched_at) < _WS_CONTEXT_TTL:
+            return cached
+
+        from sqlalchemy import select
+
+        from app.models.base import not_deleted
+        from app.models.node_card import NodeCard
+        from app.models.workspace import Workspace
+        from app.services import workspace_message_service as msg_service
+
+        ws_result = await db.execute(
+            select(Workspace.name).where(
+                Workspace.id == workspace_id, not_deleted(Workspace)
+            )
+        )
+        workspace_name = ws_result.scalar_one_or_none() or ""
+
+        cards_result = await db.execute(
+            select(NodeCard.node_type, NodeCard.name).where(
+                NodeCard.workspace_id == workspace_id,
+                NodeCard.node_type.in_(["agent", "human"]),
+                not_deleted(NodeCard),
+            )
+        )
+        members = [{"type": r[0], "name": r[1]} for r in cards_result.all()]
+
+        recent_messages = await msg_service.get_recent_messages(
+            db, workspace_id, limit=30
+        )
+
+        ctx = _WorkspaceContext(
+            workspace_name=workspace_name,
+            members=members,
+            recent_messages=recent_messages,
+            fetched_at=now,
+        )
+        self._ws_context_cache[workspace_id] = ctx
+        return ctx
+
     async def _do_deliver(
         self,
         envelope: MessageEnvelope,
@@ -360,31 +415,16 @@ class TunnelAdapter:
                 latency_ms=int((time.monotonic() - start) * 1000),
             )
 
-        from app.models.workspace import Workspace
         from app.services import workspace_message_service as msg_service
 
-        ws_result = await db.execute(
-            select(Workspace.name).where(Workspace.id == workspace_id, not_deleted(Workspace))
-        )
-        workspace_name = ws_result.scalar_one_or_none() or ""
-
-        cards_result = await db.execute(
-            select(NodeCard.node_type, NodeCard.name).where(
-                NodeCard.workspace_id == workspace_id,
-                NodeCard.node_type.in_(["agent", "human"]),
-                not_deleted(NodeCard),
-            )
-        )
-        members = [{"type": r[0], "name": r[1]} for r in cards_result.all()]
-
-        recent_messages = await msg_service.get_recent_messages(db, workspace_id, limit=30)
+        ws_ctx = await self._fetch_workspace_context(workspace_id, db)
 
         context_prompt = msg_service.build_context_prompt(
-            workspace_name=workspace_name,
+            workspace_name=ws_ctx.workspace_name,
             agent_display_name=agent_name,
             current_instance_id=target_node_id,
-            members=members,
-            recent_messages=recent_messages,
+            members=ws_ctx.members,
+            recent_messages=ws_ctx.recent_messages,
             workspace_id=workspace_id,
         )
 
