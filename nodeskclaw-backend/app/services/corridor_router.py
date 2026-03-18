@@ -226,6 +226,7 @@ async def get_reachable_endpoints(
 
     endpoints: list[ReachableEndpoint] = []
     hooks_to_fire: list[HookToFire] = []
+    seen_entity_ids: set[str] = set()
     visited: set[tuple[int, int]] = {(from_q, from_r)}
     queue: deque[tuple[tuple[int, int], int]] = deque([((from_q, from_r), 0)])
 
@@ -246,11 +247,14 @@ async def get_reachable_endpoints(
             type_def = NODE_TYPE_REGISTRY.get(node.node_type)
 
             if _should_consume(node.node_type):
-                endpoints.append(ReachableEndpoint(
-                    node.hex_q, node.hex_r, node.node_type,
-                    entity_id,
-                    display_name=node.display_name or "",
-                ))
+                if not (entity_id and entity_id in seen_entity_ids):
+                    if entity_id:
+                        seen_entity_ids.add(entity_id)
+                    endpoints.append(ReachableEndpoint(
+                        node.hex_q, node.hex_r, node.node_type,
+                        entity_id,
+                        display_name=node.display_name or "",
+                    ))
 
             if _should_propagate(node.node_type):
                 if max_hops <= 0 or hops + 1 < max_hops:

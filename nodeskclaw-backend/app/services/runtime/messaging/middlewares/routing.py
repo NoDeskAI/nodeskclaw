@@ -20,6 +20,7 @@ async def _resolve_targets_by_name(
     from sqlalchemy import or_, select
 
     targets: list[DeliveryTarget] = []
+    seen_ids: set[str] = set()
     for name in names:
         stmt = select(NodeCard).where(
             NodeCard.workspace_id == workspace_id,
@@ -31,6 +32,9 @@ async def _resolve_targets_by_name(
         if card is None:
             logger.warning("Routing: target '%s' not found in workspace %s", name, workspace_id)
             continue
+        if card.node_id in seen_ids:
+            continue
+        seen_ids.add(card.node_id)
 
         type_spec = NODE_TYPE_REGISTRY.get(card.node_type)
         transport = type_spec.transport if type_spec else ""
@@ -75,7 +79,11 @@ async def _resolve_broadcast(
                 max_hops=max_hops, visited_ids=visited_set,
             )
             targets_list: list[DeliveryTarget] = []
+            seen_ids: set[str] = set()
             for ep in endpoints:
+                if ep.entity_id in seen_ids:
+                    continue
+                seen_ids.add(ep.entity_id)
                 type_spec = NODE_TYPE_REGISTRY.get(ep.endpoint_type)
                 transport = type_spec.transport if type_spec else ""
                 targets_list.append(DeliveryTarget(
@@ -87,7 +95,11 @@ async def _resolve_broadcast(
 
     addressable = await get_all_addressable_nodes(workspace_id, db)
     targets = []
+    seen_ids: set[str] = set()
     for ep in addressable:
+        if ep.entity_id in seen_ids:
+            continue
+        seen_ids.add(ep.entity_id)
         type_spec = NODE_TYPE_REGISTRY.get(ep.endpoint_type)
         transport = type_spec.transport if type_spec else ""
         targets.append(DeliveryTarget(

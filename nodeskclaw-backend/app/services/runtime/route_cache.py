@@ -39,10 +39,17 @@ class RouteTable:
         return self._versions.get(workspace_id, 0)
 
     def put(self, workspace_id: str, targets: list[DeliveryTarget]) -> int:
+        seen: set[str] = set()
+        unique: list[DeliveryTarget] = []
+        for t in targets:
+            if t.node_id not in seen:
+                seen.add(t.node_id)
+                unique.append(t)
+
         version = self._versions.get(workspace_id, 0) + 1
         self._versions[workspace_id] = version
         self._cache[workspace_id] = VersionedRoutes(
-            version=version, targets=targets,
+            version=version, targets=unique,
         )
         return version
 
