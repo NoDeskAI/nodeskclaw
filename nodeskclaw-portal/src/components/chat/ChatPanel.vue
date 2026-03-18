@@ -424,6 +424,8 @@ const editor = useEditor({
             }
           })
 
+          if (existingMentions.has('__all__')) return []
+
           const allItem = {
             id: '__all__',
             label: t('chat.mentionAll'),
@@ -443,8 +445,7 @@ const editor = useEditor({
               status: a.status,
               slug: a.slug,
             }))
-          const showAll = !existingMentions.has('__all__')
-            && (allItem.label.toLowerCase().includes(q) || 'all'.includes(q))
+          const showAll = allItem.label.toLowerCase().includes(q) || 'all'.includes(q)
           return showAll ? [allItem, ...agentItems] : agentItems
         },
         render: createSuggestionRenderer(mentionState),
