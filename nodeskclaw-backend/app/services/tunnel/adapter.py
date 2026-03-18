@@ -360,14 +360,31 @@ class TunnelAdapter:
                 latency_ms=int((time.monotonic() - start) * 1000),
             )
 
+        from app.models.workspace import Workspace
         from app.services import workspace_message_service as msg_service
 
+        ws_result = await db.execute(
+            select(Workspace.name).where(Workspace.id == workspace_id, not_deleted(Workspace))
+        )
+        workspace_name = ws_result.scalar_one_or_none() or ""
+
+        cards_result = await db.execute(
+            select(NodeCard.node_type, NodeCard.name).where(
+                NodeCard.workspace_id == workspace_id,
+                NodeCard.node_type.in_(["agent", "human"]),
+                not_deleted(NodeCard),
+            )
+        )
+        members = [{"type": r[0], "name": r[1]} for r in cards_result.all()]
+
+        recent_messages = await msg_service.get_recent_messages(db, workspace_id, limit=30)
+
         context_prompt = msg_service.build_context_prompt(
-            workspace_name="",
+            workspace_name=workspace_name,
             agent_display_name=agent_name,
             current_instance_id=target_node_id,
-            members=[],
-            recent_messages=[],
+            members=members,
+            recent_messages=recent_messages,
             workspace_id=workspace_id,
         )
 
