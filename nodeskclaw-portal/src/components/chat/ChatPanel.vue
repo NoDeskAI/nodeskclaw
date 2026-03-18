@@ -414,8 +414,16 @@ const editor = useEditor({
         pluginKey: AGENT_MENTION_KEY,
         char: '@',
         allowedPrefixes: null,
-        items: ({ query }: { query: string }) => {
+        items: ({ query, editor: ed }: { query: string; editor: any }) => {
           const q = query.toLowerCase()
+
+          const existingMentions = new Set<string>()
+          ed.state.doc.descendants((node: any) => {
+            if (node.type.name === 'agentMention' && node.attrs?.id) {
+              existingMentions.add(node.attrs.id)
+            }
+          })
+
           const allItem = {
             id: '__all__',
             label: t('chat.mentionAll'),
@@ -425,6 +433,7 @@ const editor = useEditor({
           }
           const agentItems = agents.value
             .filter(a => agentLabel(a).toLowerCase().includes(q))
+            .filter(a => !existingMentions.has(a.instance_id))
             .sort((a, b) => hexDistToBlackboard(a.hex_q, a.hex_r) - hexDistToBlackboard(b.hex_q, b.hex_r))
             .slice(0, 10)
             .map(a => ({
@@ -434,9 +443,9 @@ const editor = useEditor({
               status: a.status,
               slug: a.slug,
             }))
-          const allMatch = allItem.label.toLowerCase().includes(q)
-            || 'all'.includes(q)
-          return allMatch ? [allItem, ...agentItems] : agentItems
+          const showAll = !existingMentions.has('__all__')
+            && (allItem.label.toLowerCase().includes(q) || 'all'.includes(q))
+          return showAll ? [allItem, ...agentItems] : agentItems
         },
         render: createSuggestionRenderer(mentionState),
         command: ({ editor: ed, range, props: p }: any) => {
