@@ -346,7 +346,7 @@ async def _ensure_workspace_schedules(session_factory: async_sessionmaker[AsyncS
                     WorkspaceSchedule.workspace_id == ws.id,
                     WorkspaceSchedule.name.in_(["任务巡检", "定时巡检"]),
                     WorkspaceSchedule.deleted_at.is_(None),
-                )
+                ).order_by(WorkspaceSchedule.created_at.desc())
             )).scalars().first()
             if existing is None:
                 db.add(WorkspaceSchedule(

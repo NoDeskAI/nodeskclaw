@@ -85,8 +85,14 @@ function openEdit(schedule: ScheduleInfo) {
   dialogOpen.value = true
 }
 
-function applyPreset(preset: { label: string; cron_expr: string; message_template: string }) {
-  form.value.name = preset.label
+function presetLabel(preset: { name: string; label: string }): string {
+  const key = `blackboard.preset_${preset.name}`
+  const translated = t(key)
+  return translated === key ? preset.label : translated
+}
+
+function applyPreset(preset: { name: string; label: string; cron_expr: string; message_template: string }) {
+  form.value.name = presetLabel(preset)
   form.value.cron_expr = preset.cron_expr
   form.value.message_template = preset.message_template
 }
@@ -150,6 +156,8 @@ async function toggle(schedule: ScheduleInfo) {
       <button
         v-if="canManage"
         class="ml-auto p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        :aria-label="t('blackboard.addSchedule')"
+        :title="t('blackboard.addSchedule')"
         @click="openCreate"
       >
         <Plus class="w-3.5 h-3.5" />
@@ -180,12 +188,16 @@ async function toggle(schedule: ScheduleInfo) {
           <template v-if="canManage">
             <button
               class="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-muted transition-all text-muted-foreground hover:text-foreground"
+              :aria-label="t('blackboard.editSchedule')"
+              :title="t('blackboard.editSchedule')"
               @click="openEdit(schedule)"
             >
               <Pencil class="w-3.5 h-3.5" />
             </button>
             <button
               class="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-muted transition-all text-muted-foreground hover:text-destructive"
+              :aria-label="t('blackboard.deleteSchedule')"
+              :title="t('blackboard.deleteSchedule')"
               @click="handleDelete(schedule)"
             >
               <Trash2 class="w-3.5 h-3.5" />
@@ -242,7 +254,7 @@ async function toggle(schedule: ScheduleInfo) {
                 class="px-2.5 py-1 text-xs rounded-md border border-border hover:bg-muted/50 transition-colors"
                 @click="applyPreset(preset)"
               >
-                {{ preset.label }}
+                {{ presetLabel(preset) }}
               </button>
             </div>
           </div>

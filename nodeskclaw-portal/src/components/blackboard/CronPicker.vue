@@ -48,17 +48,32 @@ function normalizeField(val: string): string {
   return v === '' ? '*' : v
 }
 
+function isValidToken(token: string, min: number, max: number): boolean {
+  if (/^\d+$/.test(token)) {
+    const n = parseInt(token, 10)
+    return n >= min && n <= max
+  }
+  if (/^\d+-\d+$/.test(token)) {
+    const [a, b] = token.split('-').map(Number)
+    return a >= min && b <= max && a <= b
+  }
+  if (/^\d+-\d+\/\d+$/.test(token)) {
+    const [rangePart, stepStr] = token.split('/')
+    const [a, b] = rangePart.split('-').map(Number)
+    const step = parseInt(stepStr, 10)
+    return a >= min && b <= max && a <= b && step >= 1
+  }
+  return false
+}
+
 function isValidField(val: string, min: number, max: number): boolean {
   const v = normalizeField(val)
   if (v === '*') return true
   if (/^\*\/\d+$/.test(v)) {
-    const n = parseInt(v.slice(2))
+    const n = parseInt(v.slice(2), 10)
     return n >= 1 && n <= max
   }
-  return v.split(',').every(p => {
-    const num = parseInt(p)
-    return !isNaN(num) && num >= min && num <= max
-  })
+  return v.split(',').every(p => isValidToken(p.trim(), min, max))
 }
 
 const isValid = computed(() => {
@@ -66,7 +81,7 @@ const isValid = computed(() => {
     return isValidField(customMinute.value, 0, 59)
       && isValidField(customHour.value, 0, 23)
       && isValidField(customDom.value, 1, 31)
-      && isValidField(customDow.value, 0, 6)
+      && isValidField(customDow.value, 0, 7)
   }
   if (mode.value === 'monthly') return monthlyDays.value.length > 0
   return true
@@ -101,6 +116,11 @@ function buildCron(): string {
   }
 }
 
+function normalizeDow(val: string): number {
+  const n = parseInt(val, 10)
+  return n === 7 ? 0 : n
+}
+
 function parseCron(expr: string) {
   const parts = expr.trim().split(/\s+/)
   if (parts.length < 5) {
@@ -112,10 +132,10 @@ function parseCron(expr: string) {
     return
   }
 
-  const [minute, hour, dom, , dow] = parts
+  const [minute, hour, dom, month, dow] = parts
 
-  if (hour.startsWith('*/') && dom === '*' && dow === '*') {
-    const n = parseInt(hour.slice(2))
+  if (minute === '0' && hour.startsWith('*/') && dom === '*' && month === '*' && dow === '*') {
+    const n = parseInt(hour.slice(2), 10)
     if (hourlyOptions.includes(n)) {
       mode.value = 'hourly'
       hourlyInterval.value = n
@@ -123,20 +143,20 @@ function parseCron(expr: string) {
     }
   }
 
-  if (dom === '*' && dow === '*' && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
+  if (dom === '*' && month === '*' && dow === '*' && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
     mode.value = 'daily'
     dailyTime.value = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
     return
   }
 
-  if (dom === '*' && /^\d+$/.test(dow) && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
+  if (dom === '*' && month === '*' && /^\d+$/.test(dow) && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
     mode.value = 'weekly'
-    weeklyDay.value = parseInt(dow)
+    weeklyDay.value = normalizeDow(dow)
     weeklyTime.value = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
     return
   }
 
-  if (dom !== '*' && dow === '*' && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
+  if (dom !== '*' && month === '*' && dow === '*' && /^\d+$/.test(hour) && /^\d+$/.test(minute)) {
     const days = dom.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 31)
     if (days.length > 0) {
       mode.value = 'monthly'
@@ -323,7 +343,7 @@ function toggleMonthDay(day: number) {
           <input
             v-model="customMinute"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="* = 每分钟"
+            :placeholder="t('blackboard.cronMinutePlaceholder')"
           />
         </div>
         <div>
@@ -331,7 +351,7 @@ function toggleMonthDay(day: number) {
           <input
             v-model="customHour"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="* = 每小时"
+            :placeholder="t('blackboard.cronHourPlaceholder')"
           />
         </div>
         <div>
@@ -339,15 +359,15 @@ function toggleMonthDay(day: number) {
           <input
             v-model="customDom"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="* = 每天"
+            :placeholder="t('blackboard.cronDayPlaceholder')"
           />
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronWeekdayField') }} <span class="text-muted-foreground/60">(0-6)</span></label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('blackboard.cronWeekdayField') }} <span class="text-muted-foreground/60">(0-7)</span></label>
           <input
             v-model="customDow"
             class="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="* = 不限"
+            :placeholder="t('blackboard.cronWeekdayPlaceholder')"
           />
         </div>
       </div>
