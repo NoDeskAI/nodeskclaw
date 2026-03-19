@@ -421,6 +421,8 @@ const editor = useEditor({
           ed.state.doc.descendants((node: any) => {
             if (node.type.name === 'agentMention' && node.attrs?.id) {
               existingMentions.add(node.attrs.id)
+            } else if (node.type.name === 'slashCommand' && node.attrs?.agentId) {
+              existingMentions.add(node.attrs.agentId)
             }
           })
 
