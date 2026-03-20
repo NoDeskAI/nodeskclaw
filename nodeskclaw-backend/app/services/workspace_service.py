@@ -764,7 +764,10 @@ def _obj_to_info(o: WorkspaceObjective, children: list[ObjectiveInfo] | None = N
 
 async def get_blackboard(db: AsyncSession, workspace_id: str) -> BlackboardInfo | None:
     result = await db.execute(
-        select(Blackboard).where(Blackboard.workspace_id == workspace_id)
+        select(Blackboard).where(
+            Blackboard.workspace_id == workspace_id,
+            Blackboard.deleted_at.is_(None),
+        )
     )
     bb = result.scalar_one_or_none()
     if bb is None:
@@ -782,7 +785,10 @@ async def get_blackboard(db: AsyncSession, workspace_id: str) -> BlackboardInfo 
     assignee_map: dict[str, str] = {}
     if instance_ids:
         insts = (await db.execute(
-            select(Instance.id, Instance.name).where(Instance.id.in_(instance_ids))
+            select(Instance.id, Instance.name).where(
+                Instance.id.in_(instance_ids),
+                Instance.deleted_at.is_(None),
+            )
         )).all()
         assignee_map = {r.id: r.name for r in insts}
 
@@ -805,7 +811,10 @@ async def get_blackboard(db: AsyncSession, workspace_id: str) -> BlackboardInfo 
 
 async def update_blackboard(db: AsyncSession, workspace_id: str, data: BlackboardUpdate) -> BlackboardInfo | None:
     result = await db.execute(
-        select(Blackboard).where(Blackboard.workspace_id == workspace_id)
+        select(Blackboard).where(
+            Blackboard.workspace_id == workspace_id,
+            Blackboard.deleted_at.is_(None),
+        )
     )
     bb = result.scalar_one_or_none()
     if bb is None:
@@ -844,7 +853,10 @@ async def patch_blackboard_section(
     db: AsyncSession, workspace_id: str, data: BlackboardSectionPatch,
 ) -> BlackboardInfo | None:
     result = await db.execute(
-        select(Blackboard).where(Blackboard.workspace_id == workspace_id)
+        select(Blackboard).where(
+            Blackboard.workspace_id == workspace_id,
+            Blackboard.deleted_at.is_(None),
+        )
     )
     bb = result.scalar_one_or_none()
     if bb is None:

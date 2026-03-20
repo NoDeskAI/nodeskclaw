@@ -156,7 +156,7 @@ async def _get_running_pod(k8s: K8sClient, instance: Instance) -> str | None:
 
 async def _get_k8s_client(instance: Instance, db: AsyncSession) -> K8sClient | None:
     cluster_result = await db.execute(
-        select(Cluster).where(Cluster.id == instance.cluster_id)
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
     cluster = cluster_result.scalar_one_or_none()
     if not cluster or not cluster.is_k8s or not cluster.credentials_encrypted:
@@ -419,7 +419,7 @@ async def write_instance_llm_configs(
         user_keys = {k.provider: k for k in uk_result.scalars().all()}
 
     cluster_result = await db.execute(
-        select(Cluster).where(Cluster.id == instance.cluster_id)
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
     cluster = cluster_result.scalar_one_or_none()
     use_external = bool(cluster and cluster.proxy_endpoint)
@@ -500,7 +500,7 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         logger.warning("实例 %s 缺少 wp_api_key，Working Plan 模式无法写入", instance.name)
 
     cluster_result = await db.execute(
-        select(Cluster).where(Cluster.id == instance.cluster_id)
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
     cluster = cluster_result.scalar_one_or_none()
     use_external = bool(cluster and cluster.proxy_endpoint)

@@ -168,14 +168,14 @@ async def send_invitation_email(
     if not org_name and org_id and db:
         from app.models.organization import Organization
         from sqlalchemy import select
-        org = (await db.execute(select(Organization).where(Organization.id == org_id))).scalar_one_or_none()
+        org = (await db.execute(select(Organization).where(Organization.id == org_id, Organization.deleted_at.is_(None)))).scalar_one_or_none()
         if org:
             org_name = org.name
 
     if not inviter_name and inviter_id and db:
         from app.models.user import User
         from sqlalchemy import select as sel
-        user = (await db.execute(sel(User).where(User.id == inviter_id))).scalar_one_or_none()
+        user = (await db.execute(sel(User).where(User.id == inviter_id, User.deleted_at.is_(None)))).scalar_one_or_none()
         if user:
             inviter_name = user.name or user.email
 

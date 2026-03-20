@@ -61,6 +61,9 @@ def api_call(method: str, path: str, body: dict | None = None, *, ws: bool = Tru
             err = {"status": e.code, "detail": error_body}
         _output({"error": True, **err})
         sys.exit(1)
+    except (urllib.error.URLError, OSError) as e:
+        _output({"error": True, "message": f"Network error: {e}"})
+        sys.exit(1)
 
 
 def _output(data: Any) -> None:
