@@ -1066,13 +1066,16 @@ async def list_collaboration_timeline(
 ):
     """List all collaboration messages in a workspace as a timeline."""
     await wm_service.check_workspace_member(workspace_id, user, db)
-    from datetime import datetime as dt
+    from datetime import datetime as dt, timezone
     since_dt = None
     if since:
+        normalized = since.replace("Z", "+00:00") if since.endswith("Z") else since
         try:
-            since_dt = dt.fromisoformat(since)
+            since_dt = dt.fromisoformat(normalized)
         except (ValueError, TypeError):
-            raise _error(400, 40001, "errors.validation.invalid_date", "无效的日期格式")
+            raise _error(400, 40003, "errors.validation.invalid_date", "无效的日期格式")
+        if since_dt.tzinfo is None:
+            since_dt = since_dt.replace(tzinfo=timezone.utc)
     messages = await msg_service.get_collaboration_timeline(
         db, workspace_id, limit, since_dt,
     )
