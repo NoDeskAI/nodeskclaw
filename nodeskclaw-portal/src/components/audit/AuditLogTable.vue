@@ -6,17 +6,17 @@ import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import CustomSelect, { type SelectOption } from '@/components/shared/CustomSelect.vue'
-import BaseTooltip from '@/components/shared/BaseTooltip.vue'
+import AuditDetailDrawer from '@/components/audit/AuditDetailDrawer.vue'
 import {
   Download, ChevronLeft, ChevronRight, FileJson, FileSpreadsheet,
   Search, User as UserIcon, Loader2, ScrollText,
 } from 'lucide-vue-next'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const orgStore = useOrgStore()
 const toast = useToast()
 
-interface AuditLog {
+export interface AuditLog {
   id: string
   org_id: string | null
   workspace_id: string | null
@@ -46,17 +46,29 @@ const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 const exportOpen = ref(false)
+const drawerOpen = ref(false)
+const selectedLog = ref<AuditLog | null>(null)
+
+function localizeAction(action: string): string {
+  const key = 'auditActions.' + action.replace(/\./g, '_')
+  return te(key) ? t(key) : action
+}
+
+function localizeTargetType(tt: string): string {
+  const key = 'auditTargetTypes.' + tt
+  return te(key) ? t(key) : tt
+}
 
 const targetTypeOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('auditLogs.filterAll') },
-  { value: 'user', label: 'user' },
-  { value: 'instance', label: 'instance' },
-  { value: 'cluster', label: 'cluster' },
-  { value: 'workspace', label: 'workspace' },
-  { value: 'organization', label: 'organization' },
-  { value: 'org_membership', label: 'org_membership' },
-  { value: 'llm_key', label: 'llm_key' },
-  { value: 'system_config', label: 'system_config' },
+  { value: 'user', label: localizeTargetType('user') },
+  { value: 'instance', label: localizeTargetType('instance') },
+  { value: 'cluster', label: localizeTargetType('cluster') },
+  { value: 'workspace', label: localizeTargetType('workspace') },
+  { value: 'organization', label: localizeTargetType('organization') },
+  { value: 'org_membership', label: localizeTargetType('org_membership') },
+  { value: 'llm_key', label: localizeTargetType('llm_key') },
+  { value: 'system_config', label: localizeTargetType('system_config') },
 ])
 
 const actionColorMap: Record<string, string> = {
@@ -146,6 +158,11 @@ async function handleExport(format: 'csv' | 'json') {
 function applyFilters() {
   page.value = 1
   fetchLogs()
+}
+
+function openDrawer(log: AuditLog) {
+  selectedLog.value = log
+  drawerOpen.value = true
 }
 
 watch(page, () => fetchLogs())
@@ -259,52 +276,44 @@ onUnmounted(() => {
         <thead class="bg-muted/40 text-muted-foreground">
           <tr>
             <th class="px-3 py-2.5 font-medium w-[160px]">{{ t('auditLogs.colTime') }}</th>
-            <th class="px-3 py-2.5 font-medium w-[180px]">{{ t('auditLogs.colAction') }}</th>
+            <th class="px-3 py-2.5 font-medium w-[160px]">{{ t('auditLogs.colAction') }}</th>
             <th class="px-3 py-2.5 font-medium w-[100px]">{{ t('auditLogs.colTargetType') }}</th>
             <th class="px-3 py-2.5 font-medium w-[120px]">{{ t('auditLogs.colTargetId') }}</th>
-            <th class="px-3 py-2.5 font-medium w-[140px]">{{ t('auditLogs.colActor') }}</th>
-            <th class="px-3 py-2.5 font-medium">{{ t('auditLogs.colDetails') }}</th>
+            <th class="px-3 py-2.5 font-medium">{{ t('auditLogs.colActor') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
           <tr v-if="loading">
-            <td colspan="6" class="text-center py-12 text-muted-foreground">
+            <td colspan="5" class="text-center py-12 text-muted-foreground">
               <Loader2 class="w-5 h-5 animate-spin mx-auto" />
             </td>
           </tr>
           <tr v-else-if="logs.length === 0">
-            <td colspan="6" class="text-center py-12">
+            <td colspan="5" class="text-center py-12">
               <ScrollText class="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
               <p class="text-sm text-muted-foreground">{{ t('auditLogs.empty') }}</p>
             </td>
           </tr>
-          <tr v-for="log in logs" :key="log.id" v-else class="hover:bg-muted/30 transition-colors">
+          <tr
+            v-for="log in logs"
+            :key="log.id"
+            v-else
+            class="hover:bg-muted/30 transition-colors cursor-pointer"
+            @click="openDrawer(log)"
+          >
             <td class="px-3 py-2.5 tabular-nums whitespace-nowrap">{{ formatDate(log.created_at) }}</td>
             <td class="px-3 py-2.5">
-              <span class="inline-block px-2 py-0.5 rounded text-[11px] font-mono" :class="actionBadgeClass(log.action)">
-                {{ log.action }}
+              <span class="inline-block px-2 py-0.5 rounded text-[11px]" :class="actionBadgeClass(log.action)">
+                {{ localizeAction(log.action) }}
               </span>
             </td>
-            <td class="px-3 py-2.5">{{ log.target_type || '-' }}</td>
+            <td class="px-3 py-2.5">{{ log.target_type ? localizeTargetType(log.target_type) : '-' }}</td>
+            <td class="px-3 py-2.5 font-mono text-muted-foreground">{{ truncate(log.target_id) }}</td>
             <td class="px-3 py-2.5">
-              <BaseTooltip :text="log.target_id || '-'">
-                <span class="cursor-default">{{ truncate(log.target_id) }}</span>
-              </BaseTooltip>
-            </td>
-            <td class="px-3 py-2.5">
-              <BaseTooltip :text="log.actor_id || '-'">
-                <span class="inline-flex items-center gap-1 cursor-default">
-                  <UserIcon class="w-3 h-3 text-muted-foreground shrink-0" />
-                  {{ log.actor_name || truncate(log.actor_id) }}
-                </span>
-              </BaseTooltip>
-            </td>
-            <td class="px-3 py-2.5 max-w-[260px]">
-              <BaseTooltip :text="log.details ? JSON.stringify(log.details) : '-'">
-                <span class="block truncate cursor-default">
-                  {{ log.details ? JSON.stringify(log.details) : '-' }}
-                </span>
-              </BaseTooltip>
+              <span class="inline-flex items-center gap-1">
+                <UserIcon class="w-3 h-3 text-muted-foreground shrink-0" />
+                {{ log.actor_name || truncate(log.actor_id) }}
+              </span>
             </td>
           </tr>
         </tbody>
@@ -335,5 +344,11 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
+    <AuditDetailDrawer
+      :log="selectedLog"
+      :open="drawerOpen"
+      @update:open="drawerOpen = $event"
+    />
   </div>
 </template>
