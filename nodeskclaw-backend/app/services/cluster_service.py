@@ -10,9 +10,12 @@ from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.core.feature_gate import feature_gate
 from app.core.security import decrypt_kubeconfig, encrypt_kubeconfig
 from app.models.cluster import Cluster, ClusterStatus
+from app.models.corridor import HexConnection
 from app.models.deploy_record import DeployRecord
 from app.models.instance import Instance
+from app.models.node_card import NodeCard
 from app.models.user import User
+from app.models.workspace_agent import WorkspaceAgent
 from app.schemas.cluster import ClusterCreate, ClusterInfo, ClusterUpdate, ConnectionTestResult
 
 logger = logging.getLogger(__name__)
@@ -133,6 +136,46 @@ async def delete_cluster(cluster_id: str, db: AsyncSession) -> None:
             .where(DeployRecord.instance_id.in_(instance_ids), DeployRecord.deleted_at.is_(None))
             .values(deleted_at=func.now())
         )
+
+        wa_result = await db.execute(
+            select(WorkspaceAgent.workspace_id, WorkspaceAgent.hex_q, WorkspaceAgent.hex_r)
+            .where(
+                WorkspaceAgent.instance_id.in_(instance_ids),
+                WorkspaceAgent.deleted_at.is_(None),
+            )
+        )
+        wa_positions = wa_result.all()
+
+        await db.execute(
+            update(WorkspaceAgent)
+            .where(WorkspaceAgent.instance_id.in_(instance_ids), WorkspaceAgent.deleted_at.is_(None))
+            .values(deleted_at=func.now())
+        )
+
+        await db.execute(
+            update(NodeCard)
+            .where(NodeCard.node_id.in_(instance_ids), NodeCard.deleted_at.is_(None))
+            .values(deleted_at=func.now())
+        )
+
+        from sqlalchemy import or_, and_
+        if wa_positions:
+            hex_filters = [
+                and_(
+                    HexConnection.workspace_id == ws_id,
+                    or_(
+                        and_(HexConnection.hex_a_q == hq, HexConnection.hex_a_r == hr),
+                        and_(HexConnection.hex_b_q == hq, HexConnection.hex_b_r == hr),
+                    ),
+                )
+                for ws_id, hq, hr in wa_positions
+            ]
+            await db.execute(
+                update(HexConnection)
+                .where(or_(*hex_filters), HexConnection.deleted_at.is_(None))
+                .values(deleted_at=func.now())
+            )
+
         # 级联逻辑删除实例
         await db.execute(
             update(Instance)
