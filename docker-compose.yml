@@ -23,15 +23,20 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${NODESKCLAW_DATA_DIR:-$HOME/.nodeskclaw/docker-instances}:${NODESKCLAW_DATA_DIR:-$HOME/.nodeskclaw/docker-instances}
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: ${NODESKCLAW_DATA_DIR:-${OS:+${NODESKCLAW_DATA_DIR:?NODESKCLAW_DATA_DIR required on Windows}}${HOME:?HOME must be set on macOS/Linux}/.nodeskclaw/docker-instances}
+        target: /nodeskclaw-data
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://nodeskclaw:nodeskclaw@postgres:5432/nodeskclaw}
       DATABASE_NAME_SUFFIX: ""
       LLM_PROXY_URL: http://llm-proxy:8080
       LLM_PROXY_INTERNAL_URL: http://llm-proxy:8080
       NODESKCLAW_EDITION: ce
-      DOCKER_DATA_DIR: ${NODESKCLAW_DATA_DIR:-$HOME/.nodeskclaw/docker-instances}
+      DOCKER_DATA_DIR: /nodeskclaw-data
+      DOCKER_HOST_DATA_DIR: ${NODESKCLAW_DATA_DIR:-${OS:+${NODESKCLAW_DATA_DIR:?NODESKCLAW_DATA_DIR required on Windows}}${HOME:?HOME must be set on macOS/Linux}/.nodeskclaw/docker-instances}
       DEBUG: ${DEBUG:-true}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-bytes-base64-key__=}

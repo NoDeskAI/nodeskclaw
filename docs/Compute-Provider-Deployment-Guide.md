@@ -48,10 +48,15 @@ The root `docker-compose.yml` comes pre-configured for Docker compute:
 ```yaml
 nodeskclaw-backend:
   volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
-    - $HOME/.nodeskclaw/docker-instances:$HOME/.nodeskclaw/docker-instances
+    - type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+    - type: bind
+      source: ${NODESKCLAW_DATA_DIR:-${OS:+${NODESKCLAW_DATA_DIR:?NODESKCLAW_DATA_DIR required on Windows}}${HOME:?HOME must be set on macOS/Linux}/.nodeskclaw/docker-instances}
+      target: /nodeskclaw-data
   environment:
-    DOCKER_DATA_DIR: $HOME/.nodeskclaw/docker-instances
+    DOCKER_DATA_DIR: /nodeskclaw-data
+    DOCKER_HOST_DATA_DIR: ${NODESKCLAW_DATA_DIR:-${OS:+${NODESKCLAW_DATA_DIR:?NODESKCLAW_DATA_DIR required on Windows}}${HOME:?HOME must be set on macOS/Linux}/.nodeskclaw/docker-instances}
 ```
 
 **Key volume mounts:**
@@ -59,7 +64,15 @@ nodeskclaw-backend:
 | Mount | Purpose |
 |---|---|
 | `/var/run/docker.sock` | Allows `docker compose` inside the backend container to control the host Docker daemon |
-| `$HOME/.nodeskclaw/docker-instances` | Instance data persistence — host and container paths must match |
+| `NODESKCLAW_DATA_DIR` / `$HOME/.nodeskclaw/docker-instances` | Host instance data directory, mounted into the backend container at `/nodeskclaw-data` |
+
+**Windows (Docker Desktop) note:**
+
+macOS/Linux can use the default `$HOME/.nodeskclaw/docker-instances`. On Windows, `$HOME` is unreliable, so you must set `NODESKCLAW_DATA_DIR` in the project root `.env` to an absolute host path or Compose will fail immediately. Example:
+
+```bash
+NODESKCLAW_DATA_DIR=C:\Users\yourname\.nodeskclaw\docker-instances
+```
 
 After starting the platform, go to **Org Settings → Clusters** in the Portal, click "Add Cluster", and select **Docker**. The backend automatically runs `docker compose version` to verify the environment.
 
@@ -67,7 +80,7 @@ After starting the platform, go to **Org Settings → Clusters** in the Portal, 
 
 When running locally, the backend runs directly on the host and can natively access the Docker daemon — no extra configuration needed.
 
-`DOCKER_DATA_DIR` defaults to `~/.nodeskclaw/docker-instances` when unset.
+When running the backend directly on the host, `DOCKER_DATA_DIR` defaults to `~/.nodeskclaw/docker-instances` when unset. In Docker Compose deployments, macOS/Linux default to `$HOME/.nodeskclaw/docker-instances`; Windows fails immediately if `NODESKCLAW_DATA_DIR` is missing, and `DOCKER_DATA_DIR` is fixed to `/nodeskclaw-data`.
 
 ### 2.3 How Docker Instances Work
 
@@ -76,7 +89,7 @@ When a Docker instance is created, the system:
 1. **Allocates a host port** — starting from `13000`, incrementing to avoid conflicts with existing instances
 2. **Generates a Compose file** — written to `{DOCKER_DATA_DIR}/{slug}/docker-compose.yml`
 3. **Starts the container** — `docker compose -f <path> up -d`
-4. **Persists data** — instance data is mounted at `{DOCKER_DATA_DIR}/{slug}/data`
+4. **Persists data** — instance data is bound from `{DOCKER_HOST_DATA_DIR}/{slug}/data`, while the backend container accesses the same files at `{DOCKER_DATA_DIR}/{slug}/data`
 
 Generated Compose file structure:
 
@@ -88,7 +101,9 @@ services:
     ports:
       - "13000:18789"            # host port : container gateway port
     volumes:
-      - ./data:/root/.openclaw   # instance data
+      - type: bind
+        source: /host/path/to/docker-instances/my-instance/data
+        target: /root/.openclaw
     platform: linux/amd64
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -246,7 +261,9 @@ A NetworkPolicy is automatically created to control instance egress traffic. Rel
 
 | Variable | Required | Description | Default |
 |---|---|---|---|
-| `DOCKER_DATA_DIR` | No | Instance data storage directory | `~/.nodeskclaw/docker-instances` |
+| `DOCKER_DATA_DIR` | No | Backend working directory; fixed to `/nodeskclaw-data` in Compose deployments | `~/.nodeskclaw/docker-instances` |
+| `DOCKER_HOST_DATA_DIR` | No | Host path used when the backend generates bind mounts for child containers | Same as `NODESKCLAW_DATA_DIR` or `$HOME/.nodeskclaw/docker-instances` |
+| `NODESKCLAW_DATA_DIR` | Required on Windows | Compose host bind source path | macOS/Linux default: `$HOME/.nodeskclaw/docker-instances` |
 
 ### K8s-Specific
 

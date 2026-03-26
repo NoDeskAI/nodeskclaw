@@ -7,8 +7,9 @@ import json
 import logging
 import os
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 
-from app.services.docker_constants import DOCKER_DATA_DIR
+from app.services.docker_constants import DOCKER_DATA_DIR, DOCKER_HOST_DATA_DIR
 from app.services.runtime.compute.base import (
     ComputeHandle,
     InstanceComputeConfig,
@@ -17,6 +18,7 @@ from app.services.runtime.compute.base import (
 logger = logging.getLogger(__name__)
 
 _LOCALHOST_RE = re.compile(r"(https?://)(localhost|127\.0\.0\.1)(:\d+)?")
+_WINDOWS_HOST_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def _docker_endpoint_host() -> str:
@@ -67,6 +69,49 @@ def _extract_docker_error(stderr_text: str) -> str:
     return stderr_text.strip()[:500]
 
 
+def _join_host_path(base: str, *parts: str) -> str:
+    if _WINDOWS_HOST_PATH_RE.match(base) or base.startswith("\\\\"):
+        return str(PureWindowsPath(base, *parts))
+    return str(PurePosixPath(base, *parts))
+
+
+def _pure_host_path(path: str) -> PureWindowsPath | PurePosixPath:
+    if _WINDOWS_HOST_PATH_RE.match(path) or path.startswith("\\\\"):
+        return PureWindowsPath(path)
+    return PurePosixPath(path)
+
+
+def _compose_path_for_slug(slug: str) -> str:
+    return str(DOCKER_DATA_DIR / slug / "docker-compose.yml")
+
+
+def _remap_legacy_compose_path(stored_path: str) -> str:
+    if not stored_path:
+        return ""
+
+    try:
+        rel = _pure_host_path(stored_path).relative_to(_pure_host_path(DOCKER_HOST_DATA_DIR))
+    except ValueError:
+        return ""
+
+    return str(DOCKER_DATA_DIR.joinpath(*rel.parts))
+
+
+def _resolve_compose_path(slug: str, stored_path: str) -> str:
+    current_path = _compose_path_for_slug(slug)
+    if os.path.exists(current_path):
+        return current_path
+
+    remapped_path = _remap_legacy_compose_path(stored_path)
+    if remapped_path and os.path.exists(remapped_path):
+        return remapped_path
+
+    if stored_path and os.path.exists(stored_path):
+        return stored_path
+
+    return current_path
+
+
 def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
     """Generate a docker-compose service definition with full resource config."""
     env = {
@@ -78,13 +123,18 @@ def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
     from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
     rt_spec = RUNTIME_REGISTRY.get(config.runtime)
     container_data_dir = rt_spec.data_dir_container_path if rt_spec else "/root/.openclaw"
+    host_data_dir = _join_host_path(DOCKER_HOST_DATA_DIR, config.slug, "data")
 
     main_service: dict = {
         "image": env.get("DOCKER_IMAGE", f"deskclaw:{config.image_version}"),
         "container_name": config.slug,
         "environment": env,
         "ports": [f"{host_port}:{config.gateway_port}"],
-        "volumes": [f"{(DOCKER_DATA_DIR / config.slug / 'data').as_posix()}:{container_data_dir}"],
+        "volumes": [{
+            "type": "bind",
+            "source": host_data_dir,
+            "target": container_data_dir,
+        }],
         "restart": "unless-stopped",
         "platform": "linux/amd64",
         "networks": [f"{config.slug}-net"],
@@ -146,7 +196,7 @@ class DockerComputeProvider:
         os.makedirs(str(data_dir), exist_ok=True)
 
         compose = _build_compose_yaml(config)
-        compose_path = os.path.join(project_dir, "docker-compose.yml")
+        compose_path = _compose_path_for_slug(config.slug)
 
         try:
             import yaml
@@ -183,7 +233,8 @@ class DockerComputeProvider:
 
     async def destroy_instance(self, handle: ComputeHandle, **kwargs) -> None:
         logger.info("DockerComputeProvider.destroy_instance: %s", handle.instance_id)
-        compose_path = handle.extra.get("compose_path", "")
+        slug = handle.extra.get("slug", handle.instance_id)
+        compose_path = _resolve_compose_path(slug, handle.extra.get("compose_path", ""))
         if compose_path and os.path.exists(compose_path):
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -191,9 +242,37 @@ class DockerComputeProvider:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.communicate()
+                _, stderr = await proc.communicate()
+                if proc.returncode == 0:
+                    return
+                logger.warning("docker compose down failed: %s", stderr.decode().strip()[:300])
             except Exception as e:
                 logger.warning("docker compose down failed: %s", e)
+
+        for container_name in (f"{slug}-companion", slug):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "docker", "rm", "-f", container_name,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, stderr = await proc.communicate()
+                if proc.returncode != 0 and "No such container" not in stderr.decode():
+                    logger.warning("docker rm failed for %s: %s", container_name, stderr.decode().strip()[:300])
+            except Exception as e:
+                logger.warning("docker rm failed for %s: %s", container_name, e)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "network", "rm", f"{slug}-net",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            if proc.returncode != 0 and "No such network" not in stderr.decode():
+                logger.warning("docker network rm failed for %s-net: %s", slug, stderr.decode().strip()[:300])
+        except Exception as e:
+            logger.warning("docker network rm failed for %s-net: %s", slug, e)
 
     async def get_status(self, handle: ComputeHandle) -> str:
         slug = handle.extra.get("slug", handle.instance_id)
@@ -236,7 +315,8 @@ class DockerComputeProvider:
         return await self.create_instance(config)
 
     async def restart_instance(self, handle: ComputeHandle) -> None:
-        compose_path = handle.extra.get("compose_path", "")
+        slug = handle.extra.get("slug", handle.instance_id)
+        compose_path = _resolve_compose_path(slug, handle.extra.get("compose_path", ""))
         if compose_path and os.path.exists(compose_path):
             proc = await asyncio.create_subprocess_exec(
                 "docker", "compose", "-f", compose_path, "restart",
@@ -247,7 +327,6 @@ class DockerComputeProvider:
             if proc.returncode != 0:
                 raise RuntimeError(f"docker compose restart 失败: {_extract_docker_error(stderr.decode())}")
         else:
-            slug = handle.extra.get("slug", handle.instance_id)
             proc = await asyncio.create_subprocess_exec(
                 "docker", "restart", slug,
                 stdout=asyncio.subprocess.PIPE,
@@ -258,7 +337,8 @@ class DockerComputeProvider:
                 raise RuntimeError(f"docker restart 失败: {_extract_docker_error(stderr.decode())}")
 
     async def scale_instance(self, handle: ComputeHandle, replicas: int) -> ComputeHandle:
-        compose_path = handle.extra.get("compose_path", "")
+        slug = handle.extra.get("slug", handle.instance_id)
+        compose_path = _resolve_compose_path(slug, handle.extra.get("compose_path", ""))
         if compose_path and os.path.exists(compose_path):
             proc = await asyncio.create_subprocess_exec(
                 "docker", "compose", "-f", compose_path, "up", "-d",

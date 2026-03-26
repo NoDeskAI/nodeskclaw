@@ -468,8 +468,8 @@ Docker Compose 部署注意事项：
 Docker Compose 部署默认支持创建 Docker 类型集群（后端镜像内置 Docker CLI）。关键配置：
 
 - **Docker socket 挂载**：`docker-compose.yml` 已配置 `/var/run/docker.sock` 挂载，后端容器通过宿主机 Docker daemon 管理 AI 实例容器
-- **数据目录映射**：`DOCKER_DATA_DIR` 环境变量指定实例数据目录，默认为 `$HOME/.nodeskclaw/docker-instances`（宿主机路径）。容器内外使用同一路径，确保生成的 compose volume 映射正确
-- **自定义数据目录**：如需修改，在 `.env` 中设置 `DOCKER_DATA_DIR=/your/path`，并同步修改 `docker-compose.yml` 中的 volumes 映射为 `$DOCKER_DATA_DIR:$DOCKER_DATA_DIR`
+- **数据目录映射**：Docker Compose 部署时，Mac/Linux 默认使用 `$HOME/.nodeskclaw/docker-instances`；Windows 必须显式设置 `NODESKCLAW_DATA_DIR`；后端容器内固定挂载到 `/nodeskclaw-data`，并通过 `DOCKER_HOST_DATA_DIR` 保存宿主机原始路径
+- **自定义数据目录**：如需修改，在项目根目录 `.env` 中设置 `NODESKCLAW_DATA_DIR=/your/path`。Mac/Linux 可直接使用 POSIX 路径，Windows 使用完整宿主机绝对路径
 - **CE/EE 模式**：`docker-compose.yml` 默认设置 `NODESKCLAW_EDITION=ce`；EE 部署使用 `docker compose -f docker-compose.yml -f docker-compose.ee.yml up -d`
 
 ### Docker 构建（单独构建镜像）
