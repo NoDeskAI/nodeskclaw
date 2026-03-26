@@ -145,6 +145,9 @@ def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
         "extra_hosts": ["host.docker.internal:host-gateway"],
     }
 
+    if rt_spec and rt_spec.docker_command:
+        main_service["command"] = list(rt_spec.docker_command)
+
     if config.mem_limit:
         main_service["mem_limit"] = _parse_mem(config.mem_limit)
     if config.cpu_limit:
