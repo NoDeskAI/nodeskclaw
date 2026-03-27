@@ -43,6 +43,25 @@ function deriveTunnelUrl(apiUrl: string): string {
   return `${wsUrl}/tunnel/connect`;
 }
 
+function deriveDefaultChatModel(cfg: OpenClawConfig): string {
+  const agents = (cfg as Record<string, unknown>).agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  const model = defaults?.model;
+
+  if (typeof model === "string" && model.trim()) {
+    return model.trim();
+  }
+
+  if (model && typeof model === "object") {
+    const primary = (model as Record<string, unknown>).primary;
+    if (typeof primary === "string" && primary.trim()) {
+      return primary.trim();
+    }
+  }
+
+  return process.env.OPENCLAW_DEFAULT_MODEL || "gpt-4";
+}
+
 export function startTunnelClient(cfg: OpenClawConfig, callbacks?: TunnelCallbacks): TunnelClient {
   if (_instance) {
     console.log("[tunnel] Shutting down previous TunnelClient before re-init");
@@ -66,6 +85,7 @@ export function startTunnelClient(cfg: OpenClawConfig, callbacks?: TunnelCallbac
 
   const instanceId = defaultAccount?.instanceId ?? "";
   const token = defaultAccount?.apiToken ?? "";
+  const defaultChatModel = deriveDefaultChatModel(cfg);
 
   if (!tunnelUrl || !instanceId || !token) {
     console.warn(
@@ -74,7 +94,13 @@ export function startTunnelClient(cfg: OpenClawConfig, callbacks?: TunnelCallbac
       instanceId ? "set" : "MISSING",
       token ? "set" : "MISSING",
     );
-    _instance = new TunnelClient(tunnelUrl, instanceId, token, callbacks);
+    _instance = new TunnelClient(
+      tunnelUrl,
+      instanceId,
+      token,
+      defaultChatModel,
+      callbacks,
+    );
     return _instance;
   }
 
@@ -82,7 +108,13 @@ export function startTunnelClient(cfg: OpenClawConfig, callbacks?: TunnelCallbac
     console.log("[tunnel] Derived tunnelUrl from apiUrl: %s", tunnelUrl);
   }
 
-  _instance = new TunnelClient(tunnelUrl, instanceId, token, callbacks);
+  _instance = new TunnelClient(
+    tunnelUrl,
+    instanceId,
+    token,
+    defaultChatModel,
+    callbacks,
+  );
   _instance.connect();
   return _instance;
 }
@@ -105,6 +137,7 @@ export class TunnelClient {
     private backendUrl: string,
     private instanceId: string,
     private token: string,
+    private defaultChatModel: string,
     private callbacks?: TunnelCallbacks,
   ) {}
 
@@ -286,7 +319,7 @@ export class TunnelClient {
           ...(sessionKey ? { "X-OpenClaw-Session-Key": sessionKey } : {}),
         },
         body: JSON.stringify({
-          model: "gpt-4",
+          model: this.defaultChatModel,
           messages,
           stream: false,
           max_tokens: 1,
@@ -316,7 +349,7 @@ export class TunnelClient {
             : {}),
         },
         body: JSON.stringify({
-          model: "gpt-4",
+          model: this.defaultChatModel,
           messages,
           stream: true,
         }),
