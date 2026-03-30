@@ -1263,7 +1263,7 @@ const enUS = {
     workspace: {
       not_found: "Cyber office does not exist",
       add_agent_invalid: "Invalid parameters for adding AI Employee",
-      delete_invalid: "Invalid parameters for deleting cyber office",
+      delete_invalid: "Please remove all AI employees from the cyber office before deleting it",
       agent_not_found: "AI Employee does not exist",
       agent_not_in_workspace: "AI Employee is not in this cyber office",
       blackboard_not_found: "Blackboard does not exist",

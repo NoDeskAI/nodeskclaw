@@ -1263,7 +1263,7 @@ const zhCN = {
     workspace: {
       not_found: "办公室不存在",
       add_agent_invalid: "添加 AI 员工参数不合法",
-      delete_invalid: "删除办公室参数不合法",
+      delete_invalid: "请先移除办公室内的所有 AI 员工，再删除办公室",
       agent_not_found: "AI 员工不存在",
       agent_not_in_workspace: "AI 员工不在该办公室中",
       blackboard_not_found: "黑板不存在",
