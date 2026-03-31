@@ -2,13 +2,33 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Save, Trash2, Loader2, Users, Palette, UserPlus, Search, Shield, ShieldCheck, X, LayoutTemplate } from 'lucide-vue-next'
-import { useWorkspaceStore, WORKSPACE_PERMISSIONS, PERMISSION_PRESETS, type WorkspaceMemberInfo } from '@/stores/workspace'
+import { ArrowLeft, Save, Trash2, Loader2, Users, Palette, UserPlus, Search, Shield, ShieldCheck, X, LayoutTemplate, ChevronRight } from 'lucide-vue-next'
+import Workspace2D from '@/components/hex2d/Workspace2D.vue'
+import {
+  useWorkspaceStore,
+  WORKSPACE_PERMISSIONS,
+  PERMISSION_PRESETS,
+  type TemplateCollectPreview,
+  type WorkspaceMemberInfo,
+} from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
+import {
+  buildTopoNodes,
+  buildTopoEdges,
+  buildMockAgents,
+  specGeneSlugs as _specGeneSlugs,
+  specLlmProviders as _specLlmProviders,
+  resourceSummary as _resourceSummary,
+  specGeneCount as _specGeneCount,
+  allSelectableKeys,
+  countAgentKeysInSelection,
+  keysToExcludedIndices,
+  keysToExcludedCorridorCoords,
+} from '@/utils/templateTopology'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -248,25 +268,104 @@ const showTemplateDialog = ref(false)
 const templateName = ref('')
 const templateDesc = ref('')
 const savingTemplate = ref(false)
+const templatePreviewLoading = ref(false)
+const templatePreviewError = ref('')
+const templatePreview = ref<TemplateCollectPreview | null>(null)
 
-function openTemplateDialog() {
+const saveSelectedKeys = ref<Set<string>>(new Set())
+
+function handleTopoToggle(key: string) {
+  const s = new Set(saveSelectedKeys.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  saveSelectedKeys.value = s
+}
+
+const saveSelectedCount = computed(() =>
+  countAgentKeysInSelection((templatePreview.value?.agent_specs ?? []) as Record<string, unknown>[], saveSelectedKeys.value)
+)
+
+const selectedSpecIndex = ref<number | null>(null)
+const selectedSpec = computed(() =>
+  selectedSpecIndex.value !== null ? templatePreview.value?.agent_specs[selectedSpecIndex.value] ?? null : null
+)
+
+function openSpecDetail(index: number) {
+  selectedSpecIndex.value = index
+}
+
+function closeSpecDetail() {
+  selectedSpecIndex.value = null
+}
+
+const previewTopoNodes = computed(() => {
+  const preview = templatePreview.value
+  if (!preview) return []
+  return buildTopoNodes({
+    agent_specs: preview.agent_specs as Record<string, unknown>[],
+    human_specs: preview.human_specs as Record<string, unknown>[],
+    topology_snapshot: preview.topology_snapshot as { nodes?: Record<string, unknown>[]; edges?: Record<string, unknown>[] } | undefined,
+  })
+})
+
+const previewTopoEdges = computed(() => {
+  const preview = templatePreview.value
+  if (!preview) return []
+  return buildTopoEdges({
+    agent_specs: [],
+    human_specs: [],
+    topology_snapshot: preview.topology_snapshot as { nodes?: Record<string, unknown>[]; edges?: Record<string, unknown>[] } | undefined,
+  })
+})
+
+const previewAgents = computed(() =>
+  buildMockAgents((templatePreview.value?.agent_specs ?? []) as Record<string, unknown>[])
+)
+
+const specGeneSlugs = _specGeneSlugs
+const specLlmProviders = _specLlmProviders
+const resourceSummary = _resourceSummary
+const specGeneCount = _specGeneCount
+
+async function openTemplateDialog() {
   templateName.value = store.currentWorkspace?.name ? `${store.currentWorkspace.name}` : ''
   templateDesc.value = ''
+  templatePreview.value = null
+  templatePreviewError.value = ''
+  templatePreviewLoading.value = true
   showTemplateDialog.value = true
+  try {
+    templatePreview.value = await store.fetchTemplateCollectPreview(workspaceId.value)
+    const specs = templatePreview.value?.agent_specs ?? []
+    const topo = templatePreview.value?.topology_snapshot as { nodes?: Record<string, unknown>[] } | undefined
+    saveSelectedKeys.value = allSelectableKeys(specs as Record<string, unknown>[], topo)
+  } catch (e) {
+    templatePreviewError.value = resolveApiErrorMessage(e, t('workspaceSettings.templatePreviewFailed'))
+  } finally {
+    templatePreviewLoading.value = false
+  }
 }
 
 async function handleSaveAsTemplate() {
-  if (!templateName.value.trim()) return
+  if (!templateName.value.trim() || saveSelectedCount.value === 0) return
   savingTemplate.value = true
+  const specs = templatePreview.value?.agent_specs ?? []
+  const excluded = keysToExcludedIndices(specs as Record<string, unknown>[], saveSelectedKeys.value)
+  const topo = templatePreview.value?.topology_snapshot as { nodes?: Record<string, unknown>[] } | undefined
+  const excludedCorridors = keysToExcludedCorridorCoords(topo, saveSelectedKeys.value)
   try {
     await store.saveAsTemplate({
       name: templateName.value.trim(),
       description: templateDesc.value.trim(),
       workspace_id: workspaceId.value,
       visibility: 'org_private',
+      excluded_agent_indices: excluded.length > 0 ? excluded : undefined,
+      excluded_corridor_coords: excludedCorridors.length > 0 ? excludedCorridors : undefined,
     })
     toast.success(t('workspaceSettings.templateSaved'))
     showTemplateDialog.value = false
+    templatePreview.value = null
+    templatePreviewError.value = ''
   } catch (e: any) {
     toast.error(resolveApiErrorMessage(e, t('workspaceSettings.templateSaveFailed')))
   } finally {
@@ -471,18 +570,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
         </div>
       </div>
 
-      <!-- Save as Template -->
-      <div v-if="canManageSettings" class="pt-2 border-t border-border">
-        <button
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-          @click="openTemplateDialog"
-        >
-          <LayoutTemplate class="w-4 h-4" />
-          {{ t('workspaceSettings.saveAsTemplate') }}
-        </button>
-      </div>
-
-      <!-- Save / Delete -->
+      <!-- Save / Template / Delete -->
       <div class="flex gap-3">
         <button
           v-if="canManageSettings"
@@ -493,6 +581,14 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
           <Save v-else class="w-4 h-4" />
           {{ t('workspaceSettings.save') }}
+        </button>
+        <button
+          v-if="canManageSettings"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors"
+          @click="openTemplateDialog"
+        >
+          <LayoutTemplate class="w-4 h-4" />
+          {{ t('workspaceSettings.saveAsTemplate') }}
         </button>
         <button
           v-if="canDeleteWorkspace"
@@ -509,15 +605,15 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
     <!-- Save as Template Dialog -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="showTemplateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showTemplateDialog = false">
-          <div class="bg-card rounded-xl shadow-2xl w-[400px] border border-border">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div v-if="showTemplateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showTemplateDialog = false">
+          <div class="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <h3 class="text-sm font-semibold">{{ t('workspaceSettings.saveAsTemplate') }}</h3>
-              <button class="p-1 rounded hover:bg-muted" @click="showTemplateDialog = false">
+              <button type="button" class="p-1 rounded hover:bg-muted" @click="showTemplateDialog = false">
                 <X class="w-4 h-4" />
               </button>
             </div>
-            <div class="px-5 py-4 space-y-4">
+            <div class="px-5 py-4 space-y-4 overflow-y-auto">
               <div class="space-y-1.5">
                 <label class="text-xs font-medium text-muted-foreground">{{ t('workspaceSettings.templateNameLabel') }}</label>
                 <input
@@ -535,18 +631,124 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   :placeholder="t('workspaceSettings.templateDescPlaceholder')"
                 />
               </div>
-              <div class="flex justify-end gap-2">
-                <button class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors" @click="showTemplateDialog = false">
+
+              <div v-if="templatePreviewLoading" class="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                <Loader2 class="w-4 h-4 animate-spin" />
+                {{ t('workspaceSettings.templatePreviewLoading') }}
+              </div>
+              <p v-else-if="templatePreviewError" class="text-xs text-red-400">{{ templatePreviewError }}</p>
+
+              <div v-else-if="templatePreview" class="space-y-4">
+                <div class="rounded-lg border border-border p-3 space-y-2">
+                  <p class="text-xs font-medium text-muted-foreground">{{ t('workspaceSettings.teamPreviewTitle') }}</p>
+                  <ul class="text-xs space-y-1 max-h-40 overflow-y-auto">
+                    <li
+                      v-for="(spec, si) in templatePreview.agent_specs"
+                      :key="si"
+                      class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                      @click="openSpecDetail(si)"
+                    >
+                      <div class="flex-1 min-w-0">
+                        <span class="font-medium text-foreground">{{ (spec.display_name as string) || (spec.label as string) || '—' }}</span>
+                        <span class="text-muted-foreground ml-2">
+                          {{ t('workspaceSettings.templatePreviewGeneLine', { count: specGeneCount(spec) }) }}
+                          <template v-if="resourceSummary(spec)"> · {{ resourceSummary(spec) }}</template>
+                        </span>
+                      </div>
+                      <ChevronRight class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    </li>
+                  </ul>
+                  <template v-if="templatePreview.human_specs.length">
+                    <p class="text-xs font-medium text-muted-foreground pt-1">{{ t('workspaceSettings.humanPlaceholdersTitle') }}</p>
+                    <ul class="text-xs space-y-1 text-muted-foreground">
+                      <li v-for="(h, hi) in templatePreview.human_specs" :key="hi">
+                        {{ (h as { display_name?: string }).display_name || '—' }}
+                        ({{ t('workspaceSettings.humanPlaceholderRow') }})
+                      </li>
+                    </ul>
+                  </template>
+                </div>
+
+                <div v-if="previewTopoNodes.length" class="rounded-lg border border-border overflow-hidden">
+                  <p class="text-xs font-medium text-muted-foreground px-3 pt-2.5 pb-1">{{ t('workspaceSettings.topoSelectHint') }}</p>
+                  <div class="h-[280px] bg-[#0a0a1a]">
+                    <Workspace2D
+                      :agents="previewAgents"
+                      blackboard-content=""
+                      :selected-agent-id="null"
+                      :selected-hex="null"
+                      :topology-nodes="previewTopoNodes"
+                      :topology-edges="previewTopoEdges"
+                      :selectable="true"
+                      :selected-keys="saveSelectedKeys"
+                      :selectable-types="['agent', 'corridor']"
+                      @toggle-node="handleTopoToggle"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-end gap-2 shrink-0">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors" @click="showTemplateDialog = false">
                   {{ t('workspaceSettings.cancel') }}
                 </button>
                 <button
+                  type="button"
                   class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                  :disabled="savingTemplate || !templateName.trim()"
+                  :disabled="savingTemplate || !templateName.trim() || templatePreviewLoading || saveSelectedCount === 0"
                   @click="handleSaveAsTemplate"
                 >
                   <Loader2 v-if="savingTemplate" class="w-4 h-4 animate-spin inline mr-1" />
-                  {{ t('workspaceSettings.saveTemplate') }}
+                  {{ t('workspaceSettings.saveTemplateWithCount', { n: saveSelectedCount }) }}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Agent Spec Detail Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="selectedSpec" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" @click.self="closeSpecDetail">
+          <div class="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+              <h3 class="text-sm font-semibold">{{ (selectedSpec.display_name as string) || '—' }}</h3>
+              <button type="button" class="p-1 rounded hover:bg-muted" @click="closeSpecDetail">
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="px-5 py-4 space-y-4 overflow-y-auto text-xs">
+              <div class="space-y-1.5">
+                <p class="font-medium text-muted-foreground">{{ t('workspaceSettings.geneList') }}</p>
+                <ul v-if="specGeneSlugs(selectedSpec).length" class="space-y-0.5 text-foreground">
+                  <li v-for="slug in specGeneSlugs(selectedSpec)" :key="slug" class="flex items-center gap-1.5">
+                    <span class="w-1 h-1 rounded-full bg-primary shrink-0" />
+                    {{ slug }}
+                  </li>
+                </ul>
+                <p v-else class="text-muted-foreground">{{ t('workspaceSettings.noGenes') }}</p>
+              </div>
+
+              <div class="space-y-1.5">
+                <p class="font-medium text-muted-foreground">{{ t('workspaceSettings.llmConfig') }}</p>
+                <div v-if="specLlmProviders(selectedSpec).length" class="space-y-1">
+                  <div v-for="p in specLlmProviders(selectedSpec)" :key="p.provider" class="text-foreground">
+                    <span class="font-medium">{{ p.provider }}</span>
+                    <span v-if="p.models.length" class="text-muted-foreground ml-1.5">{{ p.models.join(', ') }}</span>
+                  </div>
+                </div>
+                <p v-else class="text-muted-foreground">{{ t('workspaceSettings.noLlmConfig') }}</p>
+              </div>
+
+              <div class="space-y-1.5">
+                <p class="font-medium text-muted-foreground">{{ t('workspaceSettings.resourceConfig') }}</p>
+                <div class="grid grid-cols-3 gap-x-4 gap-y-1 text-foreground">
+                  <span>CPU: {{ (selectedSpec.resources as Record<string, string>)?.cpu_limit || '—' }}</span>
+                  <span>Mem: {{ (selectedSpec.resources as Record<string, string>)?.mem_limit || '—' }}</span>
+                  <span>{{ t('workspaceSettings.storageSizeLabel') }}: {{ (selectedSpec.resources as Record<string, string>)?.storage_size || '—' }}</span>
+                </div>
               </div>
             </div>
           </div>

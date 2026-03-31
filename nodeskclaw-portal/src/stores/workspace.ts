@@ -46,16 +46,47 @@ export interface WorkspaceTemplateItem {
   name: string
   description: string
   is_preset: boolean
-  topology_snapshot?: {
-    nodes?: Array<{
-      node_type?: string
-      display_name?: string | null
-    }>
-  }
   org_id: string | null
   visibility: string
   created_by: string | null
   created_at: string | null
+  agent_count?: number
+  human_count?: number
+  agent_names?: string[]
+  can_deploy_from_template?: boolean
+}
+
+export interface WorkspaceTemplateDetail extends WorkspaceTemplateItem {
+  topology_snapshot?: Record<string, unknown>
+  blackboard_snapshot?: Record<string, unknown>
+  gene_assignments?: unknown[]
+  agent_specs?: Array<Record<string, unknown>>
+  human_specs?: Array<Record<string, unknown>>
+  source_workspace_id?: string | null
+  can_deploy_from_template?: boolean
+}
+
+export interface ActiveWorkspaceDeployItem {
+  id: string
+  workspace_id: string | null
+  workspace_name: string
+  template_id: string
+  status: string
+  total_agents: number
+  completed_agents: number
+  failed_agents: number
+}
+
+export interface TemplateCollectPreview {
+  agent_specs: Array<Record<string, unknown>>
+  human_specs: Array<Record<string, unknown>>
+  collect_warnings: string[]
+  agent_count: number
+  human_count: number
+  topology_snapshot?: {
+    nodes: Array<{ hex_q: number; hex_r: number; node_type: string; display_name: string; entity_id: string | null }>
+    edges: Array<{ a_q: number; a_r: number; b_q: number; b_r: number; direction: string; auto_created: boolean }>
+  }
 }
 
 export interface TaskInfo {
@@ -346,8 +377,52 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return res.data.data as WorkspaceTemplateItem[]
   }
 
-  async function saveAsTemplate(data: { name: string; description?: string; workspace_id: string; visibility?: string }) {
+  async function saveAsTemplate(data: { name: string; description?: string; workspace_id: string; visibility?: string; excluded_agent_indices?: number[]; excluded_corridor_coords?: number[][] }) {
     const res = await api.post('/workspaces/templates', data)
+    return res.data.data
+  }
+
+  const activeTemplateDeploys = ref<ActiveWorkspaceDeployItem[]>([])
+
+  async function refreshActiveTemplateDeploys() {
+    try {
+      activeTemplateDeploys.value = await fetchActiveWorkspaceDeploys()
+    } catch {
+      activeTemplateDeploys.value = []
+    }
+    return activeTemplateDeploys.value
+  }
+
+  async function fetchTemplateCollectPreview(workspaceId: string) {
+    const res = await api.get('/workspaces/templates/collect-preview', {
+      params: { workspace_id: workspaceId },
+    })
+    return res.data.data as TemplateCollectPreview
+  }
+
+  async function fetchWorkspaceTemplateDetail(id: string) {
+    const res = await api.get(`/workspaces/templates/${id}`)
+    return res.data.data as WorkspaceTemplateDetail
+  }
+
+  async function deployWorkspaceFromTemplate(templateId: string, workspaceName: string, clusterId: string, selectedAgentIndices?: number[], excludedCorridorCoords?: number[][]) {
+    const body: Record<string, unknown> = {
+      workspace_name: workspaceName,
+      cluster_id: clusterId,
+    }
+    if (selectedAgentIndices) body.selected_agent_indices = selectedAgentIndices
+    if (excludedCorridorCoords?.length) body.excluded_corridor_coords = excludedCorridorCoords
+    const res = await api.post(`/workspaces/templates/${templateId}/deploy`, body)
+    return res.data.data as { workspace_deploy_id: string; workspace_id: string }
+  }
+
+  async function fetchActiveWorkspaceDeploys() {
+    const res = await api.get('/workspaces/deploys/active')
+    return res.data.data as ActiveWorkspaceDeployItem[]
+  }
+
+  async function fetchWorkspaceDeploy(deployId: string) {
+    const res = await api.get(`/workspaces/deploys/${deployId}`)
     return res.data.data
   }
 
@@ -1352,6 +1427,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     createWorkspace,
     fetchWorkspaceTemplates,
     saveAsTemplate,
+    fetchTemplateCollectPreview,
+    activeTemplateDeploys,
+    refreshActiveTemplateDeploys,
+    fetchWorkspaceTemplateDetail,
+    deployWorkspaceFromTemplate,
+    fetchActiveWorkspaceDeploys,
+    fetchWorkspaceDeploy,
     updateWorkspace,
     deleteWorkspace,
     addAgent,
