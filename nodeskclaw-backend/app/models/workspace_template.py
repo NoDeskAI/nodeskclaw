@@ -25,3 +25,8 @@ class WorkspaceTemplate(BaseModel):
         server_default="public",
     )
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    agent_specs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    human_specs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    source_workspace_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
