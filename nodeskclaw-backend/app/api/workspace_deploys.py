@@ -103,7 +103,24 @@ async def get_workspace_deploy(
 
 
 @router.get("/deploys/{deploy_id}/progress")
-async def workspace_deploy_progress_stream(deploy_id: str):
+async def workspace_deploy_progress_stream(
+    deploy_id: str,
+    org_ctx=Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, org = org_ctx
+    oid = _org_id(org)
+    r = await db.execute(
+        select(WorkspaceDeploy.id).where(
+            WorkspaceDeploy.id == deploy_id,
+            WorkspaceDeploy.org_id == oid,
+            WorkspaceDeploy.created_by == user.id,
+            not_deleted(WorkspaceDeploy),
+        )
+    )
+    if not r.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="部署记录不存在")
+
     async def generate():
         async for ev in event_bus.subscribe("workspace_deploy_progress"):
             if ev.data.get("workspace_deploy_id") != deploy_id:

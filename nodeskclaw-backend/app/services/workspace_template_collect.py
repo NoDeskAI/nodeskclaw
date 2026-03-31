@@ -37,6 +37,7 @@ async def collect_internal_template_payload(
             Instance.deleted_at.is_(None),
             Instance.status == InstanceStatus.running,
         )
+        .order_by(WorkspaceAgent.hex_q, WorkspaceAgent.hex_r)
     )
     rows = list(wa_result.all())
     if not rows:
@@ -76,10 +77,6 @@ async def collect_internal_template_payload(
             })
 
         llm_providers = await _llm_providers_snapshot(db, inst, org_id)
-
-        raw_llm = inst.llm_providers
-        if raw_llm is None and llm_providers:
-            pass
 
         agent_specs.append({
             "hex_q": wa.hex_q,
