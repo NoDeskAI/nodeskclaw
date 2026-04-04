@@ -141,7 +141,7 @@ async def _seed_template_from_image(config: InstanceComputeConfig, data_dir: Pat
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker", "create", "--name", tmp_container, image,
+            "docker", "create", "--platform", "linux/amd64", "--name", tmp_container, image,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
