@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import re
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from app.services.docker_constants import DOCKER_DATA_DIR, DOCKER_HOST_DATA_DIR
 from app.services.runtime.compute.base import (
@@ -116,6 +116,64 @@ def _resolve_compose_path(slug: str, stored_path: str) -> str:
     return current_path
 
 
+async def _seed_template_from_image(config: InstanceComputeConfig, data_dir: Path) -> None:
+    """从镜像中提取配置模板到宿主机 data 目录（仅首次部署时需要）。
+
+    Docker Compose 部署时，空目录 bind mount 到容器的 data_dir 会遮盖镜像内
+    预置的模板文件。此处通过 docker create + cp 从镜像提取模板，确保 entrypoint
+    首次启动时能正确生成 openclaw.json。
+    """
+    from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
+    rt_spec = RUNTIME_REGISTRY.get(config.runtime)
+    if not rt_spec:
+        return
+
+    container_data_dir = rt_spec.data_dir_container_path
+    template_rel = "openclaw.json.template"
+    host_template = data_dir / template_rel
+
+    # 已存在则跳过（已有实例或已迁移数据）
+    if host_template.exists():
+        return
+
+    image = config.env_vars.get("DOCKER_IMAGE", f"deskclaw:{config.image_version}")
+    tmp_container = f"tmpl-seed-{config.slug}"
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "create", "--name", tmp_container, image,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning("seed_template: docker create failed: %s", stderr.decode().strip()[:300])
+            return
+        container_id = stdout.decode().strip()
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "cp",
+                f"{container_id}:{container_data_dir}/{template_rel}",
+                str(host_template),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, cp_stderr = await proc.communicate()
+            if proc.returncode != 0:
+                logger.warning("seed_template: docker cp failed: %s", cp_stderr.decode().strip()[:300])
+                return
+            logger.info("seed_template: copied %s from %s to %s", template_rel, image, host_template)
+        finally:
+            await asyncio.create_subprocess_exec(
+                "docker", "rm", container_id,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+    except Exception:
+        logger.warning("seed_template: unexpected error for %s", config.slug, exc_info=True)
+
+
 def _build_compose_yaml(config: InstanceComputeConfig) -> dict:
     """Generate a docker-compose service definition with full resource config."""
     env = {
@@ -201,6 +259,9 @@ class DockerComputeProvider:
         os.makedirs(project_dir, exist_ok=True)
         data_dir = DOCKER_DATA_DIR / config.slug / "data"
         os.makedirs(str(data_dir), exist_ok=True)
+
+        # 从镜像中提取模板文件到宿主机 data 目录，确保 entrypoint 首次启动能生成配置
+        await _seed_template_from_image(config, data_dir)
 
         compose = _build_compose_yaml(config)
         compose_path = _compose_path_for_slug(config.slug)
