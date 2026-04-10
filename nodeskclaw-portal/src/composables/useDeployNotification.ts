@@ -5,7 +5,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 
-let intervalId: ReturnType<typeof setInterval> | null = null
+let timerId: ReturnType<typeof setTimeout> | null = null
+let ticking = false
 const prevDeployIds = ref<Set<string>>(new Set())
 
 export function useDeployNotification() {
@@ -21,59 +22,69 @@ export function useDeployNotification() {
   }
 
   async function tick() {
-    if (!shouldPoll()) return
-    const list = await store.refreshActiveTemplateDeploys()
-    const curr = new Set(list.map((l) => l.id))
-    for (const id of prevDeployIds.value) {
-      if (!curr.has(id)) {
-        try {
-          const d = (await store.fetchWorkspaceDeploy(id)) as {
-            status?: string
-            workspace_id?: string | null
-            workspace_name?: string
+    if (ticking) return
+    ticking = true
+    try {
+      if (!shouldPoll()) return
+      const list = await store.refreshActiveTemplateDeploys()
+      const curr = new Set(list.map((l) => l.id))
+      for (const id of prevDeployIds.value) {
+        if (!curr.has(id)) {
+          try {
+            const d = (await store.fetchWorkspaceDeploy(id)) as {
+              status?: string
+              workspace_id?: string | null
+              workspace_name?: string
+            }
+            const wid = d.workspace_id
+            const name = d.workspace_name || ''
+            if (d.status === 'success') {
+              toast.success(t('deployNotify.success', { name }), {
+                duration: 8000,
+                action: wid
+                  ? {
+                      label: t('deployNotify.goTo'),
+                      onClick: () => router.push(`/workspace/${wid}`),
+                    }
+                  : undefined,
+              })
+            } else if (d.status === 'partial_success') {
+              toast.info(t('deployNotify.partial', { name }), {
+                duration: 8000,
+                action: wid
+                  ? {
+                      label: t('deployNotify.goTo'),
+                      onClick: () => router.push(`/workspace/${wid}`),
+                    }
+                  : undefined,
+              })
+            } else if (d.status === 'failed') {
+              toast.error(t('deployNotify.failed', { name }))
+            }
+          } catch {
+            /* ignore */
           }
-          const wid = d.workspace_id
-          const name = d.workspace_name || ''
-          if (d.status === 'success') {
-            toast.success(t('deployNotify.success', { name }), {
-              duration: 8000,
-              action: wid
-                ? {
-                    label: t('deployNotify.goTo'),
-                    onClick: () => router.push(`/workspace/${wid}`),
-                  }
-                : undefined,
-            })
-          } else if (d.status === 'partial_success') {
-            toast.info(t('deployNotify.partial', { name }), {
-              duration: 8000,
-              action: wid
-                ? {
-                    label: t('deployNotify.goTo'),
-                    onClick: () => router.push(`/workspace/${wid}`),
-                  }
-                : undefined,
-            })
-          } else if (d.status === 'failed') {
-            toast.error(t('deployNotify.failed', { name }))
-          }
-        } catch {
-          /* ignore */
         }
       }
+      prevDeployIds.value = curr
+    } finally {
+      ticking = false
     }
-    prevDeployIds.value = curr
   }
 
-  function startInterval() {
-    if (intervalId) return
-    intervalId = setInterval(() => void tick(), 10000)
+  function scheduleNext() {
+    if (timerId) return
+    timerId = setTimeout(async () => {
+      timerId = null
+      await tick()
+      if (shouldPoll()) scheduleNext()
+    }, 10000)
   }
 
-  function stopInterval() {
-    if (intervalId) {
-      clearInterval(intervalId)
-      intervalId = null
+  function stopTimer() {
+    if (timerId) {
+      clearTimeout(timerId)
+      timerId = null
     }
     prevDeployIds.value = new Set()
   }
@@ -83,15 +94,15 @@ export function useDeployNotification() {
     () => {
       if (shouldPoll()) {
         void tick()
-        startInterval()
+        scheduleNext()
       } else {
-        stopInterval()
+        stopTimer()
       }
     },
     { immediate: true },
   )
 
   onUnmounted(() => {
-    stopInterval()
+    stopTimer()
   })
 }

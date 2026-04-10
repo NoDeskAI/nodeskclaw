@@ -21,8 +21,10 @@ onMounted(() => {
   void store.refreshActiveTemplateDeploys()
 })
 
+type ActiveDeployItem = (typeof activeTemplateDeploys.value)[number]
+
 const deployByWorkspaceId = computed(() => {
-  const m = new Map<string, (typeof activeTemplateDeploys.value)[0]>()
+  const m = new Map<string, ActiveDeployItem>()
   for (const d of activeTemplateDeploys.value) {
     if (d.workspace_id) m.set(d.workspace_id, d)
   }
@@ -108,7 +110,6 @@ function createNew() {
         v-for="ws in store.workspaces"
         :key="ws.id"
         :workspace="ws"
-        :active-deploy="activeDeployFor(ws.id)"
         @click="onCardClick(ws)"
       />
     </div>

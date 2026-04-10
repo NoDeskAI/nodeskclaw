@@ -13,13 +13,6 @@ defineEmits<{
   select: []
 }>()
 
-const iconMap: Record<string, typeof Code2> = {
-  Code2,
-  PenTool,
-  Microscope,
-  LayoutTemplate,
-}
-
 const iconComponent = computed(() => {
   if (props.blank) return FilePlus2
   if (!props.template) return LayoutTemplate
