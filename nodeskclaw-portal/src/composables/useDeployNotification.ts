@@ -26,7 +26,13 @@ export function useDeployNotification() {
     ticking = true
     try {
       if (!shouldPoll()) return
-      const list = await store.refreshActiveTemplateDeploys()
+      let list: Awaited<ReturnType<typeof store.fetchActiveWorkspaceDeploys>>
+      try {
+        list = await store.fetchActiveWorkspaceDeploys()
+        store.activeTemplateDeploys = list
+      } catch {
+        return
+      }
       const curr = new Set(list.map((l) => l.id))
       for (const id of prevDeployIds.value) {
         if (!curr.has(id)) {
