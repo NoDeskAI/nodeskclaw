@@ -39,7 +39,12 @@ const props = withDefaults(defineProps<{
   movingHexSource?: { q: number, r: number } | null
   perfSummary?: PerfSummary | null
   perfLoading?: boolean
+  selectable?: boolean
+  selectedKeys?: Set<string>
+  selectableTypes?: string[]
 }>(), {
+  selectable: false,
+  selectableTypes: () => ['agent'],
 })
 
 function formatK(n: number): string {
@@ -52,6 +57,7 @@ const emit = defineEmits<{
   (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }): void
   (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
+  (e: 'toggle-node', key: string): void
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
@@ -166,6 +172,23 @@ const statusColors: Record<string, string> = {
 
 function getAgentColor(agent: AgentBrief): string {
   return agent.theme_color || statusColors[agent.status] || '#a78bfa'
+}
+
+function isNodeSelected(q: number, r: number): boolean {
+  if (!props.selectable || !props.selectedKeys) return true
+  return props.selectedKeys.has(`${q},${r}`)
+}
+
+function isAgentSelected(agent: { hex_q: number; hex_r: number }): boolean {
+  return isNodeSelected(agent.hex_q, agent.hex_r)
+}
+
+function handleAgentClick(agent: AgentBrief) {
+  if (props.selectable) {
+    emit('toggle-node', `${agent.hex_q},${agent.hex_r}`)
+  } else {
+    emit('hex-click', { q: agent.hex_q, r: agent.hex_r, type: 'agent', agentId: agent.instance_id })
+  }
 }
 
 const honeycombGrid = computed(() => {
@@ -429,6 +452,7 @@ const emptyHexes = computed(() => {
       <!-- Empty hex clickable areas -->
       <g
         v-for="hex in emptyHexes"
+        v-if="!selectable"
         :key="`empty-${hex.q}-${hex.r}`"
         class="cursor-pointer"
         :transform="`translate(${hex.px}, ${hex.py})`"
@@ -446,13 +470,13 @@ const emptyHexes = computed(() => {
 
       <!-- Blackboard hex at center (q=0, r=0) -->
       <g
-        class="cursor-pointer bb-hex"
-        @click.stop="emit('hex-click', { q: 0, r: 0, type: 'blackboard' })"
-        @pointerenter="hoveredId = '__blackboard__'"
-        @pointerleave="hoveredId = null"
+        :class="selectable ? 'cursor-default' : 'cursor-pointer bb-hex'"
+        @click.stop="selectable || emit('hex-click', { q: 0, r: 0, type: 'blackboard' })"
+        @pointerenter="selectable || (hoveredId = '__blackboard__')"
+        @pointerleave="selectable || (hoveredId = null)"
       >
         <polygon
-          v-if="selectedHex?.q === 0 && selectedHex?.r === 0"
+          v-if="!selectable && selectedHex?.q === 0 && selectedHex?.r === 0"
           :points="bbHexPoints()"
           fill="none"
           stroke="#60a5fa"
@@ -462,13 +486,14 @@ const emptyHexes = computed(() => {
         />
         <polygon
           :points="bbHexPoints()"
-          :fill="hoveredId === '__blackboard__' ? '#1e1e3a' : '#141428'"
+          :fill="!selectable && hoveredId === '__blackboard__' ? '#1e1e3a' : '#141428'"
           stroke="#a78bfa"
           stroke-width="1.5"
           opacity="0.9"
           filter="url(#bb-glow)"
         />
         <polygon
+          v-if="!selectable"
           :points="bbHexPoints()"
           fill="none"
           stroke="#a78bfa"
@@ -477,21 +502,23 @@ const emptyHexes = computed(() => {
           stroke-dasharray="4,4"
           class="animate-bb-ring"
         />
-        <text x="0" y="-20" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">
+        <text x="0" :y="selectable ? 0 : -20" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="600">
           {{ t('workspaceView.bbTitle') }}
         </text>
-        <text v-if="perfSummary" x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
-          {{ t('workspaceView.bbInputLine', { done: perfSummary.completedTasks, tasks: perfSummary.totalTasks }) }}
-        </text>
-        <text v-else-if="!perfLoading" x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
-          {{ blackboardContent?.slice(0, 24) || t('workspaceView.bbNoSummary') }}{{ (blackboardContent?.length ?? 0) > 24 ? '...' : '' }}
-        </text>
-        <text v-if="perfSummary" x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
-          {{ t('workspaceView.bbOutputLine', { value: formatK(perfSummary.totalValueCreated) }) }}
-        </text>
-        <text v-else-if="!perfLoading" x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
-          {{ blackboardContent?.slice(24, 54) || '' }}{{ (blackboardContent?.length ?? 0) > 54 ? '...' : '' }}
-        </text>
+        <template v-if="!selectable">
+          <text v-if="perfSummary" x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
+            {{ t('workspaceView.bbInputLine', { done: perfSummary.completedTasks, tasks: perfSummary.totalTasks }) }}
+          </text>
+          <text v-else-if="!perfLoading" x="0" y="-2" text-anchor="middle" fill="#9ca3af" font-size="9">
+            {{ blackboardContent?.slice(0, 24) || t('workspaceView.bbNoSummary') }}{{ (blackboardContent?.length ?? 0) > 24 ? '...' : '' }}
+          </text>
+          <text v-if="perfSummary" x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
+            {{ t('workspaceView.bbOutputLine', { value: formatK(perfSummary.totalValueCreated) }) }}
+          </text>
+          <text v-else-if="!perfLoading" x="0" y="16" text-anchor="middle" fill="#6b7280" font-size="8">
+            {{ blackboardContent?.slice(24, 54) || '' }}{{ (blackboardContent?.length ?? 0) > 54 ? '...' : '' }}
+          </text>
+        </template>
       </g>
 
       <!-- Agent hexes -->
@@ -499,15 +526,16 @@ const emptyHexes = computed(() => {
         v-for="agent in agentPositions"
         :key="agent.instance_id"
         class="cursor-pointer transition-transform"
-        :transform="`translate(${agent.px}, ${agent.py}) ${hoveredId === agent.instance_id ? 'scale(1.08)' : ''}`"
-        @click.stop="emit('hex-click', { q: agent.hex_q, r: agent.hex_r, type: 'agent', agentId: agent.instance_id })"
-        @dblclick="emit('agent-dblclick', agent.instance_id)"
-        @pointerenter="hoveredId = agent.instance_id; emit('agent-hover', agent.instance_id)"
-        @pointerleave="hoveredId = null; emit('agent-hover', null)"
+        :transform="`translate(${agent.px}, ${agent.py}) ${!selectable && hoveredId === agent.instance_id ? 'scale(1.08)' : ''}`"
+        :opacity="selectable && !isAgentSelected(agent) ? 0.25 : 1"
+        @click.stop="handleAgentClick(agent)"
+        @dblclick="selectable || emit('agent-dblclick', agent.instance_id)"
+        @pointerenter="selectable || (hoveredId = agent.instance_id, emit('agent-hover', agent.instance_id))"
+        @pointerleave="selectable || (hoveredId = null, emit('agent-hover', null))"
       >
         <!-- Selection highlight ring -->
         <polygon
-          v-if="props.selectedAgentId === agent.instance_id"
+          v-if="!selectable && props.selectedAgentId === agent.instance_id"
           :points="hexPoints(0, 0)"
           fill="none"
           stroke="#60a5fa"
@@ -517,18 +545,26 @@ const emptyHexes = computed(() => {
         />
         <polygon
           :points="hexPoints(0, 0)"
-          :fill="agent.sse_connected ? getAgentColor(agent) + '22' : '#55556622'"
-          :stroke="agent.sse_connected ? getAgentColor(agent) : '#555566'"
+          :fill="selectable ? (getAgentColor(agent) + '22') : (agent.sse_connected ? getAgentColor(agent) + '22' : '#55556622')"
+          :stroke="selectable ? getAgentColor(agent) : (agent.sse_connected ? getAgentColor(agent) : '#555566')"
           stroke-width="2"
-          :stroke-dasharray="agent.sse_connected ? 'none' : '6,4'"
-          :opacity="agent.sse_connected ? 1 : 0.6"
+          :stroke-dasharray="selectable ? 'none' : (agent.sse_connected ? 'none' : '6,4')"
+          :opacity="selectable ? 1 : (agent.sse_connected ? 1 : 0.6)"
           :class="{
-            'animate-pulse': agent.sse_connected && (agent.status === 'running' || agent.status === 'active'),
-            'animate-hex-thinking': agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending' || agent.status === 'learning'),
+            'animate-pulse': !selectable && agent.sse_connected && (agent.status === 'running' || agent.status === 'active'),
+            'animate-hex-thinking': !selectable && agent.sse_connected && (agent.status === 'thinking' || agent.status === 'pending' || agent.status === 'learning'),
           }"
         />
+        <!-- Red strikethrough for deselected agents -->
+        <line
+          v-if="selectable && !isAgentSelected(agent)"
+          :x1="-HEX_RADIUS * 0.7" :y1="0"
+          :x2="HEX_RADIUS * 0.7" :y2="0"
+          stroke="#ef4444" stroke-width="3" stroke-linecap="round"
+          class="pointer-events-none"
+        />
         <!-- Directional heat edges -->
-        <template v-for="(edge, ei) in agentHeatEdges(agent)" :key="'heat-' + ei">
+        <template v-if="!selectable" v-for="(edge, ei) in agentHeatEdges(agent)" :key="'heat-' + ei">
           <line v-if="edge.heat > 0"
             :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
             :stroke="heatColor(edge.heat)" :stroke-width="3"
@@ -538,6 +574,7 @@ const emptyHexes = computed(() => {
         </template>
         <!-- Status text along upper-left edge (inside hex) -->
         <text
+          v-if="!selectable"
           :x="EDGE_MX" :y="EDGE_MY"
           :transform="`rotate(-30, ${EDGE_MX}, ${EDGE_MY})`"
           text-anchor="middle"
@@ -549,16 +586,16 @@ const emptyHexes = computed(() => {
           {{ agent.sse_connected ? agent.status : 'disconnected' }}
         </text>
         <text
-          :y="agent.label ? -4 : 0"
+          :y="agent.label && !selectable ? -4 : 0"
           text-anchor="middle"
-          :fill="agent.sse_connected ? 'white' : '#9ca3af'"
+          :fill="selectable ? 'white' : (agent.sse_connected ? 'white' : '#9ca3af')"
           font-size="11"
           font-weight="500"
         >
           {{ agent.display_name || agent.name }}
         </text>
         <text
-          v-if="agent.label"
+          v-if="agent.label && !selectable"
           y="10"
           text-anchor="middle"
           fill="#9ca3af"
@@ -572,11 +609,12 @@ const emptyHexes = computed(() => {
       <g
         v-for="ch in corridorPaths"
         :key="'corridor-' + ch.entity_id"
-        class="cursor-pointer transition-transform"
-        :transform="`translate(${ch.px}, ${ch.py}) ${hoveredId === 'corridor-' + ch.entity_id ? 'scale(1.06)' : ''}`"
-        @click.stop="emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.entity_id })"
-        @pointerenter="hoveredId = 'corridor-' + ch.entity_id"
-        @pointerleave="hoveredId = null"
+        :class="selectable && selectableTypes.includes('corridor') ? 'cursor-pointer' : selectable ? 'cursor-default' : 'cursor-pointer transition-transform'"
+        :transform="`translate(${ch.px}, ${ch.py}) ${!selectable && hoveredId === 'corridor-' + ch.entity_id ? 'scale(1.06)' : ''}`"
+        :opacity="selectable && !isNodeSelected(ch.hex_q, ch.hex_r) ? 0.2 : 1"
+        @click.stop="selectable && selectableTypes.includes('corridor') ? emit('toggle-node', `${ch.hex_q},${ch.hex_r}`) : selectable ? undefined : emit('hex-click', { q: ch.hex_q, r: ch.hex_r, type: 'corridor', entityId: ch.entity_id })"
+        @pointerenter="selectable || (hoveredId = 'corridor-' + ch.entity_id)"
+        @pointerleave="selectable || (hoveredId = null)"
       >
         <polygon
           :points="corridorHexPoints(0, 0)"
@@ -594,6 +632,13 @@ const emptyHexes = computed(() => {
           />
         </template>
         <circle cx="0" cy="0" :r="JUNCTION_R_2D" :fill="getJunctionColor(ch)" opacity="0.6" />
+        <line
+          v-if="selectable && !isNodeSelected(ch.hex_q, ch.hex_r)"
+          :x1="-CORRIDOR_RADIUS * 0.7" :y1="0"
+          :x2="CORRIDOR_RADIUS * 0.7" :y2="0"
+          stroke="#ef4444" stroke-width="3" stroke-linecap="round"
+          class="pointer-events-none"
+        />
         <text
           v-if="ch.display_name"
           :y="-CORRIDOR_RADIUS - 6"
@@ -610,11 +655,11 @@ const emptyHexes = computed(() => {
       <g
         v-for="hh in humanNodes"
         :key="'human-' + hh.entity_id"
-        class="cursor-pointer transition-transform"
-        :transform="`translate(${hh.px}, ${hh.py}) ${hoveredId === 'human-' + hh.entity_id ? 'scale(1.06)' : ''}`"
-        @click.stop="emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', entityId: hh.entity_id })"
-        @pointerenter="hoveredId = 'human-' + hh.entity_id"
-        @pointerleave="hoveredId = null"
+        :class="selectable ? 'cursor-default' : 'cursor-pointer transition-transform'"
+        :transform="`translate(${hh.px}, ${hh.py}) ${!selectable && hoveredId === 'human-' + hh.entity_id ? 'scale(1.06)' : ''}`"
+        @click.stop="selectable || emit('hex-click', { q: hh.hex_q, r: hh.hex_r, type: 'human', entityId: hh.entity_id })"
+        @pointerenter="selectable || (hoveredId = 'human-' + hh.entity_id)"
+        @pointerleave="selectable || (hoveredId = null)"
       >
         <polygon
           :points="humanHexPoints(0, 0)"
@@ -629,7 +674,7 @@ const emptyHexes = computed(() => {
       </g>
 
       <!-- Message flow animation particles -->
-      <g class="flow-anim-layer">
+      <g v-if="!selectable" class="flow-anim-layer">
         <circle
           v-for="p in particles"
           :key="p.id"
@@ -642,7 +687,7 @@ const emptyHexes = computed(() => {
       </g>
 
       <!-- Hex pulse on message arrival -->
-      <g class="pulse-layer">
+      <g v-if="!selectable" class="pulse-layer">
         <template v-for="pulse in pulses" :key="pulse.key">
           <circle
             :cx="worldPos(Number(pulse.key.split(',')[0]), Number(pulse.key.split(',')[1])).px"
@@ -658,7 +703,7 @@ const emptyHexes = computed(() => {
 
       <!-- Selected hex highlight for agents -->
       <g
-        v-if="selectedHex && !isMovingHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
+        v-if="!selectable && selectedHex && !isMovingHex && agents.some(a => a.hex_q === selectedHex!.q && a.hex_r === selectedHex!.r)"
         :transform="`translate(${worldPos(selectedHex!.q, selectedHex!.r).px}, ${worldPos(selectedHex!.q, selectedHex!.r).py})`"
       >
         <polygon
@@ -673,7 +718,7 @@ const emptyHexes = computed(() => {
 
       <!-- Move mode: source hex pulsing highlight -->
       <g
-        v-if="isMovingHex && movingHexSource"
+        v-if="!selectable && isMovingHex && movingHexSource"
         :transform="`translate(${worldPos(movingHexSource.q, movingHexSource.r).px}, ${worldPos(movingHexSource.q, movingHexSource.r).py})`"
       >
         <polygon

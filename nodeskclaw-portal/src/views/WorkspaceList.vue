@@ -1,21 +1,55 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { Plus, Loader2, Bot } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorkspaceStore, type WorkspaceListItem } from '@/stores/workspace'
 import WorkspaceCard from '@/components/workspace/WorkspaceCard.vue'
+import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
 
 const router = useRouter()
 const store = useWorkspaceStore()
+const { activeTemplateDeploys } = storeToRefs(store)
 const { t } = useI18n()
+
+const resumeDialogOpen = ref(false)
+const resumeDeployId = ref<string | null>(null)
 
 onMounted(() => {
   store.fetchWorkspaces()
+  void store.refreshActiveTemplateDeploys()
 })
+
+const deployByWorkspaceId = computed(() => {
+  const m = new Map<string, (typeof activeTemplateDeploys.value)[0]>()
+  for (const d of activeTemplateDeploys.value) {
+    if (d.workspace_id) m.set(d.workspace_id, d)
+  }
+  return m
+})
+
+function activeDeployFor(wsId: string) {
+  return deployByWorkspaceId.value.get(wsId) ?? null
+}
 
 function openWorkspace(id: string) {
   router.push(`/workspace/${id}`)
+}
+
+function onCardClick(ws: WorkspaceListItem) {
+  const d = activeDeployFor(ws.id)
+  if (d) {
+    resumeDeployId.value = d.id
+    resumeDialogOpen.value = true
+    return
+  }
+  openWorkspace(ws.id)
+}
+
+function onResumeDeployDone(workspaceId: string) {
+  void store.refreshActiveTemplateDeploys()
+  openWorkspace(workspaceId)
 }
 
 function createNew() {
@@ -74,8 +108,15 @@ function createNew() {
         v-for="ws in store.workspaces"
         :key="ws.id"
         :workspace="ws"
-        @click="openWorkspace(ws.id)"
+        :active-deploy="activeDeployFor(ws.id)"
+        @click="onCardClick(ws)"
       />
     </div>
+
+    <DeployFromTemplateDialog
+      v-model:open="resumeDialogOpen"
+      :resume-deploy-id="resumeDeployId"
+      @done="onResumeDeployDone"
+    />
   </div>
 </template>

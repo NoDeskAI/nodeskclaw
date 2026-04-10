@@ -13,31 +13,35 @@ defineEmits<{
   select: []
 }>()
 
+const iconMap: Record<string, typeof Code2> = {
+  Code2,
+  PenTool,
+  Microscope,
+  LayoutTemplate,
+}
+
 const iconComponent = computed(() => {
   if (props.blank) return FilePlus2
   if (!props.template) return LayoutTemplate
   if (props.template.visibility === 'org_private') return Building2
-
-  const nodes = props.template.topology_snapshot?.nodes ?? []
-  const agentNames = new Set(
-    nodes
-      .filter((node) => node.node_type === 'agent')
-      .map((node) => node.display_name?.trim())
-      .filter((name): name is string => Boolean(name)),
-  )
-
-  if (agentNames.has('PM') && agentNames.has('Dev') && agentNames.has('QA')) return Code2
-  if (agentNames.has('Writer') && agentNames.has('Editor') && agentNames.has('Designer')) return PenTool
-  if (agentNames.has('Researcher') && agentNames.has('Analyst')) return Microscope
-
+  const name = props.template.name
+  if (name.includes('研发') || name.includes('Software')) return Code2
+  if (name.includes('内容') || name.includes('Content')) return PenTool
+  if (name.includes('研究') || name.includes('Research')) return Microscope
   return LayoutTemplate
 })
 
 const agentCount = computed(() => {
   if (props.blank || !props.template) return 0
-  const topo = props.template.topology_snapshot
+  if (props.template.agent_count != null) return props.template.agent_count
+  const topo = (props.template as { topology_snapshot?: { nodes?: { node_type?: string }[] } }).topology_snapshot
   if (!topo?.nodes) return 0
-  return topo.nodes.filter((node) => node.node_type === 'agent').length
+  return topo.nodes.filter((n) => n.node_type === 'agent').length
+})
+
+const humanCount = computed(() => {
+  if (props.blank || !props.template) return 0
+  return props.template.human_count ?? 0
 })
 </script>
 
@@ -55,8 +59,11 @@ const agentCount = computed(() => {
     <span class="text-sm font-medium leading-tight">
       {{ blank ? $t('createWorkspace.blankTemplate') : template?.name }}
     </span>
-    <span v-if="!blank && agentCount" class="text-xs text-muted-foreground">
+    <span v-if="!blank" class="text-xs text-muted-foreground">
       {{ $t('createWorkspace.agentSlots', { count: agentCount }) }}
+    </span>
+    <span v-if="!blank && humanCount > 0" class="text-xs text-muted-foreground">
+      {{ $t('createWorkspace.humanSlots', { count: humanCount }) }}
     </span>
     <span
       v-if="template?.visibility === 'org_private'"
