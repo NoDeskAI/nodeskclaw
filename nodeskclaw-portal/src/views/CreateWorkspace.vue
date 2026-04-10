@@ -8,6 +8,7 @@ import type { WorkspaceTemplateItem } from '@/stores/workspace'
 import { useClusterStore, type ClusterInfo } from '@/stores/cluster'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import TemplateCard from '@/components/workspace/TemplateCard.vue'
+import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -32,6 +33,8 @@ const clusterDropdownOpen = ref(false)
 const selectedCluster = computed(() =>
   availableClusters.value.find(c => c.id === selectedClusterId.value) ?? null
 )
+const deployDialogOpen = ref(false)
+const deployTemplateId = ref<string | null>(null)
 
 const colors = [
   '#a78bfa', '#60a5fa', '#34d399', '#fbbf24',
@@ -65,9 +68,18 @@ function selectBlank() {
 }
 
 function selectTemplate(tpl: WorkspaceTemplateItem) {
+  if (tpl.can_deploy_from_template) {
+    deployTemplateId.value = tpl.id
+    deployDialogOpen.value = true
+    return
+  }
   selectedTemplateId.value = tpl.id
   selectedTemplateName.value = tpl.name
   step.value = 2
+}
+
+function onDeployFromTemplateDone(workspaceId: string) {
+  router.push(`/workspace/${workspaceId}`)
 }
 
 function goBackToTemplates() {
@@ -282,5 +294,11 @@ async function handleCreate() {
         </button>
       </div>
     </div>
+
+    <DeployFromTemplateDialog
+      v-model:open="deployDialogOpen"
+      :template-id="deployTemplateId"
+      @done="onDeployFromTemplateDone"
+    />
   </div>
 </template>

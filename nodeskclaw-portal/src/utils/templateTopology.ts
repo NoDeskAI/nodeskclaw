@@ -20,17 +20,21 @@ interface TemplateData {
 
 export function buildTopoNodes(data: TemplateData): TopoNode[] {
   const nodes: TopoNode[] = []
-  const seen = new Set<string>()
-
-  const addNode = (n: TopoNode) => {
-    const key = `${n.hex_q},${n.hex_r}`
-    if (seen.has(key)) return
-    seen.add(key)
-    nodes.push(n)
+  const snap = data.topology_snapshot
+  if (snap?.nodes) {
+    for (const n of snap.nodes) {
+      nodes.push({
+        hex_q: n.hex_q as number,
+        hex_r: n.hex_r as number,
+        node_type: (n.node_type as TopoNode['node_type']) || 'corridor',
+        entity_id: null,
+        display_name: (n.display_name as string) || '',
+        extra: {},
+      })
+    }
   }
-
   for (const s of data.agent_specs) {
-    addNode({
+    nodes.push({
       hex_q: s.hex_q as number,
       hex_r: s.hex_r as number,
       node_type: 'agent',
@@ -40,7 +44,7 @@ export function buildTopoNodes(data: TemplateData): TopoNode[] {
     })
   }
   for (const h of data.human_specs) {
-    addNode({
+    nodes.push({
       hex_q: h.hex_q as number,
       hex_r: h.hex_r as number,
       node_type: 'human',
@@ -48,19 +52,6 @@ export function buildTopoNodes(data: TemplateData): TopoNode[] {
       display_name: (h.display_name as string) || '',
       extra: {},
     })
-  }
-  const snap = data.topology_snapshot
-  if (snap?.nodes) {
-    for (const n of snap.nodes) {
-      addNode({
-        hex_q: n.hex_q as number,
-        hex_r: n.hex_r as number,
-        node_type: (n.node_type as TopoNode['node_type']) || 'corridor',
-        entity_id: null,
-        display_name: (n.display_name as string) || '',
-        extra: {},
-      })
-    }
   }
   return nodes
 }

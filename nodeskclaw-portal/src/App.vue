@@ -9,6 +9,7 @@ import { useFeature } from '@/composables/useFeature'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
+import { useDeployNotification } from '@/composables/useDeployNotification'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -22,6 +23,8 @@ const userMenuRef = ref<HTMLElement>()
 const locale = ref(getCurrentLocale())
 const appVersion = __APP_VERSION__
 const { isEnabled: isPerformanceEnabled } = useFeature('performance_analytics')
+
+useDeployNotification()
 
 function onDocumentClick(e: MouseEvent) {
   if (showUserMenu.value && userMenuRef.value && !userMenuRef.value.contains(e.target as Node)) {
