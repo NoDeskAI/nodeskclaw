@@ -480,10 +480,45 @@ cmd_release() {
 
   echo ""
   log "创建 git tag..."
-  git -C "$PROJECT_ROOT" tag "$VERSION"
-  git -C "$PROJECT_ROOT" push origin "$VERSION"
+  local local_exists=false remote_exists=false
+  git -C "$PROJECT_ROOT" rev-parse "refs/tags/$VERSION" &>/dev/null && local_exists=true
+  git -C "$PROJECT_ROOT" ls-remote --tags origin "refs/tags/$VERSION" 2>/dev/null | grep -q . && remote_exists=true
+
+  if [[ "$local_exists" == true || "$remote_exists" == true ]]; then
+    local where=""
+    [[ "$local_exists" == true ]] && where+="本地"
+    [[ "$local_exists" == true && "$remote_exists" == true ]] && where+=" + "
+    [[ "$remote_exists" == true ]] && where+="远程"
+    warn "tag $VERSION 已存在（${where}）"
+    read -rp "覆盖已有 tag? [y/N] " ans
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+      [[ "$local_exists" == true ]] && git -C "$PROJECT_ROOT" tag -d "$VERSION"
+      git -C "$PROJECT_ROOT" tag "$VERSION"
+      git -C "$PROJECT_ROOT" push origin "$VERSION" --force
+    else
+      err "已取消"
+      exit 1
+    fi
+  else
+    git -C "$PROJECT_ROOT" tag "$VERSION"
+    git -C "$PROJECT_ROOT" push origin "$VERSION"
+  fi
 
   log "创建 GitHub Pre-release..."
+  local release_exists=false
+  gh release view "$VERSION" --repo NoDeskAI/nodeskclaw &>/dev/null && release_exists=true
+
+  if [[ "$release_exists" == true ]]; then
+    warn "GitHub Release $VERSION 已存在"
+    read -rp "覆盖已有 Release? [y/N] " ans
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+      gh release delete "$VERSION" --repo NoDeskAI/nodeskclaw --yes
+    else
+      err "已取消"
+      exit 1
+    fi
+  fi
+
   gh release create "$VERSION" \
     --repo NoDeskAI/nodeskclaw \
     --prerelease \
