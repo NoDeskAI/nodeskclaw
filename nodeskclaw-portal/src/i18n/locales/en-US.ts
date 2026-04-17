@@ -478,6 +478,7 @@ const enUS = {
     start: "Start deploy",
     enterWorkspace: "Open office",
     loadFailed: "Failed to load template",
+    resumeFailed: "Failed to load deployment details, entering workspace directly",
     startFailed: "Failed to start deploy",
     toastSuccess: "Deploy finished",
     toastPartial: "Deploy partially finished",

@@ -478,6 +478,7 @@ const zhCN = {
     start: "开始部署",
     enterWorkspace: "进入办公室",
     loadFailed: "加载模板详情失败",
+    resumeFailed: "加载部署详情失败，已直接进入工作区",
     startFailed: "启动部署失败",
     toastSuccess: "部署已完成",
     toastPartial: "部署部分完成",

@@ -15,6 +15,7 @@ const { t } = useI18n()
 
 const resumeDialogOpen = ref(false)
 const resumeDeployId = ref<string | null>(null)
+const pendingWorkspaceId = ref<string | null>(null)
 
 onMounted(() => {
   store.fetchWorkspaces()
@@ -42,6 +43,7 @@ function openWorkspace(id: string) {
 function onCardClick(ws: WorkspaceListItem) {
   const d = activeDeployFor(ws.id)
   if (d) {
+    pendingWorkspaceId.value = ws.id
     resumeDeployId.value = d.id
     resumeDialogOpen.value = true
     return
@@ -52,6 +54,13 @@ function onCardClick(ws: WorkspaceListItem) {
 function onResumeDeployDone(workspaceId: string) {
   void store.refreshActiveTemplateDeploys()
   openWorkspace(workspaceId)
+}
+
+function onResumeLoadError() {
+  if (pendingWorkspaceId.value) {
+    openWorkspace(pendingWorkspaceId.value)
+    pendingWorkspaceId.value = null
+  }
 }
 
 function createNew() {
@@ -118,6 +127,7 @@ function createNew() {
       v-model:open="resumeDialogOpen"
       :resume-deploy-id="resumeDeployId"
       @done="onResumeDeployDone"
+      @load-error="onResumeLoadError"
     />
   </div>
 </template>

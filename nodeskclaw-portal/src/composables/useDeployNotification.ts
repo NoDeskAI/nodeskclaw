@@ -33,7 +33,9 @@ export function useDeployNotification() {
       } catch {
         return
       }
+      const TERMINAL = new Set(['success', 'partial_success', 'failed'])
       const curr = new Set(list.map((l) => l.id))
+      const nextPrev = new Set(curr)
       for (const id of prevDeployIds.value) {
         if (!curr.has(id)) {
           try {
@@ -42,37 +44,41 @@ export function useDeployNotification() {
               workspace_id?: string | null
               workspace_name?: string
             }
-            const wid = d.workspace_id
-            const name = d.workspace_name || ''
-            if (d.status === 'success') {
-              toast.success(t('deployNotify.success', { name }), {
-                duration: 8000,
-                action: wid
-                  ? {
-                      label: t('deployNotify.goTo'),
-                      onClick: () => router.push(`/workspace/${wid}`),
-                    }
-                  : undefined,
-              })
-            } else if (d.status === 'partial_success') {
-              toast.info(t('deployNotify.partial', { name }), {
-                duration: 8000,
-                action: wid
-                  ? {
-                      label: t('deployNotify.goTo'),
-                      onClick: () => router.push(`/workspace/${wid}`),
-                    }
-                  : undefined,
-              })
-            } else if (d.status === 'failed') {
-              toast.error(t('deployNotify.failed', { name }))
+            if (TERMINAL.has(d.status || '')) {
+              const wid = d.workspace_id
+              const name = d.workspace_name || ''
+              if (d.status === 'success') {
+                toast.success(t('deployNotify.success', { name }), {
+                  duration: 8000,
+                  action: wid
+                    ? {
+                        label: t('deployNotify.goTo'),
+                        onClick: () => router.push(`/workspace/${wid}`),
+                      }
+                    : undefined,
+                })
+              } else if (d.status === 'partial_success') {
+                toast.info(t('deployNotify.partial', { name }), {
+                  duration: 8000,
+                  action: wid
+                    ? {
+                        label: t('deployNotify.goTo'),
+                        onClick: () => router.push(`/workspace/${wid}`),
+                      }
+                    : undefined,
+                })
+              } else if (d.status === 'failed') {
+                toast.error(t('deployNotify.failed', { name }))
+              }
+            } else {
+              nextPrev.add(id)
             }
           } catch {
-            /* ignore */
+            nextPrev.add(id)
           }
         }
       }
-      prevDeployIds.value = curr
+      prevDeployIds.value = nextPrev
     } finally {
       ticking = false
     }

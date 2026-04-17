@@ -32,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:open': [v: boolean]
   done: [workspaceId: string]
+  loadError: []
 }>()
 
 const { t } = useI18n()
@@ -174,7 +175,8 @@ watch(
     if (props.resumeDeployId) {
       phase.value = 'progress'
       deployId.value = props.resumeDeployId
-      await loadDeployState(props.resumeDeployId)
+      const ok = await loadDeployState(props.resumeDeployId)
+      if (!ok) return
       startSse(props.resumeDeployId)
       return
     }
@@ -202,7 +204,7 @@ watch(
   },
 )
 
-async function loadDeployState(id: string) {
+async function loadDeployState(id: string): Promise<boolean> {
   try {
     const d = await store.fetchWorkspaceDeploy(id)
     workspaceIdRef.value = (d as { workspace_id?: string }).workspace_id ?? null
@@ -218,8 +220,12 @@ async function loadDeployState(id: string) {
     if (st === 'success' || st === 'partial_success' || st === 'failed') {
       finalDone.value = true
     }
-  } catch {
-    /* ignore */
+    return true
+  } catch (e) {
+    toast.error(resolveApiErrorMessage(e, t('deployFromTemplate.resumeFailed')))
+    emit('loadError')
+    close()
+    return false
   }
 }
 
