@@ -393,6 +393,12 @@ const zhCN = {
     focusMode: "聚焦模式",
     skillLearnedToast: "{agentName} 学会了 {geneName}",
     skillLearnedToastWithSummary: "{agentName} 学会了 {geneName}：{summary}",
+    restartAll: "重启全部实例",
+    restartAllConfirm: "确认重启该办公室全部 AI 员工？重启过程中员工将暂时离线。",
+    restartAllSuccess: "已成功重启 {succeeded} 个实例",
+    restartAllPartial: "{succeeded} 个实例已重启，{failed} 个失败",
+    restartAllFailed: "重启失败",
+    restartAllNoInstances: "没有可重启的实例",
   },
   workspaceSettings: {
     title: "办公室设置",

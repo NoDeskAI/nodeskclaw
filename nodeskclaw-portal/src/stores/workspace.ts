@@ -497,6 +497,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await updateAgent(workspaceId, instanceId, { theme_color: color })
   }
 
+  async function restartAllInstances(workspaceId: string) {
+    const res = await api.post(`/workspaces/${workspaceId}/restart-all-instances`)
+    return res.data.data as { total: number; succeeded: number; failed: number; skipped: number; details: unknown[] }
+  }
+
   // ── Blackboard ────────────────────────────────────
 
   async function fetchBlackboard(workspaceId: string) {
@@ -1582,5 +1587,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     updateMember,
     removeMember,
     searchOrgUsers,
+    restartAllInstances,
   }
 })

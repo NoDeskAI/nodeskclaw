@@ -2067,3 +2067,51 @@ async def delete_shared_file(
     f.soft_delete()
     await db.commit()
     return True
+
+
+async def restart_all_instances(workspace_id: str, db: AsyncSession) -> dict:
+    from app.services import instance_service
+
+    agents_result = await db.execute(
+        select(Instance, WorkspaceAgent).join(
+            WorkspaceAgent,
+            (WorkspaceAgent.instance_id == Instance.id) & (WorkspaceAgent.deleted_at.is_(None)),
+        ).where(
+            WorkspaceAgent.workspace_id == workspace_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    agents = agents_result.all()
+
+    restartable = [
+        (inst, wa) for inst, wa in agents
+        if inst.status in ("running", "learning")
+    ]
+
+    if not restartable:
+        return {"total": len(agents), "succeeded": 0, "failed": 0, "skipped": len(agents), "details": []}
+
+    results = await asyncio.gather(
+        *[instance_service.restart_instance(inst.id, db) for inst, _wa in restartable],
+        return_exceptions=True,
+    )
+
+    details = []
+    succeeded = 0
+    failed = 0
+    for (inst, _wa), result in zip(restartable, results):
+        if isinstance(result, Exception):
+            failed += 1
+            details.append({"instance_id": inst.id, "name": inst.name, "status": "failed", "error": str(result)[:200]})
+            logger.warning("批量重启: 实例 %s 失败: %s", inst.name, result)
+        else:
+            succeeded += 1
+            details.append({"instance_id": inst.id, "name": inst.name, "status": "ok"})
+
+    return {
+        "total": len(agents),
+        "succeeded": succeeded,
+        "failed": failed,
+        "skipped": len(agents) - len(restartable),
+        "details": details,
+    }

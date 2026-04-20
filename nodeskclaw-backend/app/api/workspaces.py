@@ -2154,6 +2154,19 @@ async def batch_upgrade_instances(
     return _ok({"upgrade": upgrade_result, "repair": repair_result})
 
 
+@router.post("/{workspace_id}/restart-all-instances")
+async def restart_all_instances(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_dep()),
+):
+    await wm_service.check_workspace_access(workspace_id, user, "manage_agents", db)
+    result = await workspace_service.restart_all_instances(workspace_id, db)
+    if result["total"] == 0:
+        raise _error(400, 40090, "errors.workspace.restart_no_instances", "该办公室没有可重启的实例")
+    return _ok(result)
+
+
 @router.post("/maintenance/refresh-gene-skills")
 async def refresh_gene_skills(
     body: dict,

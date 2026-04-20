@@ -393,6 +393,12 @@ const enUS = {
     focusMode: "Focus Mode",
     skillLearnedToast: "{agentName} learned {geneName}",
     skillLearnedToastWithSummary: "{agentName} learned {geneName}: {summary}",
+    restartAll: "Restart All Instances",
+    restartAllConfirm: "Restart all AI employees in this workspace? They will be temporarily offline during restart.",
+    restartAllSuccess: "Successfully restarted {succeeded} instances",
+    restartAllPartial: "{succeeded} instances restarted, {failed} failed",
+    restartAllFailed: "Restart failed",
+    restartAllNoInstances: "No instances to restart",
   },
   workspaceSettings: {
     title: "Cyber Office Settings",

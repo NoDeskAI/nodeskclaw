@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin, Focus, Minimize } from 'lucide-vue-next'
+import { ArrowLeft, Settings, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, RefreshCw, MessageSquare, Plus, Keyboard, ChevronDown, X, Bot, ListChecks, AlertTriangle, Wifi, User, Users, MapPin, Focus, Minimize } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { useViewTransition } from '@/composables/useViewTransition'
@@ -19,6 +19,7 @@ import CollaborationTimeline from '@/components/workspace/CollaborationTimeline.
 import AddAgentDialog from '@/components/workspace/AddAgentDialog.vue'
 import WorkspaceSettings from '@/views/WorkspaceSettings.vue'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import { axialToWorld } from '@/composables/useHexLayout'
 import { getCurrentLocale, setCurrentLocale } from '@/i18n'
 
@@ -713,6 +714,32 @@ function panCanvas(key: string) {
 
 // ── Move Mode ────────────────────────────────────────
 const toast = useToast()
+const { confirm } = useConfirm()
+
+const restartingAll = ref(false)
+const hasRestartableAgents = computed(() => agents.value.some(a => a.status === 'running' || a.status === 'learning'))
+
+async function handleRestartAll() {
+  const ok = await confirm({
+    title: t('workspaceView.restartAll'),
+    description: t('workspaceView.restartAllConfirm'),
+    variant: 'danger',
+  })
+  if (!ok) return
+  restartingAll.value = true
+  try {
+    const result = await store.restartAllInstances(workspaceId.value)
+    if (result.failed > 0) {
+      toast.warning(t('workspaceView.restartAllPartial', { succeeded: result.succeeded, failed: result.failed }))
+    } else {
+      toast.success(t('workspaceView.restartAllSuccess', { succeeded: result.succeeded }))
+    }
+  } catch (e: any) {
+    toast.error(e?.response?.data?.detail?.message || t('workspaceView.restartAllFailed'))
+  } finally {
+    restartingAll.value = false
+  }
+}
 
 type MovingHexSource = {
   type: 'agent' | 'corridor' | 'human'
@@ -906,6 +933,18 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
 
       <div class="flex items-center gap-2">
+        <button
+          v-if="store.hasPermission('manage_agents')"
+          class="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          :title="hasRestartableAgents ? t('workspaceView.restartAll') : t('workspaceView.restartAllNoInstances')"
+          :disabled="restartingAll || !hasRestartableAgents"
+          @click="handleRestartAll"
+        >
+          <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': restartingAll }" />
+        </button>
+
+        <div v-if="store.hasPermission('manage_agents')" class="w-px h-5 bg-border" />
+
         <div class="flex items-center gap-0.5 mr-1">
           <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" :title="t('workspaceView.zoomIn')" @click="handleZoomIn">
             <ZoomIn class="w-4 h-4" />
