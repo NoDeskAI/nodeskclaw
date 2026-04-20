@@ -908,6 +908,9 @@ const enUS = {
     nextStep: "Next",
     apiKeyPlaceholder: "Enter API key",
     providerHint: "Choose the LLM provider you use",
+    llmBlockCustomBaseUrl: "{label}: Please enter the Base URL (API root).",
+    llmBlockPersonalKey: "{label}: Please enter your personal API key.",
+    llmBlockModel: "{label}: Please select or enter a model.",
   },
   deployProgress: {
     title: "Deploy AI Employee",

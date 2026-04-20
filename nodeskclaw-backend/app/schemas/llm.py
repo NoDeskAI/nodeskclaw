@@ -95,6 +95,8 @@ class LlmConfigItem(BaseModel):
     provider: str
     key_source: str = Field(default="org", pattern=r"^(org|personal)$")
     selected_models: list[dict] | None = None
+    base_url: str | None = None
+    api_type: str | None = None
 
 
 # ── Instance Provider Config ────────────────────────────

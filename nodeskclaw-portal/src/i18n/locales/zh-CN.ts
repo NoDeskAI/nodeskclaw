@@ -908,6 +908,9 @@ const zhCN = {
     nextStep: "下一步",
     apiKeyPlaceholder: "输入 API Key",
     providerHint: "选择你使用的大模型服务商",
+    llmBlockCustomBaseUrl: "{label}：请填写 Base URL（API 根地址）",
+    llmBlockPersonalKey: "{label}：请填写个人 API Key",
+    llmBlockModel: "{label}：请选择或填写模型",
   },
   deployProgress: {
     title: "部署 AI 员工",
