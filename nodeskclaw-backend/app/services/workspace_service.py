@@ -228,6 +228,61 @@ async def _apply_template_to_workspace(
     await db.commit()
 
 
+async def apply_internal_deploy_topology(
+    db: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    topo_snap: dict,
+    human_specs: list[dict],
+) -> None:
+    """Apply filtered topology snapshot (corridors, connections, human hexes) during template deploy."""
+    import uuid
+
+    from app.models.corridor import CorridorHex, HexConnection, HumanHex, ordered_pair
+
+    for node in topo_snap.get("nodes", []):
+        if node.get("node_type") == "corridor":
+            db.add(CorridorHex(
+                id=str(uuid.uuid4()),
+                workspace_id=workspace_id,
+                hex_q=node.get("hex_q", 0),
+                hex_r=node.get("hex_r", 0),
+                display_name=node.get("display_name", ""),
+                created_by=user_id,
+            ))
+
+    for spec in human_specs:
+        db.add(HumanHex(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            user_id=spec.get("user_id", user_id),
+            hex_q=spec.get("hex_q", 0),
+            hex_r=spec.get("hex_r", 0),
+            display_name=spec.get("display_name"),
+            display_color=spec.get("display_color", "#f59e0b"),
+            created_by=user_id,
+        ))
+
+    await db.flush()
+
+    for edge in topo_snap.get("edges", []):
+        aq, ar, bq, br = ordered_pair(
+            edge.get("a_q", 0), edge.get("a_r", 0),
+            edge.get("b_q", 0), edge.get("b_r", 0),
+        )
+        db.add(HexConnection(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            hex_a_q=aq, hex_a_r=ar,
+            hex_b_q=bq, hex_b_r=br,
+            direction=edge.get("direction", "both"),
+            auto_created=edge.get("auto_created", False),
+            created_by=user_id,
+        ))
+
+    await db.commit()
+
+
 async def list_workspaces(
     db: AsyncSession, org_id: str, user_id: str | None = None,
 ) -> list[WorkspaceListItem]:
