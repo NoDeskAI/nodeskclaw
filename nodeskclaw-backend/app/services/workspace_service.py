@@ -167,7 +167,8 @@ async def _apply_template_to_workspace(
     import uuid
 
     from app.models.base import not_deleted
-    from app.models.corridor import CorridorHex, HexConnection, ordered_pair
+    from app.models.corridor import HexConnection, ordered_pair
+    from app.models.node_card import NodeCard
     from app.models.workspace_template import WorkspaceTemplate
 
     result = await db.execute(
@@ -186,15 +187,17 @@ async def _apply_template_to_workspace(
 
     for node in topo.get("nodes", []):
         if node.get("node_type") == "corridor":
-            ch = CorridorHex(
-                id=str(uuid.uuid4()),
+            db.add(NodeCard(
+                node_type="corridor",
+                node_id=str(uuid.uuid4()),
                 workspace_id=workspace_id,
                 hex_q=node.get("hex_q", 0),
                 hex_r=node.get("hex_r", 0),
-                display_name=node.get("display_name", ""),
-                created_by=user_id,
-            )
-            db.add(ch)
+                name=node.get("display_name", ""),
+                status="active",
+                tags=[],
+                metadata_={},
+            ))
 
     await db.flush()
 
@@ -203,7 +206,7 @@ async def _apply_template_to_workspace(
             edge.get("a_q", 0), edge.get("a_r", 0),
             edge.get("b_q", 0), edge.get("b_r", 0),
         )
-        conn = HexConnection(
+        db.add(HexConnection(
             id=str(uuid.uuid4()),
             workspace_id=workspace_id,
             hex_a_q=aq, hex_a_r=ar,
@@ -211,8 +214,7 @@ async def _apply_template_to_workspace(
             direction=edge.get("direction", "both"),
             auto_created=edge.get("auto_created", False),
             created_by=user_id,
-        )
-        db.add(conn)
+        ))
 
     if "content" in bb_snap:
         bb_result = await db.execute(
@@ -235,32 +237,47 @@ async def apply_internal_deploy_topology(
     topo_snap: dict,
     human_specs: list[dict],
 ) -> None:
-    """Apply filtered topology snapshot (corridors, connections, human hexes) during template deploy."""
+    """Apply filtered topology snapshot (corridors, connections, human hexes) during template deploy.
+
+    Writes directly to node_cards (Runtime v2) instead of legacy corridor_hexes/human_hexes,
+    because _build_hex_map short-circuits when node_cards already has data (agents are
+    already written there by add_agent).
+    """
     import uuid
 
-    from app.models.corridor import CorridorHex, HexConnection, HumanHex, ordered_pair
+    from app.models.corridor import HexConnection, ordered_pair
+    from app.models.node_card import NodeCard
 
     for node in topo_snap.get("nodes", []):
         if node.get("node_type") == "corridor":
-            db.add(CorridorHex(
-                id=str(uuid.uuid4()),
+            db.add(NodeCard(
+                node_type="corridor",
+                node_id=str(uuid.uuid4()),
                 workspace_id=workspace_id,
                 hex_q=node.get("hex_q", 0),
                 hex_r=node.get("hex_r", 0),
-                display_name=node.get("display_name", ""),
-                created_by=user_id,
+                name=node.get("display_name", ""),
+                status="active",
+                tags=[],
+                metadata_={},
             ))
 
     for spec in human_specs:
-        db.add(HumanHex(
-            id=str(uuid.uuid4()),
+        db.add(NodeCard(
+            node_type="human",
+            node_id=spec.get("user_id", user_id),
             workspace_id=workspace_id,
-            user_id=spec.get("user_id", user_id),
             hex_q=spec.get("hex_q", 0),
             hex_r=spec.get("hex_r", 0),
-            display_name=spec.get("display_name"),
-            display_color=spec.get("display_color", "#f59e0b"),
-            created_by=user_id,
+            name=spec.get("display_name", ""),
+            status="active",
+            tags=[],
+            metadata_={
+                "user_id": spec.get("user_id", user_id),
+                "display_color": spec.get("display_color", "#f59e0b"),
+                "channel_type": spec.get("channel_type"),
+                "channel_config": spec.get("channel_config"),
+            },
         ))
 
     await db.flush()
