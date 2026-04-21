@@ -75,7 +75,7 @@ class Cluster(BaseModel):
 
     @property
     def ingress_class(self) -> str:
-        return self.get_provider_value("ingress_class", "nginx")
+        return self.get_provider_value("ingress_class", "nginx") or "nginx"
 
     @property
     def auth_type(self) -> str:
