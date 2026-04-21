@@ -304,15 +304,19 @@ async def _run_deploy_pipeline_inner(workspace_deploy_id: str) -> None:
                         db_inner, org_id, spec.get("llm_providers") or [],
                     )
                     image_version = await _resolve_image_version(db_inner, runtime)
+                    cpu_limit = resources.get("cpu_limit", "2000m")
+                    mem_limit = resources.get("mem_limit", "2Gi")
                     req = DeployRequest(
                         cluster_id=cluster_id,
                         name=attempt_name,
                         image_version=image_version,
                         cpu_request=resources.get("cpu_request", "500m"),
-                        cpu_limit=resources.get("cpu_limit", "2000m"),
+                        cpu_limit=cpu_limit,
                         mem_request=resources.get("mem_request", "2Gi"),
-                        mem_limit=resources.get("mem_limit", "2Gi"),
+                        mem_limit=mem_limit,
                         storage_size=resources.get("storage_size", "80Gi"),
+                        quota_cpu=resources.get("quota_cpu") or cpu_limit,
+                        quota_mem=resources.get("quota_mem") or mem_limit,
                         llm_configs=llm_items or None,
                         runtime=runtime,
                     )

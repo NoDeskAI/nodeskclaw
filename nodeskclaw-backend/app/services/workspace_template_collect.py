@@ -91,6 +91,8 @@ async def collect_internal_template_payload(
                 "mem_request": inst.mem_request,
                 "mem_limit": inst.mem_limit,
                 "storage_size": inst.storage_size,
+                "quota_cpu": inst.quota_cpu,
+                "quota_mem": inst.quota_mem,
             },
             "llm_providers": llm_providers,
             "gene_slugs": gene_slugs,
