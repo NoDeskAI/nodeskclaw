@@ -15,12 +15,20 @@ function readErrorData(error: unknown): ApiErrorData {
   return {}
 }
 
+const GENERIC_KEY_PREFIX = 'errors.common.'
+
 export function resolveApiErrorMessage(error: unknown, fallback = ''): string {
   const { message_key, message, message_params } = readErrorData(error)
+  const hasSpecificMessage = !!(message && message.trim())
+  const isGenericKey = message_key?.startsWith(GENERIC_KEY_PREFIX)
+
+  if (isGenericKey && hasSpecificMessage) {
+    return message!.trim()
+  }
   if (message_key && i18n.global.te(message_key)) {
     return i18n.global.t(message_key, message_params ?? {})
   }
-  if (message && message.trim()) return message
+  if (hasSpecificMessage) return message!.trim()
   if (fallback) return fallback
   if (i18n.global.te('errors.system.internal_error')) {
     return i18n.global.t('errors.system.internal_error')
