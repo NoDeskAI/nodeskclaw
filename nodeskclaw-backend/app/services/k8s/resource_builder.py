@@ -419,11 +419,15 @@ def _build_egress_rules(
     deny_cidrs: list[str],
     allow_ports: list[int],
     platform_namespace: str = "nodeskclaw-system",
+    platform_host_endpoints: list[tuple[str, int]] | None = None,
 ) -> list[dict]:
-    """构建 Egress 规则列表（允许列表模式，未匹配流量默认拒绝）。"""
+    """构建 Egress 规则列表（允许列表模式，未匹配流量默认拒绝）。
+
+    platform_host_endpoints: 宿主机平台服务地址列表 [(ip, port), ...]，
+    当后端/LLM Proxy 不在 K8s 集群内时，需要通过 ipBlock 显式放行。
+    """
     rules: list[dict] = []
 
-    # 1. DNS — 仅允许 kube-system 的 53 端口
     rules.append({
         "to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}}}],
         "ports": [
@@ -432,17 +436,14 @@ def _build_egress_rules(
         ],
     })
 
-    # 2. 平台服务（由 PLATFORM_NAMESPACE 配置决定，默认 nodeskclaw-system）
     rules.append({
         "to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": platform_namespace}}}],
     })
 
-    # 3. 同 Namespace 内 Pod 互访
     rules.append({
         "to": [{"podSelector": {}}],
     })
 
-    # 4. Peer Namespaces — 已配置的互访实例
     for ns in peer_namespaces:
         rules.append({
             "to": [{
@@ -451,7 +452,16 @@ def _build_egress_rules(
             }],
         })
 
-    # 5. 公网出站 — 排除内网 CIDR，限定端口
+    if platform_host_endpoints:
+        seen: dict[str, list[int]] = {}
+        for ip, port in platform_host_endpoints:
+            seen.setdefault(ip, []).append(port)
+        for ip, ports_list in seen.items():
+            rules.append({
+                "to": [{"ipBlock": {"cidr": f"{ip}/32"}}],
+                "ports": [{"protocol": "TCP", "port": p} for p in sorted(set(ports_list))],
+            })
+
     ip_block: dict = {"cidr": "0.0.0.0/0"}
     if deny_cidrs:
         ip_block["except"] = deny_cidrs
@@ -476,6 +486,7 @@ def build_network_policy(
     ingress_enabled: bool = True,
     egress_enabled: bool = True,
     ingress_allow_cidrs: list[str] | None = None,
+    platform_host_endpoints: list[tuple[str, int]] | None = None,
 ) -> dict:
     """Build NetworkPolicy for multi-tenant isolation + egress restriction.
 
@@ -512,6 +523,7 @@ def build_network_policy(
             deny_cidrs=egress_deny_cidrs or [],
             allow_ports=egress_allow_ports or [80, 443],
             platform_namespace=platform_namespace,
+            platform_host_endpoints=platform_host_endpoints,
         )
 
     spec["policyTypes"] = policy_types
