@@ -519,12 +519,14 @@ async def deploy_instance(
 
         for item in req.llm_configs:
             selected_models = normalize_selected_models(item.provider, item.selected_models)
-            if item.key_source == "personal" or selected_models:
+            if item.key_source == "personal" or selected_models or item.base_url or item.api_type:
                 db.add(InstanceProviderConfig(
                     instance_id=instance.id,
                     provider=item.provider,
                     key_source=item.key_source,
                     selected_models=selected_models,
+                    base_url=item.base_url,
+                    api_type=item.api_type,
                 ))
         await db.commit()
         logger.info(
@@ -1148,26 +1150,30 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 await db.commit()
 
                 llm_sync_warning = ""
-
                 if ctx.runtime == "openclaw":
                     from app.services.llm_config_service import (
                         ensure_openclaw_gateway_config,
                         sync_openclaw_llm_config,
                     )
 
-                    if ctx.has_llm_configs:
-                        config_step = len(DEPLOY_STEPS_BASE) + 1
-                        _publish(config_step, "应用实例配置")
-                        try:
+                    try:
+                        if ctx.has_llm_configs:
+                            config_step = len(DEPLOY_STEPS_BASE) + 1
+                            _publish(config_step, "应用实例配置")
                             await ensure_openclaw_gateway_config(instance, db)
                             await sync_openclaw_llm_config(instance, db)
                             _publish(config_step, "应用实例配置", status="success")
-                        except Exception as e:
-                            logger.warning("部署后应用实例配置失败（非致命）: %s", e)
-                            llm_sync_warning = "（LLM 配置注入失败，请在管理后台手动同步）"
-                            _publish(config_step, "应用实例配置", status="failed", message=str(e))
-                    else:
-                        await ensure_openclaw_gateway_config(instance, db)
+                        else:
+                            await ensure_openclaw_gateway_config(instance, db)
+                    except Exception as e:
+                        logger.warning(
+                            "LLM 配置同步失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
+                            ctx.record_id, ctx.instance_id, e, exc_info=True,
+                        )
+                        llm_sync_warning = "（LLM 配置同步失败，可在管理后台手动重试）"
+                        if ctx.has_llm_configs:
+                            _publish(config_step, "应用实例配置", status="failed",
+                                     message=str(e)[:200])
 
                 gene_install_warning = ""
                 if ctx.template_gene_slugs:

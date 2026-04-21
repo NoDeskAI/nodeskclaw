@@ -282,7 +282,7 @@ _LLM_PROXY_DB_URL=$(cd "$BACKEND_DIR" && uv run python3 -c "from app.core.config
   2>&1 | prefix_output "$CYAN" "llm-prx" &
 PIDS+=($!)
 
-(cd "$BACKEND_DIR" && uv run uvicorn app.main:app --reload --port 4510 --timeout-graceful-shutdown 3) \
+(cd "$BACKEND_DIR" && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 4510 --timeout-graceful-shutdown 3) \
   2>&1 | prefix_output "$BLUE" "backend" &
 PIDS+=($!)
 

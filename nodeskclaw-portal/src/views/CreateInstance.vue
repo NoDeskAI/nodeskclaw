@@ -493,21 +493,52 @@ onMounted(async () => {
 
 const runtimeHasLlm = computed(() => getRuntimeCaps(selectedRuntime.value).llmConfig)
 
-const llmReady = computed(() => {
-  if (!runtimeHasLlm.value) return true
-  return llmConfigs.value.every(c => {
-    if (c.isCustom) return !!c.baseUrl && (c.keySource === 'org' || !!c.personalKey) && !!c.selectedModel
-    if (isCodexProvider(c.provider)) return !!c.selectedModel
-    if (BUILTIN_PROVIDERS.has(c.provider)) return true
-    return !!c.selectedModel
-  })
-})
+function providerLabel(provider: string) {
+  return PROVIDER_LABELS[provider] || provider
+}
+
+function getLlmDeployBlockReason(): string | null {
+  if (!runtimeHasLlm.value) return null
+  for (const c of llmConfigs.value) {
+    const label = providerLabel(c.provider)
+    if (c.isCustom) {
+      if (!c.baseUrl?.trim()) {
+        return t('createInstance.llmBlockCustomBaseUrl', { label })
+      }
+      if (c.keySource === 'personal' && !c.personalKey?.trim()) {
+        return t('createInstance.llmBlockPersonalKey', { label })
+      }
+      if (!c.selectedModel) {
+        return t('createInstance.llmBlockModel', { label })
+      }
+      continue
+    }
+    if (isCodexProvider(c.provider)) {
+      if (!c.selectedModel) {
+        return t('createInstance.llmBlockModel', { label })
+      }
+      continue
+    }
+    if (c.keySource === 'personal' && !c.personalKey?.trim()) {
+      return t('createInstance.llmBlockPersonalKey', { label })
+    }
+    if (!c.selectedModel) {
+      return t('createInstance.llmBlockModel', { label })
+    }
+  }
+  return null
+}
+
+const llmReady = computed(() => getLlmDeployBlockReason() === null)
 
 const canDeploy = computed(() =>
   !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
-  && !!selectedImage.value && !!selectedCluster.value && !deploying.value
-  && llmReady.value
+  && !!selectedImage.value && !!selectedCluster.value && clusters.value.length > 0 && !deploying.value
 )
+
+function validateLlmConfigsBeforeDeploy(): string | null {
+  return getLlmDeployBlockReason()
+}
 
 async function handleDeploy() {
   if (!name.value.trim()) {
@@ -518,8 +549,13 @@ async function handleDeploy() {
     error.value = t('createInstance.imageRequired')
     return
   }
-  if (clusters.value.length === 0) {
+  if (!selectedCluster.value || clusters.value.length === 0) {
     error.value = t('createInstance.noClusterError')
+    return
+  }
+  const llmError = validateLlmConfigsBeforeDeploy()
+  if (llmError) {
+    error.value = llmError
     return
   }
 
@@ -547,6 +583,8 @@ async function handleDeploy() {
         provider: c.provider,
         key_source: c.keySource,
         selected_models: selectedModel ? [selectedModel] : undefined,
+        base_url: isCodexProvider(c.provider) ? null : (c.baseUrl || null),
+        api_type: c.isCustom ? c.apiType : null,
       }
     })
 
@@ -1163,7 +1201,7 @@ async function handleDeploy() {
                 allow-manual-input
                 @fetch-models="handleFetchModels"
               />
-              <p v-if="(cfg.isCustom || isCodexProvider(cfg.provider) || !BUILTIN_PROVIDERS.has(cfg.provider)) && !cfg.selectedModel" class="text-[10px] text-amber-500">
+              <p v-if="!cfg.selectedModel" class="text-[10px] text-amber-500">
                 {{ t('llm.modelRequired') }}
               </p>
             </div>

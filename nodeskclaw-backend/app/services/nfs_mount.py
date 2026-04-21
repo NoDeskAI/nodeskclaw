@@ -58,6 +58,20 @@ class PodFS:
         except Exception:
             return None
 
+    async def read_binary(self, path: str) -> bytes | None:
+        """Read a file as raw bytes via base64 encoding (exec channel cannot transmit raw binary)."""
+        try:
+            result = await self._k8s.exec_in_pod(
+                self._ns, self._pod,
+                ["bash", "-c", f"base64 '/root/{path}' 2>/dev/null"],
+                container=self._container,
+            )
+            if not result:
+                return None
+            return base64.b64decode(result)
+        except Exception:
+            return None
+
     async def write_text(self, path: str, content: str) -> None:
         """Write content to a file in the Pod (creates parent dirs)."""
         encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
@@ -340,6 +354,13 @@ class DockerFS:
         p = self._resolve(remote_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+
+    async def read_binary(self, remote_path: str) -> bytes | None:
+        """Read a file as raw bytes. Returns None if file does not exist."""
+        p = self._resolve(remote_path)
+        if not p.exists():
+            return None
+        return p.read_bytes()
 
     async def write_binary(self, remote_path: str, data: bytes) -> None:
         p = self._resolve(remote_path)

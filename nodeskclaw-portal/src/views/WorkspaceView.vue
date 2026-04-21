@@ -443,7 +443,12 @@ async function onHexAction(action: string) {
       break
     case 'remove-agent':
       if (selectedHex.value?.agentId) {
-        store.removeAgent(workspaceId.value, selectedHex.value.agentId)
+        try {
+          await store.removeAgent(workspaceId.value, selectedHex.value.agentId)
+          toast.success(t('hexAction.agentRemoved'))
+        } catch {
+          toast.error(t('hexAction.removeFailed'))
+        }
         selectedHex.value = null
         hexDrawerOpen.value = false
         selectedAgentId.value = null

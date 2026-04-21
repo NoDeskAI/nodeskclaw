@@ -74,6 +74,7 @@ def _build_providers_config(
     wp_api_key: str,
     user_keys: dict[str, UserLlmKey],
     *,
+    org_keys: dict[str, OrgModelProvider] | None = None,
     use_external_proxy: bool = False,
 ) -> dict:
     """Build the models.providers section for openclaw.json.
@@ -82,6 +83,7 @@ def _build_providers_config(
     (InstanceProviderConfig ORM or InstanceProviderConfigItem schema both work).
     Optionally reads .base_url / .api_type from config objects directly.
     """
+    org_keys = org_keys or {}
     if use_external_proxy:
         proxy_url = (settings.LLM_PROXY_URL or "").rstrip("/")
     else:
@@ -109,18 +111,29 @@ def _build_providers_config(
                 "apiKey": uk.api_key,
             }
         else:
-            if not proxy_url:
-                logger.error("LLM_PROXY_URL 未配置，Working Plan 模式无法生成 proxy URL")
-                continue
-            api_type = cfg_api_type or PROVIDER_API_TYPE.get(provider)
-            skip_v1 = api_type in ("anthropic-messages", "google-generative-ai")
-            entry = {
-                "baseUrl": f"{proxy_url}/{provider}" if skip_v1 else f"{proxy_url}/{provider}/v1",
-                "apiKey": wp_api_key,
-            }
+            ok = org_keys.get(provider)
+            if proxy_url:
+                api_type = cfg_api_type or PROVIDER_API_TYPE.get(provider)
+                skip_v1 = api_type in ("anthropic-messages", "google-generative-ai")
+                entry = {
+                    "baseUrl": f"{proxy_url}/{provider}" if skip_v1 else f"{proxy_url}/{provider}/v1",
+                    "apiKey": wp_api_key,
+                }
+            else:
+                if not ok:
+                    raise AppException(
+                        code=50001,
+                        message=f"未找到团队 Provider 配置: {provider}",
+                        status_code=500,
+                    )
+                entry = {
+                    "baseUrl": cfg_base_url or ok.base_url or PROVIDER_BASE_URLS.get(provider, ""),
+                    "apiKey": ok.api_key,
+                }
 
         uk = user_keys.get(provider)
-        api_type = cfg_api_type or PROVIDER_API_TYPE.get(provider) or (uk.api_type if uk else None)
+        ok = org_keys.get(provider)
+        api_type = cfg_api_type or PROVIDER_API_TYPE.get(provider) or (uk.api_type if uk else None) or (ok.api_type if ok else None)
         if api_type:
             entry["api"] = api_type
 
@@ -229,10 +242,10 @@ def _set_default_agent_model(config: dict, providers: dict) -> None:
                 defaults["model"] = {"primary": primary}
                 return
 
-    first_provider = next(iter(providers))
-    agents = config.setdefault("agents", {})
-    defaults = agents.setdefault("defaults", {})
-    defaults["model"] = {"primary": first_provider}
+    logger.warning(
+        "openclaw_llm_config: no model ids on configured providers, "
+        "skipped updating agents.defaults.model",
+    )
 
 
 async def _read_config_file(fs: RemoteFS) -> dict | None:
@@ -475,6 +488,18 @@ async def write_instance_llm_configs(
             )
         )
         user_keys = {k.provider: k for k in uk_result.scalars().all()}
+    org_providers = [c.provider for c in configs if c.key_source == "org"]
+    org_keys: dict[str, OrgModelProvider] = {}
+    if org_providers:
+        ok_result = await db.execute(
+            select(OrgModelProvider).where(
+                OrgModelProvider.org_id == instance.org_id,
+                OrgModelProvider.provider.in_(org_providers),
+                OrgModelProvider.is_active.is_(True),
+                not_deleted(OrgModelProvider),
+            )
+        )
+        org_keys = {k.provider: k for k in ok_result.scalars().all()}
 
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, not_deleted(Cluster))
@@ -484,8 +509,14 @@ async def write_instance_llm_configs(
 
     providers = _build_providers_config(
         configs, wp_api_key, user_keys,
-        use_external_proxy=use_external,
+        org_keys=org_keys, use_external_proxy=use_external,
     )
+    if configs and not providers:
+        raise AppException(
+            code=50001,
+            message="未生成任何 LLM Provider 配置，请检查团队 Key / 个人 Key 配置",
+            status_code=500,
+        )
     if instance.compute_provider == "docker":
         _docker_rewrite_urls(providers)
 
@@ -555,7 +586,9 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
             not_deleted(OrgModelProvider),
         )
     )
-    org_providers = {op.provider for op in org_result.scalars().all()}
+    org_items = list(org_result.scalars().all())
+    org_keys = {op.provider: op for op in org_items}
+    org_providers = set(org_keys.keys())
 
     configs: list = list(ipc_list)
     for provider in (org_providers - ipc_providers) if not ipc_list else []:
@@ -585,10 +618,6 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
         )
         user_keys = {k.provider: k for k in uk_result.scalars().all()}
 
-    has_org = any(c.key_source == "org" for c in configs)
-    if has_org and not wp_api_key:
-        logger.warning("实例 %s 缺少 wp_api_key，Working Plan 模式无法写入", instance.name)
-
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, not_deleted(Cluster))
     )
@@ -597,8 +626,14 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
 
     providers = _build_providers_config(
         configs, wp_api_key, user_keys,
-        use_external_proxy=use_external,
+        org_keys=org_keys, use_external_proxy=use_external,
     )
+    if configs and not providers:
+        raise AppException(
+            code=50001,
+            message="未生成任何 LLM Provider 配置，请检查团队 Key / 个人 Key 配置",
+            status_code=500,
+        )
     if instance.compute_provider == "docker":
         _docker_rewrite_urls(providers)
 

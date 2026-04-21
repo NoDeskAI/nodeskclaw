@@ -1723,13 +1723,17 @@ async def agent_chat(
 
 # ── SSE Event Stream ─────────────────────────────────
 
+_SSE_QUEUE_MAXSIZE = 256
 _workspace_queues: dict[str, set[asyncio.Queue]] = {}
 
 
 def broadcast_event(workspace_id: str, event_type: str, data: dict):
     queues = _workspace_queues.get(workspace_id, set())
     for q in queues:
-        q.put_nowait({"event": event_type, "data": data})
+        try:
+            q.put_nowait({"event": event_type, "data": data})
+        except asyncio.QueueFull:
+            logger.warning("SSE queue full for workspace %s, dropping event %s", workspace_id, event_type)
 
     asyncio.ensure_future(_cross_instance_push(workspace_id, event_type, data))
 
@@ -1799,12 +1803,14 @@ async def workspace_events(
         except Exception as e:
             logger.warning("Failed to register SSE connection: %s", e)
 
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
     if workspace_id not in _workspace_queues:
         _workspace_queues[workspace_id] = set()
     _workspace_queues[workspace_id].add(queue)
 
     async def stream():
+        from app.services.runtime import sse_registry
+        last_hb = time.monotonic()
         try:
             yield f"data: {json.dumps({'event': 'connected'})}\n\n"
             if snapshot:
@@ -1815,12 +1821,19 @@ async def workspace_events(
                     yield f"event: {msg['event']}\ndata: {json.dumps(msg['data'])}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
+                if time.monotonic() - last_hb >= sse_registry.HEARTBEAT_INTERVAL_S:
+                    last_hb = time.monotonic()
+                    try:
+                        async with async_session_factory() as hb_db:
+                            await sse_registry.heartbeat(hb_db, conn_id)
+                            await hb_db.commit()
+                    except Exception:
+                        logger.debug("SSE heartbeat update failed for %s", conn_id)
         except asyncio.CancelledError:
             pass
         finally:
             _workspace_queues.get(workspace_id, set()).discard(queue)
             try:
-                from app.services.runtime import sse_registry
                 async with async_session_factory() as cleanup_db:
                     await sse_registry.unregister_connection(cleanup_db, conn_id)
                     await cleanup_db.commit()

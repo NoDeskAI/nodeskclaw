@@ -290,8 +290,15 @@ async def delete_corridor_hex(
         )
     )
     ch = result.scalar_one_or_none()
-    if not ch:
+
+    card = await node_card_service.get_node_card(db, node_id=hex_id, workspace_id=workspace_id)
+
+    if not ch and not card:
         raise _corridor_http_error(404, 40480, "errors.corridor.hex_not_found", "走廊格子不存在")
+
+    hex_q = card.hex_q if card else ch.hex_q
+    hex_r = card.hex_r if card else ch.hex_r
+    deleted_id = hex_id
 
     conns = await db.execute(
         select(HexConnection).where(
@@ -299,22 +306,25 @@ async def delete_corridor_hex(
             HexConnection.auto_created.is_(True),
             not_deleted(HexConnection),
             (
-                ((HexConnection.hex_a_q == ch.hex_q) & (HexConnection.hex_a_r == ch.hex_r))
-                | ((HexConnection.hex_b_q == ch.hex_q) & (HexConnection.hex_b_r == ch.hex_r))
+                ((HexConnection.hex_a_q == hex_q) & (HexConnection.hex_a_r == hex_r))
+                | ((HexConnection.hex_b_q == hex_q) & (HexConnection.hex_b_r == hex_r))
             ),
         )
     )
     for conn in conns.scalars().all():
         conn.soft_delete()
 
-    ch.soft_delete()
-    await node_card_service.soft_delete_node_card(db, node_id=ch.id, workspace_id=workspace_id)
+    if ch:
+        ch.soft_delete()
+    if card:
+        card.soft_delete()
+
     await db.commit()
     actor_type, actor_id = _actor(org_ctx)
-    broadcast_event(workspace_id, "corridor:hex_removed", {"hex_id": ch.id})
+    broadcast_event(workspace_id, "corridor:hex_removed", {"hex_id": deleted_id})
     await hooks.emit(
         "topology_change", db=db, workspace_id=workspace_id,
-        action="corridor_hex_deleted", target_type="corridor_hex", target_id=ch.id,
+        action="corridor_hex_deleted", target_type="corridor_hex", target_id=deleted_id,
         actor_type=actor_type, actor_id=actor_id,
     )
     return _ok(message="deleted")
@@ -605,10 +615,17 @@ async def delete_human_hex(
         )
     )
     hh = result.scalar_one_or_none()
-    if not hh:
+
+    card = await node_card_service.get_node_card(db, node_id=hex_id, workspace_id=workspace_id)
+
+    if not hh and not card:
         raise _corridor_http_error(404, 40483, "errors.corridor.human_hex_not_found", "人工节点不存在")
-    hh.soft_delete()
-    await node_card_service.soft_delete_node_card(db, node_id=hh.id, workspace_id=workspace_id)
+
+    if hh:
+        hh.soft_delete()
+    if card:
+        card.soft_delete()
+
     await db.commit()
     actor_type, actor_id = _actor(org_ctx)
     broadcast_event(workspace_id, "human:hex_removed", {"hex_id": hex_id})

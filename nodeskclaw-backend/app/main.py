@@ -151,8 +151,6 @@ async def lifespan(app: FastAPI):
     from app.core.deps import async_session_factory, engine
     from app.models.cluster import Cluster, ClusterStatus
     from app.services.k8s.client_manager import k8s_manager
-    from app.utils.oauth_providers.feishu import FeishuProvider
-    from app.utils.oauth_providers.registry import register_provider
 
     logger = logging.getLogger(__name__)
     logger.info("NoDeskClaw %s starting (Python %s)", settings.APP_VERSION, sys.version.split()[0])
@@ -170,7 +168,6 @@ async def lifespan(app: FastAPI):
             pass
 
     # ── Startup ──────────────────────────────────────
-    register_provider(FeishuProvider())
 
     # ── 自动创建开发数据库（仅 DATABASE_NAME_SUFFIX 非空时触发）──
     if settings.DATABASE_NAME_SUFFIX:
@@ -613,8 +610,6 @@ async def lifespan(app: FastAPI):
     # ── Runtime Platform v2 Startup ──────────────────
     _pg_notify_service = None
     _heartbeat_task = None
-    _raw_conn = None
-    _asyncpg_conn = None
     _pg_notify_channels: list[str] = []
     _queue_consumer_task = None
     try:
@@ -668,7 +663,10 @@ async def lifespan(app: FastAPI):
                 if ws_id and event_type:
                     queues = _workspace_queues.get(ws_id, set())
                     for q in queues:
-                        q.put_nowait({"event": event_type, "data": data})
+                        try:
+                            q.put_nowait({"event": event_type, "data": data})
+                        except asyncio.QueueFull:
+                            logger.warning("SSE queue full (cross-instance) for workspace %s, dropping %s", ws_id, event_type)
             except Exception as e:
                 logger.warning("_on_sse_push handler failed: %s", e)
 
@@ -679,16 +677,14 @@ async def lifespan(app: FastAPI):
 
         _pg_notify_channels = ["topology_changed", _sse_push_channel, "message_enqueued"]
         try:
-            _raw_conn = await engine.raw_connection()
-            _asyncpg_conn = _raw_conn.connection._connection
-            await _pg_notify_service.start_listening(_asyncpg_conn, _pg_notify_channels)
+            await _pg_notify_service.start_with_reconnect(engine, _pg_notify_channels)
             logger.info(
                 "Runtime v2: PG LISTEN/NOTIFY 已启动 (channels=%s, backend=%s)",
                 _pg_notify_channels, BACKEND_INSTANCE_ID,
             )
         except Exception as e:
             logger.warning("Runtime v2: PG LISTEN/NOTIFY 启动失败（非致命）: %s", e)
-            _raw_conn = None
+
 
         from app.services.runtime.failure_recovery import run_heartbeat_scanner
         _heartbeat_task = asyncio.create_task(run_heartbeat_scanner(async_session_factory))
@@ -840,9 +836,9 @@ async def lifespan(app: FastAPI):
 
         if _heartbeat_task and not _heartbeat_task.done():
             _heartbeat_task.cancel()
-        if _pg_notify_service and _raw_conn:
+        if _pg_notify_service:
             try:
-                await _pg_notify_service.stop_listening(_asyncpg_conn, _pg_notify_channels)
+                await _pg_notify_service.shutdown()
             except Exception:
                 logger.warning("Failed to stop PG NOTIFY listeners", exc_info=True)
         try:

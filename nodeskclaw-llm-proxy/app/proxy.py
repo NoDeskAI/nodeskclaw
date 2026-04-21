@@ -75,6 +75,8 @@ def _extract_proxy_token(request: Request) -> str | None:
 
 def _build_target_url(provider: str, path: str, base_url: str | None, api_key: str | None) -> str:
     base = (base_url or PROVIDER_DEFAULTS.get(provider, {}).get("base_url", "")).rstrip("/")
+    if base.endswith("/v1") and path.startswith("v1/"):
+        path = path[3:]
     url = f"{base}/{path}"
 
     prov_conf = PROVIDER_DEFAULTS.get(provider, {})
@@ -317,6 +319,75 @@ async def _handle_codex_proxy(
         response_body=response_meta,
     )
     return JSONResponse(status_code=200, content=response_data)
+
+
+@router.post("/internal/test-connection")
+async def internal_test_connection(request: Request):
+    """Test upstream provider connectivity using the same URL construction as real traffic."""
+    body = await request.json()
+    provider: str = body.get("provider", "")
+    base_url: str | None = body.get("base_url")
+    api_key: str = body.get("api_key", "")
+    api_type: str = body.get("api_type") or "openai-completions"
+    model: str = body.get("model", "")
+    skip_ssl_verify: bool = body.get("skip_ssl_verify", False)
+
+    if not provider or not api_key or not model:
+        return JSONResponse(status_code=400, content={
+            "ok": False, "message": "provider, api_key, model 为必填",
+        })
+
+    t0 = time.monotonic()
+    try:
+        if api_type == "google-generative-ai":
+            path = f"v1beta/models/{model}:generateContent"
+            target_url = _build_target_url(provider, path, base_url, api_key)
+            req_body = {
+                "contents": [{"parts": [{"text": "hi"}]}],
+                "generationConfig": {"maxOutputTokens": 1},
+            }
+            req_headers: dict = {}
+        elif api_type == "anthropic-messages":
+            path = "v1/messages"
+            target_url = _build_target_url(provider, path, base_url, api_key)
+            req_body = {"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
+            req_headers = _build_auth_headers(provider, api_key, {}, api_type=api_type)
+        else:
+            path = "v1/chat/completions"
+            target_url = _build_target_url(provider, path, base_url, api_key)
+            req_body = {"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
+            req_headers = _build_auth_headers(provider, api_key, {}, api_type=api_type)
+
+        client = _get_http_client(skip_ssl_verify)
+        resp = await client.post(target_url, json=req_body, headers=req_headers, timeout=30)
+        resp.raise_for_status()
+
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        return JSONResponse(content={
+            "ok": True, "message": "连接成功", "model": model, "latency_ms": latency_ms,
+        })
+
+    except httpx.HTTPStatusError as e:
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        status = e.response.status_code
+        resp_text = e.response.text[:300] if e.response.text else ""
+        if status in (401, 403):
+            msg = f"认证失败 (HTTP {status})，请检查 API Key 是否有效"
+        elif status == 404:
+            msg = "端点不存在 (HTTP 404)，请检查 Base URL 是否正确"
+        else:
+            msg = f"HTTP {status}"
+        return JSONResponse(content={
+            "ok": False, "message": msg, "model": model, "latency_ms": latency_ms,
+            "error_detail": f"URL: {e.request.url} | HTTP {status} | {resp_text}",
+        })
+    except Exception as e:
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        return JSONResponse(content={
+            "ok": False, "message": f"连接失败: {type(e).__name__}",
+            "model": model, "latency_ms": latency_ms,
+            "error_detail": str(e)[:300],
+        })
 
 
 @router.api_route(
