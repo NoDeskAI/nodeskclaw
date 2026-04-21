@@ -410,6 +410,8 @@ async def deploy_instance(
     if not slug:
         slug = _re.sub(r"[^a-z0-9-]", "-", req.name.lower()).strip("-")
         slug = _re.sub(r"-{2,}", "-", slug) or "instance"
+    if slug and slug[0].isdigit():
+        slug = f"i-{slug}"
 
     # namespace: adapter 决定命名格式，K8s 限制 63 字符
     auto_ns = adapter.build_namespace(slug, org)
