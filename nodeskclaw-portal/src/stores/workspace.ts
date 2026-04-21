@@ -56,6 +56,7 @@ export interface WorkspaceTemplateItem {
   human_count?: number
   agent_names?: string[]
   can_deploy_from_template?: boolean
+  source_workspace_id?: string | null
 }
 
 export interface WorkspaceTemplateDetail extends WorkspaceTemplateItem {
@@ -404,6 +405,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   async function saveAsTemplate(data: { name: string; description?: string; workspace_id: string; visibility?: string; excluded_agent_indices?: number[]; excluded_corridor_coords?: number[][] }) {
     const res = await api.post('/workspaces/templates', data)
     return res.data.data
+  }
+
+  async function deleteTemplate(templateId: string) {
+    const res = await api.delete(`/workspaces/templates/${templateId}`)
+    return res.data
+  }
+
+  async function updateTemplate(templateId: string, data: { workspace_id: string; name?: string; description?: string; excluded_agent_indices?: number[]; excluded_corridor_coords?: number[][] }) {
+    const res = await api.put(`/workspaces/templates/${templateId}`, data)
+    return res.data.data
+  }
+
+  async function findTemplateBySourceWorkspace(workspaceId: string): Promise<WorkspaceTemplateItem | null> {
+    const templates = await fetchWorkspaceTemplates('org_private')
+    return templates.find(t => t.source_workspace_id === workspaceId) ?? null
   }
 
   const activeTemplateDeploys = ref<ActiveWorkspaceDeployItem[]>([])
@@ -1522,6 +1538,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     createWorkspace,
     fetchWorkspaceTemplates,
     saveAsTemplate,
+    deleteTemplate,
+    updateTemplate,
+    findTemplateBySourceWorkspace,
     fetchTemplateCollectPreview,
     activeTemplateDeploys,
     refreshActiveTemplateDeploys,
