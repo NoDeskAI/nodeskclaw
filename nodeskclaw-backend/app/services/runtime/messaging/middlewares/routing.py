@@ -28,7 +28,7 @@ async def _resolve_targets_by_name(
             or_(NodeCard.name == name, NodeCard.node_id == name),
         )
         result = await db.execute(stmt)
-        card = result.scalar_one_or_none()
+        card = result.scalars().first()
         if card is None:
             logger.warning("Routing: target '%s' not found in workspace %s", name, workspace_id)
             continue
