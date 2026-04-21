@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import GeneMarketDialog from '@/components/gene/GeneMarketDialog.vue'
 import api from '@/services/api'
 import { renderMarkdown } from '@/utils/markdown'
+import { resolveApiErrorMessage } from '@/i18n/error'
 import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
 
 const { t } = useI18n()
@@ -231,8 +232,8 @@ async function handleCreate() {
     createDialogOpen.value = false
     await store.fetchInstanceSkills(instanceId.value)
     toast.success(t('instanceGenes.createSubmitted'))
-  } catch {
-    toast.error(t('instanceGenes.createFailed'))
+  } catch (e) {
+    toast.error(resolveApiErrorMessage(e, t('instanceGenes.createFailed')))
   } finally {
     creating.value = false
   }
@@ -256,8 +257,8 @@ async function handleManualCreate() {
     manualSkillContent.value = ''
     await store.fetchInstanceSkills(instanceId.value)
     toast.success(t('instanceGenes.manualCreateSuccess'))
-  } catch {
-    toast.error(t('instanceGenes.manualCreateFailed'))
+  } catch (e) {
+    toast.error(resolveApiErrorMessage(e, t('instanceGenes.manualCreateFailed')))
   } finally {
     manualCreating.value = false
   }
