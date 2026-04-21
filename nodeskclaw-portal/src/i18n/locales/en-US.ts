@@ -1652,9 +1652,6 @@ const enUS = {
     model_provider: {
       already_exists: "This provider is already configured",
     },
-    template: {
-      name_duplicate: "Template name already exists, please use a different name",
-    },
     billing: {
       instance_limit_exceeded: "AI Employee limit reached ({used}/{limit}). Please upgrade your plan or contact admin.",
       cpu_quota_exceeded: "CPU quota exceeded: used {used}, requesting {requested}, limit {limit}",
@@ -1805,6 +1802,10 @@ const enUS = {
       access_denied: "You do not have access to this template",
       deploy_invalid: "Invalid deploy request; ensure the cluster matches the template compute platform",
       cannot_delete_preset: "Preset templates cannot be deleted",
+      cannot_update_preset: "Preset templates cannot be updated",
+      has_active_deploy: "This template has active deployments, please wait before modifying",
+      name_duplicate: "Template name already exists, please use a different name",
+      name_empty: "Template name cannot be empty",
     },
     http: {
       status_400: "Bad request",

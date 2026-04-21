@@ -349,10 +349,9 @@ async function openTemplateDialog() {
   overwriteMode.value = 'overwrite'
   showTemplateDialog.value = true
   try {
-    const [preview, existing] = await Promise.all([
-      store.fetchTemplateCollectPreview(workspaceId.value),
-      store.findTemplateBySourceWorkspace(workspaceId.value),
-    ])
+    const existingPromise = store.findTemplateBySourceWorkspace(workspaceId.value).catch(() => null)
+    const preview = await store.fetchTemplateCollectPreview(workspaceId.value)
+    const existing = await existingPromise
     templatePreview.value = preview
     existingTemplate.value = existing
     if (existing) {

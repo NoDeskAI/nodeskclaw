@@ -19,7 +19,6 @@ from app.models.instance_mcp_server import InstanceMcpServer
 from app.models.org_llm_key import OrgLlmKey
 from app.models.user import User
 from app.models.workspace import Workspace
-from app.models.workspace import Workspace
 from app.models.workspace_deploy import WorkspaceDeploy
 from app.models.workspace_template import WorkspaceTemplate
 from app.models.base import not_deleted

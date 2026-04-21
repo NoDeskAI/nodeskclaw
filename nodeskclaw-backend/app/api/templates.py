@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.corridors import _check_workspace
@@ -78,7 +79,7 @@ class TemplateCreateRequest(BaseModel):
 class TemplateUpdateRequest(BaseModel):
     workspace_id: str
     name: str | None = None
-    description: str = ""
+    description: str | None = None
     excluded_agent_indices: list[int] | None = None
     excluded_corridor_coords: list[list[int]] | None = None
 
@@ -235,7 +236,10 @@ async def create_template(
 ):
     user, org = org_ctx
     org_id = _org_id(org)
-    await _check_template_name_unique(db, org_id, body.name.strip())
+    template_name = body.name.strip()
+    if not template_name:
+        raise _error(400, 40056, "errors.template.name_empty", "模板名称不能为空")
+    await _check_template_name_unique(db, org_id, template_name)
 
     collect_warnings: list[str] = []
     agent_specs: list = []
@@ -272,7 +276,7 @@ async def create_template(
 
     t = WorkspaceTemplate(
         id=str(uuid.uuid4()),
-        name=body.name.strip(),
+        name=template_name,
         description=body.description,
         is_preset=False,
         topology_snapshot=topology_snapshot,
@@ -286,7 +290,11 @@ async def create_template(
         source_workspace_id=source_workspace_id,
     )
     db.add(t)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise _error(409, 40960, "errors.template.name_duplicate", f"模板名称「{template_name}」已存在，请使用其他名称")
     await db.refresh(t)
     summ = template_summary_from_specs(t.agent_specs or [], t.human_specs or [])
     return _ok(
@@ -477,10 +485,13 @@ async def update_template(
 
     if body.name is not None:
         new_name = body.name.strip()
+        if not new_name:
+            raise _error(400, 40056, "errors.template.name_empty", "模板名称不能为空")
         if new_name != t.name:
             await _check_template_name_unique(db, org_id, new_name, exclude_id=template_id)
         t.name = new_name
-    t.description = body.description
+    if body.description is not None:
+        t.description = body.description
     t.topology_snapshot = topology_snapshot
     t.blackboard_snapshot = blackboard_snapshot
     t.gene_assignments = gene_assignments
@@ -488,7 +499,11 @@ async def update_template(
     t.human_specs = human_specs
     t.source_workspace_id = body.workspace_id
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise _error(409, 40960, "errors.template.name_duplicate", f"模板名称「{t.name}」已存在，请使用其他名称")
     await db.refresh(t)
     summ = template_summary_from_specs(t.agent_specs or [], t.human_specs or [])
     return _ok({

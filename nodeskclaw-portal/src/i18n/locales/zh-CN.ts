@@ -1652,9 +1652,6 @@ const zhCN = {
     model_provider: {
       already_exists: "该供应商已配置，不能重复添加",
     },
-    template: {
-      name_duplicate: "模板名称已存在，请使用其他名称",
-    },
     billing: {
       instance_limit_exceeded: "AI 员工数量已达上限（{used}/{limit}），请升级套餐或联系管理员",
       cpu_quota_exceeded: "CPU 配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",
@@ -1805,6 +1802,10 @@ const zhCN = {
       access_denied: "无权使用该模板",
       deploy_invalid: "一键部署参数不合法，请检查集群是否与模板计算平台一致",
       cannot_delete_preset: "预设模板不可删除",
+      cannot_update_preset: "预设模板不允许修改",
+      has_active_deploy: "该模板有正在进行的部署，请等待完成后再操作",
+      name_duplicate: "模板名称已存在，请使用其他名称",
+      name_empty: "模板名称不能为空",
     },
     http: {
       status_400: "请求参数错误",

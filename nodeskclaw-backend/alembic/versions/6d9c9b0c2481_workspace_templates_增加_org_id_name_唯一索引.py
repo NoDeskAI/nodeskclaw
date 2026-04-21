@@ -19,6 +19,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    conn = op.get_bind()
+    conn.execute(sa.text("""
+        UPDATE workspace_templates AS t
+        SET name = t.name || ' (' || LEFT(t.id::text, 6) || ')'
+        WHERE t.deleted_at IS NULL
+          AND EXISTS (
+              SELECT 1 FROM workspace_templates AS t2
+              WHERE t2.org_id IS NOT DISTINCT FROM t.org_id
+                AND t2.name = t.name
+                AND t2.deleted_at IS NULL
+                AND t2.created_at > t.created_at
+          )
+    """))
     op.create_index(
         'uq_workspace_templates_org_name', 'workspace_templates',
         ['org_id', 'name'], unique=True,
