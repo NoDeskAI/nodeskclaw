@@ -9,6 +9,7 @@ import {
   PERMISSION_PRESETS,
   type TemplateCollectPreview,
   type WorkspaceMemberInfo,
+  type WorkspaceTemplateItem,
 } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiErrorMessage } from '@/i18n/error'
@@ -280,6 +281,8 @@ const savingTemplate = ref(false)
 const templatePreviewLoading = ref(false)
 const templatePreviewError = ref('')
 const templatePreview = ref<TemplateCollectPreview | null>(null)
+const existingTemplate = ref<WorkspaceTemplateItem | null>(null)
+const overwriteMode = ref<'overwrite' | 'new'>('overwrite')
 
 const saveSelectedKeys = ref<Set<string>>(new Set())
 
@@ -342,9 +345,23 @@ async function openTemplateDialog() {
   templatePreview.value = null
   templatePreviewError.value = ''
   templatePreviewLoading.value = true
+  existingTemplate.value = null
+  overwriteMode.value = 'overwrite'
   showTemplateDialog.value = true
   try {
-    templatePreview.value = await store.fetchTemplateCollectPreview(workspaceId.value)
+    const [preview, existing] = await Promise.all([
+      store.fetchTemplateCollectPreview(workspaceId.value),
+      store.findTemplateBySourceWorkspace(workspaceId.value),
+    ])
+    templatePreview.value = preview
+    existingTemplate.value = existing
+    if (existing) {
+      templateName.value = existing.name
+      templateDesc.value = existing.description || ''
+      overwriteMode.value = 'overwrite'
+    } else {
+      overwriteMode.value = 'new'
+    }
     const specs = templatePreview.value?.agent_specs ?? []
     const topo = templatePreview.value?.topology_snapshot as { nodes?: Record<string, unknown>[] } | undefined
     saveSelectedKeys.value = allSelectableKeys(specs as Record<string, unknown>[], topo)
@@ -363,15 +380,26 @@ async function handleSaveAsTemplate() {
   const topo = templatePreview.value?.topology_snapshot as { nodes?: Record<string, unknown>[] } | undefined
   const excludedCorridors = keysToExcludedCorridorCoords(topo, saveSelectedKeys.value)
   try {
-    await store.saveAsTemplate({
-      name: templateName.value.trim(),
-      description: templateDesc.value.trim(),
-      workspace_id: workspaceId.value,
-      visibility: 'org_private',
-      excluded_agent_indices: excluded.length > 0 ? excluded : undefined,
-      excluded_corridor_coords: excludedCorridors.length > 0 ? excludedCorridors : undefined,
-    })
-    toast.success(t('workspaceSettings.templateSaved'))
+    if (overwriteMode.value === 'overwrite' && existingTemplate.value) {
+      await store.updateTemplate(existingTemplate.value.id, {
+        workspace_id: workspaceId.value,
+        name: templateName.value.trim(),
+        description: templateDesc.value.trim(),
+        excluded_agent_indices: excluded.length > 0 ? excluded : undefined,
+        excluded_corridor_coords: excludedCorridors.length > 0 ? excludedCorridors : undefined,
+      })
+      toast.success(t('workspaceSettings.templateOverwritten'))
+    } else {
+      await store.saveAsTemplate({
+        name: templateName.value.trim(),
+        description: templateDesc.value.trim(),
+        workspace_id: workspaceId.value,
+        visibility: 'org_private',
+        excluded_agent_indices: excluded.length > 0 ? excluded : undefined,
+        excluded_corridor_coords: excludedCorridors.length > 0 ? excludedCorridors : undefined,
+      })
+      toast.success(t('workspaceSettings.templateSaved'))
+    }
     showTemplateDialog.value = false
     templatePreview.value = null
     templatePreviewError.value = ''
@@ -628,6 +656,22 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
               </button>
             </div>
             <div class="px-5 py-4 space-y-4 overflow-y-auto">
+              <div v-if="existingTemplate" class="rounded-lg bg-muted/60 border border-border px-3 py-2.5 space-y-2.5">
+                <p class="text-xs text-muted-foreground">
+                  {{ t('workspaceSettings.existingTemplateHint', { name: existingTemplate.name }) }}
+                </p>
+                <div class="flex flex-col gap-1.5">
+                  <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input v-model="overwriteMode" type="radio" value="overwrite" class="accent-primary" />
+                    {{ t('workspaceSettings.overwriteExisting', { name: existingTemplate.name }) }}
+                  </label>
+                  <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input v-model="overwriteMode" type="radio" value="new" class="accent-primary" />
+                    {{ t('workspaceSettings.createNew') }}
+                  </label>
+                </div>
+              </div>
+
               <div class="space-y-1.5">
                 <label class="text-xs font-medium text-muted-foreground">{{ t('workspaceSettings.templateNameLabel') }}</label>
                 <input
@@ -713,7 +757,9 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   @click="handleSaveAsTemplate"
                 >
                   <Loader2 v-if="savingTemplate" class="w-4 h-4 animate-spin inline mr-1" />
-                  {{ t('workspaceSettings.saveTemplateWithCount', { n: saveSelectedCount }) }}
+                  {{ overwriteMode === 'overwrite' && existingTemplate
+                    ? t('workspaceSettings.overwriteSave')
+                    : t('workspaceSettings.saveTemplateWithCount', { n: saveSelectedCount }) }}
                 </button>
               </div>
             </div>
