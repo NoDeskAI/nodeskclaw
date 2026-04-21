@@ -325,8 +325,8 @@ async def upload_file_multipart(
     workspace_id: str,
     file: UploadFile,
     parent_path: str = Form("/"),
-    filename: Optional[str] = Form(None),
-    content_type: Optional[str] = Form(None),
+    filename: str | None = Form(None),
+    content_type: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):

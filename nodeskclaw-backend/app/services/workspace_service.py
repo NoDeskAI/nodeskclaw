@@ -5,6 +5,7 @@ import base64
 import logging
 import re
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Coroutine, Literal
 
 from sqlalchemy import and_, case, func, or_, select
@@ -1120,7 +1121,7 @@ async def create_task(
     db: AsyncSession, workspace_id: str, data: TaskCreate,
     created_by_instance_id: str | None = None,
     schedule_id: str | None = None,
-    deadline: "datetime | None" = None,
+    deadline: datetime | None = None,
 ) -> TaskInfo:
     task = WorkspaceTask(
         workspace_id=workspace_id,
