@@ -47,6 +47,7 @@ class WorkspaceInfo(BaseModel):
     icon: str
     created_by: str
     cluster_id: str | None = None
+    source_template_id: str | None = None
     agent_count: int = 0
     agents: list[AgentBrief] = []
     created_at: datetime

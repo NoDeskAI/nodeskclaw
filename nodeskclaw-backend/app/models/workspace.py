@@ -20,6 +20,7 @@ class Workspace(BaseModel):
         String(36), ForeignKey("clusters.id"), nullable=True, index=True,
     )
     decoration_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    source_template_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     # relationships
     organization = relationship("Organization", foreign_keys=[org_id])

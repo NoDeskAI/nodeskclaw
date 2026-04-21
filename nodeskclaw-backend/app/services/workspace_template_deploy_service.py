@@ -19,6 +19,7 @@ from app.models.instance_mcp_server import InstanceMcpServer
 from app.models.org_llm_key import OrgLlmKey
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.workspace import Workspace
 from app.models.workspace_deploy import WorkspaceDeploy
 from app.models.workspace_template import WorkspaceTemplate
 from app.models.base import not_deleted
@@ -549,6 +550,9 @@ async def start_workspace_template_deploy(
         user.id,
         WorkspaceCreate(name=workspace_name, description=template.description or "", cluster_id=cluster_id),
     )
+
+    ws_row = await db.get(Workspace, ws.id)
+    ws_row.source_template_id = template.id
 
     wd = WorkspaceDeploy(
         id=str(uuid.uuid4()),
