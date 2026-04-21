@@ -2,11 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Loader2, Palette, Bot, ChevronLeft, Server, Container } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Palette, Bot, ChevronLeft, Server, Container, X } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { WorkspaceTemplateItem } from '@/stores/workspace'
 import { useClusterStore, type ClusterInfo } from '@/stores/cluster'
 import { resolveApiErrorMessage } from '@/i18n/error'
+import { useToast } from '@/composables/useToast'
 import TemplateCard from '@/components/workspace/TemplateCard.vue'
 import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
 
@@ -14,12 +15,19 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useWorkspaceStore()
 const clusterStore = useClusterStore()
+const toast = useToast()
 
 const step = ref(1)
 const selectedTemplateId = ref<string | null>(null)
 const selectedTemplateName = ref('')
 const templates = ref<WorkspaceTemplateItem[]>([])
 const loadingTemplates = ref(false)
+
+const deleteDialogOpen = ref(false)
+const deleteTarget = ref<WorkspaceTemplateItem | null>(null)
+const deleteConfirmInput = ref('')
+const deleting = ref(false)
+const deleteConfirmMatch = computed(() => deleteConfirmInput.value === deleteTarget.value?.name)
 
 const name = ref('')
 const description = ref('')
@@ -86,6 +94,27 @@ function goBackToTemplates() {
   step.value = 1
 }
 
+function openDeleteDialog(tpl: WorkspaceTemplateItem) {
+  deleteTarget.value = tpl
+  deleteConfirmInput.value = ''
+  deleteDialogOpen.value = true
+}
+
+async function handleDeleteTemplate() {
+  if (!deleteTarget.value || !deleteConfirmMatch.value) return
+  deleting.value = true
+  try {
+    await store.deleteTemplate(deleteTarget.value.id)
+    templates.value = templates.value.filter(t => t.id !== deleteTarget.value!.id)
+    deleteDialogOpen.value = false
+    toast.success(t('deleteTemplate.success'))
+  } catch (e: any) {
+    toast.error(resolveApiErrorMessage(e, t('deleteTemplate.failed')))
+  } finally {
+    deleting.value = false
+  }
+}
+
 async function handleCreate() {
   if (!name.value.trim()) {
     error.value = t('createWorkspace.nameRequired')
@@ -140,6 +169,7 @@ async function handleCreate() {
           :key="tpl.id"
           :template="tpl"
           @select="selectTemplate(tpl)"
+          @delete="openDeleteDialog(tpl)"
         />
       </div>
     </div>
@@ -300,5 +330,51 @@ async function handleCreate() {
       :template-id="deployTemplateId"
       @done="onDeployFromTemplateDone"
     />
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="deleteDialogOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="deleteDialogOpen = false">
+          <div class="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 class="text-sm font-semibold">{{ t('deleteTemplate.title') }}</h3>
+              <button type="button" class="p-1 rounded hover:bg-muted" @click="deleteDialogOpen = false">
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="px-5 py-4 space-y-4">
+              <p class="text-sm text-muted-foreground">
+                {{ t('deleteTemplate.confirmMessage', { name: deleteTarget?.name }) }}
+              </p>
+              <div class="space-y-1.5">
+                <label class="text-xs text-muted-foreground">{{ t('deleteTemplate.inputLabel') }}</label>
+                <input
+                  v-model="deleteConfirmInput"
+                  class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-destructive/50"
+                  :placeholder="deleteTarget?.name"
+                />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 px-5 py-3 border-t border-border">
+              <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                @click="deleteDialogOpen = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                :disabled="!deleteConfirmMatch || deleting"
+                @click="handleDeleteTemplate"
+              >
+                <Loader2 v-if="deleting" class="w-4 h-4 animate-spin inline mr-1" />
+                {{ t('deleteTemplate.confirmButton') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
