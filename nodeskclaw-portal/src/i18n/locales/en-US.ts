@@ -471,6 +471,11 @@ const enUS = {
     selectAll: "Select all",
     deselectAll: "Deselect all",
     saveTemplateWithCount: "Save template ({n})",
+    existingTemplateHint: "This workspace already has an associated template \"{name}\"",
+    overwriteExisting: "Overwrite existing template \"{name}\"",
+    createNew: "Create new template",
+    overwriteSave: "Overwrite & save",
+    templateOverwritten: "Template has been updated",
   },
   deployFromTemplate: {
     title: "Create office from template",
@@ -769,6 +774,14 @@ const enUS = {
     nameRequired: "Please enter cyber office name",
     createFailed: "Failed to create cyber office",
     submit: "Create Cyber Office",
+  },
+  deleteTemplate: {
+    title: "Delete Template",
+    confirmMessage: "Are you sure you want to delete template \"{name}\"? This action cannot be undone.",
+    inputLabel: "Type the template name to confirm",
+    confirmButton: "Confirm Delete",
+    success: "Template deleted",
+    failed: "Failed to delete template",
   },
   workspaceList: {
     title: "My Cyber Offices",
