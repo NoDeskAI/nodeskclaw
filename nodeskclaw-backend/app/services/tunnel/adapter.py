@@ -85,16 +85,26 @@ def _format_user_content(sender_name: str, text: str, attachments: list[dict]) -
 
 
 def _extract_mentions(
-    text: str, members: list[dict], self_name: str,
+    text: str,
+    members: list[dict],
+    self_name: str,
+    *,
+    exclude_names: list[str] | None = None,
 ) -> list[dict]:
     """Parse @name from agent response, matching all workspace members (agent + human).
 
     Uses negative lookahead to avoid prefix false positives (e.g. @test matching @test-2).
+    ``exclude_names`` suppresses mentions of the upstream sender so that
+    gratuitous acknowledgements like "@咕咕嘎嘎 收到！" don't trigger a
+    collaboration round-trip back to the original requester.
     """
+    skip = {self_name}
+    if exclude_names:
+        skip.update(exclude_names)
     results = []
     for m in members:
         name = m.get("name", "")
-        if not name or name == self_name:
+        if not name or name in skip:
             continue
         if re.search(rf"@{re.escape(name)}(?![\w-])", text):
             results.append(m)
@@ -656,7 +666,11 @@ class TunnelAdapter:
                 logger.warning("Delegation %s->%s failed: %s", action, delegate_target, e)
 
         elif full_response and not msg_service.is_no_reply(full_response.strip()):
-            mentions = _extract_mentions(full_response, ws_ctx.members, agent_name)
+            upstream_sender = data.sender.name if data.sender else ""
+            mentions = _extract_mentions(
+                full_response, ws_ctx.members, agent_name,
+                exclude_names=[upstream_sender] if upstream_sender else None,
+            )
             if mentions:
                 depth = (data.extensions or {}).get("depth", 0)
                 from app.core.deps import async_session_factory
