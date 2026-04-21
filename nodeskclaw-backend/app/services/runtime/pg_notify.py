@@ -106,5 +106,51 @@ class PGNotifyService:
                 logger.warning("Failed to remove listener for channel: %s", ch)
         logger.info("PG NOTIFY listeners stopped")
 
+    async def start_with_reconnect(self, engine: Any, channels: list[str]) -> None:
+        """Start LISTEN with auto-reconnect on connection loss."""
+        self._reconnect_task = asyncio.create_task(
+            self._reconnect_loop(engine, channels)
+        )
+
+    async def _reconnect_loop(self, engine: Any, channels: list[str]) -> None:
+        backoff = 1
+        while True:
+            raw_conn = None
+            try:
+                raw_conn = await engine.raw_connection()
+                asyncpg_conn = raw_conn.connection._connection
+                await self.start_listening(asyncpg_conn, channels)
+                backoff = 1
+                logger.info("PG LISTEN connected (channels=%s)", channels)
+                disconnected: asyncio.Future[bool] = asyncio.get_event_loop().create_future()
+                asyncpg_conn.add_termination_listener(
+                    lambda conn: disconnected.set_result(True)
+                )
+                await disconnected
+                logger.warning("PG LISTEN connection terminated, will reconnect")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning("PG LISTEN connection lost: %s, reconnecting in %ds", e, backoff)
+            finally:
+                if raw_conn:
+                    try:
+                        await raw_conn.close()
+                    except Exception:
+                        pass
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+
+    async def shutdown(self) -> None:
+        """Cancel the reconnect loop task."""
+        task = getattr(self, "_reconnect_task", None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        logger.info("PG NOTIFY reconnect loop stopped")
+
 
 pg_notify_service = PGNotifyService()

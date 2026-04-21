@@ -15,10 +15,17 @@ async def test_notify_mentions_targets_agents_and_guides_reply():
         SimpleNamespace(type="agent", id="inst-002"),
     ]
 
-    with patch(
-        "app.services.collaboration_service.send_system_message_to_agents",
-        new_callable=AsyncMock,
-    ) as mock_send:
+    with (
+        patch(
+            "app.services.collaboration_service.send_system_message_to_agents",
+            new_callable=AsyncMock,
+        ) as mock_send,
+        patch(
+            "app.services.corridor_router.has_any_connections",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+    ):
         await _notify_mentions(
             "ws-001",
             mentions,
@@ -45,10 +52,17 @@ async def test_notify_mentions_targets_agents_and_guides_reply():
 async def test_notify_mentions_skips_when_no_agent_targets():
     mentions = [SimpleNamespace(type="human", id="user-001")]
 
-    with patch(
-        "app.services.collaboration_service.send_system_message_to_agents",
-        new_callable=AsyncMock,
-    ) as mock_send:
+    with (
+        patch(
+            "app.services.collaboration_service.send_system_message_to_agents",
+            new_callable=AsyncMock,
+        ) as mock_send,
+        patch(
+            "app.services.corridor_router.has_any_connections",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+    ):
         await _notify_mentions(
             "ws-001",
             mentions,

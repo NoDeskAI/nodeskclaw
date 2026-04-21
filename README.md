@@ -344,7 +344,7 @@ Available presets are in `deploy/mirrors/`. See [deploy/mirrors/README.md](deplo
 - [GitHub Issues](https://github.com/NoDeskAI/nodeskclaw/issues) -- Bug reports and feature requests
 - WeChat -- Scan the QR code below to join the developer group; if the WeChat group is full, please use Discord above
 
-
+<img src="docs/assets/wechat-group-qr.png" alt="WeChat Group QR Code" width="200" />
 
 ## Contributing
 

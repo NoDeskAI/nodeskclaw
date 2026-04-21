@@ -15,9 +15,7 @@ from app.schemas.auth import (
     AccountLoginRequest,
     ChangePasswordRequest,
     EmailLoginRequest,
-    FeishuCallbackRequest,
     LoginResponse,
-    OAuthCallbackRequest,
     RefreshTokenRequest,
     SmsLoginRequest,
     SmsSendRequest,
@@ -30,28 +28,6 @@ from app.schemas.common import ApiResponse
 from app.services import auth_service
 
 router = APIRouter()
-
-
-# ── OAuth 通用回调 ────────────────────────────────────────
-
-@router.post("/oauth/callback", response_model=ApiResponse[LoginResponse])
-async def oauth_callback(body: OAuthCallbackRequest, db: AsyncSession = Depends(get_db)):
-    """通用 OAuth 回调：provider + code 换取 JWT。"""
-    result = await auth_service.oauth_login(
-        body.provider, body.code, db, redirect_uri=body.redirect_uri, client_id=body.client_id
-    )
-    await hooks.emit("operation_audit", action="auth.login", target_type="user", target_id=result.user.id, actor_id=result.user.id, org_id=result.user.current_org_id, details={"method": "oauth"})
-    return ApiResponse(data=result)
-
-
-@router.post("/feishu/callback", response_model=ApiResponse[LoginResponse])
-async def feishu_callback(body: FeishuCallbackRequest, db: AsyncSession = Depends(get_db)):
-    """飞书 SSO 回调（向后兼容别名）。"""
-    result = await auth_service.oauth_login(
-        "feishu", body.code, db, redirect_uri=body.redirect_uri, client_id=body.client_id
-    )
-    await hooks.emit("operation_audit", action="auth.login", target_type="user", target_id=result.user.id, actor_id=result.user.id, org_id=result.user.current_org_id, details={"method": "feishu"})
-    return ApiResponse(data=result)
 
 
 # ── 邮箱密码 ─────────────────────────────────────────────

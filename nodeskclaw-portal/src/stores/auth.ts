@@ -39,7 +39,6 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('portal_token'))
   const refreshToken = ref<string | null>(localStorage.getItem('portal_refresh_token'))
   const user = ref<PortalUser | null>(null)
-  const lastOAuthProvider = ref<string | null>(sessionStorage.getItem('oauth_provider'))
   const systemInfo = ref<SystemInfo | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
@@ -55,22 +54,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     refreshToken.value = null
     user.value = null
-    lastOAuthProvider.value = null
     localStorage.removeItem('portal_token')
     localStorage.removeItem('portal_refresh_token')
-    sessionStorage.removeItem('oauth_provider')
-  }
-
-  async function oauthLogin(provider: string, code: string) {
-    const redirect_uri = window.location.origin + `/login/callback/${provider}`
-    const client_id = import.meta.env.VITE_FEISHU_APP_ID || undefined
-    const res = await api.post('/auth/oauth/callback', { provider, code, redirect_uri, client_id })
-    const data = res.data.data
-    setTokens(data.access_token, data.refresh_token)
-    user.value = data.user
-    lastOAuthProvider.value = data.provider || provider
-    sessionStorage.setItem('oauth_provider', lastOAuthProvider.value!)
-    return data
   }
 
   async function fetchSystemInfo() {
@@ -142,9 +127,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, refreshToken, user, systemInfo, isLoggedIn, lastOAuthProvider,
+    token, refreshToken, user, systemInfo, isLoggedIn,
     setTokens, clearAuth,
-    oauthLogin, emailLogin, sendSmsCode, smsLogin,
+    emailLogin, sendSmsCode, smsLogin,
     accountLogin, sendVerificationCode, verificationCodeLogin,
     fetchSystemInfo, fetchUser, logout,
   }

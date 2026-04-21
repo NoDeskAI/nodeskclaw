@@ -1,4 +1,4 @@
-"""Auth service: OAuth (generic), email/password, phone/SMS login, JWT management."""
+"""Auth service: email/password, phone/SMS login, JWT management."""
 
 import hashlib
 import hmac
@@ -19,150 +19,10 @@ from app.core.exceptions import NotFoundError
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User, UserRole
 from app.schemas.auth import LoginResponse, TokenResponse, UserInfo
-from app.utils.oauth_providers import get_provider
 
 logger = logging.getLogger(__name__)
 
 _verification_codes: dict[str, tuple[str, float]] = {}
-
-
-async def oauth_login(
-    provider_name: str, code: str, db: AsyncSession,
-    redirect_uri: str | None = None, client_id: str | None = None,
-) -> LoginResponse:
-    """
-    通用 OAuth 登录：
-    1. 通过 provider registry 用 code 换取用户信息
-    2. 按 (provider, provider_user_id) 查 OAuthConnection → 找到 User 或创建新 User
-    3. 按 (provider, provider_tenant_id) 查 OrgOAuthBinding → 自动加入组织或标记 needs_org_setup
-    4. 签发 JWT
-    """
-    from app.models.oauth_connection import UserOAuthConnection
-    from app.models.org_membership import OrgMembership, OrgRole
-    from app.models.org_oauth_binding import OrgOAuthBinding
-
-    provider = get_provider(provider_name)
-    oauth_info = await provider.exchange_code(code, redirect_uri, client_id=client_id)
-
-    conn_result = await db.execute(
-        select(UserOAuthConnection)
-        .where(
-            UserOAuthConnection.provider == oauth_info.provider,
-            UserOAuthConnection.provider_user_id == oauth_info.provider_user_id,
-            UserOAuthConnection.deleted_at.is_(None),
-        )
-    )
-    connection = conn_result.scalar_one_or_none()
-
-    if connection is not None:
-        user_result = await db.execute(
-            select(User)
-            .options(selectinload(User.oauth_connections))
-            .where(User.id == connection.user_id, User.deleted_at.is_(None))
-        )
-        user = user_result.scalar_one_or_none()
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error_code": 40106,
-                    "message_key": "errors.auth.user_not_found_or_disabled",
-                    "message": "用户不存在或已禁用",
-                },
-            )
-        user.name = oauth_info.name
-        if oauth_info.email:
-            user.email = oauth_info.email
-        if oauth_info.avatar_url:
-            user.avatar_url = oauth_info.avatar_url
-        if oauth_info.provider_tenant_id:
-            connection.provider_tenant_id = oauth_info.provider_tenant_id
-    else:
-        user = None
-        if oauth_info.email:
-            existing = await db.execute(
-                select(User).where(User.email == oauth_info.email, User.deleted_at.is_(None))
-            )
-            user = existing.scalar_one_or_none()
-
-        if user is not None:
-            user.name = oauth_info.name
-            if oauth_info.avatar_url:
-                user.avatar_url = oauth_info.avatar_url
-        else:
-            user = User(
-                name=oauth_info.name,
-                email=oauth_info.email,
-                avatar_url=oauth_info.avatar_url,
-                role=UserRole.user,
-            )
-            db.add(user)
-            await db.flush()
-
-        connection = UserOAuthConnection(
-            user_id=user.id,
-            provider=oauth_info.provider,
-            provider_user_id=oauth_info.provider_user_id,
-            provider_tenant_id=oauth_info.provider_tenant_id,
-        )
-        db.add(connection)
-
-    user.last_login_at = datetime.now(timezone.utc)
-
-    needs_org_setup = False
-    tenant_id = oauth_info.provider_tenant_id
-
-    if tenant_id:
-        binding_result = await db.execute(
-            select(OrgOAuthBinding).where(
-                OrgOAuthBinding.provider == oauth_info.provider,
-                OrgOAuthBinding.provider_tenant_id == tenant_id,
-                OrgOAuthBinding.deleted_at.is_(None),
-            )
-        )
-        binding = binding_result.scalar_one_or_none()
-
-        if binding is not None:
-            await db.flush()
-            existing_membership = await db.execute(
-                select(OrgMembership).where(
-                    OrgMembership.user_id == user.id,
-                    OrgMembership.org_id == binding.org_id,
-                    OrgMembership.deleted_at.is_(None),
-                )
-            )
-            if existing_membership.scalar_one_or_none() is None:
-                db.add(OrgMembership(user_id=user.id, org_id=binding.org_id, role=OrgRole.member))
-            user.current_org_id = binding.org_id
-        else:
-            needs_org_setup = True
-    else:
-        needs_org_setup = True
-
-    await db.commit()
-
-    refreshed = await db.execute(
-        select(User)
-        .options(selectinload(User.oauth_connections))
-        .where(User.id == user.id, User.deleted_at.is_(None))
-    )
-    user = refreshed.scalar_one()
-
-    user_info = await _build_user_info(user, db)
-    return LoginResponse(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
-        user=user_info,
-        needs_org_setup=needs_org_setup,
-        provider=oauth_info.provider,
-    )
-
-
-async def feishu_login(
-    code: str, db: AsyncSession, redirect_uri: str | None = None, client_id: str | None = None,
-) -> LoginResponse:
-    """向后兼容别名。"""
-    return await oauth_login("feishu", code, db, redirect_uri, client_id=client_id)
 
 
 async def refresh_tokens(refresh_token_str: str, db: AsyncSession) -> TokenResponse:
@@ -593,7 +453,7 @@ async def login_with_verification_code(
             detail={
                 "error_code": 40025,
                 "message_key": "errors.auth.email_not_registered",
-                "message": "该邮箱未注册，请先通过账号密码注册",
+                "message": "该邮箱未注册，请联系管理员获取邀请",
             },
         )
     if not user.is_active:

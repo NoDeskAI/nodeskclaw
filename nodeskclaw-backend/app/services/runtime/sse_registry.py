@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 BACKEND_INSTANCE_ID = os.environ.get("BACKEND_INSTANCE_ID", str(uuid.uuid4())[:8])
 
 HEARTBEAT_INTERVAL_S = 15
-HEARTBEAT_TIMEOUT_S = 30
+HEARTBEAT_TIMEOUT_S = 60
 
 
 async def register_connection(

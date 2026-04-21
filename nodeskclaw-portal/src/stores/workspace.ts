@@ -480,7 +480,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function removeAgent(workspaceId: string, instanceId: string) {
-    await api.delete(`/workspaces/${workspaceId}/agents/${instanceId}`)
+    try {
+      await api.delete(`/workspaces/${workspaceId}/agents/${instanceId}`)
+    } catch (err: any) {
+      if (err?.response?.status !== 404) throw err
+    }
     if (currentWorkspace.value?.id === workspaceId) {
       await fetchWorkspace(workspaceId)
     }

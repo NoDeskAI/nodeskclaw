@@ -5,6 +5,7 @@ import base64
 import logging
 import re
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Coroutine, Literal
 
 from sqlalchemy import and_, case, func, or_, select
@@ -169,6 +170,7 @@ async def _apply_template_to_workspace(
     from app.models.base import not_deleted
     from app.models.corridor import CorridorHex, HexConnection, ordered_pair
     from app.models.workspace_template import WorkspaceTemplate
+    from app.services.runtime import node_card as node_card_service
 
     result = await db.execute(
         select(WorkspaceTemplate).where(
@@ -195,6 +197,15 @@ async def _apply_template_to_workspace(
                 created_by=user_id,
             )
             db.add(ch)
+            await node_card_service.create_node_card(
+                db,
+                node_type="corridor",
+                node_id=ch.id,
+                workspace_id=workspace_id,
+                hex_q=ch.hex_q,
+                hex_r=ch.hex_r,
+                name=ch.display_name or "",
+            )
 
     await db.flush()
 
@@ -203,7 +214,7 @@ async def _apply_template_to_workspace(
             edge.get("a_q", 0), edge.get("a_r", 0),
             edge.get("b_q", 0), edge.get("b_r", 0),
         )
-        conn = HexConnection(
+        db.add(HexConnection(
             id=str(uuid.uuid4()),
             workspace_id=workspace_id,
             hex_a_q=aq, hex_a_r=ar,
@@ -211,8 +222,7 @@ async def _apply_template_to_workspace(
             direction=edge.get("direction", "both"),
             auto_created=edge.get("auto_created", False),
             created_by=user_id,
-        )
-        db.add(conn)
+        ))
 
     if "content" in bb_snap:
         bb_result = await db.execute(
@@ -224,6 +234,95 @@ async def _apply_template_to_workspace(
         bb_row = bb_result.scalar_one_or_none()
         if bb_row:
             bb_row.content = bb_snap["content"]
+
+    await db.commit()
+
+
+async def apply_internal_deploy_topology(
+    db: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    topo_snap: dict,
+    human_specs: list[dict],
+) -> None:
+    """Apply filtered topology snapshot (corridors, connections, human hexes) during template deploy.
+
+    Dual-writes to legacy tables (corridor_hexes/human_hexes) AND node_cards so that
+    existing CRUD endpoints and _is_hex_occupied checks keep working while _build_hex_map
+    (which short-circuits on node_cards) also sees the data.
+    """
+    import uuid
+
+    from app.models.corridor import CorridorHex, HexConnection, HumanHex, ordered_pair
+    from app.services.runtime import node_card as node_card_service
+
+    for node in topo_snap.get("nodes", []):
+        if node.get("node_type") == "corridor":
+            ch = CorridorHex(
+                id=str(uuid.uuid4()),
+                workspace_id=workspace_id,
+                hex_q=node.get("hex_q", 0),
+                hex_r=node.get("hex_r", 0),
+                display_name=node.get("display_name", ""),
+                created_by=user_id,
+            )
+            db.add(ch)
+            await node_card_service.create_node_card(
+                db,
+                node_type="corridor",
+                node_id=ch.id,
+                workspace_id=workspace_id,
+                hex_q=ch.hex_q,
+                hex_r=ch.hex_r,
+                name=ch.display_name or "",
+            )
+
+    for spec in human_specs:
+        hh = HumanHex(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            user_id=user_id,
+            hex_q=spec.get("hex_q", 0),
+            hex_r=spec.get("hex_r", 0),
+            display_name=spec.get("display_name", ""),
+            display_color=spec.get("display_color", "#f59e0b"),
+            channel_type=spec.get("channel_type"),
+            channel_config=spec.get("channel_config"),
+            created_by=user_id,
+        )
+        db.add(hh)
+        await node_card_service.create_node_card(
+            db,
+            node_type="human",
+            node_id=hh.id,
+            workspace_id=workspace_id,
+            hex_q=hh.hex_q,
+            hex_r=hh.hex_r,
+            name=spec.get("display_name", ""),
+            metadata={
+                "user_id": user_id,
+                "display_color": spec.get("display_color", "#f59e0b"),
+                "channel_type": spec.get("channel_type"),
+                "channel_config": spec.get("channel_config"),
+            },
+        )
+
+    await db.flush()
+
+    for edge in topo_snap.get("edges", []):
+        aq, ar, bq, br = ordered_pair(
+            edge.get("a_q", 0), edge.get("a_r", 0),
+            edge.get("b_q", 0), edge.get("b_r", 0),
+        )
+        db.add(HexConnection(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            hex_a_q=aq, hex_a_r=ar,
+            hex_b_q=bq, hex_b_r=br,
+            direction=edge.get("direction", "both"),
+            auto_created=edge.get("auto_created", False),
+            created_by=user_id,
+        ))
 
     await db.commit()
 
@@ -1115,7 +1214,7 @@ async def create_task(
     db: AsyncSession, workspace_id: str, data: TaskCreate,
     created_by_instance_id: str | None = None,
     schedule_id: str | None = None,
-    deadline: "datetime | None" = None,
+    deadline: datetime | None = None,
 ) -> TaskInfo:
     task = WorkspaceTask(
         workspace_id=workspace_id,
