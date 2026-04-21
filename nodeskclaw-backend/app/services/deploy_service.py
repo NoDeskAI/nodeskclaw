@@ -1149,20 +1149,31 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 instance.available_replicas = dep_status.get("available_replicas", 0)
                 await db.commit()
 
+                llm_sync_warning = ""
                 if ctx.runtime == "openclaw":
                     from app.services.llm_config_service import (
                         ensure_openclaw_gateway_config,
                         sync_openclaw_llm_config,
                     )
 
-                    if ctx.has_llm_configs:
-                        config_step = len(DEPLOY_STEPS_BASE) + 1
-                        _publish(config_step, "应用实例配置")
-                        await ensure_openclaw_gateway_config(instance, db)
-                        await sync_openclaw_llm_config(instance, db)
-                        _publish(config_step, "应用实例配置", status="success")
-                    else:
-                        await ensure_openclaw_gateway_config(instance, db)
+                    try:
+                        if ctx.has_llm_configs:
+                            config_step = len(DEPLOY_STEPS_BASE) + 1
+                            _publish(config_step, "应用实例配置")
+                            await ensure_openclaw_gateway_config(instance, db)
+                            await sync_openclaw_llm_config(instance, db)
+                            _publish(config_step, "应用实例配置", status="success")
+                        else:
+                            await ensure_openclaw_gateway_config(instance, db)
+                    except Exception as e:
+                        logger.warning(
+                            "LLM 配置同步失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
+                            ctx.record_id, ctx.instance_id, e, exc_info=True,
+                        )
+                        llm_sync_warning = "（LLM 配置同步失败，可在管理后台手动重试）"
+                        if ctx.has_llm_configs:
+                            _publish(config_step, "应用实例配置", status="failed",
+                                     message=str(e)[:200])
 
                 gene_install_warning = ""
                 if ctx.template_gene_slugs:
@@ -1216,7 +1227,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                         except Exception:
                             logger.warning("Failed to increment template use count for %s", ctx.template_id, exc_info=True)
 
-                success_msg = f"部署成功{gene_install_warning}"
+                success_msg = f"部署成功{llm_sync_warning}{gene_install_warning}"
                 _publish(total, "完成", status="success", message=success_msg)
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
             else:

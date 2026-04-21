@@ -73,8 +73,8 @@ def _build_providers_config(
     configs: list,
     wp_api_key: str,
     user_keys: dict[str, UserLlmKey],
-    org_keys: dict[str, OrgModelProvider],
     *,
+    org_keys: dict[str, OrgModelProvider] | None = None,
     use_external_proxy: bool = False,
 ) -> dict:
     """Build the models.providers section for openclaw.json.
@@ -83,6 +83,7 @@ def _build_providers_config(
     (InstanceProviderConfig ORM or InstanceProviderConfigItem schema both work).
     Optionally reads .base_url / .api_type from config objects directly.
     """
+    org_keys = org_keys or {}
     if use_external_proxy:
         proxy_url = (settings.LLM_PROXY_URL or "").rstrip("/")
     else:
@@ -507,8 +508,8 @@ async def write_instance_llm_configs(
     use_external = bool(cluster and cluster.proxy_endpoint)
 
     providers = _build_providers_config(
-        configs, wp_api_key, user_keys, org_keys,
-        use_external_proxy=use_external,
+        configs, wp_api_key, user_keys,
+        org_keys=org_keys, use_external_proxy=use_external,
     )
     if configs and not providers:
         raise AppException(
@@ -624,8 +625,8 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
     use_external = bool(cluster and cluster.proxy_endpoint)
 
     providers = _build_providers_config(
-        configs, wp_api_key, user_keys, org_keys,
-        use_external_proxy=use_external,
+        configs, wp_api_key, user_keys,
+        org_keys=org_keys, use_external_proxy=use_external,
     )
     if configs and not providers:
         raise AppException(
