@@ -37,6 +37,7 @@ export interface WorkspaceInfo {
   icon: string
   created_by: string
   cluster_id?: string
+  source_template_id?: string | null
   agent_count: number
   agents: AgentBrief[]
   created_at: string
@@ -419,7 +420,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function findTemplateBySourceWorkspace(workspaceId: string): Promise<WorkspaceTemplateItem | null> {
     const templates = await fetchWorkspaceTemplates('org_private')
-    return templates.find(t => t.source_workspace_id === workspaceId) ?? null
+    const direct = templates.find(t => t.source_workspace_id === workspaceId)
+    if (direct) return direct
+    const ws = currentWorkspace.value
+    if (ws?.source_template_id) {
+      const fromTemplate = templates.find(t => t.id === ws.source_template_id)
+      if (fromTemplate) return fromTemplate
+    }
+    return null
   }
 
   const activeTemplateDeploys = ref<ActiveWorkspaceDeployItem[]>([])
