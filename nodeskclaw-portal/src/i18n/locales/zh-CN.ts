@@ -1652,6 +1652,9 @@ const zhCN = {
     model_provider: {
       already_exists: "该供应商已配置，不能重复添加",
     },
+    template: {
+      name_duplicate: "模板名称已存在，请使用其他名称",
+    },
     billing: {
       instance_limit_exceeded: "AI 员工数量已达上限（{used}/{limit}），请升级套餐或联系管理员",
       cpu_quota_exceeded: "CPU 配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",

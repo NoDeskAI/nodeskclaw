@@ -1652,6 +1652,9 @@ const enUS = {
     model_provider: {
       already_exists: "This provider is already configured",
     },
+    template: {
+      name_duplicate: "Template name already exists, please use a different name",
+    },
     billing: {
       instance_limit_exceeded: "AI Employee limit reached ({used}/{limit}). Please upgrade your plan or contact admin.",
       cpu_quota_exceeded: "CPU quota exceeded: used {used}, requesting {requested}, limit {limit}",
