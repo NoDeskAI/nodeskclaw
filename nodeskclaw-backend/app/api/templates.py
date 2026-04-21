@@ -44,6 +44,25 @@ def _error(status_code: int, error_code: int, message_key: str, message: str) ->
     )
 
 
+async def _check_template_name_unique(
+    db: AsyncSession, org_id: str, name: str, *, exclude_id: str | None = None,
+) -> None:
+    q = select(WorkspaceTemplate.id).where(
+        WorkspaceTemplate.org_id == org_id,
+        WorkspaceTemplate.name == name,
+        not_deleted(WorkspaceTemplate),
+    )
+    if exclude_id:
+        q = q.where(WorkspaceTemplate.id != exclude_id)
+    existing = (await db.execute(q)).scalar_one_or_none()
+    if existing:
+        raise _error(
+            409, 40960,
+            "errors.template.name_duplicate",
+            f"模板名称「{name}」已存在，请使用其他名称",
+        )
+
+
 class TemplateCreateRequest(BaseModel):
     name: str
     description: str = ""
@@ -215,6 +234,8 @@ async def create_template(
     db: AsyncSession = Depends(get_db),
 ):
     user, org = org_ctx
+    org_id = _org_id(org)
+    await _check_template_name_unique(db, org_id, body.name.strip())
 
     collect_warnings: list[str] = []
     agent_specs: list = []
@@ -251,7 +272,7 @@ async def create_template(
 
     t = WorkspaceTemplate(
         id=str(uuid.uuid4()),
-        name=body.name,
+        name=body.name.strip(),
         description=body.description,
         is_preset=False,
         topology_snapshot=topology_snapshot,
@@ -455,7 +476,10 @@ async def update_template(
     )
 
     if body.name is not None:
-        t.name = body.name.strip()
+        new_name = body.name.strip()
+        if new_name != t.name:
+            await _check_template_name_unique(db, org_id, new_name, exclude_id=template_id)
+        t.name = new_name
     t.description = body.description
     t.topology_snapshot = topology_snapshot
     t.blackboard_snapshot = blackboard_snapshot

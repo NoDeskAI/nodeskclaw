@@ -1,6 +1,6 @@
 """Workspace template model — saves reusable workspace configurations."""
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,14 @@ from app.models.gene import ContentVisibility
 
 class WorkspaceTemplate(BaseModel):
     __tablename__ = "workspace_templates"
+    __table_args__ = (
+        Index(
+            "uq_workspace_templates_org_name",
+            "org_id", "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
