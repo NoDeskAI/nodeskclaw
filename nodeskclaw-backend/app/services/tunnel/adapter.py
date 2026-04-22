@@ -138,6 +138,11 @@ class _InstanceConnection:
         queue = self._stream_queues.get(reply_to)
         if queue is not None:
             queue.put_nowait(msg)
+            if msg.type in (
+                TunnelMessageType.CHAT_RESPONSE_DONE,
+                TunnelMessageType.CHAT_RESPONSE_ERROR,
+            ):
+                self._stream_queues.pop(reply_to, None)
             return True
         fut = self._pending_responses.pop(reply_to, None)
         if fut and not fut.done():

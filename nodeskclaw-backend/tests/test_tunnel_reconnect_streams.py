@@ -17,10 +17,8 @@ from app.services.tunnel.protocol import TunnelMessage, TunnelMessageType
 INSTANCE_ID = "inst-reconnect-001"
 
 
-def _make_ws_mock(*, accepted: bool = True) -> MagicMock:
+def _make_ws_mock() -> MagicMock:
     ws = AsyncMock()
-    ws.client_state = MagicMock()
-    ws.client_state.name = "CONNECTED"
     from starlette.websockets import WebSocketState
     ws.client_state = WebSocketState.CONNECTED
     return ws
@@ -91,6 +89,24 @@ def test_response_without_handler_returns_false():
     )
     resolved = conn.resolve_response("req-nonexistent", chunk)
     assert resolved is False
+
+
+def test_resolve_response_auto_cleanup_on_done():
+    """resolve_response 收到 DONE/ERROR 时应自动移除 stream 条目，防止重连后泄漏。"""
+    ws = _make_ws_mock()
+    conn = _InstanceConnection(ws, INSTANCE_ID)
+    q = conn.register_stream("req-77")
+
+    chunk = TunnelMessage(type=TunnelMessageType.CHAT_RESPONSE_CHUNK, payload={"content": "hi"})
+    conn.resolve_response("req-77", chunk)
+    assert "req-77" in conn._stream_queues
+
+    done = TunnelMessage(type=TunnelMessageType.CHAT_RESPONSE_DONE, payload={})
+    conn.resolve_response("req-77", done)
+    assert "req-77" not in conn._stream_queues, \
+        "Stream entry should be auto-removed after DONE"
+    assert q.get_nowait() is chunk
+    assert q.get_nowait() is done
 
 
 @pytest.mark.asyncio
