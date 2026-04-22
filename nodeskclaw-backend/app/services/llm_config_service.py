@@ -62,6 +62,7 @@ NODESKCLAW_TOOL_NAMES = (
     "nodeskclaw_gene_discovery",
     "nodeskclaw_file_download",
     "nodeskclaw_chat_history",
+    "nodeskclaw_shared_files",
 )
 
 

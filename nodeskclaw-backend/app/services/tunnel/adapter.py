@@ -163,6 +163,7 @@ class _InstanceConnection:
             if not fut.done():
                 fut.cancel()
         self._pending_responses.clear()
+        self._instance_streams.clear()
 
 
 class TunnelAdapter:
