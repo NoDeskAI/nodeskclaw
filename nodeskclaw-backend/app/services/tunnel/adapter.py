@@ -216,8 +216,10 @@ class TunnelAdapter:
             return
 
         old_conn = self._connections.get(instance_id)
+        surviving_streams: dict[str, asyncio.Queue[TunnelMessage]] = {}
         if old_conn:
             logger.info("Tunnel: kicking previous connection for %s", instance_id)
+            surviving_streams = dict(old_conn._stream_queues)
             old_conn.cancel_all()
             try:
                 await old_conn.ws.close(code=4010, reason="replaced")
@@ -226,6 +228,12 @@ class TunnelAdapter:
             self._cleanup_instance(instance_id)
 
         conn = _InstanceConnection(ws, instance_id)
+        if surviving_streams:
+            conn._stream_queues.update(surviving_streams)
+            logger.info(
+                "Tunnel: %d in-flight stream(s) transferred to new connection for %s",
+                len(surviving_streams), instance_id,
+            )
         self._connections[instance_id] = conn
         self._stats["total_connections"] += 1
 
@@ -282,7 +290,12 @@ class TunnelAdapter:
 
     def _on_chat_response(self, conn: _InstanceConnection, msg: TunnelMessage) -> None:
         if msg.reply_to:
-            conn.resolve_response(msg.reply_to, msg)
+            resolved = conn.resolve_response(msg.reply_to, msg)
+            if not resolved:
+                logger.warning(
+                    "Tunnel: chat response for request %s has no handler (instance=%s, type=%s)",
+                    msg.reply_to, conn.instance_id, msg.type,
+                )
 
     async def _on_collaboration_message(self, instance_id: str, msg: TunnelMessage) -> None:
         try:
