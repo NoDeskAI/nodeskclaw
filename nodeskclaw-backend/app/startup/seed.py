@@ -194,8 +194,8 @@ async def _seed_default_org_and_templates(
                 pass
 
         from app.models.workspace_template import WorkspaceTemplate
-        preset_names = ["软件研发团队", "内容工作室", "研究实验室"]
-        preset_files = ["software_team.json", "content_studio.json", "research_lab.json"]
+        preset_names = ["软件研发团队", "内容工作室", "研究实验室", "自媒体内容工作室"]
+        preset_files = ["software_team.json", "content_studio.json", "research_lab.json", "content_media_studio.json"]
         for pname, pfile in zip(preset_names, preset_files):
             exists = await db.execute(
                 select(WorkspaceTemplate).where(
@@ -218,6 +218,8 @@ async def _seed_default_org_and_templates(
                     topology_snapshot=data.get("topology_snapshot", {}),
                     blackboard_snapshot=data.get("blackboard_snapshot", {}),
                     gene_assignments=data.get("gene_assignments", []),
+                    agent_specs=data.get("agent_specs", []),
+                    human_specs=data.get("human_specs", []),
                     created_by=None,
                 )
                 db.add(t)

@@ -1,0 +1,101 @@
+{
+  "name": "自媒体内容工作室",
+  "description": "选题编辑→内容创作→审核优化→分发运营，4 位 AI 员工全流程自动化内容生产",
+  "agent_specs": [
+    {
+      "hex_q": 1, "hex_r": 0,
+      "display_name": "选题编辑",
+      "label": "选题策划与热点追踪",
+      "runtime": "openclaw",
+      "compute_provider": "k8s",
+      "resources": {
+        "cpu_request": "500m",
+        "cpu_limit": "2000m",
+        "mem_request": "2Gi",
+        "mem_limit": "2Gi",
+        "storage_size": "80Gi"
+      },
+      "llm_providers": [],
+      "gene_slugs": ["content-topic-editor"],
+      "mcp_servers": []
+    },
+    {
+      "hex_q": 0, "hex_r": 1,
+      "display_name": "内容创作",
+      "label": "内容撰写与初稿交付",
+      "runtime": "openclaw",
+      "compute_provider": "k8s",
+      "resources": {
+        "cpu_request": "500m",
+        "cpu_limit": "2000m",
+        "mem_request": "2Gi",
+        "mem_limit": "2Gi",
+        "storage_size": "80Gi"
+      },
+      "llm_providers": [],
+      "gene_slugs": ["content-writer"],
+      "mcp_servers": []
+    },
+    {
+      "hex_q": -1, "hex_r": 1,
+      "display_name": "审核优化",
+      "label": "内容审核与 SEO 优化",
+      "runtime": "openclaw",
+      "compute_provider": "k8s",
+      "resources": {
+        "cpu_request": "500m",
+        "cpu_limit": "2000m",
+        "mem_request": "2Gi",
+        "mem_limit": "2Gi",
+        "storage_size": "80Gi"
+      },
+      "llm_providers": [],
+      "gene_slugs": ["content-reviewer"],
+      "mcp_servers": []
+    },
+    {
+      "hex_q": -1, "hex_r": 0,
+      "display_name": "分发运营",
+      "label": "多平台分发与数据追踪",
+      "runtime": "openclaw",
+      "compute_provider": "k8s",
+      "resources": {
+        "cpu_request": "500m",
+        "cpu_limit": "2000m",
+        "mem_request": "2Gi",
+        "mem_limit": "2Gi",
+        "storage_size": "80Gi"
+      },
+      "llm_providers": [],
+      "gene_slugs": ["content-distributor"],
+      "mcp_servers": []
+    }
+  ],
+  "topology_snapshot": {
+    "nodes": [
+      {"hex_q": 0, "hex_r": 0, "node_type": "blackboard", "entity_id": null, "display_name": "黑板", "extra": {}},
+      {"hex_q": 1, "hex_r": 0, "node_type": "agent", "entity_id": null, "display_name": "选题编辑", "extra": {}},
+      {"hex_q": 0, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "内容创作", "extra": {}},
+      {"hex_q": -1, "hex_r": 1, "node_type": "agent", "entity_id": null, "display_name": "审核优化", "extra": {}},
+      {"hex_q": -1, "hex_r": 0, "node_type": "agent", "entity_id": null, "display_name": "分发运营", "extra": {}}
+    ],
+    "edges": [
+      {"a_q": 0, "a_r": 0, "b_q": 1, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": 0, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 0, "b_q": -1, "b_r": 0, "direction": "both", "auto_created": false},
+      {"a_q": 1, "a_r": 0, "b_q": 0, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": 0, "a_r": 1, "b_q": -1, "b_r": 1, "direction": "both", "auto_created": false},
+      {"a_q": -1, "a_r": 1, "b_q": -1, "b_r": 0, "direction": "both", "auto_created": false}
+    ]
+  },
+  "blackboard_snapshot": {
+    "content": "## 内容工作室 SOP\n\n### 工作流程\n1. **选题编辑** → 追踪热点、评估选题、创建选题任务（含完整 Brief）\n2. **内容创作** → 认领选题 → 撰写初稿 → 上传共享文件 → BBS 通知审核\n3. **审核优化** → 审稿（质量/SEO/合规）→ BBS 发反馈 → 通过后通知分发\n4. **分发运营** → 适配各平台版本 → 排入发布日历 → 发布后记录数据\n\n### 内容标准\n- 标题：15-25 字，含核心关键词，有信息增量\n- 正文：小红书 300-800 字 / 公众号 800-2000 字 / 知乎 1000-3000 字\n- 每 300 字建议配图 1 张\n- 核心观点必须有数据或案例支撑\n\n### 选题池\n\n> 在此区域追加选题想法，由选题编辑评估后转为正式任务\n>\n> 格式：`[优先级] 选题标题 — 简要理由`\n\n### 发布排期\n\n| 日期 | 平台 | 标题 | 状态 | 负责人 | 数据 |\n|------|------|------|------|--------|------|\n| - | - | 待排期 | - | - | - |\n\n### 内容表现\n\n> 发布后的数据追踪，由分发运营在发布 48h 后更新\n>\n> 每周汇总一次，输出到 BBS 数据周报帖\n"
+  },
+  "gene_assignments": [
+    {"agent_index": 0, "gene_slugs": ["content-topic-editor"]},
+    {"agent_index": 1, "gene_slugs": ["content-writer"]},
+    {"agent_index": 2, "gene_slugs": ["content-reviewer"]},
+    {"agent_index": 3, "gene_slugs": ["content-distributor"]}
+  ]
+}

@@ -27,8 +27,13 @@ gene_templates/
 ├── meta_gene_self_improve.json      # 自我改进元基因
 ├── meta_gene_innovation.json        # 创新探索元基因
 ├── meta_gene_akr_decomposer.json    # AKR 分解元基因（O -> KR -> Task）
+├── content_topic_editor.json        # 自媒体选题编辑角色基因
+├── content_writer.json              # 自媒体内容创作角色基因
+├── content_reviewer.json            # 自媒体审核优化角色基因
+├── content_distributor.json         # 自媒体分发运营角色基因
 ├── genome_self_management.json      # 自管理基因组（捆绑 5 个工具基因，旧版）
 ├── genome_ai_employee_basics.json   # AI 员工基础技能基因组（捆绑 6 个工具基因 + 1 个元基因）
+├── genome_content_media_studio.json # 自媒体内容工作室基因组（捆绑 4 个角色基因）
 ├── workflow_genome_example.json     # 内容创作流水线基因组（含拓扑推荐）
 └── workflow_step_template.json      # 工作流步骤基因的 manifest 模板（不入库）
 ```
@@ -62,5 +67,10 @@ gene_templates/
 | 元基因 | meta_gene_akr_decomposer.json | akr-decomposer | 待更新 |
 | 基因组 | genome_self_management.json | nodeskclaw-self-management | 已上传 |
 | 基因组 | genome_ai_employee_basics.json | ai-employee-basics | 待更新 |
+| 角色基因 | content_topic_editor.json | content-topic-editor | 待上传 |
+| 角色基因 | content_writer.json | content-writer | 待上传 |
+| 角色基因 | content_reviewer.json | content-reviewer | 待上传 |
+| 角色基因 | content_distributor.json | content-distributor | 待上传 |
+| 基因组 | genome_content_media_studio.json | content-media-studio | 待上传 |
 | 基因组 | workflow_genome_example.json | content-creation-pipeline | 未上传 |
 | 模板 | workflow_step_template.json | -- | 不入库 |

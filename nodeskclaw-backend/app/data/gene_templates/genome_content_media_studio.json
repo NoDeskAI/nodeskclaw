@@ -1,0 +1,23 @@
+{
+  "name": "Content Media Studio",
+  "slug": "content-media-studio",
+  "description": "自媒体内容工作室基因组：选题策划→内容创作→审核优化→分发运营，4 人全流程协作",
+  "gene_slugs": [
+    "content-topic-editor",
+    "content-writer",
+    "content-reviewer",
+    "content-distributor"
+  ],
+  "config_override": {
+    "description": "A content media studio genome bundling 4 role-specific genes for topic planning, content creation, review/optimization, and multi-platform distribution. Install the full genome to get all roles, or install individual genes for specific agents.",
+    "topology_recommendation": {
+      "description": "Hub-and-spoke layout around the blackboard, with workflow connections between adjacent roles",
+      "suggested_layout": [
+        {"role": "选题编辑", "hex_q": 1, "hex_r": 0, "genes": ["content-topic-editor"]},
+        {"role": "内容创作", "hex_q": 0, "hex_r": 1, "genes": ["content-writer"]},
+        {"role": "审核优化", "hex_q": -1, "hex_r": 1, "genes": ["content-reviewer"]},
+        {"role": "分发运营", "hex_q": -1, "hex_r": 0, "genes": ["content-distributor"]}
+      ]
+    }
+  }
+}

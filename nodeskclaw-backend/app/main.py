@@ -366,11 +366,16 @@ async def lifespan(app: FastAPI):
                     "meta_gene_self_improve.json",
                     "meta_gene_innovation.json",
                     "meta_gene_akr_decomposer.json",
+                    "content_topic_editor.json",
+                    "content_writer.json",
+                    "content_reviewer.json",
+                    "content_distributor.json",
                 ]
                 _genome_files = [
                     "genome_self_management.json",
                     "genome_ai_employee_basics.json",
                     "workflow_genome_example.json",
+                    "genome_content_media_studio.json",
                 ]
 
                 _seeded_genes = 0

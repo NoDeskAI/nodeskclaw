@@ -14,8 +14,9 @@
 
 ## 预设模板
 
-| 文件 | 名称 | 说明 |
-|------|------|------|
-| software_team.json | 软件研发团队 | PM、Dev、QA 三角协作，过道连接 |
-| content_studio.json | 内容工作室 | Writer、Editor、Designer 内容流水线 |
-| research_lab.json | 研究实验室 | Researcher、Analyst 协作，共享黑板 |
+| 文件 | 名称 | 说明 | 一键部署 |
+|------|------|------|----------|
+| software_team.json | 软件研发团队 | PM、Dev、QA 三角协作，过道连接 | 否 |
+| content_studio.json | 内容工作室 | Writer、Editor、Designer 内容流水线 | 否 |
+| research_lab.json | 研究实验室 | Researcher、Analyst 协作，共享黑板 | 否 |
+| content_media_studio.json | 自媒体内容工作室 | 选题编辑→内容创作→审核优化→分发运营，4 人全流程 | 是（含 agent_specs） |
