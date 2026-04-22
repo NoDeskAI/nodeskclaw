@@ -127,6 +127,8 @@ export function startTunnelClient(cfg: OpenClawConfig, callbacks?: TunnelCallbac
   return _instance;
 }
 
+const SEND_BUFFER_MAX = 64;
+
 export class TunnelClient {
   private ws: WebSocket | null = null;
   private reconnectAttempt = 0;
@@ -136,6 +138,7 @@ export class TunnelClient {
   private closed = false;
   private _protocolDowngraded = false;
   private learningHandler: LearningWebhookHandler | null = null;
+  private sendBuffer: TunnelMessage[] = [];
 
   get downgraded(): boolean {
     return this._protocolDowngraded;
@@ -231,7 +234,16 @@ export class TunnelClient {
 
   send(msg: TunnelMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn("[tunnel] Cannot send — not connected");
+      if (msg.type !== "auth" && this.sendBuffer.length < SEND_BUFFER_MAX) {
+        this.sendBuffer.push(msg);
+        console.debug(
+          "[tunnel] Buffered message (type=%s, buffered=%d)",
+          msg.type,
+          this.sendBuffer.length,
+        );
+      } else if (this.sendBuffer.length >= SEND_BUFFER_MAX) {
+        console.warn("[tunnel] Send buffer full, dropping message type=%s", msg.type);
+      }
       return;
     }
     const data: Record<string, unknown> = {
@@ -243,6 +255,15 @@ export class TunnelClient {
     if (msg.replyTo) data.replyTo = msg.replyTo;
     if (msg.traceId) data.traceId = msg.traceId;
     this.ws.send(JSON.stringify(data));
+  }
+
+  private flushSendBuffer(): void {
+    if (this.sendBuffer.length === 0) return;
+    console.log("[tunnel] Flushing %d buffered messages", this.sendBuffer.length);
+    const pending = this.sendBuffer.splice(0);
+    for (const msg of pending) {
+      this.send(msg);
+    }
   }
 
   sendCollaboration(payload: CollaborationPayload): void {
@@ -261,6 +282,7 @@ export class TunnelClient {
         this.reconnectAttempt = 0;
         this.lastPong = Date.now();
         this.startPingCheck();
+        this.flushSendBuffer();
         this.callbacks?.onAuthOk?.();
         break;
 
