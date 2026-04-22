@@ -230,6 +230,11 @@ export class TunnelClient {
   }
 
   send(msg: TunnelMessage): void {
+    const current = _instance;
+    if (current && current !== this && current.ws?.readyState === WebSocket.OPEN) {
+      current.send(msg);
+      return;
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn("[tunnel] Cannot send — not connected");
       return;
