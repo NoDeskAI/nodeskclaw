@@ -17,15 +17,22 @@ async def _resolve_targets_by_name(
     from app.models.base import not_deleted
     from app.models.node_card import NodeCard
     from app.services.runtime.registries.node_type_registry import NODE_TYPE_REGISTRY
-    from sqlalchemy import or_, select
+    from sqlalchemy import case, or_, select
 
     targets: list[DeliveryTarget] = []
     seen_ids: set[str] = set()
     for name in names:
-        stmt = select(NodeCard).where(
-            NodeCard.workspace_id == workspace_id,
-            not_deleted(NodeCard),
-            or_(NodeCard.name == name, NodeCard.node_id == name),
+        stmt = (
+            select(NodeCard)
+            .where(
+                NodeCard.workspace_id == workspace_id,
+                not_deleted(NodeCard),
+                or_(NodeCard.name == name, NodeCard.node_id == name),
+            )
+            .order_by(
+                case((NodeCard.node_id == name, 0), else_=1),
+                NodeCard.created_at.desc(),
+            )
         )
         result = await db.execute(stmt)
         card = result.scalars().first()

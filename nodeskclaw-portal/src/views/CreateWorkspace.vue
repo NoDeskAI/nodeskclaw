@@ -102,10 +102,19 @@ function openDeleteDialog(tpl: WorkspaceTemplateItem) {
 
 async function handleDeleteTemplate() {
   if (!deleteTarget.value || !deleteConfirmMatch.value) return
+  const deletedId = deleteTarget.value.id
   deleting.value = true
   try {
-    await store.deleteTemplate(deleteTarget.value.id)
-    templates.value = templates.value.filter(t => t.id !== deleteTarget.value!.id)
+    await store.deleteTemplate(deletedId)
+    templates.value = templates.value.filter(t => t.id !== deletedId)
+    if (selectedTemplateId.value === deletedId) {
+      selectedTemplateId.value = null
+      selectedTemplateName.value = ''
+      step.value = 1
+    }
+    if (deployTemplateId.value === deletedId) {
+      deployTemplateId.value = null
+    }
     deleteDialogOpen.value = false
     toast.success(t('deleteTemplate.success'))
   } catch (e: any) {

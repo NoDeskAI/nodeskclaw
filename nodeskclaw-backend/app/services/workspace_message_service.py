@@ -11,7 +11,7 @@ from app.models.workspace_message import WorkspaceMessage
 logger = logging.getLogger(__name__)
 
 NO_REPLY_TOKEN = "NO_REPLY"
-_NO_REPLY_VARIANTS = frozenset({"no_reply", "no reply", "noreply", "no"})
+_NO_REPLY_VARIANTS = frozenset({"no_reply", "no reply", "noreply"})
 DEFAULT_COLLABORATION_DEPTH = 3
 ABSOLUTE_MAX_COLLABORATION_DEPTH = 20
 
@@ -241,8 +241,9 @@ def build_context_prompt(
 def is_no_reply(text: str) -> bool:
     """Check if text is a silent-skip response that should not be shown to users.
 
-    Matches exact tokens ("NO_REPLY", "NO", "no reply") and responses where
+    Matches exact tokens ("NO_REPLY", "no reply", "noreply") and responses where
     the agent prepends filler text before the token (e.g. "这不是给我的\\nNO_REPLY").
+    Bare "no" is intentionally excluded to avoid swallowing legitimate short replies.
     """
     normalized = text.strip().lower()
     if normalized in _NO_REPLY_VARIANTS:

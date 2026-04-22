@@ -172,7 +172,7 @@ async def _apply_template_to_workspace(
     import uuid
 
     from app.models.base import not_deleted
-    from app.models.corridor import HexConnection, ordered_pair
+    from app.models.corridor import CorridorHex, HexConnection, ordered_pair
     from app.models.node_card import NodeCard
     from app.models.workspace_template import WorkspaceTemplate
     from app.services.runtime import node_card as node_card_service
@@ -2124,22 +2124,18 @@ async def restart_all_instances(workspace_id: str, db: AsyncSession) -> dict:
     if not restartable:
         return {"total": len(agents), "succeeded": 0, "failed": 0, "skipped": len(agents), "details": []}
 
-    results = await asyncio.gather(
-        *[instance_service.restart_instance(inst.id, db) for inst, _wa in restartable],
-        return_exceptions=True,
-    )
-
     details = []
     succeeded = 0
     failed = 0
-    for (inst, _wa), result in zip(restartable, results):
-        if isinstance(result, Exception):
-            failed += 1
-            details.append({"instance_id": inst.id, "name": inst.name, "status": "failed", "error": str(result)[:200]})
-            logger.warning("批量重启: 实例 %s 失败: %s", inst.name, result)
-        else:
+    for inst, _wa in restartable:
+        try:
+            await instance_service.restart_instance(inst.id, db)
             succeeded += 1
             details.append({"instance_id": inst.id, "name": inst.name, "status": "ok"})
+        except Exception as exc:
+            failed += 1
+            details.append({"instance_id": inst.id, "name": inst.name, "status": "failed", "error": str(exc)[:200]})
+            logger.warning("批量重启: 实例 %s 失败: %s", inst.name, exc)
 
     return {
         "total": len(agents),

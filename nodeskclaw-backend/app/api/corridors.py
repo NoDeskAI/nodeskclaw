@@ -282,7 +282,6 @@ async def delete_corridor_hex(
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
     await wm_service.check_workspace_access(workspace_id, user, "edit_topology", db)
-    from app.models.node_card import NodeCard
 
     result = await db.execute(
         select(CorridorHex).where(

@@ -50,6 +50,7 @@ def _collect_platform_host_endpoints() -> list[tuple[str, int]]:
 
     仅收集 IP 地址（非 K8s Service 域名），用于 NetworkPolicy 放行。
     """
+    _default_ports = {"http": 80, "https": 443}
     endpoints: list[tuple[str, int]] = []
     urls = [settings.AGENT_API_BASE_URL, settings.LLM_PROXY_INTERNAL_URL, settings.LLM_PROXY_URL]
     for url in urls:
@@ -58,7 +59,9 @@ def _collect_platform_host_endpoints() -> list[tuple[str, int]]:
         parsed = _urlparse(url)
         host = parsed.hostname or ""
         port = parsed.port
-        if not host or not port:
+        if port is None:
+            port = _default_ports.get((parsed.scheme or "").lower())
+        if not host or port is None:
             continue
         parts = host.split(".")
         if all(p.isdigit() for p in parts) and len(parts) == 4:
