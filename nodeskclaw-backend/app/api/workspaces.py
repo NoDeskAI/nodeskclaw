@@ -306,7 +306,7 @@ async def patch_blackboard_section(
     workspace_id: str,
     data: BlackboardSectionPatch,
     db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
+    user=Depends(_get_current_user_or_agent_dep()),
 ):
     await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
