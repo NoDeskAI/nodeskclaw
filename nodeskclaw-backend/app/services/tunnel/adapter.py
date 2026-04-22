@@ -514,26 +514,6 @@ class TunnelAdapter:
                 "Mention skip for %s: targets=%s, mentioned=%s",
                 agent_name, mention_targets, is_mentioned,
             )
-            user_content = _format_user_content(data.sender.name, data.content, data.attachments)
-            messages = [
-                {"role": "system", "content": context_prompt},
-                {"role": "user", "content": user_content},
-            ]
-            try:
-                chat_stream = await self.send_chat_request(
-                    target_node_id, messages,
-                    workspace_id=workspace_id,
-                    trace_id=envelope.traceid,
-                    stream=True,
-                    no_reply=True,
-                )
-                async for _ in chat_stream:
-                    break
-            except Exception as e:
-                logger.debug("Context injection for %s failed: %s", agent_name, e)
-            broadcast_event(workspace_id, "agent:done", {
-                "instance_id": target_node_id, "agent_name": agent_name,
-            })
             return DeliveryResult(
                 success=True, target_node_id=target_node_id,
                 transport=self.transport_id,
@@ -1042,5 +1022,9 @@ class AsyncChatStream:
                 self._conn.unregister_stream(self._request_id)
             return msg
         except asyncio.TimeoutError:
+            logger.warning(
+                "Chat stream timeout (120s) for request %s, trace=%s",
+                self._request_id, self._trace_id,
+            )
             self._conn.unregister_stream(self._request_id)
             raise StopAsyncIteration
