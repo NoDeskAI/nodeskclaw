@@ -117,10 +117,13 @@ class _InstanceConnection:
     __slots__ = (
         "ws", "instance_id", "connected_at", "last_pong",
         "msg_count_in", "msg_count_out",
-        "_pending_responses", "_stream_queues",
+        "_pending_responses", "_instance_streams",
     )
 
-    def __init__(self, ws: WebSocket, instance_id: str) -> None:
+    def __init__(
+        self, ws: WebSocket, instance_id: str,
+        instance_streams: dict[str, asyncio.Queue[TunnelMessage]],
+    ) -> None:
         self.ws = ws
         self.instance_id = instance_id
         self.connected_at = time.monotonic()
@@ -128,7 +131,7 @@ class _InstanceConnection:
         self.msg_count_in = 0
         self.msg_count_out = 0
         self._pending_responses: dict[str, asyncio.Future[TunnelMessage]] = {}
-        self._stream_queues: dict[str, asyncio.Queue[TunnelMessage]] = {}
+        self._instance_streams = instance_streams
 
     def create_response_future(self, request_id: str) -> asyncio.Future[TunnelMessage]:
         loop = asyncio.get_running_loop()
@@ -138,14 +141,14 @@ class _InstanceConnection:
 
     def register_stream(self, request_id: str) -> asyncio.Queue[TunnelMessage]:
         q: asyncio.Queue[TunnelMessage] = asyncio.Queue()
-        self._stream_queues[request_id] = q
+        self._instance_streams[request_id] = q
         return q
 
     def unregister_stream(self, request_id: str) -> None:
-        self._stream_queues.pop(request_id, None)
+        self._instance_streams.pop(request_id, None)
 
     def resolve_response(self, reply_to: str, msg: TunnelMessage) -> bool:
-        queue = self._stream_queues.get(reply_to)
+        queue = self._instance_streams.get(reply_to)
         if queue is not None:
             queue.put_nowait(msg)
             return True
@@ -160,7 +163,6 @@ class _InstanceConnection:
             if not fut.done():
                 fut.cancel()
         self._pending_responses.clear()
-        self._stream_queues.clear()
 
 
 class TunnelAdapter:
@@ -173,6 +175,7 @@ class TunnelAdapter:
         self._ping_tasks: dict[str, asyncio.Task] = {}
         self._stats = {"total_connections": 0, "total_messages_in": 0, "total_messages_out": 0}
         self._ws_context_cache: dict[str, _WorkspaceContext] = {}
+        self._instance_streams: dict[str, dict[str, asyncio.Queue[TunnelMessage]]] = {}
 
     @property
     def connected_instances(self) -> set[str]:
@@ -226,11 +229,8 @@ class TunnelAdapter:
             return
 
         old_conn = self._connections.get(instance_id)
-        migrated_streams: dict[str, asyncio.Queue[TunnelMessage]] = {}
         if old_conn:
             logger.info("Tunnel: kicking previous connection for %s", instance_id)
-            migrated_streams = dict(old_conn._stream_queues)
-            old_conn._stream_queues.clear()
             old_conn.cancel_all()
             try:
                 await old_conn.ws.close(code=4010, reason="replaced")
@@ -238,12 +238,12 @@ class TunnelAdapter:
                 logger.warning("Tunnel: failed to close old ws for %s", instance_id, exc_info=True)
             self._cleanup_instance(instance_id)
 
-        conn = _InstanceConnection(ws, instance_id)
-        if migrated_streams:
-            conn._stream_queues.update(migrated_streams)
+        streams = self._instance_streams.setdefault(instance_id, {})
+        conn = _InstanceConnection(ws, instance_id, streams)
+        if streams:
             logger.info(
-                "Tunnel: migrated %d in-flight stream(s) to new connection for %s",
-                len(migrated_streams), instance_id,
+                "Tunnel: %d in-flight stream(s) survive reconnect for %s",
+                len(streams), instance_id,
             )
         self._connections[instance_id] = conn
         self._stats["total_connections"] += 1
@@ -301,7 +301,12 @@ class TunnelAdapter:
 
     def _on_chat_response(self, conn: _InstanceConnection, msg: TunnelMessage) -> None:
         if msg.reply_to:
-            conn.resolve_response(msg.reply_to, msg)
+            resolved = conn.resolve_response(msg.reply_to, msg)
+            if not resolved:
+                logger.warning(
+                    "Tunnel: chat response for request %s has no handler on conn %s (type=%s)",
+                    msg.reply_to, conn.instance_id, msg.type,
+                )
 
     async def _on_collaboration_message(self, instance_id: str, msg: TunnelMessage) -> None:
         try:
@@ -342,6 +347,10 @@ class TunnelAdapter:
             payload=payload,
         )
         await self._send(conn.ws, msg)
+        logger.info(
+            "Tunnel: chat request sent to %s, request_id=%s, trace=%s",
+            instance_id, request_id, trace_id,
+        )
         return AsyncChatStream(conn, request_id, trace_id)
 
     async def send_learning_task(self, instance_id: str, task: dict) -> None:
@@ -659,6 +668,10 @@ class TunnelAdapter:
             mentions = _extract_mentions(
                 full_response, ws_ctx.members, agent_name,
                 exclude_names=[upstream_sender] if upstream_sender else None,
+            )
+            logger.info(
+                "Agent %s response mentions=%s (upstream=%s, response_len=%d)",
+                agent_name, [m["name"] for m in mentions], upstream_sender, len(full_response),
             )
             if mentions:
                 depth = (data.extensions or {}).get("depth", 0)
