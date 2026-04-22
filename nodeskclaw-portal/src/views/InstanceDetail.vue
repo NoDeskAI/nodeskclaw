@@ -316,12 +316,14 @@ const skillDirty = computed(() => skillContent.value !== skillOriginal.value)
 async function fetchSkills() {
   try {
     const res = await api.get(`/instances/${instanceId.value}/skills`)
-    skills.value = (res.data?.data ?? []).map((s: any) => ({
-      skill_name: s.skill_name,
-      name: s.name || s.skill_name,
-      description: s.description || '',
-      type: s.type,
-    }))
+    skills.value = (res.data?.data ?? [])
+      .filter((s: any) => s.type === 'emerged')
+      .map((s: any) => ({
+        skill_name: s.skill_name,
+        name: s.name || s.skill_name,
+        description: s.description || '',
+        type: s.type,
+      }))
     if (skills.value.length && !activeSkill.value) {
       activeSkill.value = skills.value[0].skill_name
       await fetchSkillContent(activeSkill.value)
