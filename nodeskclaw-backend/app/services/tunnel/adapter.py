@@ -1016,14 +1016,14 @@ class AsyncChatStream:
             self._conn.unregister_stream(self._request_id)
             raise StopAsyncIteration
         try:
-            msg = await asyncio.wait_for(self._queue.get(), timeout=120)
+            msg = await asyncio.wait_for(self._queue.get(), timeout=600)
             if msg.type in (TunnelMessageType.CHAT_RESPONSE_DONE, TunnelMessageType.CHAT_RESPONSE_ERROR):
                 self._done = True
                 self._conn.unregister_stream(self._request_id)
             return msg
         except asyncio.TimeoutError:
             logger.warning(
-                "Chat stream timeout (120s) for request %s, trace=%s",
+                "Chat stream timeout (600s) for request %s, trace=%s",
                 self._request_id, self._trace_id,
             )
             self._conn.unregister_stream(self._request_id)
