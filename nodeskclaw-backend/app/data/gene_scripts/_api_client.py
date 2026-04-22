@@ -17,9 +17,30 @@ import urllib.request
 import uuid
 from typing import Any
 
-API_URL = os.environ.get("DESKCLAW_API_URL", "http://localhost:4510/api/v1")
-TOKEN = os.environ.get("DESKCLAW_TOKEN", "")
-WORKSPACE_ID = os.environ.get("DESKCLAW_WORKSPACE_ID", "")
+def _discover_from_openclaw_config() -> tuple[str, str, str]:
+    """Fall back to openclaw.json channel config when env vars are missing."""
+    cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
+    api, tok, ws = "", "", ""
+    try:
+        import re as _re
+        with open(cfg_path) as f:
+            raw = f.read()
+        clean = _re.sub(r"^\s*//.*$", "", raw, flags=_re.MULTILINE)
+        cfg = json.loads(clean)
+        acct = cfg.get("channels", {}).get("nodeskclaw", {}).get("accounts", {}).get("default", {})
+        api = acct.get("apiUrl", "")
+        tok = acct.get("apiToken", "")
+        ws = acct.get("workspaceId", "")
+    except (OSError, json.JSONDecodeError, KeyError):
+        pass
+    return api, tok, ws
+
+
+_oc_api, _oc_tok, _oc_ws = _discover_from_openclaw_config()
+
+API_URL = os.environ.get("DESKCLAW_API_URL") or os.environ.get("NODESKCLAW_API_URL") or _oc_api or "http://localhost:4510/api/v1"
+TOKEN = os.environ.get("DESKCLAW_TOKEN") or os.environ.get("NODESKCLAW_TOKEN") or _oc_tok or ""
+WORKSPACE_ID = os.environ.get("DESKCLAW_WORKSPACE_ID") or os.environ.get("NODESKCLAW_WORKSPACE_ID") or _oc_ws or ""
 
 
 def _ws_base() -> str:
