@@ -101,6 +101,68 @@ async function bbApiFetch(
   return result;
 }
 
+const AUTO_SAVE_KEYWORDS = /脚本|终稿|报告|方案|拆解|分析/;
+const AUTO_SAVE_MIN_LENGTH = 500;
+
+async function autoSaveAsFile(
+  cfg: ToolConfig, ws: string, title: string, content: string,
+): Promise<Record<string, unknown> | null> {
+  if (content.length < AUTO_SAVE_MIN_LENGTH || !AUTO_SAVE_KEYWORDS.test(title)) return null;
+  try {
+    const safeName = title
+      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_")
+      .replace(/_+/g, "_").replace(/^_|_$/g, "")
+      .slice(0, 80) || "blackboard_section";
+    const fname = `${safeName}.md`;
+    const fileData = Buffer.from(content, "utf-8");
+    const boundary = `----AutoSave${Date.now()}${Math.random().toString(36).slice(2)}`;
+    const parts: Buffer[] = [];
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fname}"\r\nContent-Type: text/markdown\r\n\r\n`,
+    ));
+    parts.push(fileData);
+    parts.push(Buffer.from("\r\n"));
+    for (const [n, v] of [["parent_path", "/documents"], ["filename", fname]]) {
+      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`));
+    }
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+    const res = await fetch(`${cfg.apiUrl}/workspaces/${ws}/blackboard/files/upload-multipart`, {
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        Authorization: `Bearer ${cfg.token}`,
+      },
+      body: Buffer.concat(parts),
+    });
+    if (res.ok) return (await res.json()) as Record<string, unknown>;
+  } catch { /* best-effort */ }
+  return null;
+}
+
+function extractSections(markdown: string): Array<{ title: string; content: string }> {
+  const sections: Array<{ title: string; content: string }> = [];
+  const lines = markdown.split("\n");
+  let currentTitle = "";
+  let currentLines: string[] = [];
+  for (const line of lines) {
+    const m = line.match(/^#{1,2}\s+(.+)/);
+    if (m) {
+      if (currentTitle && currentLines.length > 0) {
+        sections.push({ title: currentTitle, content: currentLines.join("\n") });
+      }
+      currentTitle = m[1].trim();
+      currentLines = [line];
+    } else {
+      currentLines.push(line);
+    }
+  }
+  if (currentTitle && currentLines.length > 0) {
+    sections.push({ title: currentTitle, content: currentLines.join("\n") });
+  }
+  return sections;
+}
+
 function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
   return {
     name: "nodeskclaw_blackboard",
@@ -158,57 +220,34 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
       switch (p.action) {
         case "get_blackboard":
           return jsonResult(await bbApiFetch(cfg, `/workspaces/${ws}/blackboard`));
-        case "update_blackboard":
-          return jsonResult(
-            await bbApiFetch(cfg, `/workspaces/${ws}/blackboard`, "PUT", { content: p.content }),
-          );
+        case "update_blackboard": {
+          const ubResult = await bbApiFetch(cfg, `/workspaces/${ws}/blackboard`, "PUT", { content: p.content });
+          const fullContent = String(p.content || "");
+          const savedFiles: string[] = [];
+          for (const sec of extractSections(fullContent)) {
+            const r = await autoSaveAsFile(cfg, ws, sec.title, sec.content);
+            if (r) savedFiles.push(sec.title);
+          }
+          if (fullContent.length >= AUTO_SAVE_MIN_LENGTH && AUTO_SAVE_KEYWORDS.test(fullContent) && savedFiles.length === 0) {
+            const r = await autoSaveAsFile(cfg, ws, "blackboard_full_content", fullContent);
+            if (r) savedFiles.push("blackboard_full_content");
+          }
+          const ubOut = ubResult as Record<string, unknown>;
+          if (savedFiles.length > 0) ubOut["auto_saved_files"] = savedFiles;
+          return jsonResult(ubOut);
+        }
         case "patch_section": {
           const patchResult = await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/sections`, "PATCH", {
             section: p.section, content: p.content,
           });
           const sectionContent = String(p.content || "");
           const sectionTitle = String(p.section || "");
-          if (sectionContent.length > 500 && /脚本|终稿|报告|方案/.test(sectionTitle)) {
-            try {
-              const safeName = sectionTitle
-                .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
-                .replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_")
-                .replace(/_+/g, "_")
-                .replace(/^_|_$/g, "")
-                .slice(0, 80) || "blackboard_section";
-              const tmpPath = `/tmp/blackboard_${safeName}_${Date.now()}.md`;
-              await fs.writeFile(tmpPath, sectionContent, "utf-8");
-              const fname = `${safeName}.md`;
-              const boundary = `----AutoSave${Date.now()}${Math.random().toString(36).slice(2)}`;
-              const fileData = Buffer.from(sectionContent, "utf-8");
-              const parts: Buffer[] = [];
-              parts.push(Buffer.from(
-                `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fname}"\r\nContent-Type: text/markdown\r\n\r\n`,
-              ));
-              parts.push(fileData);
-              parts.push(Buffer.from("\r\n"));
-              for (const [n, v] of [["parent_path", "/documents"], ["filename", fname]]) {
-                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`));
-              }
-              parts.push(Buffer.from(`--${boundary}--\r\n`));
-              const uploadBody = Buffer.concat(parts);
-              const uploadUrl = `${cfg.apiUrl}/workspaces/${ws}/blackboard/files/upload-multipart`;
-              const uploadRes = await fetch(uploadUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": `multipart/form-data; boundary=${boundary}`,
-                  Authorization: `Bearer ${cfg.token}`,
-                },
-                body: uploadBody,
-              });
-              if (uploadRes.ok) {
-                const uploadData = await uploadRes.json();
-                return jsonResult({
-                  ...(patchResult as Record<string, unknown>),
-                  auto_saved_file: { filename: fname, parent_path: "/documents/", upload_result: uploadData },
-                });
-              }
-            } catch { /* auto-save is best-effort, don't block patch_section */ }
+          const saved = await autoSaveAsFile(cfg, ws, sectionTitle, sectionContent);
+          if (saved) {
+            return jsonResult({
+              ...(patchResult as Record<string, unknown>),
+              auto_saved_file: saved,
+            });
           }
           return jsonResult(patchResult);
         }
