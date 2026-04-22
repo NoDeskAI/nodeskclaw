@@ -443,12 +443,56 @@ async def list_provider_models(
     return ApiResponse(data=ProviderModelsResponse(provider=provider, models=models))
 
 
+async def _test_via_proxy(
+    proxy_url: str,
+    provider: str,
+    api_key: str,
+    model: str | None,
+    *,
+    base_url: str | None = None,
+    api_type: str | None = None,
+    skip_ssl_verify: bool = False,
+):
+    """Route test connection through the LLM Proxy's /internal/test-connection endpoint."""
+    import httpx
+    from app.services.model_catalog_service import ChatTestResult
+
+    payload = {
+        "provider": provider,
+        "api_key": api_key,
+        "model": model or "",
+        "base_url": base_url,
+        "api_type": api_type,
+        "skip_ssl_verify": skip_ssl_verify,
+    }
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=httpx.Timeout(45, connect=10)) as client:
+            resp = await client.post(f"{proxy_url}/internal/test-connection", json=payload)
+            data = resp.json()
+        return ChatTestResult(
+            ok=data.get("ok", False),
+            model=data.get("model", model or ""),
+            message=data.get("message", ""),
+            latency_ms=data.get("latency_ms", 0),
+            error_detail=data.get("error_detail"),
+        )
+    except Exception as e:
+        logger.warning("LLM Proxy test-connection 调用失败，fallback 到直连: %s", e)
+        from app.services.model_catalog_service import test_provider_chat_completion
+        return await test_provider_chat_completion(
+            provider, api_key, model,
+            base_url=base_url, api_type=api_type,
+            skip_ssl_verify=skip_ssl_verify,
+        )
+
+
 @router.post("/llm/test-connection", response_model=ApiResponse[LlmTestConnectionResult])
 async def test_llm_connection(
     body: LlmTestConnectionRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.core.config import settings
     from app.services.model_catalog_service import test_provider_chat_completion
 
     resolved_key = body.api_key
@@ -493,11 +537,19 @@ async def test_llm_connection(
             ok=False, message="无可用 Key，请先填写 API Key",
         ))
 
-    r = await test_provider_chat_completion(
-        body.provider, resolved_key, body.model,
-        base_url=resolved_base_url, api_type=resolved_api_type,
-        skip_ssl_verify=body.skip_ssl_verify,
-    )
+    proxy_url = (settings.LLM_PROXY_INTERNAL_URL or settings.LLM_PROXY_URL or "").rstrip("/")
+    if proxy_url:
+        r = await _test_via_proxy(
+            proxy_url, body.provider, resolved_key, body.model,
+            base_url=resolved_base_url, api_type=resolved_api_type,
+            skip_ssl_verify=body.skip_ssl_verify,
+        )
+    else:
+        r = await test_provider_chat_completion(
+            body.provider, resolved_key, body.model,
+            base_url=resolved_base_url, api_type=resolved_api_type,
+            skip_ssl_verify=body.skip_ssl_verify,
+        )
     return ApiResponse(data=LlmTestConnectionResult(
         ok=r.ok,
         message=r.message,

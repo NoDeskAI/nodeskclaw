@@ -2,8 +2,6 @@
 
 import logging
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 

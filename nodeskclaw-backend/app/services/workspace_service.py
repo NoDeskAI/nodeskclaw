@@ -175,6 +175,7 @@ async def _apply_template_to_workspace(
     from app.models.corridor import HexConnection, ordered_pair
     from app.models.node_card import NodeCard
     from app.models.workspace_template import WorkspaceTemplate
+    from app.services.runtime import node_card as node_card_service
 
     result = await db.execute(
         select(WorkspaceTemplate).where(
@@ -192,17 +193,24 @@ async def _apply_template_to_workspace(
 
     for node in topo.get("nodes", []):
         if node.get("node_type") == "corridor":
-            db.add(NodeCard(
-                node_type="corridor",
-                node_id=str(uuid.uuid4()),
+            ch = CorridorHex(
+                id=str(uuid.uuid4()),
                 workspace_id=workspace_id,
                 hex_q=node.get("hex_q", 0),
                 hex_r=node.get("hex_r", 0),
-                name=node.get("display_name", ""),
-                status="active",
-                tags=[],
-                metadata_={},
-            ))
+                display_name=node.get("display_name", ""),
+                created_by=user_id,
+            )
+            db.add(ch)
+            await node_card_service.create_node_card(
+                db,
+                node_type="corridor",
+                node_id=ch.id,
+                workspace_id=workspace_id,
+                hex_q=ch.hex_q,
+                hex_r=ch.hex_r,
+                name=ch.display_name or "",
+            )
 
     await db.flush()
 
@@ -244,46 +252,65 @@ async def apply_internal_deploy_topology(
 ) -> None:
     """Apply filtered topology snapshot (corridors, connections, human hexes) during template deploy.
 
-    Writes directly to node_cards (Runtime v2) instead of legacy corridor_hexes/human_hexes,
-    because _build_hex_map short-circuits when node_cards already has data (agents are
-    already written there by add_agent).
+    Dual-writes to legacy tables (corridor_hexes/human_hexes) AND node_cards so that
+    existing CRUD endpoints and _is_hex_occupied checks keep working while _build_hex_map
+    (which short-circuits on node_cards) also sees the data.
     """
     import uuid
 
-    from app.models.corridor import HexConnection, ordered_pair
-    from app.models.node_card import NodeCard
+    from app.models.corridor import CorridorHex, HexConnection, HumanHex, ordered_pair
+    from app.services.runtime import node_card as node_card_service
 
     for node in topo_snap.get("nodes", []):
         if node.get("node_type") == "corridor":
-            db.add(NodeCard(
-                node_type="corridor",
-                node_id=str(uuid.uuid4()),
+            ch = CorridorHex(
+                id=str(uuid.uuid4()),
                 workspace_id=workspace_id,
                 hex_q=node.get("hex_q", 0),
                 hex_r=node.get("hex_r", 0),
-                name=node.get("display_name", ""),
-                status="active",
-                tags=[],
-                metadata_={},
-            ))
+                display_name=node.get("display_name", ""),
+                created_by=user_id,
+            )
+            db.add(ch)
+            await node_card_service.create_node_card(
+                db,
+                node_type="corridor",
+                node_id=ch.id,
+                workspace_id=workspace_id,
+                hex_q=ch.hex_q,
+                hex_r=ch.hex_r,
+                name=ch.display_name or "",
+            )
 
     for spec in human_specs:
-        db.add(NodeCard(
-            node_type="human",
-            node_id=spec.get("user_id", user_id),
+        hh = HumanHex(
+            id=str(uuid.uuid4()),
             workspace_id=workspace_id,
+            user_id=user_id,
             hex_q=spec.get("hex_q", 0),
             hex_r=spec.get("hex_r", 0),
+            display_name=spec.get("display_name", ""),
+            display_color=spec.get("display_color", "#f59e0b"),
+            channel_type=spec.get("channel_type"),
+            channel_config=spec.get("channel_config"),
+            created_by=user_id,
+        )
+        db.add(hh)
+        await node_card_service.create_node_card(
+            db,
+            node_type="human",
+            node_id=hh.id,
+            workspace_id=workspace_id,
+            hex_q=hh.hex_q,
+            hex_r=hh.hex_r,
             name=spec.get("display_name", ""),
-            status="active",
-            tags=[],
-            metadata_={
-                "user_id": spec.get("user_id", user_id),
+            metadata={
+                "user_id": user_id,
                 "display_color": spec.get("display_color", "#f59e0b"),
                 "channel_type": spec.get("channel_type"),
                 "channel_config": spec.get("channel_config"),
             },
-        ))
+        )
 
     await db.flush()
 

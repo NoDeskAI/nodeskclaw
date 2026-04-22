@@ -353,17 +353,27 @@ async def read_file_for_instance(
 
 async def download_file_for_instance(
     instance_id: str, rel_path: str, db: AsyncSession,
-) -> tuple[str, str]:
+) -> tuple[bytes, str, str]:
+    """Return (raw_bytes, filename, mime_type) for download."""
     instance = await _get_running_instance(instance_id, db)
     safe_path = _validate_path(rel_path, get_allowed_root(instance.runtime))
 
     try:
         async with remote_fs(instance, db) as fs:
-            content = await fs.read_text(safe_path)
-            if content is None:
+            stat = await fs.file_stat(safe_path)
+            if stat is None:
                 raise NotFoundError("文件不存在", "errors.enterprise_files.path_not_found")
+
+            mime = stat.get("mime_type") or "application/octet-stream"
+            if mime == "application/octet-stream":
+                mime = _guess_mime(safe_path.rsplit("/", 1)[-1])
+
+            data = await fs.read_binary(safe_path)
+            if data is None:
+                raise NotFoundError("文件不存在", "errors.enterprise_files.path_not_found")
+
             filename = safe_path.rsplit("/", 1)[-1]
-            return content, filename
+            return data, filename, mime
     except NFSMountError:
         raise AppException(
             code=50300, message="无法连接到实例",

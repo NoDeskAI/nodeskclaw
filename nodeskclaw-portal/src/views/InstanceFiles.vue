@@ -221,21 +221,27 @@ function cancelConfirm() {
   confirmVisible.value = false
 }
 
-function downloadFile(item: FileItem) {
+async function downloadFile(item: FileItem) {
   const filePath = `${currentPath.value}/${item.name}`
   const url = `/api/v1/instances/${instanceId.value}/files/download?path=${encodeURIComponent(filePath)}`
   const token = localStorage.getItem('portal_token')
-  if (token) {
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.blob())
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = blobUrl
-        a.download = item.name
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-      })
+  if (!token) return
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.message || t('instanceFiles.downloadFailed'))
+      return
+    }
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = item.name
+    a.click()
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    toast.error(t('instanceFiles.downloadFailed'))
   }
 }
 

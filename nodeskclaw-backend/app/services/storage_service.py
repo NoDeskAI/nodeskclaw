@@ -123,8 +123,7 @@ def _local_upload(file_content: bytes, filename: str, _content_type: str, worksp
 def _local_presigned_url(key: str, expires: int = 3600) -> str:
     expires_at = int(time.time()) + expires
     sig = _sign_url(key, expires_at)
-    base_url = settings.AGENT_API_BASE_URL.rstrip("/")
-    return f"{base_url}/files/local/{key}?expires={expires_at}&sig={sig}"
+    return f"/api/v1/files/local/{key}?expires={expires_at}&sig={sig}"
 
 
 def _local_download(key: str) -> bytes:

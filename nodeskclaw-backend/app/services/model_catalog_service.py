@@ -213,7 +213,10 @@ async def _fetch_minimax(_api_key: str) -> list[ModelInfo]:
 
 
 async def _fetch_openai_compatible(api_key: str, base_url: str, *, verify: bool = True) -> list[ModelInfo]:
-    url = f"{base_url.rstrip('/')}/models"
+    base = base_url.rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    url = f"{base}/models"
     async with _make_client(verify=verify, timeout=15) as client:
         resp = await client.get(
             url,
@@ -235,7 +238,10 @@ async def _fetch_openai_compatible(api_key: str, base_url: str, *, verify: bool 
 
 
 async def _fetch_anthropic_compatible(api_key: str, base_url: str, *, verify: bool = True) -> list[ModelInfo]:
-    url = f"{base_url.rstrip('/')}/models"
+    base = base_url.rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    url = f"{base}/models"
     async with _make_client(verify=verify, timeout=15) as client:
         resp = await client.get(
             url,

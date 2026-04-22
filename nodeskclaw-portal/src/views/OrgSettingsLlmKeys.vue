@@ -303,6 +303,11 @@ function usagePercent(used: number, limit: number | null): number {
   return Math.min(100, (used / limit) * 100)
 }
 
+function effectiveLimit(p: ModelProvider | undefined | null): number | null {
+  if (!p) return null
+  return isEE.value ? p.org_token_limit : p.system_token_limit
+}
+
 const canSave = computed(() => {
   if (isEditing.value) return true
   if (!form.value.api_key) return false
@@ -487,12 +492,12 @@ onMounted(async () => {
           <div class="space-y-2 text-xs text-muted-foreground">
             <div class="font-mono">{{ configuredMap()[providerName].api_key_masked }}</div>
             <div class="flex items-center gap-2">
-              <span>{{ formatTokens(configuredMap()[providerName].usage_total_tokens) }} / {{ formatTokens(configuredMap()[providerName].org_token_limit) }}</span>
-              <div v-if="configuredMap()[providerName].org_token_limit" class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <span>{{ formatTokens(configuredMap()[providerName].usage_total_tokens) }} / {{ formatTokens(effectiveLimit(configuredMap()[providerName])) }}</span>
+              <div v-if="effectiveLimit(configuredMap()[providerName])" class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all"
-                  :class="usagePercent(configuredMap()[providerName].usage_total_tokens, configuredMap()[providerName].org_token_limit) > 90 ? 'bg-destructive' : 'bg-primary'"
-                  :style="{ width: usagePercent(configuredMap()[providerName].usage_total_tokens, configuredMap()[providerName].org_token_limit) + '%' }"
+                  :class="usagePercent(configuredMap()[providerName].usage_total_tokens, effectiveLimit(configuredMap()[providerName])) > 90 ? 'bg-destructive' : 'bg-primary'"
+                  :style="{ width: usagePercent(configuredMap()[providerName].usage_total_tokens, effectiveLimit(configuredMap()[providerName])) + '%' }"
                 />
               </div>
             </div>
@@ -688,8 +693,8 @@ onMounted(async () => {
               @fetch-models="handleFetchModels"
             />
 
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1.5">
+            <div class="grid gap-3" :class="isEE ? 'grid-cols-2' : 'grid-cols-1'">
+              <div v-if="isEE" class="space-y-1.5">
                 <label class="text-sm font-medium">{{ t('orgSettings.llmKeysOrgTokenLimit') }}</label>
                 <input
                   v-model="form.org_token_limit"
@@ -699,12 +704,12 @@ onMounted(async () => {
                 />
               </div>
               <div class="space-y-1.5">
-                <label class="text-sm font-medium">{{ t('orgSettings.llmKeysSysTokenLimit') }}</label>
+                <label class="text-sm font-medium">{{ isEE ? t('orgSettings.llmKeysSysTokenLimit') : t('orgSettings.llmKeysTokenLimit') }}</label>
                 <input
                   v-model="form.system_token_limit"
                   type="number"
                   class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  :placeholder="t('orgSettings.llmKeysSysTokenLimitHint')"
+                  :placeholder="isEE ? t('orgSettings.llmKeysSysTokenLimitHint') : t('orgSettings.llmKeysTokenLimitHint')"
                 />
               </div>
             </div>

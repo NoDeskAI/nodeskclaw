@@ -342,7 +342,7 @@ docker compose --env-file deploy/mirrors/cn.env up -d --build
 - [GitHub Issues](https://github.com/NoDeskAI/nodeskclaw/issues) -- Bug 报告与功能建议
 - 微信 -- 扫描下方二维码加入开发者交流群；若微信群已满，请优先使用上方 Discord
 
-
+<img src="docs/assets/wechat-group-qr.png" alt="微信开发者群二维码" width="200" />
 
 ## 贡献
 
