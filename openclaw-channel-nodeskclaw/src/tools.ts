@@ -105,7 +105,9 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
   return {
     name: "nodeskclaw_blackboard",
     description:
-      "Workspace blackboard operations: content, tasks, objectives, and BBS discussion posts.",
+      "Workspace blackboard operations: content, tasks, objectives, BBS discussion posts, AND shared files. " +
+      "Use upload_file to upload a local file to the blackboard Files tab (visible to all workspace members). " +
+      "Use list_files to see existing shared files.",
     parameters: {
       type: "object",
       properties: {
@@ -117,9 +119,13 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
             "list_objectives", "create_objective", "update_objective",
             "list_posts", "create_post", "get_post", "reply_post",
             "update_post", "delete_post", "pin_post", "unpin_post",
+            "upload_file", "list_files",
           ],
-          description: "Which blackboard operation to perform.",
+          description: "Which blackboard operation to perform. Use upload_file to upload a local file to the shared Files tab.",
         },
+        local_path: { type: "string", description: "upload_file: local file path to upload to blackboard Files tab." },
+        parent_path: { type: "string", description: "upload_file/list_files: parent directory (default /). Use /documents for documents." },
+        filename: { type: "string", description: "upload_file: target filename (defaults to basename of local_path)." },
         title: { type: "string", description: "Task/post/objective title." },
         description: { type: "string", description: "Task/objective description." },
         content: { type: "string", description: "Markdown content (update_blackboard, create_post, reply_post, update_post, patch_section)." },
@@ -252,6 +258,62 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
           return jsonResult(
             await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/posts/${p.post_id}/pin`, "DELETE"),
           );
+        case "upload_file": {
+          const localPath = p.local_path as string;
+          if (!localPath) return jsonResult({ error: "local_path is required for upload_file" });
+
+          let fileData: Buffer;
+          try {
+            fileData = await fs.readFile(localPath);
+          } catch (err) {
+            return jsonResult({ error: `Cannot read file: ${(err as Error).message}` });
+          }
+
+          const fname = (p.filename as string) || path.basename(localPath);
+          const parentPath = (p.parent_path as string) || "/";
+          const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`;
+
+          const parts: Buffer[] = [];
+          parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${fname}"\r\n` +
+            `Content-Type: application/octet-stream\r\n\r\n`,
+          ));
+          parts.push(fileData);
+          parts.push(Buffer.from("\r\n"));
+          for (const [n, v] of [["parent_path", parentPath], ["filename", fname]]) {
+            parts.push(Buffer.from(
+              `--${boundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`,
+            ));
+          }
+          parts.push(Buffer.from(`--${boundary}--\r\n`));
+          const body = Buffer.concat(parts);
+
+          const url = `${cfg.apiUrl}/workspaces/${ws}/blackboard/files/upload-multipart`;
+          try {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": `multipart/form-data; boundary=${boundary}`,
+                Authorization: `Bearer ${cfg.token}`,
+              },
+              body,
+            });
+            if (!res.ok) {
+              const detail = await res.text().catch(() => "");
+              return jsonResult({ error: true, status: res.status, message: detail || res.statusText });
+            }
+            return jsonResult(await res.json());
+          } catch (err) {
+            return jsonResult({ error: true, message: `Upload failed: ${(err as Error).message}` });
+          }
+        }
+        case "list_files": {
+          const parentPath = (p.parent_path as string) || "/";
+          return jsonResult(
+            await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/files?parent_path=${encodeURIComponent(parentPath)}`),
+          );
+        }
         default:
           return jsonResult({ error: `Unknown action: ${p.action}` });
       }
