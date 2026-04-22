@@ -25,27 +25,29 @@ def _make_ws_mock() -> MagicMock:
 
 
 def test_cancel_all_clears_stream_queues():
-    """cancel_all 应当清空 _stream_queues（基线行为确认）。"""
+    """cancel_all 应当清空 _instance_streams（基线行为确认）。"""
+    streams: dict = {}
     ws = _make_ws_mock()
-    conn = _InstanceConnection(ws, INSTANCE_ID)
+    conn = _InstanceConnection(ws, INSTANCE_ID, streams)
     q = conn.register_stream("req-1")
-    assert "req-1" in conn._stream_queues
+    assert "req-1" in conn._instance_streams
 
     conn.cancel_all()
-    assert len(conn._stream_queues) == 0
+    assert len(conn._instance_streams) == 0
     assert q.empty()
 
 
 def test_stream_queue_snapshot_survives_cancel_all():
-    """在 cancel_all 之前对 _stream_queues 取快照，快照中的 Queue 对象应仍可用。"""
+    """在 cancel_all 之前对 _instance_streams 取快照，快照中的 Queue 对象应仍可用。"""
+    streams: dict = {}
     ws = _make_ws_mock()
-    conn = _InstanceConnection(ws, INSTANCE_ID)
+    conn = _InstanceConnection(ws, INSTANCE_ID, streams)
     q = conn.register_stream("req-1")
 
-    snapshot = dict(conn._stream_queues)
+    snapshot = dict(conn._instance_streams)
     conn.cancel_all()
 
-    assert len(conn._stream_queues) == 0
+    assert len(conn._instance_streams) == 0
     assert "req-1" in snapshot
     assert snapshot["req-1"] is q
 
@@ -54,19 +56,16 @@ def test_stream_queue_snapshot_survives_cancel_all():
 
 
 def test_surviving_streams_transferred_to_new_connection():
-    """模拟重连流程：旧连接的 stream queue 应被转移到新连接。"""
+    """模拟重连流程：adapter 级别 streams dict 在新旧连接间共享。"""
+    streams: dict = {}
     old_ws = _make_ws_mock()
-    old_conn = _InstanceConnection(old_ws, INSTANCE_ID)
+    old_conn = _InstanceConnection(old_ws, INSTANCE_ID, streams)
     q = old_conn.register_stream("req-42")
 
-    surviving = dict(old_conn._stream_queues)
-    old_conn.cancel_all()
-
     new_ws = _make_ws_mock()
-    new_conn = _InstanceConnection(new_ws, INSTANCE_ID)
-    new_conn._stream_queues.update(surviving)
+    new_conn = _InstanceConnection(new_ws, INSTANCE_ID, streams)
 
-    assert "req-42" in new_conn._stream_queues
+    assert "req-42" in new_conn._instance_streams
 
     chunk = TunnelMessage(
         type=TunnelMessageType.CHAT_RESPONSE_CHUNK,
@@ -80,8 +79,9 @@ def test_surviving_streams_transferred_to_new_connection():
 
 def test_response_without_handler_returns_false():
     """新连接上如果没有 handler，resolve_response 应返回 False。"""
+    streams: dict = {}
     ws = _make_ws_mock()
-    conn = _InstanceConnection(ws, INSTANCE_ID)
+    conn = _InstanceConnection(ws, INSTANCE_ID, streams)
 
     chunk = TunnelMessage(
         type=TunnelMessageType.CHAT_RESPONSE_CHUNK,
@@ -93,17 +93,18 @@ def test_response_without_handler_returns_false():
 
 def test_resolve_response_auto_cleanup_on_done():
     """resolve_response 收到 DONE/ERROR 时应自动移除 stream 条目，防止重连后泄漏。"""
+    streams: dict = {}
     ws = _make_ws_mock()
-    conn = _InstanceConnection(ws, INSTANCE_ID)
+    conn = _InstanceConnection(ws, INSTANCE_ID, streams)
     q = conn.register_stream("req-77")
 
     chunk = TunnelMessage(type=TunnelMessageType.CHAT_RESPONSE_CHUNK, payload={"content": "hi"})
     conn.resolve_response("req-77", chunk)
-    assert "req-77" in conn._stream_queues
+    assert "req-77" in conn._instance_streams
 
     done = TunnelMessage(type=TunnelMessageType.CHAT_RESPONSE_DONE, payload={})
     conn.resolve_response("req-77", done)
-    assert "req-77" not in conn._stream_queues, \
+    assert "req-77" not in conn._instance_streams, \
         "Stream entry should be auto-removed after DONE"
     assert q.get_nowait() is chunk
     assert q.get_nowait() is done
@@ -115,7 +116,8 @@ async def test_handle_websocket_transfers_streams_on_reconnect():
     adapter = TunnelAdapter()
 
     old_ws = _make_ws_mock()
-    old_conn = _InstanceConnection(old_ws, INSTANCE_ID)
+    streams = adapter._instance_streams.setdefault(INSTANCE_ID, {})
+    old_conn = _InstanceConnection(old_ws, INSTANCE_ID, streams)
     q = old_conn.register_stream("req-100")
     adapter._connections[INSTANCE_ID] = old_conn
 
@@ -150,9 +152,9 @@ async def test_handle_websocket_transfers_streams_on_reconnect():
         new_conn = adapter._connections.get(INSTANCE_ID)
         assert new_conn is not None
         assert new_conn is not old_conn
-        assert "req-100" in new_conn._stream_queues, \
+        assert "req-100" in new_conn._instance_streams, \
             "In-flight stream queue should survive reconnection"
-        assert new_conn._stream_queues["req-100"] is q, \
+        assert new_conn._instance_streams["req-100"] is q, \
             "Should be the same Queue object so waiting coroutines receive messages"
 
         chunk = TunnelMessage(
