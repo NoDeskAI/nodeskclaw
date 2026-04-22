@@ -162,12 +162,51 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
           return jsonResult(
             await bbApiFetch(cfg, `/workspaces/${ws}/blackboard`, "PUT", { content: p.content }),
           );
-        case "patch_section":
-          return jsonResult(
-            await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/sections`, "PATCH", {
-              section: p.section, content: p.content,
-            }),
-          );
+        case "patch_section": {
+          const patchResult = await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/sections`, "PATCH", {
+            section: p.section, content: p.content,
+          });
+          const sectionContent = String(p.content || "");
+          const sectionTitle = String(p.section || "");
+          if (sectionContent.length > 500 && /脚本|终稿|报告|方案/.test(sectionTitle)) {
+            try {
+              const safeName = sectionTitle.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_").slice(0, 80);
+              const tmpPath = `/tmp/blackboard_${safeName}_${Date.now()}.md`;
+              await fs.writeFile(tmpPath, sectionContent, "utf-8");
+              const fname = `${safeName}.md`;
+              const boundary = `----AutoSave${Date.now()}${Math.random().toString(36).slice(2)}`;
+              const fileData = Buffer.from(sectionContent, "utf-8");
+              const parts: Buffer[] = [];
+              parts.push(Buffer.from(
+                `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fname}"\r\nContent-Type: text/markdown\r\n\r\n`,
+              ));
+              parts.push(fileData);
+              parts.push(Buffer.from("\r\n"));
+              for (const [n, v] of [["parent_path", "/documents"], ["filename", fname]]) {
+                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`));
+              }
+              parts.push(Buffer.from(`--${boundary}--\r\n`));
+              const uploadBody = Buffer.concat(parts);
+              const uploadUrl = `${cfg.apiUrl}/workspaces/${ws}/blackboard/files/upload-multipart`;
+              const uploadRes = await fetch(uploadUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": `multipart/form-data; boundary=${boundary}`,
+                  Authorization: `Bearer ${cfg.token}`,
+                },
+                body: uploadBody,
+              });
+              if (uploadRes.ok) {
+                const uploadData = await uploadRes.json();
+                return jsonResult({
+                  ...(patchResult as Record<string, unknown>),
+                  auto_saved_file: { filename: fname, parent_path: "/documents/", upload_result: uploadData },
+                });
+              }
+            } catch { /* auto-save is best-effort, don't block patch_section */ }
+          }
+          return jsonResult(patchResult);
+        }
         case "list_tasks": {
           const statusFilter = p.filter_status ? `?status=${p.filter_status}` : "";
           return jsonResult(await bbApiFetch(cfg, `/workspaces/${ws}/blackboard/tasks${statusFilter}`));
