@@ -1227,18 +1227,32 @@ async def list_tasks_paginated(
     ], total
 
 
+async def _resolve_assignee_id(
+    db: AsyncSession, workspace_id: str, raw_id: str | None,
+) -> str | None:
+    """Resolve assignee_id that may be a display name into an instance UUID."""
+    if not raw_id:
+        return None
+    from app.services.collaboration_service import looks_like_uuid, find_agent_by_name_or_id
+    if looks_like_uuid(raw_id):
+        return raw_id
+    inst = await find_agent_by_name_or_id(db, workspace_id, raw_id)
+    return inst.id if inst else None
+
+
 async def create_task(
     db: AsyncSession, workspace_id: str, data: TaskCreate,
     created_by_instance_id: str | None = None,
     schedule_id: str | None = None,
     deadline: datetime | None = None,
 ) -> TaskInfo:
+    resolved_assignee = await _resolve_assignee_id(db, workspace_id, data.assignee_id)
     task = WorkspaceTask(
         workspace_id=workspace_id,
         title=data.title,
         description=data.description,
         priority=data.priority if data.priority in VALID_TASK_PRIORITIES else "medium",
-        assignee_instance_id=data.assignee_id,
+        assignee_instance_id=resolved_assignee,
         created_by_instance_id=created_by_instance_id,
         estimated_value=data.estimated_value,
         schedule_id=schedule_id,
@@ -1294,7 +1308,9 @@ async def update_task(
     if data.priority is not None and data.priority in VALID_TASK_PRIORITIES:
         task.priority = data.priority
     if data.assignee_id is not None:
-        task.assignee_instance_id = data.assignee_id
+        task.assignee_instance_id = await _resolve_assignee_id(
+            db, workspace_id, data.assignee_id,
+        ) or data.assignee_id
     if data.estimated_value is not None:
         task.estimated_value = data.estimated_value
     if data.actual_value is not None:

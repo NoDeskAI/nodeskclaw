@@ -151,6 +151,11 @@ class _InstanceConnection:
         queue = self._instance_streams.get(reply_to)
         if queue is not None:
             queue.put_nowait(msg)
+            if msg.type in (
+                TunnelMessageType.CHAT_RESPONSE_DONE,
+                TunnelMessageType.CHAT_RESPONSE_ERROR,
+            ):
+                self._instance_streams.pop(reply_to, None)
             return True
         fut = self._pending_responses.pop(reply_to, None)
         if fut and not fut.done():
@@ -230,8 +235,10 @@ class TunnelAdapter:
             return
 
         old_conn = self._connections.get(instance_id)
+        surviving_streams: dict[str, asyncio.Queue[TunnelMessage]] = {}
         if old_conn:
             logger.info("Tunnel: kicking previous connection for %s", instance_id)
+            surviving_streams = dict(old_conn._stream_queues)
             old_conn.cancel_all()
             try:
                 await old_conn.ws.close(code=4010, reason="replaced")

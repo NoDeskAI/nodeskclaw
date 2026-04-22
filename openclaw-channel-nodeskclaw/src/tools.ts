@@ -193,7 +193,7 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
         content: { type: "string", description: "Markdown content (update_blackboard, create_post, reply_post, update_post, patch_section)." },
         section: { type: "string", description: "patch_section: section heading to update." },
         priority: { type: "string", enum: ["urgent", "high", "medium", "low"], description: "create_task / update_task." },
-        assignee_id: { type: "string", description: "create_task: assign to agent instance ID." },
+        assignee_id: { type: "string", description: "create_task / update_task: agent instance ID or display name." },
         estimated_value: { type: "number", description: "create_task: estimated monetary value." },
         task_id: { type: "string", description: "update_task: target task ID." },
         post_id: { type: "string", description: "get_post / reply_post / update_post / delete_post / pin_post / unpin_post: target post ID." },

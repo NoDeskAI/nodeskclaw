@@ -372,9 +372,12 @@ class RoutingMiddleware(MessageMiddleware):
         data,
         db,
     ) -> list[DeliveryTarget]:
-        from app.services.runtime.messaging.envelope import SenderType
+        from app.services.runtime.messaging.envelope import IntentType, SenderType
 
         if not resolved or data.sender.type != SenderType.AGENT:
+            return resolved
+
+        if data.intent == IntentType.COLLABORATE:
             return resolved
 
         from app.services.corridor_router import get_reachable_endpoints, has_any_connections
@@ -394,12 +397,12 @@ class RoutingMiddleware(MessageMiddleware):
             ).limit(1)
         )
         src_row = src_q.first()
-        if src_row is None:
+        if src_row is None or src_row.hex_q is None or src_row.hex_r is None:
             logger.warning(
-                "Routing: agent sender %s has no hex in workspace %s, dropping all unicast targets",
+                "Routing: agent sender %s has no hex coordinates in workspace %s, skipping topology filter",
                 sender_id, workspace_id,
             )
-            return []
+            return resolved
 
         endpoints, _hooks = await get_reachable_endpoints(
             workspace_id, src_row.hex_q, src_row.hex_r, db,

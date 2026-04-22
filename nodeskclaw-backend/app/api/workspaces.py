@@ -317,34 +317,60 @@ async def patch_blackboard_section(
     return _ok(bb.model_dump(mode="json"))
 
 
-async def _notify_agents_task_done(workspace_id: str, task_title: str):
-    """Send system message to workspace agents when a task completes."""
+async def _notify_agent_task_assigned(
+    workspace_id: str, assignee_instance_id: str,
+    task_title: str, task_description: str,
+):
+    """Notify the assigned agent about a new task via system message."""
     try:
-        from app.services import corridor_router
         from app.services.collaboration_service import send_system_message_to_agents
-        from app.models.base import not_deleted
-
         async with async_session_factory() as db:
-            has_topo = await corridor_router.has_any_connections(workspace_id, db)
-            if has_topo:
-                audience = await corridor_router.get_blackboard_audience(workspace_id, db)
-                agent_ids = [ep.entity_id for ep in audience if ep.endpoint_type == "agent"]
-            else:
-                agents_q = await db.execute(
-                    sa_select(Instance.id)
-                    .join(
-                        WorkspaceAgent,
-                        (WorkspaceAgent.instance_id == Instance.id)
-                        & (WorkspaceAgent.deleted_at.is_(None)),
-                    )
-                    .where(
-                        WorkspaceAgent.workspace_id == workspace_id,
-                        Instance.status == "running",
-                        Instance.deleted_at.is_(None),
-                    )
-                )
-                agent_ids = [r[0] for r in agents_q.all()]
+            desc_part = f"\n{task_description}" if task_description else ""
+            message = f"你有一个新任务：「{task_title}」{desc_part}"
+            await send_system_message_to_agents(
+                workspace_id,
+                [assignee_instance_id],
+                message,
+                db,
+                mention_targets=[assignee_instance_id],
+            )
+    except Exception as e:
+        logger.warning("通知 Agent 新任务指派失败: %s", e)
 
+
+async def _get_all_workspace_agent_ids(workspace_id: str, db: AsyncSession) -> list[str]:
+    from app.services import corridor_router
+    has_topo = await corridor_router.has_any_connections(workspace_id, db)
+    if has_topo:
+        audience = await corridor_router.get_blackboard_audience(workspace_id, db)
+        return [ep.entity_id for ep in audience if ep.endpoint_type == "agent"]
+    agents_q = await db.execute(
+        sa_select(Instance.id)
+        .join(
+            WorkspaceAgent,
+            (WorkspaceAgent.instance_id == Instance.id)
+            & (WorkspaceAgent.deleted_at.is_(None)),
+        )
+        .where(
+            WorkspaceAgent.workspace_id == workspace_id,
+            Instance.status == "running",
+            Instance.deleted_at.is_(None),
+        )
+    )
+    return [r[0] for r in agents_q.all()]
+
+
+async def _notify_agents_task_done(
+    workspace_id: str, task_title: str, created_by_instance_id: str | None = None,
+):
+    """Notify task creator (or all agents if human-created) when a task completes."""
+    try:
+        from app.services.collaboration_service import send_system_message_to_agents
+        async with async_session_factory() as db:
+            if created_by_instance_id:
+                agent_ids = [created_by_instance_id]
+            else:
+                agent_ids = await _get_all_workspace_agent_ids(workspace_id, db)
             if agent_ids:
                 message = f"任务「{task_title}」已完成，请检查黑板是否有新的待办任务。"
                 await send_system_message_to_agents(workspace_id, agent_ids, message, db)
@@ -352,34 +378,17 @@ async def _notify_agents_task_done(workspace_id: str, task_title: str):
         logger.warning("通知 Agent 任务完成失败: %s", e)
 
 
-async def _notify_agents_task_failed(workspace_id: str, task_title: str):
-    """Send system message to workspace agents when a task is marked failed."""
+async def _notify_agents_task_failed(
+    workspace_id: str, task_title: str, created_by_instance_id: str | None = None,
+):
+    """Notify task creator (or all agents if human-created) when a task fails."""
     try:
-        from app.services import corridor_router
         from app.services.collaboration_service import send_system_message_to_agents
-        from app.models.base import not_deleted
-
         async with async_session_factory() as db:
-            has_topo = await corridor_router.has_any_connections(workspace_id, db)
-            if has_topo:
-                audience = await corridor_router.get_blackboard_audience(workspace_id, db)
-                agent_ids = [ep.entity_id for ep in audience if ep.endpoint_type == "agent"]
+            if created_by_instance_id:
+                agent_ids = [created_by_instance_id]
             else:
-                agents_q = await db.execute(
-                    sa_select(Instance.id)
-                    .join(
-                        WorkspaceAgent,
-                        (WorkspaceAgent.instance_id == Instance.id)
-                        & (WorkspaceAgent.deleted_at.is_(None)),
-                    )
-                    .where(
-                        WorkspaceAgent.workspace_id == workspace_id,
-                        Instance.status == "running",
-                        Instance.deleted_at.is_(None),
-                    )
-                )
-                agent_ids = [r[0] for r in agents_q.all()]
-
+                agent_ids = await _get_all_workspace_agent_ids(workspace_id, db)
             if agent_ids:
                 message = f"任务「{task_title}」已标记为失败，请检查黑板了解详情。"
                 await send_system_message_to_agents(workspace_id, agent_ids, message, db)
@@ -431,8 +440,18 @@ async def create_task(
     await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
-    task = await workspace_service.create_task(db, workspace_id, data)
+    from app.core.security import get_auth_actor
+    actor = get_auth_actor()
+    creator_instance_id = actor.actor_id if actor and actor.actor_type == "agent" else None
+    task = await workspace_service.create_task(
+        db, workspace_id, data, created_by_instance_id=creator_instance_id,
+    )
     broadcast_event(workspace_id, "task:created", task.model_dump(mode="json"))
+    if task.assignee_instance_id and task.assignee_instance_id != creator_instance_id:
+        _fire_task(_notify_agent_task_assigned(
+            workspace_id, task.assignee_instance_id,
+            task.title, task.description or "",
+        ))
     return _ok(task.model_dump(mode="json"))
 
 
@@ -460,9 +479,13 @@ async def update_task(
             "new_status": new_status,
         })
         if new_status == "done":
-            _fire_task(_notify_agents_task_done(workspace_id, task_info.title))
+            _fire_task(_notify_agents_task_done(
+                workspace_id, task_info.title, task_info.created_by_instance_id,
+            ))
         elif new_status == "failed":
-            _fire_task(_notify_agents_task_failed(workspace_id, task_info.title))
+            _fire_task(_notify_agents_task_failed(
+                workspace_id, task_info.title, task_info.created_by_instance_id,
+            ))
         if new_status in ("done", "failed") and task_info.schedule_id:
             from app.services.workspace_service import update_schedule_failure_count
             await update_schedule_failure_count(

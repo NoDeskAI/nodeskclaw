@@ -352,8 +352,11 @@ async def _find_human_by_display_name(
     return None
 
 
-def _looks_like_uuid(s: str) -> bool:
+def looks_like_uuid(s: str) -> bool:
     return len(s) == 36 and s.count("-") == 4
+
+
+_looks_like_uuid = looks_like_uuid
 
 
 async def _get_instance(db: AsyncSession, instance_id: str) -> Instance | None:
@@ -366,7 +369,7 @@ async def _get_instance(db: AsyncSession, instance_id: str) -> Instance | None:
     return result.scalar_one_or_none()
 
 
-async def _find_agent_by_name_or_id(
+async def find_agent_by_name_or_id(
     db: AsyncSession, workspace_id: str, identifier: str,
 ) -> Instance | None:
     result = await db.execute(
@@ -390,6 +393,9 @@ async def _find_agent_by_name_or_id(
         if display.lower() == id_lower or inst.name.lower() == id_lower:
             return inst
     return None
+
+
+_find_agent_by_name_or_id = find_agent_by_name_or_id
 
 
 async def _get_workspace_agents(db: AsyncSession, workspace_id: str) -> list[Instance]:
