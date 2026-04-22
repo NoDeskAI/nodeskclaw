@@ -319,15 +319,26 @@ async def apply_internal_deploy_topology(
             edge.get("a_q", 0), edge.get("a_r", 0),
             edge.get("b_q", 0), edge.get("b_r", 0),
         )
-        db.add(HexConnection(
-            id=str(uuid.uuid4()),
-            workspace_id=workspace_id,
-            hex_a_q=aq, hex_a_r=ar,
-            hex_b_q=bq, hex_b_r=br,
-            direction=edge.get("direction", "both"),
-            auto_created=edge.get("auto_created", False),
-            created_by=user_id,
-        ))
+        existing = (await db.execute(
+            select(HexConnection.id).where(
+                HexConnection.workspace_id == workspace_id,
+                HexConnection.hex_a_q == aq,
+                HexConnection.hex_a_r == ar,
+                HexConnection.hex_b_q == bq,
+                HexConnection.hex_b_r == br,
+                HexConnection.deleted_at.is_(None),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if existing is None:
+            db.add(HexConnection(
+                id=str(uuid.uuid4()),
+                workspace_id=workspace_id,
+                hex_a_q=aq, hex_a_r=ar,
+                hex_b_q=bq, hex_b_r=br,
+                direction=edge.get("direction", "both"),
+                auto_created=edge.get("auto_created", False),
+                created_by=user_id,
+            ))
 
     await db.commit()
 
