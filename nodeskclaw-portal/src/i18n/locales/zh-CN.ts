@@ -855,6 +855,15 @@ const zhCN = {
     engineOpenclawDesc: "支持工具调用、基因系统、多技能管理",
     engineNanobotName: "轻量工作引擎",
     engineNanobotDesc: "超轻量，快速部署，适合简单对话场景",
+    skillEditor: {
+      title: "角色与提示词",
+      save: "保存修改",
+      saved: "已保存",
+      saveFailed: "保存失败",
+      restartHint: "修改后需重启 AI 员工才能生效",
+      empty: "暂无技能",
+      loadFailed: "加载技能内容失败",
+    },
   },
   instanceRuntime: {
     title: "运行状态",

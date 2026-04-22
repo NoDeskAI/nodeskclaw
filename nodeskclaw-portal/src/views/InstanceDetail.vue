@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   RefreshCw, Trash2, Circle, Loader2, Copy, Check, RotateCcw, AlertTriangle,
-  Wrench, Archive, CopyPlus,
+  Wrench, Archive, CopyPlus, ChevronDown, ChevronRight, Save,
 } from 'lucide-vue-next'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
@@ -296,6 +296,84 @@ async function handleDelete() {
     toast.error(e?.response?.data?.message || t('agentDetailDialog.deleteFailed'))
   }
 }
+
+interface SkillItem {
+  skill_name: string
+  name: string
+  description: string
+  type: string
+}
+
+const skillEditorOpen = ref(false)
+const skills = ref<SkillItem[]>([])
+const activeSkill = ref('')
+const skillContent = ref('')
+const skillOriginal = ref('')
+const skillLoading = ref(false)
+const skillSaving = ref(false)
+const skillDirty = computed(() => skillContent.value !== skillOriginal.value)
+
+async function fetchSkills() {
+  try {
+    const res = await api.get(`/instances/${instanceId.value}/skills`)
+    skills.value = (res.data?.data ?? []).map((s: any) => ({
+      skill_name: s.skill_name,
+      name: s.name || s.skill_name,
+      description: s.description || '',
+      type: s.type,
+    }))
+    if (skills.value.length && !activeSkill.value) {
+      activeSkill.value = skills.value[0].skill_name
+      await fetchSkillContent(activeSkill.value)
+    }
+  } catch {
+    skills.value = []
+  }
+}
+
+async function fetchSkillContent(name: string) {
+  skillLoading.value = true
+  try {
+    const res = await api.get(`/instances/${instanceId.value}/skills/${name}/content`)
+    skillContent.value = res.data?.data?.content ?? ''
+    skillOriginal.value = skillContent.value
+  } catch {
+    toast.error(t('instanceDetail.skillEditor.loadFailed'))
+    skillContent.value = ''
+    skillOriginal.value = ''
+  } finally {
+    skillLoading.value = false
+  }
+}
+
+async function selectSkill(name: string) {
+  if (name === activeSkill.value) return
+  activeSkill.value = name
+  await fetchSkillContent(name)
+}
+
+async function saveSkillContent() {
+  if (!activeSkill.value || skillSaving.value) return
+  skillSaving.value = true
+  try {
+    await api.put(`/instances/${instanceId.value}/skills/${activeSkill.value}/content`, {
+      content: skillContent.value,
+    })
+    skillOriginal.value = skillContent.value
+    toast.success(t('instanceDetail.skillEditor.saved'))
+  } catch {
+    toast.error(t('instanceDetail.skillEditor.saveFailed'))
+  } finally {
+    skillSaving.value = false
+  }
+}
+
+function toggleSkillEditor() {
+  skillEditorOpen.value = !skillEditorOpen.value
+  if (skillEditorOpen.value && !skills.value.length) {
+    fetchSkills()
+  }
+}
 </script>
 
 <template>
@@ -477,6 +555,73 @@ async function handleDelete() {
           <Trash2 v-else class="w-4 h-4" />
           {{ deleting ? t('agentDetailDialog.deleting') : t('agentDetailDialog.delete') }}
         </button>
+      </div>
+
+      <!-- 角色与提示词 -->
+      <div class="rounded-xl border border-border bg-card overflow-hidden">
+        <button
+          class="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+          @click="toggleSkillEditor"
+        >
+          <div class="flex items-center gap-2">
+            <ChevronRight v-if="!skillEditorOpen" class="w-4 h-4 text-muted-foreground" />
+            <ChevronDown v-else class="w-4 h-4 text-muted-foreground" />
+            <span class="text-sm font-medium">{{ t('instanceDetail.skillEditor.title') }}</span>
+            <span
+              v-if="skills.length"
+              class="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground"
+            >{{ skills.length }}</span>
+          </div>
+        </button>
+
+        <div v-if="skillEditorOpen" class="border-t border-border">
+          <div v-if="!skills.length && !skillLoading" class="px-4 py-8 text-center text-sm text-muted-foreground">
+            {{ t('instanceDetail.skillEditor.empty') }}
+          </div>
+          <template v-else>
+            <div class="flex gap-1 px-4 pt-3 pb-0 overflow-x-auto">
+              <button
+                v-for="s in skills"
+                :key="s.skill_name"
+                class="px-3 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors whitespace-nowrap"
+                :class="s.skill_name === activeSkill
+                  ? 'bg-card border-border text-foreground font-medium'
+                  : 'bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'"
+                @click="selectSkill(s.skill_name)"
+              >{{ s.name }}</button>
+            </div>
+
+            <div class="px-4 pb-4">
+              <div v-if="skillLoading" class="flex items-center justify-center py-12">
+                <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+              <template v-else>
+                <textarea
+                  v-model="skillContent"
+                  class="w-full h-80 px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono resize-y scrollbar-compact"
+                  :readonly="!canEdit"
+                  spellcheck="false"
+                />
+                <div class="flex items-center justify-between mt-2">
+                  <p class="text-xs text-muted-foreground">{{ t('instanceDetail.skillEditor.restartHint') }}</p>
+                  <button
+                    v-if="canEdit"
+                    class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    :class="skillDirty
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : 'border border-border text-muted-foreground'"
+                    :disabled="!skillDirty || skillSaving"
+                    @click="saveSkillContent"
+                  >
+                    <Loader2 v-if="skillSaving" class="w-3.5 h-3.5 animate-spin" />
+                    <Save v-else class="w-3.5 h-3.5" />
+                    {{ t('instanceDetail.skillEditor.save') }}
+                  </button>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- 克隆对话框 -->

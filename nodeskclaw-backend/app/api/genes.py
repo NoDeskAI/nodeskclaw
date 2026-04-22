@@ -1,13 +1,15 @@
 """Gene Evolution Ecosystem API routes."""
 
 import logging
+import re
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_org, get_db
-from app.core.exceptions import BadRequestError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse, PaginatedResponse, Pagination
@@ -244,6 +246,70 @@ async def instance_skills(
     _current_user, org = org_ctx
     skills = await gene_service.get_instance_skills(db, instance_id, org.id)
     return ApiResponse(data=skills)
+
+
+_SAFE_SKILL_NAME = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+class _SkillContentUpdate(BaseModel):
+    content: str
+
+
+@router.get("/instances/{instance_id}/skills/{skill_name}/content")
+async def get_skill_content(
+    instance_id: str,
+    skill_name: str,
+    db: AsyncSession = Depends(get_db),
+    org_ctx=Depends(get_current_org),
+):
+    if not _SAFE_SKILL_NAME.match(skill_name):
+        raise BadRequestError(message="skill_name 包含非法字符")
+
+    _current_user, org = org_ctx
+    from app.services.instance_service import get_instance
+    instance = await get_instance(instance_id, db, org.id)
+
+    from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
+    spec = RUNTIME_REGISTRY.get(instance.runtime)
+    skills_dir = spec.skills_dir_rel if spec else ".openclaw/skills"
+
+    from app.services.nfs_mount import remote_fs
+    async with remote_fs(instance, db) as fs:
+        content = await fs.read_text(f"{skills_dir}/{skill_name}/SKILL.md")
+
+    if content is None:
+        raise NotFoundError(message=f"Skill '{skill_name}' 不存在")
+
+    return ApiResponse(data={"skill_name": skill_name, "content": content})
+
+
+@router.put("/instances/{instance_id}/skills/{skill_name}/content")
+async def update_skill_content(
+    instance_id: str,
+    skill_name: str,
+    body: _SkillContentUpdate,
+    db: AsyncSession = Depends(get_db),
+    org_ctx=Depends(get_current_org),
+):
+    if not _SAFE_SKILL_NAME.match(skill_name):
+        raise BadRequestError(message="skill_name 包含非法字符")
+
+    _current_user, org = org_ctx
+    from app.services.instance_service import get_instance
+    instance = await get_instance(instance_id, db, org.id)
+
+    from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
+    spec = RUNTIME_REGISTRY.get(instance.runtime)
+    skills_dir = spec.skills_dir_rel if spec else ".openclaw/skills"
+
+    from app.services.nfs_mount import remote_fs
+    async with remote_fs(instance, db) as fs:
+        existing = await fs.read_text(f"{skills_dir}/{skill_name}/SKILL.md")
+        if existing is None:
+            raise NotFoundError(message=f"Skill '{skill_name}' 不存在")
+        await fs.write_text(f"{skills_dir}/{skill_name}/SKILL.md", body.content)
+
+    return ApiResponse(data={"skill_name": skill_name, "updated": True})
 
 
 @router.post("/instances/{instance_id}/genes/install")

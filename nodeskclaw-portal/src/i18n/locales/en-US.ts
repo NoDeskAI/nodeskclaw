@@ -855,6 +855,15 @@ const enUS = {
     engineOpenclawDesc: "Supports tool calling, gene system, and multi-skill management",
     engineNanobotName: "Light Work Engine",
     engineNanobotDesc: "Ultra-lightweight and fast for simple chat scenarios",
+    skillEditor: {
+      title: "Role & Prompts",
+      save: "Save Changes",
+      saved: "Saved",
+      saveFailed: "Save failed",
+      restartHint: "Restart required for changes to take effect",
+      empty: "No skills",
+      loadFailed: "Failed to load skill content",
+    },
   },
   instanceRuntime: {
     title: "Runtime Status",
