@@ -20,6 +20,7 @@ export const NODESKCLAW_TOOL_NAMES = [
   "nodeskclaw_gene_discovery",
   "nodeskclaw_file_download",
   "nodeskclaw_chat_history",
+  "nodeskclaw_shared_files",
 ] as const;
 
 function resolveToolConfig(config: OpenClawConfig, sessionWorkspaceId?: string): ToolConfig {
@@ -609,6 +610,155 @@ function createChatHistoryTool(cfg: ToolConfig): AnyAgentTool {
   };
 }
 
+function createSharedFilesTool(cfg: ToolConfig): AnyAgentTool {
+  return {
+    name: "nodeskclaw_shared_files",
+    description:
+      "Manage shared files on the workspace central blackboard. " +
+      "Upload local files, list/read/delete files, create directories. " +
+      "Files uploaded here are visible to ALL workspace members in the blackboard Files tab.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "list_files",
+            "upload_file",
+            "read_file",
+            "delete_file",
+            "mkdir",
+            "get_file_url",
+          ],
+          description:
+            "list_files: list files in a directory; " +
+            "upload_file: upload a local file to shared files (requires local_path); " +
+            "read_file: read file content (requires file_id); " +
+            "delete_file: delete a file (requires file_id); " +
+            "mkdir: create a directory (requires name); " +
+            "get_file_url: get download URL (requires file_id).",
+        },
+        local_path: {
+          type: "string",
+          description: "Local file path to upload (for upload_file action).",
+        },
+        parent_path: {
+          type: "string",
+          description: "Parent directory path (default: /). Use /documents/ for document files.",
+        },
+        filename: {
+          type: "string",
+          description: "Target filename (defaults to basename of local_path).",
+        },
+        file_id: {
+          type: "string",
+          description: "File ID (for read_file, delete_file, get_file_url actions).",
+        },
+        name: {
+          type: "string",
+          description: "Directory name (for mkdir action).",
+        },
+      },
+      required: ["action"],
+    },
+    execute: async (_toolCallId, args) => {
+      const p = args as Record<string, unknown>;
+      const ws = cfg.workspaceId;
+      const basePath = `/workspaces/${ws}/blackboard/files`;
+
+      switch (p.action) {
+        case "list_files": {
+          const parentPath = (p.parent_path as string) || "/";
+          return jsonResult(
+            await bbApiFetch(cfg, `${basePath}?parent_path=${encodeURIComponent(parentPath)}`),
+          );
+        }
+        case "upload_file": {
+          const localPath = p.local_path as string;
+          if (!localPath) return jsonResult({ error: "local_path is required" });
+
+          let fileData: Buffer;
+          try {
+            fileData = await fs.readFile(localPath);
+          } catch (err) {
+            return jsonResult({ error: `Cannot read file: ${(err as Error).message}` });
+          }
+
+          const fname = (p.filename as string) || path.basename(localPath);
+          const parentPath = (p.parent_path as string) || "/";
+          const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`;
+
+          const parts: Buffer[] = [];
+          parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${fname}"\r\n` +
+            `Content-Type: application/octet-stream\r\n\r\n`,
+          ));
+          parts.push(fileData);
+          parts.push(Buffer.from("\r\n"));
+
+          for (const [name, value] of [
+            ["parent_path", parentPath],
+            ["filename", fname],
+          ]) {
+            parts.push(Buffer.from(
+              `--${boundary}\r\n` +
+              `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+              `${value}\r\n`,
+            ));
+          }
+          parts.push(Buffer.from(`--${boundary}--\r\n`));
+          const body = Buffer.concat(parts);
+
+          const url = `${cfg.apiUrl}${basePath}/upload-multipart`;
+          try {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": `multipart/form-data; boundary=${boundary}`,
+                Authorization: `Bearer ${cfg.token}`,
+              },
+              body,
+            });
+            if (!res.ok) {
+              const detail = await res.text().catch(() => "");
+              return jsonResult({ error: true, status: res.status, message: detail || res.statusText });
+            }
+            return jsonResult(await res.json());
+          } catch (err) {
+            return jsonResult({ error: true, message: `Upload failed: ${(err as Error).message}` });
+          }
+        }
+        case "read_file": {
+          const fileId = p.file_id as string;
+          if (!fileId) return jsonResult({ error: "file_id is required" });
+          return jsonResult(await bbApiFetch(cfg, `${basePath}/${fileId}/content`));
+        }
+        case "delete_file": {
+          const fileId = p.file_id as string;
+          if (!fileId) return jsonResult({ error: "file_id is required" });
+          return jsonResult(await bbApiFetch(cfg, `${basePath}/${fileId}`, "DELETE"));
+        }
+        case "mkdir": {
+          const dirName = p.name as string;
+          if (!dirName) return jsonResult({ error: "name is required" });
+          const parentPath = (p.parent_path as string) || "/";
+          return jsonResult(
+            await bbApiFetch(cfg, basePath + "/mkdir", "POST", { name: dirName, parent_path: parentPath }),
+          );
+        }
+        case "get_file_url": {
+          const fileId = p.file_id as string;
+          if (!fileId) return jsonResult({ error: "file_id is required" });
+          return jsonResult(await bbApiFetch(cfg, `${basePath}/${fileId}/url`));
+        }
+        default:
+          return jsonResult({ error: `Unknown action: ${p.action}` });
+      }
+    },
+  };
+}
+
 export function createNoDeskClawTools(config: OpenClawConfig, sessionWorkspaceId?: string): AnyAgentTool[] {
   const cfg = resolveToolConfig(config, sessionWorkspaceId);
   return [
@@ -619,5 +769,6 @@ export function createNoDeskClawTools(config: OpenClawConfig, sessionWorkspaceId
     createGeneDiscoveryTool(cfg),
     createFileDownloadTool(cfg),
     createChatHistoryTool(cfg),
+    createSharedFilesTool(cfg),
   ];
 }
