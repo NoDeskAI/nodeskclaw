@@ -1669,9 +1669,6 @@ const enUS = {
     model_provider: {
       already_exists: "This provider is already configured",
     },
-    workspace: {
-      restart_no_instances: "No instances available to restart in this workspace",
-    },
     billing: {
       instance_limit_exceeded: "AI Employee limit reached ({used}/{limit}). Please upgrade your plan or contact admin.",
       cpu_quota_exceeded: "CPU quota exceeded: used {used}, requesting {requested}, limit {limit}",
@@ -1809,6 +1806,7 @@ const enUS = {
       decision_record_not_found: "Decision record not found",
     },
     workspace: {
+      restart_no_instances: "No instances available to restart in this workspace",
       not_found: "Cyber office does not exist",
       add_agent_invalid: "Invalid parameters for adding AI Employee",
       delete_invalid: "Please remove all AI employees from the cyber office before deleting it",

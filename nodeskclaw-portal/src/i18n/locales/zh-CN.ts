@@ -1669,9 +1669,6 @@ const zhCN = {
     model_provider: {
       already_exists: "该供应商已配置，不能重复添加",
     },
-    workspace: {
-      restart_no_instances: "该办公室没有可重启的实例",
-    },
     billing: {
       instance_limit_exceeded: "AI 员工数量已达上限（{used}/{limit}），请升级套餐或联系管理员",
       cpu_quota_exceeded: "CPU 配额不足：已用 {used}，本次需要 {requested}，上限 {limit}",
@@ -1809,6 +1806,7 @@ const zhCN = {
       decision_record_not_found: "审批记录不存在",
     },
     workspace: {
+      restart_no_instances: "该办公室没有可重启的实例",
       not_found: "办公室不存在",
       add_agent_invalid: "添加 AI 员工参数不合法",
       delete_invalid: "请先移除办公室内的所有 AI 员工，再删除办公室",
