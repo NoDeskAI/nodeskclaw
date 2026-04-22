@@ -170,7 +170,12 @@ function createBlackboardTool(cfg: ToolConfig): AnyAgentTool {
           const sectionTitle = String(p.section || "");
           if (sectionContent.length > 500 && /脚本|终稿|报告|方案/.test(sectionTitle)) {
             try {
-              const safeName = sectionTitle.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_").slice(0, 80);
+              const safeName = sectionTitle
+                .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+                .replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_")
+                .replace(/_+/g, "_")
+                .replace(/^_|_$/g, "")
+                .slice(0, 80) || "blackboard_section";
               const tmpPath = `/tmp/blackboard_${safeName}_${Date.now()}.md`;
               await fs.writeFile(tmpPath, sectionContent, "utf-8");
               const fname = `${safeName}.md`;
