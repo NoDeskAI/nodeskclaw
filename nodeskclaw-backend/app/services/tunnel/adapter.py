@@ -226,8 +226,11 @@ class TunnelAdapter:
             return
 
         old_conn = self._connections.get(instance_id)
+        migrated_streams: dict[str, asyncio.Queue[TunnelMessage]] = {}
         if old_conn:
             logger.info("Tunnel: kicking previous connection for %s", instance_id)
+            migrated_streams = dict(old_conn._stream_queues)
+            old_conn._stream_queues.clear()
             old_conn.cancel_all()
             try:
                 await old_conn.ws.close(code=4010, reason="replaced")
@@ -236,6 +239,12 @@ class TunnelAdapter:
             self._cleanup_instance(instance_id)
 
         conn = _InstanceConnection(ws, instance_id)
+        if migrated_streams:
+            conn._stream_queues.update(migrated_streams)
+            logger.info(
+                "Tunnel: migrated %d in-flight stream(s) to new connection for %s",
+                len(migrated_streams), instance_id,
+            )
         self._connections[instance_id] = conn
         self._stats["total_connections"] += 1
 
