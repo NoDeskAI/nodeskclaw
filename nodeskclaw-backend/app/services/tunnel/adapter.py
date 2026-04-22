@@ -238,7 +238,7 @@ class TunnelAdapter:
         surviving_streams: dict[str, asyncio.Queue[TunnelMessage]] = {}
         if old_conn:
             logger.info("Tunnel: kicking previous connection for %s", instance_id)
-            surviving_streams = dict(old_conn._stream_queues)
+            surviving_streams = dict(old_conn._instance_streams)
             old_conn.cancel_all()
             try:
                 await old_conn.ws.close(code=4010, reason="replaced")
@@ -247,6 +247,7 @@ class TunnelAdapter:
             self._cleanup_instance(instance_id)
 
         streams = self._instance_streams.setdefault(instance_id, {})
+        streams.update(surviving_streams)
         conn = _InstanceConnection(ws, instance_id, streams)
         if streams:
             logger.info(
