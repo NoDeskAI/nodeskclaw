@@ -436,6 +436,8 @@ async def _invoke_target_agent(
     async with async_session_factory() as db:
         ws_info = await workspace_service.get_workspace(db, workspace_id)
         recent_messages = await msg_service.get_recent_messages(db, workspace_id)
+        from app.services.corridor_router import get_reachable_names
+        reachable = await get_reachable_names(workspace_id, instance_id, db)
 
     members: list[dict] = []
     if ws_info and ws_info.agents:
@@ -453,6 +455,7 @@ async def _invoke_target_agent(
         members=members,
         recent_messages=recent_messages,
         workspace_id=workspace_id,
+        reachable_names=reachable,
     )
 
     messages_payload = [

@@ -191,11 +191,25 @@ def build_context_prompt(
     members: list[dict],
     recent_messages: list[WorkspaceMessage],
     workspace_id: str = "",
+    *,
+    reachable_names: list[str] | None = None,
 ) -> str:
     """Build the system prompt context injected into each Agent call."""
     members_text = "\n".join(
         f"- [{m['type']}] {m['name']}" for m in members
     )
+
+    if reachable_names is not None:
+        if reachable_names:
+            reachable_lines = "\n".join(f"- {n}" for n in reachable_names)
+            reachable_section = (
+                f"\n你可以 @ 联系以下成员:\n{reachable_lines}\n"
+                "只有上述成员能收到你的消息，不要 @ 不在此列表中的成员。\n"
+            )
+        else:
+            reachable_section = "\n你当前无法联系任何成员。\n"
+    else:
+        reachable_section = ""
 
     all_messages = recent_messages
 
@@ -224,16 +238,14 @@ def build_context_prompt(
 
 办公室成员:
 {members_text}
-
+{reachable_section}
 近期对话:
 {messages_text}
 
 ---
 你可以直接回复参与讨论。如果当前话题与你无关或你没有要补充的，回复 NO_REPLY 即可。
-注意：办公室成员列表仅供了解同事身份，不代表你可以和所有人通讯。办公室使用过道系统连接工位，你只能联系通过过道与你相连的成员。
-如需确认你能联系谁，必须调用 nodeskclaw_topology 工具（action: get_reachable, my_instance_id: 你的实例 ID）。未经工具确认，不要声称可以联系任何人。
 当你回复或联系其他成员（AI 员工或人类）时，在回复中直接 @{{name}} 即可（如"@test-2 你好"），系统会自动转发。收到其他成员的消息后回复时，也请 @提及对方，这样系统才能正确路由你的回复。不要用 send 命令。
-办公室设有中央黑板（get_reachable 中 node_type=blackboard 的节点），通过 nodeskclaw_blackboard 工具读写黑板内容，不要 @提及黑板。
+办公室设有中央黑板，通过 nodeskclaw_blackboard 工具读写黑板内容，不要 @提及黑板。
 如需回顾更早的对话记录，使用 nodeskclaw_chat_history 工具搜索历史消息。
 """
 

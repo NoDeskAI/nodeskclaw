@@ -1688,6 +1688,9 @@ async def agent_chat(
     recent_messages = await msg_service.get_recent_messages(db, workspace_id)
     members = _build_members_list(ws_info, user)
 
+    from app.services.corridor_router import get_reachable_names
+    reachable = await get_reachable_names(workspace_id, instance_id, db)
+
     agent_name = inst.agent_display_name or inst.name
     context_prompt = msg_service.build_context_prompt(
         workspace_name=ws_info.name if ws_info else "Unknown",
@@ -1696,6 +1699,7 @@ async def agent_chat(
         members=members,
         recent_messages=recent_messages,
         workspace_id=workspace_id,
+        reachable_names=reachable,
     )
 
     messages = [

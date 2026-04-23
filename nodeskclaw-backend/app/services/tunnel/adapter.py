@@ -505,8 +505,10 @@ class TunnelAdapter:
             )
 
         from app.services import workspace_message_service as msg_service
+        from app.services.corridor_router import get_reachable_names
 
         ws_ctx = await self._fetch_workspace_context(workspace_id, db)
+        reachable = await get_reachable_names(workspace_id, target_node_id, db)
 
         context_prompt = msg_service.build_context_prompt(
             workspace_name=ws_ctx.workspace_name,
@@ -515,6 +517,7 @@ class TunnelAdapter:
             members=ws_ctx.members,
             recent_messages=ws_ctx.recent_messages,
             workspace_id=workspace_id,
+            reachable_names=reachable,
         )
 
         mention_targets: list[str] = data.extensions.get("mention_targets", [])

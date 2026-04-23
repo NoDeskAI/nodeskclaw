@@ -101,6 +101,10 @@ async def test_context_prompt_receives_workspace_name():
         new_callable=AsyncMock,
         return_value=[],
     ), patch(
+        "app.services.corridor_router.get_reachable_names",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
         "app.services.workspace_message_service.build_context_prompt",
         return_value="mocked prompt",
     ) as mock_build, patch.object(
@@ -126,6 +130,10 @@ async def test_context_prompt_receives_members():
         "app.services.workspace_message_service.get_recent_messages",
         new_callable=AsyncMock,
         return_value=[],
+    ), patch(
+        "app.services.corridor_router.get_reachable_names",
+        new_callable=AsyncMock,
+        return_value=None,
     ), patch(
         "app.services.workspace_message_service.build_context_prompt",
         return_value="mocked prompt",
@@ -155,6 +163,10 @@ async def test_context_prompt_receives_recent_messages():
         new_callable=AsyncMock,
         return_value=fake_msgs,
     ), patch(
+        "app.services.corridor_router.get_reachable_names",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
         "app.services.workspace_message_service.build_context_prompt",
         return_value="mocked prompt",
     ) as mock_build, patch.object(
@@ -179,6 +191,10 @@ async def test_workspace_not_found_falls_back_to_empty():
         new_callable=AsyncMock,
         return_value=[],
     ), patch(
+        "app.services.corridor_router.get_reachable_names",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
         "app.services.workspace_message_service.build_context_prompt",
         return_value="mocked prompt",
     ) as mock_build, patch.object(
@@ -202,6 +218,10 @@ async def test_no_reply_path_also_gets_context():
         "app.services.workspace_message_service.get_recent_messages",
         new_callable=AsyncMock,
         return_value=[_make_fake_message()],
+    ), patch(
+        "app.services.corridor_router.get_reachable_names",
+        new_callable=AsyncMock,
+        return_value=None,
     ), patch(
         "app.services.workspace_message_service.build_context_prompt",
         return_value="mocked prompt",

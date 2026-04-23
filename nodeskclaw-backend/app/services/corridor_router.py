@@ -369,6 +369,29 @@ async def check_blackboard_access(
     return allowed, reason
 
 
+async def get_reachable_names(
+    workspace_id: str, instance_id: str, db: AsyncSession,
+) -> list[str] | None:
+    """Return display names of members reachable from *instance_id* via topology.
+
+    Returns None when there is no topology (flat workspace) or when the agent
+    has no hex coordinates, meaning all members are reachable and no prompt
+    constraint should be injected.  Returns an empty list when the agent is
+    positioned on the grid but has no reachable neighbors (isolated).
+    """
+    if not await has_any_connections(workspace_id, db):
+        return None
+
+    coords = await get_agent_hex_in_workspace(instance_id, workspace_id, db)
+    if coords is None:
+        return None
+
+    endpoints, _hooks = await get_reachable_endpoints(
+        workspace_id, coords[0], coords[1], db,
+    )
+    return [ep.display_name for ep in endpoints if ep.display_name]
+
+
 async def get_topology(workspace_id: str, db: AsyncSession) -> Topology:
     hex_map = await _build_hex_map(workspace_id, db)
 
