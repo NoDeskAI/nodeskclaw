@@ -56,3 +56,24 @@ def test_docker_rewrite_urls_uses_external_proxy_url(monkeypatch):
     rewritten = _docker_rewrite_urls(providers)
 
     assert rewritten["codex"]["baseUrl"] == "http://host.docker.internal:18080/codex/v1"
+
+
+def test_docker_rewrite_urls_custom_provider(monkeypatch):
+    """Custom providers (e.g. Ollama) routed through proxy should also be
+    rewritten to host.docker.internal so standalone instance containers can
+    reach the proxy. Regression test for #228."""
+    monkeypatch.setattr(settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy:8080")
+    monkeypatch.setattr(settings, "LLM_PROXY_URL", "http://localhost:4511")
+
+    providers = {
+        "ollama": {
+            "baseUrl": "http://llm-proxy:8080/ollama/v1",
+            "apiKey": "wp-token",
+            "api": "openai-completions",
+            "models": [{"id": "qwen3.6:35b", "name": "qwen3.6:35b"}],
+        }
+    }
+
+    rewritten = _docker_rewrite_urls(providers)
+
+    assert rewritten["ollama"]["baseUrl"] == "http://host.docker.internal:4511/ollama/v1"

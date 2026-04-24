@@ -43,7 +43,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://nodeskclaw:nodeskclaw@postgres:5432/nodeskclaw}
       DATABASE_NAME_SUFFIX: ""
-      LLM_PROXY_URL: http://llm-proxy:8080
+      LLM_PROXY_URL: http://localhost:${LLM_PROXY_PORT:-4511}
       LLM_PROXY_INTERNAL_URL: http://llm-proxy:8080
       NODESKCLAW_EDITION: ce
       DOCKER_DATA_DIR: /nodeskclaw-data
