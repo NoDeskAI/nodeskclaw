@@ -69,6 +69,15 @@ def _collect_platform_host_endpoints() -> list[tuple[str, int]]:
     return endpoints
 
 
+def _rewrite_docker_callback_url(url: str) -> str:
+    """Rewrite host callback URLs so Docker Desktop containers can reach the backend."""
+    return _re.sub(
+        r"(https?://|wss?://)(localhost|127\.0\.0\.1|0\.0\.0\.0|172\.17\.0\.1)(:\d+)?",
+        r"\1host.docker.internal\3",
+        url,
+    )
+
+
 def _compute_llm_providers(
     llm_configs: list | None, org_active_providers: list[str],
 ) -> list[str] | None:
@@ -491,9 +500,16 @@ async def deploy_instance(
     env_vars["OPENCLAW_GATEWAY_TOKEN"] = gateway_token
     env_vars["NODESKCLAW_TOKEN"] = gateway_token
 
-    env_vars.setdefault("NODESKCLAW_API_URL", settings.AGENT_API_BASE_URL)
-    if settings.TUNNEL_BASE_URL:
-        env_vars.setdefault("NODESKCLAW_TUNNEL_URL", settings.TUNNEL_BASE_URL)
+    api_url = settings.AGENT_API_BASE_URL
+    tunnel_url = settings.TUNNEL_BASE_URL
+    if is_docker:
+        api_url = _rewrite_docker_callback_url(api_url)
+        if tunnel_url:
+            tunnel_url = _rewrite_docker_callback_url(tunnel_url)
+
+    env_vars.setdefault("NODESKCLAW_API_URL", api_url)
+    if tunnel_url:
+        env_vars.setdefault("NODESKCLAW_TUNNEL_URL", tunnel_url)
 
     if docker_host_port is not None:
         env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
@@ -810,15 +826,16 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
 
         await db.commit()
 
-        if ctx.runtime == "openclaw":
+        if ctx.runtime in {"openclaw", "hermes"}:
             from app.services.llm_config_service import (
                 ensure_openclaw_gateway_config,
-                sync_openclaw_llm_config,
+                sync_runtime_llm_config,
             )
             try:
-                await ensure_openclaw_gateway_config(instance, db)
+                if ctx.runtime == "openclaw":
+                    await ensure_openclaw_gateway_config(instance, db)
                 if ctx.has_llm_configs:
-                    await sync_openclaw_llm_config(instance, db)
+                    await sync_runtime_llm_config(instance, db)
             except Exception as e:
                 logger.warning(
                     "Docker 部署后注入配置失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
@@ -1177,21 +1194,23 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 await db.commit()
 
                 llm_sync_warning = ""
-                if ctx.runtime == "openclaw":
+                if ctx.runtime in {"openclaw", "hermes"}:
                     from app.services.llm_config_service import (
                         ensure_openclaw_gateway_config,
-                        sync_openclaw_llm_config,
+                        sync_runtime_llm_config,
                     )
 
                     try:
                         if ctx.has_llm_configs:
                             config_step = len(DEPLOY_STEPS_BASE) + 1
                             _publish(config_step, "应用实例配置")
-                            await ensure_openclaw_gateway_config(instance, db)
-                            await sync_openclaw_llm_config(instance, db)
+                            if ctx.runtime == "openclaw":
+                                await ensure_openclaw_gateway_config(instance, db)
+                            await sync_runtime_llm_config(instance, db)
                             _publish(config_step, "应用实例配置", status="success")
                         else:
-                            await ensure_openclaw_gateway_config(instance, db)
+                            if ctx.runtime == "openclaw":
+                                await ensure_openclaw_gateway_config(instance, db)
                     except Exception as e:
                         logger.warning(
                             "LLM 配置同步失败（非致命） [deploy_id=%s, instance_id=%s]: %s",

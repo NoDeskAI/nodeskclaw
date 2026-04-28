@@ -6,6 +6,7 @@ from app.services.runtime.messaging.envelope import (
     IntentType,
     MessageData,
     MessageEnvelope,
+    MessageRouting,
     MessageSender,
     Priority,
     SenderType,
@@ -22,6 +23,8 @@ def build_portal_envelope(
     attachments: list[dict] | None = None,
     conversation_id: str | None = None,
 ) -> MessageEnvelope:
+    routing_targets = mentions or []
+    routing_mode = "unicast" if len(routing_targets) == 1 else "multicast"
     extensions: dict = {}
     if conversation_id:
         extensions["conversation_id"] = conversation_id
@@ -38,8 +41,9 @@ def build_portal_envelope(
             ),
             intent=IntentType.CHAT,
             content=content,
-            mentions=mentions or [],
+            mentions=routing_targets,
             attachments=attachments or [],
+            routing=MessageRouting(mode=routing_mode, targets=routing_targets),
             extensions=extensions,
             priority=Priority.NORMAL,
         ),

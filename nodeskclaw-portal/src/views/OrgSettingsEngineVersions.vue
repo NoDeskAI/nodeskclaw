@@ -23,6 +23,11 @@ interface EngineVersion {
 const loading = ref(false)
 const versions = ref<EngineVersion[]>([])
 const selectedRuntime = ref('openclaw')
+const runtimeOptions = [
+  { id: 'openclaw', label: 'OpenClaw' },
+  { id: 'nanobot', label: 'NanoBot' },
+  { id: 'hermes', label: 'Hermes' },
+]
 
 const showPublishDialog = ref(false)
 const publishForm = ref({ version: '', image_tag: '', release_notes: '' })
@@ -129,6 +134,17 @@ onMounted(fetchVersions)
     </div>
 
     <div class="flex items-center justify-between">
+      <div class="inline-flex rounded-lg border border-border bg-card p-1">
+        <button
+          v-for="rt in runtimeOptions"
+          :key="rt.id"
+          class="px-3 py-1.5 rounded-md text-sm transition-colors"
+          :class="selectedRuntime === rt.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+          @click="selectedRuntime = rt.id; fetchVersions()"
+        >
+          {{ rt.label }}
+        </button>
+      </div>
       <button
         class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         :disabled="loading"

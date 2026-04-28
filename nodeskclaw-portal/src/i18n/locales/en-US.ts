@@ -858,6 +858,8 @@ const enUS = {
     engineOpenclawDesc: "Supports tool calling, gene system, and multi-skill management",
     engineNanobotName: "Light Work Engine",
     engineNanobotDesc: "Ultra-lightweight and fast for simple chat scenarios",
+    engineHermesName: "Hermes Runtime",
+    engineHermesDesc: "General-purpose runtime for long-running agents",
     skillEditor: {
       title: "Role & Prompts",
       save: "Save Changes",
