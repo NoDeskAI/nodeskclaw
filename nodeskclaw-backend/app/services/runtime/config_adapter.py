@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+import yaml
 
 from app.utils.jsonc import ensure_exec_security, strip_jsonc
 
@@ -181,6 +184,218 @@ class NanobotConfigAdapter(RuntimeConfigAdapter):
         return result
 
 
+class HermesConfigAdapter(RuntimeConfigAdapter):
+
+    _CONFIG_REL = ".hermes/config.yaml"
+    _SUPPORTED_CHANNELS = ["feishu", "telegram", "discord", "dingtalk"]
+    _TOP_LEVEL_FIELD_MIRRORS = {
+        "telegram": {
+            "extra.require_mention": "require_mention",
+            "extra.mention_patterns": "mention_patterns",
+            "extra.free_response_chats": "free_response_chats",
+        },
+        "discord": {
+            "extra.require_mention": "require_mention",
+            "extra.free_response_channels": "free_response_channels",
+        },
+    }
+
+    async def read_config(self, fs: RemoteFS) -> dict | None:
+        raw = await fs.read_text(self._CONFIG_REL)
+        if raw is None:
+            return None
+        try:
+            data = yaml.safe_load(raw) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"hermes config.yaml 格式无法解析: {e}") from e
+        if not isinstance(data, dict):
+            raise ValueError("hermes config.yaml 根节点必须为对象")
+        return data
+
+    async def write_config(self, fs: RemoteFS, data: dict) -> None:
+        await fs.write_text(
+            self._CONFIG_REL,
+            yaml.safe_dump(
+                data,
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            ),
+        )
+
+    def extract_channels(self, config: dict) -> dict:
+        platforms = config.get("platforms", {})
+        if not isinstance(platforms, dict):
+            platforms = {}
+
+        result: dict[str, dict] = {}
+        for channel_id in self._SUPPORTED_CHANNELS:
+            native = platforms.get(channel_id)
+            merged = copy.deepcopy(native) if isinstance(native, dict) else {}
+            top_level = config.get(channel_id)
+            if isinstance(top_level, dict):
+                self._apply_top_level_overrides(channel_id, merged, top_level)
+            if merged:
+                result[channel_id] = merged
+        return result
+
+    def merge_channels(self, config: dict, channels: dict) -> dict:
+        updated = copy.deepcopy(config)
+        platforms = updated.get("platforms", {})
+        if not isinstance(platforms, dict):
+            platforms = {}
+        else:
+            platforms = copy.deepcopy(platforms)
+
+        for channel_id in self._SUPPORTED_CHANNELS:
+            platforms.pop(channel_id, None)
+
+        for channel_id, channel_config in channels.items():
+            if channel_id not in self._SUPPORTED_CHANNELS or not isinstance(channel_config, dict):
+                continue
+            merged = copy.deepcopy(channel_config)
+            if merged:
+                merged.setdefault("enabled", True)
+                platforms[channel_id] = merged
+
+        updated["platforms"] = platforms
+
+        for channel_id in self._SUPPORTED_CHANNELS:
+            top_level = updated.get(channel_id)
+            if not isinstance(top_level, dict):
+                top_level = {}
+            else:
+                top_level = copy.deepcopy(top_level)
+            for top_key in self._TOP_LEVEL_FIELD_MIRRORS.get(channel_id, {}).values():
+                top_level.pop(top_key, None)
+
+            native = platforms.get(channel_id)
+            if isinstance(native, dict):
+                for native_path, top_key in self._TOP_LEVEL_FIELD_MIRRORS.get(channel_id, {}).items():
+                    value = self._get_nested(native, native_path)
+                    if value is not None:
+                        top_level[top_key] = copy.deepcopy(value)
+
+            if top_level:
+                updated[channel_id] = top_level
+            else:
+                updated.pop(channel_id, None)
+
+        return updated
+
+    async def restart(self, instance: Instance, db: AsyncSession) -> dict:
+        return await _restart_container(instance, db)
+
+    def supported_channels(self) -> list[str]:
+        return list(self._SUPPORTED_CHANNELS)
+
+    def translate_to_runtime(self, canonical: dict, channel_id: str) -> dict:
+        from app.services.unified_channel_schema import UNIFIED_CHANNEL_REGISTRY
+
+        defn = UNIFIED_CHANNEL_REGISTRY.get(channel_id)
+        if not defn:
+            return canonical
+
+        result = copy.deepcopy(canonical)
+        for field_def in defn.fields:
+            runtime_key = field_def.runtime_key.get("hermes")
+            if not runtime_key or field_def.key not in canonical:
+                continue
+            result.pop(field_def.key, None)
+            runtime_value = self._canonical_to_runtime_value(channel_id, field_def.key, canonical[field_def.key])
+            if runtime_value is None:
+                continue
+            self._set_nested(result, runtime_key, runtime_value)
+        return result
+
+    def translate_from_runtime(self, native: dict, channel_id: str) -> dict:
+        from app.services.unified_channel_schema import UNIFIED_CHANNEL_REGISTRY
+
+        defn = UNIFIED_CHANNEL_REGISTRY.get(channel_id)
+        if not defn:
+            return native
+
+        remaining = copy.deepcopy(native)
+        result: dict[str, object] = {}
+        for field_def in defn.fields:
+            runtime_key = field_def.runtime_key.get("hermes")
+            if not runtime_key:
+                continue
+            runtime_value = self._get_nested(native, runtime_key)
+            if runtime_value is None:
+                continue
+            result[field_def.key] = self._runtime_to_canonical_value(channel_id, field_def.key, runtime_value)
+            self._delete_nested(remaining, runtime_key)
+
+        if isinstance(remaining, dict):
+            result.update(remaining)
+        return result
+
+    def _apply_top_level_overrides(self, channel_id: str, native: dict, top_level: dict) -> None:
+        for native_path, top_key in self._TOP_LEVEL_FIELD_MIRRORS.get(channel_id, {}).items():
+            if top_key in top_level:
+                self._set_nested(native, native_path, copy.deepcopy(top_level[top_key]))
+
+    @staticmethod
+    def _set_nested(data: dict, path: str, value: object) -> None:
+        parts = path.split(".")
+        cursor = data
+        for key in parts[:-1]:
+            child = cursor.get(key)
+            if not isinstance(child, dict):
+                child = {}
+                cursor[key] = child
+            cursor = child
+        cursor[parts[-1]] = value
+
+    @staticmethod
+    def _get_nested(data: dict, path: str) -> object | None:
+        cursor: object = data
+        for key in path.split("."):
+            if not isinstance(cursor, dict):
+                return None
+            cursor = cursor.get(key)
+            if cursor is None:
+                return None
+        return cursor
+
+    @classmethod
+    def _delete_nested(cls, data: dict, path: str) -> None:
+        parts = path.split(".")
+        cursor = data
+        parents: list[tuple[dict, str]] = []
+        for key in parts[:-1]:
+            child = cursor.get(key)
+            if not isinstance(child, dict):
+                return
+            parents.append((cursor, key))
+            cursor = child
+        cursor.pop(parts[-1], None)
+
+        for parent, key in reversed(parents):
+            child = parent.get(key)
+            if isinstance(child, dict) and not child:
+                parent.pop(key, None)
+            else:
+                break
+
+    @staticmethod
+    def _canonical_to_runtime_value(channel_id: str, field_key: str, value: object) -> object | None:
+        if channel_id in {"telegram", "discord"} and field_key == "groupPolicy":
+            if value == "mention":
+                return True
+            if value == "open":
+                return False
+            return None
+        return copy.deepcopy(value)
+
+    @staticmethod
+    def _runtime_to_canonical_value(channel_id: str, field_key: str, value: object) -> object:
+        if channel_id in {"telegram", "discord"} and field_key == "groupPolicy":
+            return "mention" if bool(value) else "open"
+        return copy.deepcopy(value)
+
+
 async def _restart_container(instance: Instance, db: AsyncSession) -> dict:
     """Generic container restart for NanoBot (SIGTERM + wait)."""
     if instance.compute_provider == "docker":
@@ -232,6 +447,7 @@ async def _restart_container(instance: Instance, db: AsyncSession) -> dict:
 _ADAPTERS: dict[str, RuntimeConfigAdapter] = {
     "openclaw": OpenClawConfigAdapter(),
     "nanobot": NanobotConfigAdapter(),
+    "hermes": HermesConfigAdapter(),
 }
 
 

@@ -44,6 +44,12 @@ export function buildEngineInfoMap(t: Translator): Record<string, EngineInfo> {
       poweredBy: 'Nanobot',
       tags: [],
     },
+    hermes: {
+      name: t('instanceDetail.engineHermesName'),
+      description: t('instanceDetail.engineHermesDesc'),
+      poweredBy: 'Hermes Agent',
+      tags: [],
+    },
   }
 }
 

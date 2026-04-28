@@ -31,18 +31,18 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
     # ── Feishu / 飞书 ────────────────────────────────────────
     "feishu": ChannelDefinition(
         label="Feishu / 飞书",
-        supported_runtimes=("openclaw", "nanobot"),
+        supported_runtimes=("openclaw", "nanobot", "hermes"),
         order=35,
         fields=(
             FieldDef(
                 key="appId", label="App ID", type="string", required=True,
                 placeholder="cli_xxxx",
-                runtime_key={"openclaw": "appId", "nanobot": "appId"},
+                runtime_key={"openclaw": "appId", "nanobot": "appId", "hermes": "extra.app_id"},
             ),
             FieldDef(
                 key="appSecret", label="App Secret", type="password", required=True,
                 placeholder="飞书应用的 App Secret",
-                runtime_key={"openclaw": "appSecret", "nanobot": "appSecret"},
+                runtime_key={"openclaw": "appSecret", "nanobot": "appSecret", "hermes": "extra.app_secret"},
             ),
             FieldDef(
                 key="domain", label="Domain（域名）", type="select", required=False,
@@ -51,7 +51,7 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
                     {"value": "feishu", "label": "feishu（飞书国内）"},
                     {"value": "lark", "label": "lark（海外 Lark）"},
                 ),
-                runtime_key={"openclaw": "domain"},
+                runtime_key={"openclaw": "domain", "hermes": "extra.domain"},
             ),
             FieldDef(
                 key="connectionMode", label="Connection Mode（连接方式）", type="select",
@@ -60,7 +60,7 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
                     {"value": "websocket", "label": "WebSocket（长连接，推荐）"},
                     {"value": "webhook", "label": "Webhook（需公网回调）"},
                 ),
-                runtime_key={"openclaw": "connectionMode"},
+                runtime_key={"openclaw": "connectionMode", "hermes": "extra.connection_mode"},
             ),
             FieldDef(
                 key="allowFrom", label="Allow From（允许列表）", type="string_list",
@@ -86,7 +86,11 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
                     {"value": "allowlist", "label": "allowlist（白名单）"},
                     {"value": "disabled", "label": "disabled（禁用群聊）"},
                 ),
-                runtime_key={"openclaw": "groupPolicy", "nanobot": "groupPolicy"},
+                runtime_key={
+                    "openclaw": "groupPolicy",
+                    "nanobot": "groupPolicy",
+                    "hermes": "extra.default_group_policy",
+                },
             ),
             FieldDef(
                 key="requireMention", label="Require Mention（需@提及）", type="boolean",
@@ -128,13 +132,13 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
     # ── Telegram ─────────────────────────────────────────────
     "telegram": ChannelDefinition(
         label="Telegram",
-        supported_runtimes=("openclaw", "nanobot"),
+        supported_runtimes=("openclaw", "nanobot", "hermes"),
         order=45,
         fields=(
             FieldDef(
                 key="botToken", label="Bot Token", type="password", required=True,
                 placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-                runtime_key={"openclaw": "botToken", "nanobot": "token"},
+                runtime_key={"openclaw": "botToken", "nanobot": "token", "hermes": "token"},
             ),
             FieldDef(
                 key="allowFrom", label="Allow From（允许列表）", type="string_list",
@@ -148,7 +152,7 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
                     {"value": "open", "label": "open（开放）"},
                     {"value": "mention", "label": "mention（需@提及）"},
                 ),
-                runtime_key={"nanobot": "groupPolicy"},
+                runtime_key={"nanobot": "groupPolicy", "hermes": "extra.require_mention"},
             ),
             FieldDef(
                 key="proxy", label="Proxy（代理地址）", type="string",
@@ -166,13 +170,13 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
     # ── Discord ──────────────────────────────────────────────
     "discord": ChannelDefinition(
         label="Discord",
-        supported_runtimes=("openclaw", "nanobot"),
+        supported_runtimes=("openclaw", "nanobot", "hermes"),
         order=50,
         fields=(
             FieldDef(
                 key="token", label="Bot Token", type="password", required=True,
                 placeholder="Discord Bot Token",
-                runtime_key={"openclaw": "token", "nanobot": "token"},
+                runtime_key={"openclaw": "token", "nanobot": "token", "hermes": "token"},
             ),
             FieldDef(
                 key="allowFrom", label="Allow From（允许列表）", type="string_list",
@@ -186,7 +190,7 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
                     {"value": "mention", "label": "mention（需@提及）"},
                     {"value": "open", "label": "open（开放）"},
                 ),
-                runtime_key={"nanobot": "groupPolicy"},
+                runtime_key={"nanobot": "groupPolicy", "hermes": "extra.require_mention"},
             ),
         ),
     ),
@@ -238,18 +242,18 @@ UNIFIED_CHANNEL_REGISTRY: dict[str, ChannelDefinition] = {
     # ── DingTalk / 钉钉 ─────────────────────────────────────
     "dingtalk": ChannelDefinition(
         label="DingTalk / 钉钉",
-        supported_runtimes=("openclaw", "nanobot"),
+        supported_runtimes=("openclaw", "nanobot", "hermes"),
         order=36,
         fields=(
             FieldDef(
                 key="clientId", label="Client ID（应用凭证）", type="string", required=True,
                 placeholder="dingxxxxxxx",
-                runtime_key={"openclaw": "clientId", "nanobot": "clientId"},
+                runtime_key={"openclaw": "clientId", "nanobot": "clientId", "hermes": "extra.client_id"},
             ),
             FieldDef(
                 key="clientSecret", label="Client Secret（应用密钥）", type="password",
                 required=True, placeholder="钉钉应用的 Client Secret",
-                runtime_key={"openclaw": "clientSecret", "nanobot": "clientSecret"},
+                runtime_key={"openclaw": "clientSecret", "nanobot": "clientSecret", "hermes": "extra.client_secret"},
             ),
             FieldDef(
                 key="agentId", label="Agent ID（机器人 ID）", type="string", required=False,

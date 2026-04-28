@@ -19,6 +19,8 @@ const messages: Record<string, string> = {
   'instanceDetail.engineOpenclawDesc': 'Tool-heavy engine',
   'instanceDetail.engineNanobotName': 'Light Engine',
   'instanceDetail.engineNanobotDesc': 'Fast lightweight engine',
+  'instanceDetail.engineHermesName': 'Hermes Runtime',
+  'instanceDetail.engineHermesDesc': 'Long-running agent engine',
   'engine.defaultTag': 'Default',
   'deployProgress.stepPreflight': 'Preflight',
   'deployProgress.stepProvision': 'Provision',
@@ -66,6 +68,12 @@ describe('instanceFlow', () => {
       name: 'General Engine',
       description: 'Tool-heavy engine',
       tags: ['Default'],
+    })
+    expect(buildEngineInfoMap(t).hermes).toMatchObject({
+      name: 'Hermes Runtime',
+      description: 'Long-running agent engine',
+      poweredBy: 'Hermes Agent',
+      tags: [],
     })
   })
 

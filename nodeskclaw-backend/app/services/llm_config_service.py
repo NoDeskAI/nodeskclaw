@@ -28,11 +28,14 @@ from app.services.codex_provider import is_codex_provider, mask_personal_key, no
 from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.k8s_client import K8sClient
 from app.services.nfs_mount import NFSMountError, RemoteFS, remote_fs
+from app.services.runtime.config_adapter import get_config_adapter
 from app.utils.jsonc import ensure_exec_security, strip_jsonc
 
 logger = logging.getLogger(__name__)
 
 OPENCLAW_CONFIG_REL = Path(".openclaw") / "openclaw.json"
+HERMES_ENV_REL = Path(".hermes") / ".env"
+HERMES_WP_API_KEY_ENV = "NODESKCLAW_WP_API_KEY"
 
 PROVIDER_BASE_URLS: dict[str, str] = {
     "codex": "",
@@ -145,6 +148,12 @@ def _docker_rewrite_urls(providers: dict) -> dict:
     return providers
 
 
+def _resolve_proxy_url(*, use_external_proxy: bool) -> str:
+    if use_external_proxy:
+        return (settings.LLM_PROXY_URL or "").rstrip("/")
+    return (settings.LLM_PROXY_INTERNAL_URL or settings.LLM_PROXY_URL or "").rstrip("/")
+
+
 def _to_openclaw_models(selected: list[dict]) -> list[dict]:
     """Convert stored model metadata to OpenClaw models array format."""
     result = []
@@ -156,6 +165,228 @@ def _to_openclaw_models(selected: list[dict]) -> list[dict]:
             item["maxTokens"] = m["max_tokens"]
         result.append(item)
     return result
+
+
+def _api_type_to_hermes_api_mode(api_type: str | None) -> str:
+    normalized = (api_type or "").strip().lower()
+    if normalized == "anthropic-messages":
+        return "anthropic_messages"
+    if normalized == "bedrock-converse":
+        return "bedrock_converse"
+    if normalized == "codex-responses":
+        return "codex_responses"
+    return "chat_completions"
+
+
+def _provider_env_key(provider: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", provider).strip("_").upper() or "DEFAULT"
+    return f"NODESKCLAW_{slug}_API_KEY"
+
+
+def _hermes_custom_provider_name(provider: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", provider.lower()).strip("-") or "default"
+    return f"nodeskclaw-{slug}"
+
+
+def _resolve_direct_provider_credentials(
+    cfg,
+    *,
+    user_keys: dict[str, UserLlmKey],
+    org_keys: dict[str, OrgModelProvider],
+) -> tuple[str, str, str | None]:
+    provider = cfg.provider
+    cfg_base_url = getattr(cfg, "base_url", None)
+    cfg_api_type = getattr(cfg, "api_type", None)
+    if cfg.key_source == "personal":
+        uk = user_keys.get(provider)
+        if not uk:
+            raise AppException(
+                code=50001,
+                message=f"未找到个人 Provider 配置: {provider}",
+                status_code=500,
+            )
+        return (
+            cfg_base_url or uk.base_url or PROVIDER_BASE_URLS.get(provider, ""),
+            uk.api_key,
+            cfg_api_type or uk.api_type,
+        )
+
+    ok = org_keys.get(provider)
+    if not ok:
+        raise AppException(
+            code=50001,
+            message=f"未找到团队 Provider 配置: {provider}",
+            status_code=500,
+        )
+    return (
+        cfg_base_url or ok.base_url or PROVIDER_BASE_URLS.get(provider, ""),
+        ok.api_key,
+        cfg_api_type or ok.api_type,
+    )
+
+
+def _parse_dotenv(raw: str | None) -> dict[str, str]:
+    env: dict[str, str] = {}
+    if not raw:
+        return env
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        env[key] = value
+    return env
+
+
+def _dump_dotenv(env: dict[str, str]) -> str:
+    lines = [f"{key}={json.dumps(value)}" for key, value in sorted(env.items())]
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+async def _discover_openai_compatible_model(base_url: str, api_key: str) -> str:
+    normalized = base_url.rstrip("/")
+    if not normalized:
+        return ""
+    url = normalized if normalized.endswith("/models") else f"{normalized}/models"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=8.0, verify=True) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception as e:
+        logger.warning("Hermes 模型自动探测失败: base_url=%s error=%s", normalized, e)
+        return ""
+
+    data = payload.get("data")
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                model_id = str(item.get("id", "") or "").strip()
+                if model_id:
+                    return model_id
+    return ""
+
+
+async def _build_hermes_provider_payload(
+    configs: list,
+    *,
+    wp_api_key: str,
+    user_keys: dict[str, UserLlmKey],
+    org_keys: dict[str, OrgModelProvider],
+    use_external_proxy: bool,
+    compute_provider: str | None = None,
+) -> tuple[list[dict], dict[str, str], dict | None]:
+    providers: list[dict] = []
+    env_updates: dict[str, str] = {}
+    primary: dict | None = None
+    proxy_url = _resolve_proxy_url(use_external_proxy=use_external_proxy)
+
+    for cfg in configs:
+        cfg_api_type = getattr(cfg, "api_type", None)
+        api_type = cfg_api_type or PROVIDER_API_TYPE.get(cfg.provider)
+        if cfg.key_source == "personal":
+            base_url, api_key, api_type = _resolve_direct_provider_credentials(
+                cfg,
+                user_keys=user_keys,
+                org_keys=org_keys,
+            )
+            env_key = _provider_env_key(cfg.provider)
+        else:
+            assert proxy_url, "LLM_PROXY_URL must be set (checked at startup)"
+            skip_v1 = api_type in ("anthropic-messages", "google-generative-ai")
+            base_url = f"{proxy_url}/{cfg.provider}" if skip_v1 else f"{proxy_url}/{cfg.provider}/v1"
+            api_key = wp_api_key
+            env_key = HERMES_WP_API_KEY_ENV
+
+        if compute_provider == "docker":
+            base_url = _docker_rewrite_url(base_url)
+
+        provider_name = _hermes_custom_provider_name(cfg.provider)
+        selected_models = normalize_selected_models(cfg.provider, cfg.selected_models)
+        model_id = selected_models[0]["id"] if selected_models else ""
+        if not model_id and _api_type_to_hermes_api_mode(api_type) in {"chat_completions", "codex_responses"}:
+            model_id = await _discover_openai_compatible_model(base_url.rstrip("/"), api_key)
+
+        entry = {
+            "name": provider_name,
+            "base_url": base_url.rstrip("/"),
+            "key_env": env_key,
+            "api_mode": _api_type_to_hermes_api_mode(api_type),
+        }
+        if model_id:
+            entry["model"] = model_id
+
+        providers.append(entry)
+        env_updates[env_key] = api_key
+
+        if primary is None:
+            primary = {
+                "provider": provider_name,
+                "base_url": base_url.rstrip("/"),
+                "model": model_id,
+            }
+
+    return providers, env_updates, primary
+
+
+async def _write_hermes_runtime_config(
+    instance: Instance,
+    db: AsyncSession,
+    configs: list,
+    *,
+    wp_api_key: str,
+    user_keys: dict[str, UserLlmKey],
+    org_keys: dict[str, OrgModelProvider],
+    use_external_proxy: bool,
+    restart_runtime_after_write: bool,
+) -> None:
+    providers, env_updates, primary = await _build_hermes_provider_payload(
+        configs,
+        wp_api_key=wp_api_key,
+        user_keys=user_keys,
+        org_keys=org_keys,
+        use_external_proxy=use_external_proxy,
+        compute_provider=instance.compute_provider,
+    )
+    if not providers or primary is None:
+        raise AppException(
+            code=50001,
+            message="Hermes 未生成任何可用的 Provider 配置",
+            status_code=500,
+        )
+
+    adapter = get_config_adapter("hermes")
+    async with remote_fs(instance, db) as fs:
+        existing_config = await adapter.read_config(fs) or {}
+        model_cfg = existing_config.setdefault("model", {})
+        model_cfg["provider"] = primary["provider"]
+        model_cfg["base_url"] = primary["base_url"]
+        if primary["model"]:
+            model_cfg["default"] = primary["model"]
+        existing_config["custom_providers"] = providers
+        await adapter.write_config(fs, existing_config)
+
+        current_env = _parse_dotenv(await fs.read_text(str(HERMES_ENV_REL)))
+        stale_keys = [k for k in current_env if k.startswith("NODESKCLAW_") and k.endswith("_API_KEY")]
+        for key in stale_keys:
+            current_env.pop(key, None)
+        current_env.update(env_updates)
+        await fs.write_text(str(HERMES_ENV_REL), _dump_dotenv(current_env))
+
+    if restart_runtime_after_write:
+        try:
+            await adapter.restart(instance, db)
+        except Exception as e:
+            logger.warning("Hermes LLM 配置写入后重启失败: %s", e, exc_info=True)
 
 
 async def _get_running_pod(k8s: K8sClient, instance: Instance) -> str | None:
@@ -419,7 +650,7 @@ async def read_instance_llm_configs(
 async def write_instance_llm_configs(
     instance: Instance, db: AsyncSession, configs: list, current_user_id: str,
 ) -> bool:
-    """Write LLM provider configs to DB (InstanceProviderConfig) and Pod's openclaw.json.
+    """Write LLM provider configs to DB and apply runtime-specific config files.
 
     configs: list of InstanceProviderConfigItem (or anything with .provider, .key_source, .selected_models)
 
@@ -494,43 +725,57 @@ async def write_instance_llm_configs(
     cluster = cluster_result.scalar_one_or_none()
     use_external = bool(cluster and cluster.proxy_endpoint)
 
-    providers = _build_providers_config(
-        configs, wp_api_key, user_keys,
-        org_keys=org_keys, use_external_proxy=use_external,
-    )
-    if configs and not providers:
-        raise AppException(
-            code=50001,
-            message="未生成任何 LLM Provider 配置，请检查团队 Key / 个人 Key 配置",
-            status_code=500,
-        )
-    if instance.compute_provider == "docker":
-        _docker_rewrite_urls(providers)
-
     try:
-        async with remote_fs(instance, db) as fs:
-            try:
-                existing_json = await _read_config_file(fs)
-            except ValueError as e:
-                logger.error("openclaw.json parse error, aborting write: %s", e)
+        if instance.runtime == "openclaw":
+            providers = _build_providers_config(
+                configs, wp_api_key, user_keys,
+                org_keys=org_keys, use_external_proxy=use_external,
+            )
+            if configs and not providers:
                 raise AppException(
                     code=50001,
-                    message=f"openclaw.json parse error: {e}",
+                    message="未生成任何 LLM Provider 配置，请检查团队 Key / 个人 Key 配置",
                     status_code=500,
-                ) from e
+                )
+            if instance.compute_provider == "docker":
+                _docker_rewrite_urls(providers)
 
-            if existing_json is None:
-                existing_json = {}
+            async with remote_fs(instance, db) as fs:
+                try:
+                    existing_json = await _read_config_file(fs)
+                except ValueError as e:
+                    logger.error("openclaw.json parse error, aborting write: %s", e)
+                    raise AppException(
+                        code=50001,
+                        message=f"openclaw.json parse error: {e}",
+                        status_code=500,
+                    ) from e
 
-            if "models" not in existing_json:
-                existing_json["models"] = {}
-            existing_json["models"]["providers"] = providers
+                if existing_json is None:
+                    existing_json = {}
 
-            _ensure_gateway_config(existing_json, instance)
-            if "codex" in providers:
-                existing_json["gateway"].setdefault("mode", "local")
-            _set_default_agent_model(existing_json, providers)
-            await _write_config_file(fs, existing_json)
+                if "models" not in existing_json:
+                    existing_json["models"] = {}
+                existing_json["models"]["providers"] = providers
+
+                _ensure_gateway_config(existing_json, instance)
+                if "codex" in providers:
+                    existing_json["gateway"].setdefault("mode", "local")
+                _set_default_agent_model(existing_json, providers)
+                await _write_config_file(fs, existing_json)
+        elif instance.runtime == "hermes":
+            await _write_hermes_runtime_config(
+                instance,
+                db,
+                configs,
+                wp_api_key=wp_api_key,
+                user_keys=user_keys,
+                org_keys=org_keys,
+                use_external_proxy=use_external,
+                restart_runtime_after_write=True,
+            )
+        else:
+            logger.info("实例 %s runtime=%s 暂不支持运行时 LLM 配置注入", instance.name, instance.runtime)
     except NFSMountError:
         logger.warning(
             "Pod 不可用，LLM 配置已保存到 DB，标记 pending: instance=%s",
@@ -542,8 +787,8 @@ async def write_instance_llm_configs(
 
     instance.llm_config_pending = False
     logger.info(
-        "write_instance_llm_configs: instance=%s providers=%s",
-        instance.name, list(providers.keys()),
+        "write_instance_llm_configs: instance=%s runtime=%s providers=%s",
+        instance.name, instance.runtime, [cfg.provider for cfg in configs],
     )
     return True
 
@@ -651,6 +896,84 @@ async def sync_openclaw_llm_config(instance: Instance, db: AsyncSession) -> None
     logger.info(
         "已写入 openclaw.json LLM 配置: instance=%s providers=%s",
         instance.name, list(providers.keys()),
+    )
+
+
+async def sync_runtime_llm_config(instance: Instance, db: AsyncSession) -> None:
+    """Apply LLM config snapshot to the runtime's native config files."""
+    if instance.runtime == "openclaw":
+        await sync_openclaw_llm_config(instance, db)
+        return
+    if instance.runtime != "hermes":
+        logger.info("runtime=%s 暂不支持自动同步 LLM 配置，跳过 instance=%s", instance.runtime, instance.name)
+        return
+
+    from types import SimpleNamespace
+
+    ipc_result = await db.execute(
+        select(InstanceProviderConfig).where(
+            InstanceProviderConfig.instance_id == instance.id,
+            not_deleted(InstanceProviderConfig),
+        )
+    )
+    ipc_list = list(ipc_result.scalars().all())
+    ipc_providers = {ipc.provider for ipc in ipc_list}
+
+    org_result = await db.execute(
+        select(OrgModelProvider).where(
+            OrgModelProvider.org_id == instance.org_id,
+            OrgModelProvider.is_active.is_(True),
+            not_deleted(OrgModelProvider),
+        )
+    )
+    org_items = list(org_result.scalars().all())
+    org_keys = {op.provider: op for op in org_items}
+    org_providers = set(org_keys.keys())
+
+    configs: list = list(ipc_list)
+    for provider in (org_providers - ipc_providers) if not ipc_list else []:
+        configs.append(SimpleNamespace(
+            provider=provider,
+            key_source="org",
+            selected_models=None,
+            base_url=None,
+            api_type=None,
+        ))
+
+    if not configs:
+        logger.info("实例 %s 无 LLM 配置，跳过写入", instance.name)
+        return
+
+    personal_providers = [c.provider for c in configs if c.key_source == "personal"]
+    user_keys: dict[str, UserLlmKey] = {}
+    if personal_providers:
+        uk_result = await db.execute(
+            select(UserLlmKey).where(
+                UserLlmKey.user_id == instance.created_by,
+                UserLlmKey.provider.in_(personal_providers),
+                not_deleted(UserLlmKey),
+            )
+        )
+        user_keys = {k.provider: k for k in uk_result.scalars().all()}
+
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, not_deleted(Cluster))
+    )
+    cluster = cluster_result.scalar_one_or_none()
+
+    await _write_hermes_runtime_config(
+        instance,
+        db,
+        configs,
+        wp_api_key=instance.wp_api_key or "",
+        user_keys=user_keys,
+        org_keys=org_keys,
+        use_external_proxy=bool(cluster and cluster.proxy_endpoint),
+        restart_runtime_after_write=True,
+    )
+    logger.info(
+        "已写入 Hermes LLM 配置: instance=%s providers=%s",
+        instance.name, [cfg.provider for cfg in configs],
     )
 
 
