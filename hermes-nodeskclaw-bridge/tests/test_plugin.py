@@ -83,3 +83,42 @@ def test_resolve_tool_config_accepts_official_deskclaw_env(monkeypatch, tmp_path
     assert cfg.instance_id == "desk-inst"
     assert cfg.workspace_id == "desk-ws"
     assert cfg.workspace_root == tmp_path
+
+
+def test_resolve_unique_file_path_strips_path_traversal(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+
+    path = plugin._resolve_unique_file_path(uploads, "../../secret.txt")
+
+    assert path == uploads.resolve() / "secret.txt"
+    assert path.is_relative_to(uploads.resolve())
+
+
+def test_resolve_unique_file_path_strips_absolute_path(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+
+    path = plugin._resolve_unique_file_path(uploads, "/etc/passwd")
+
+    assert path == uploads.resolve() / "passwd"
+    assert path.is_relative_to(uploads.resolve())
+
+
+def test_resolve_unique_file_path_falls_back_for_empty_name(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+
+    path = plugin._resolve_unique_file_path(uploads, "../..")
+
+    assert path == uploads.resolve() / "unnamed"
+
+
+def test_resolve_unique_file_path_suffixes_existing_file(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "report.txt").write_text("existing", encoding="utf-8")
+
+    path = plugin._resolve_unique_file_path(uploads, "report.txt")
+
+    assert path == uploads.resolve() / "report(1).txt"

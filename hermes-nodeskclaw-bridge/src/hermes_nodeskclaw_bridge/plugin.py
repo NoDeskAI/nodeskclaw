@@ -392,7 +392,7 @@ def file_download_tool(args: dict[str, Any], **kwargs: Any) -> str:
     except (urllib.error.URLError, OSError) as exc:
         return _json_result({"error": f"Network error: {exc}"})
 
-    save_name = str(args.get("save_as") or original_name)
+    save_name = _sanitize_download_filename(str(args.get("save_as") or original_name))
     uploads_dir = cfg.workspace_root / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     local_path = _resolve_unique_file_path(uploads_dir, save_name)
@@ -574,14 +574,26 @@ def _parse_content_disposition_filename(header: str | None) -> str | None:
     return None
 
 
+def _sanitize_download_filename(filename: str) -> str:
+    safe_name = filename.replace("\\", "/").split("/")[-1].strip()
+    safe_name = re.sub(r"[\x00-\x1f\x7f]", "", safe_name)
+    safe_name = safe_name.strip(". ")
+    return safe_name or "unnamed"
+
+
 def _resolve_unique_file_path(directory: Path, filename: str) -> Path:
-    candidate = directory / filename
+    base_dir = directory.resolve()
+    candidate = (base_dir / _sanitize_download_filename(filename)).resolve()
+    if not candidate.is_relative_to(base_dir):
+        raise ValueError("download path escapes uploads directory")
     stem = candidate.stem
     suffix = candidate.suffix
     counter = 0
     while candidate.exists():
         counter += 1
-        candidate = directory / f"{stem}({counter}){suffix}"
+        candidate = (base_dir / f"{stem}({counter}){suffix}").resolve()
+        if not candidate.is_relative_to(base_dir):
+            raise ValueError("download path escapes uploads directory")
     return candidate
 
 
