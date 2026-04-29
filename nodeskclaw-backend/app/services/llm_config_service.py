@@ -383,6 +383,12 @@ async def _write_hermes_runtime_config(
         await fs.write_text(str(HERMES_ENV_REL), _dump_dotenv(current_env))
 
     if restart_runtime_after_write:
+        # A successful write supersedes any previous pending marker. Clear it
+        # before restarting so stale pending state does not route Hermes back
+        # through recovery while applying a freshly written config.
+        if getattr(instance, "llm_config_pending", False):
+            instance.llm_config_pending = False
+            await db.flush()
         try:
             await adapter.restart(instance, db)
         except Exception as e:
@@ -904,9 +910,19 @@ async def sync_runtime_llm_config(instance: Instance, db: AsyncSession) -> None:
     if instance.runtime == "openclaw":
         await sync_openclaw_llm_config(instance, db)
         return
-    if instance.runtime != "hermes":
-        logger.info("runtime=%s 暂不支持自动同步 LLM 配置，跳过 instance=%s", instance.runtime, instance.name)
+    if instance.runtime == "hermes":
+        await sync_hermes_llm_config(instance, db)
         return
+    logger.info("runtime=%s 暂不支持自动同步 LLM 配置，跳过 instance=%s", instance.runtime, instance.name)
+
+
+async def sync_hermes_llm_config(
+    instance: Instance,
+    db: AsyncSession,
+    *,
+    restart_runtime_after_write: bool = True,
+) -> None:
+    """Write saved LLM config to Hermes config.yaml and .hermes/.env."""
 
     from types import SimpleNamespace
 
@@ -969,7 +985,7 @@ async def sync_runtime_llm_config(instance: Instance, db: AsyncSession) -> None:
         user_keys=user_keys,
         org_keys=org_keys,
         use_external_proxy=bool(cluster and cluster.proxy_endpoint),
-        restart_runtime_after_write=True,
+        restart_runtime_after_write=restart_runtime_after_write,
     )
     logger.info(
         "已写入 Hermes LLM 配置: instance=%s providers=%s",
@@ -1606,11 +1622,9 @@ async def restart_runtime(instance: Instance, db: AsyncSession) -> dict:
     fall back to Deployment rolling restart.
     Docker: delegate to DockerComputeProvider.restart_instance.
 
-    When instance.llm_config_pending is True, runs the force-reconfig recovery:
-    1. Inject OPENCLAW_FORCE_RECONFIG=true env → rolling restart → Pod starts with clean config
-    2. sync_openclaw_llm_config writes correct config from DB to Pod
-    3. Remove FORCE_RECONFIG env → second rolling restart → Pod reads correct config
-    4. Clear llm_config_pending flag
+    When instance.llm_config_pending is True, runs runtime-specific recovery.
+    OpenClaw keeps its FORCE_RECONFIG flow; Hermes waits for an exec-capable
+    Pod, writes Hermes-native config from DB, then rolls the deployment.
     """
     if instance.runtime == "openclaw":
         try:
@@ -1637,7 +1651,16 @@ async def restart_runtime(instance: Instance, db: AsyncSession) -> dict:
     deploy_name = _k8s_name(instance)
 
     if instance.llm_config_pending:
-        return await _restart_with_force_reconfig(instance, db, k8s, deploy_name)
+        if instance.runtime == "openclaw":
+            return await _restart_with_openclaw_force_reconfig(instance, db, k8s, deploy_name)
+        if instance.runtime == "hermes":
+            return await _restart_hermes_with_pending_config(instance, db, k8s, deploy_name)
+        logger.warning(
+            "runtime=%s 的 pending LLM 配置没有恢复流程: instance=%s",
+            instance.runtime,
+            instance.name,
+        )
+        return {"status": "error", "message": f"{instance.runtime} 暂不支持待应用 LLM 配置恢复"}
 
     restarted_via = "sigterm"
 
@@ -1684,7 +1707,7 @@ async def _poll_pod_ready(
     return False
 
 
-async def _restart_with_force_reconfig(
+async def _restart_with_openclaw_force_reconfig(
     instance: Instance, db: AsyncSession, k8s: K8sClient, deploy_name: str,
 ) -> dict:
     """Recovery path: Pod crashed due to bad config on PVC.
@@ -1730,6 +1753,69 @@ async def _restart_with_force_reconfig(
     instance.llm_config_pending = False
     await db.commit()
     logger.info("force-reconfig 恢复完成: instance=%s", instance.name)
+    return {"status": "ok", "message": "配置已恢复并重启完成"}
+
+
+async def _restart_hermes_with_pending_config(
+    instance: Instance, db: AsyncSession, k8s: K8sClient, deploy_name: str,
+) -> dict:
+    """Recovery path for Hermes pending LLM config.
+
+    Hermes does not understand OPENCLAW_FORCE_RECONFIG.  Instead, make sure a
+    container is available for exec, write the Hermes-native config without
+    recursively restarting, then roll the deployment once the pending flag is
+    cleared.
+    """
+    ns = instance.namespace
+    logger.info(
+        "Hermes pending LLM 配置恢复开始: instance=%s deploy=%s",
+        instance.name,
+        deploy_name,
+    )
+
+    await k8s.restart_deployment(ns, deploy_name)
+
+    last_mount_error: NFSMountError | None = None
+    for attempt in range(1, 31):
+        try:
+            await sync_hermes_llm_config(
+                instance,
+                db,
+                restart_runtime_after_write=False,
+            )
+            last_mount_error = None
+            break
+        except NFSMountError as e:
+            last_mount_error = e
+            logger.info(
+                "Hermes pending LLM 配置恢复等待 Pod 可写: instance=%s attempt=%d error=%s",
+                instance.name,
+                attempt,
+                e,
+            )
+            if attempt < 30:
+                await asyncio.sleep(2)
+        except Exception as e:
+            logger.error("Hermes pending LLM 配置写入失败: %s", e, exc_info=True)
+            return {"status": "error", "message": f"Hermes 配置恢复失败（写入失败）: {e}"}
+
+    if last_mount_error is not None:
+        return {
+            "status": "timeout",
+            "message": f"Hermes 配置恢复超时（Pod 不可写）: {last_mount_error}",
+        }
+
+    instance.llm_config_pending = False
+    await db.commit()
+
+    logger.info("Hermes pending LLM 配置已写入，触发滚动重启: instance=%s", instance.name)
+    await k8s.restart_deployment(ns, deploy_name)
+
+    if not await _poll_pod_ready(k8s, ns, deploy_name):
+        logger.error("Hermes pending LLM 配置恢复超时: restart 后 Pod 未就绪")
+        return {"status": "timeout", "message": "Hermes 配置已写入，但重启未完成，请检查实例状态"}
+
+    logger.info("Hermes pending LLM 配置恢复完成: instance=%s", instance.name)
     return {"status": "ok", "message": "配置已恢复并重启完成"}
 
 

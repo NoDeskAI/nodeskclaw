@@ -29,6 +29,23 @@ def test_resolve_tool_config_prefers_hook_session_workspace(monkeypatch, tmp_pat
     assert cfg.workspace_root == tmp_path
 
 
+def test_resolve_tool_config_uses_hook_task_workspace(monkeypatch, tmp_path):
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "secret")
+    monkeypatch.setenv("NODESKCLAW_INSTANCE_ID", "inst-1")
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("NODESKCLAW_WORKSPACE_ID", raising=False)
+    monkeypatch.delenv("DESKCLAW_WORKSPACE_ID", raising=False)
+
+    try:
+        plugin._on_pre_tool_call(task_id="workspace:ws-task")
+        cfg = plugin._resolve_tool_config({})
+    finally:
+        plugin._on_post_tool_call()
+
+    assert cfg.workspace_id == "ws-task"
+
+
 def test_resolve_workspace_id_falls_back_to_env(monkeypatch):
     monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-env")
 
