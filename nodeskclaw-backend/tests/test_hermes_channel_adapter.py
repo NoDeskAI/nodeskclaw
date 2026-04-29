@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.services.runtime.config_adapter import HermesConfigAdapter
 from app.services.unified_channel_schema import get_channel_schema
 
@@ -101,6 +103,13 @@ class TestHermesConfigAdapter:
             "mention_patterns": ["^new"],
         }
 
+    def test_feishu_group_policy_mention_is_preserved_for_runtime(self):
+        adapter = HermesConfigAdapter()
+
+        native = adapter.translate_to_runtime({"groupPolicy": "mention"}, "feishu")
+
+        assert native == {"extra": {"default_group_policy": "mention"}}
+
 
 class TestHermesChannelSchema:
 
@@ -117,3 +126,13 @@ class TestHermesChannelSchema:
         schema = get_channel_schema("slack", runtime_id="hermes")
         assert schema is not None
         assert all(field["applicable"] is False for field in schema)
+
+
+def test_hermes_entrypoint_does_not_downgrade_feishu_mention_policy():
+    repo_root = Path(__file__).resolve().parents[2]
+    entrypoint = repo_root / "nodeskclaw-artifacts" / "hermes-image" / "docker-entrypoint.sh"
+
+    script = entrypoint.read_text(encoding="utf-8")
+
+    assert 'group_policy = "open"' not in script
+    assert '_set_if_missing("FEISHU_GROUP_POLICY", group_policy)' in script

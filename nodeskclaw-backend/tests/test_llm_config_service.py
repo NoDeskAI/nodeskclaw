@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from app.services import llm_config_service
 
@@ -109,3 +110,43 @@ def test_dotenv_roundtrip_preserves_values() -> None:
 
     assert parsed == {"OPENAI_API_KEY": "abc123", "OTHER": "value"}
     assert llm_config_service._dump_dotenv(parsed) == 'OPENAI_API_KEY="abc123"\nOTHER="value"\n'
+
+
+async def test_restart_runtime_recovers_hermes_pending_without_openclaw_force(monkeypatch) -> None:
+    instance = SimpleNamespace(
+        runtime="hermes",
+        compute_provider="k8s",
+        namespace="ns-hermes",
+        slug="hermes-1",
+        name="Hermes",
+        llm_config_pending=True,
+    )
+    db = AsyncMock()
+    k8s = SimpleNamespace(
+        restart_deployment=AsyncMock(),
+        set_deployment_env=AsyncMock(),
+        remove_deployment_env=AsyncMock(),
+    )
+    sync_hermes = AsyncMock()
+    sync_openclaw = AsyncMock()
+
+    monkeypatch.setattr(llm_config_service, "_get_k8s_client", AsyncMock(return_value=k8s))
+    monkeypatch.setattr(llm_config_service, "_poll_pod_ready", AsyncMock(return_value=True))
+    monkeypatch.setattr(llm_config_service, "sync_hermes_llm_config", sync_hermes)
+    monkeypatch.setattr(llm_config_service, "sync_openclaw_llm_config", sync_openclaw)
+
+    result = await llm_config_service.restart_runtime(instance, db)
+
+    assert result == {"status": "ok", "message": "配置已恢复并重启完成"}
+    sync_hermes.assert_awaited_once_with(
+        instance,
+        db,
+        restart_runtime_after_write=False,
+    )
+    sync_openclaw.assert_not_awaited()
+    assert k8s.restart_deployment.await_count == 2
+    k8s.restart_deployment.assert_any_await("ns-hermes", "hermes-1")
+    k8s.set_deployment_env.assert_not_awaited()
+    k8s.remove_deployment_env.assert_not_awaited()
+    assert instance.llm_config_pending is False
+    db.commit.assert_awaited_once()

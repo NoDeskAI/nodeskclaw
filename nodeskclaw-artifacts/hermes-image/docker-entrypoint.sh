@@ -139,8 +139,6 @@ if isinstance(feishu_cfg, dict) and feishu_cfg.get("enabled"):
         or feishu_cfg.get("groupPolicy")
         or ""
     ).strip().lower()
-    if group_policy == "mention":
-        group_policy = "open"
     _set_if_missing("FEISHU_GROUP_POLICY", group_policy)
 
 lines = ["#!/usr/bin/env sh", "set -eu"]

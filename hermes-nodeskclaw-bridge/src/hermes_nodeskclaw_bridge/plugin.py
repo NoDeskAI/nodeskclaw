@@ -444,8 +444,9 @@ def _resolve_tool_config(kwargs: dict[str, Any]) -> ToolConfig:
         or (Path.home() / ".openclaw" / "workspace")
     )
     session_id = str(kwargs.get("session_id") or getattr(_thread_state, "session_id", ""))
+    task_id = str(kwargs.get("task_id") or getattr(_thread_state, "task_id", ""))
     workspace_id = _resolve_workspace_id(
-        task_id=str(kwargs.get("task_id") or ""),
+        task_id=task_id,
         session_id=session_id,
     )
     return ToolConfig(
