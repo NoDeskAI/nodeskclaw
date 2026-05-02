@@ -122,3 +122,48 @@ def test_resolve_unique_file_path_suffixes_existing_file(tmp_path):
     path = plugin._resolve_unique_file_path(uploads, "report.txt")
 
     assert path == uploads.resolve() / "report(1).txt"
+
+
+def test_collaboration_tool_returns_error_without_workspace(monkeypatch):
+    monkeypatch.delenv("NODESKCLAW_WORKSPACE_ID", raising=False)
+    monkeypatch.delenv("DESKCLAW_WORKSPACE_ID", raising=False)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.collaboration_tool({"action": "send_message", "target": "agent:test", "text": "hi"}))
+
+    assert payload["error"] is True
+    assert "Workspace context is missing" in payload["message"]
+
+
+def test_collaboration_tool_returns_error_without_instance(monkeypatch):
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.delenv("NODESKCLAW_INSTANCE_ID", raising=False)
+    monkeypatch.delenv("DESKCLAW_INSTANCE_ID", raising=False)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.collaboration_tool({"action": "send_message", "target": "agent:test", "text": "hi"}))
+
+    assert payload["error"] is True
+    assert "NODESKCLAW_INSTANCE_ID" in payload["message"]
+
+
+def test_collaboration_tool_auto_prefixes_target(monkeypatch):
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_INSTANCE_ID", "inst-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://unreachable.test/api/v1")
+    plugin._on_post_tool_call()
+
+    result = json.loads(plugin.collaboration_tool({"action": "send_message", "target": "Bob", "text": "hello"}))
+    assert isinstance(result, dict)
+
+
+def test_shared_files_tool_returns_error_without_workspace(monkeypatch):
+    monkeypatch.delenv("NODESKCLAW_WORKSPACE_ID", raising=False)
+    monkeypatch.delenv("DESKCLAW_WORKSPACE_ID", raising=False)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.shared_files_tool({"action": "list"}))
+
+    assert payload["error"] is True
+    assert "Workspace context is missing" in payload["message"]
