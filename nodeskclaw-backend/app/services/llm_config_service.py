@@ -373,6 +373,11 @@ async def _write_hermes_runtime_config(
         if primary["model"]:
             model_cfg["default"] = primary["model"]
         existing_config["custom_providers"] = providers
+
+        agent_cfg = existing_config.setdefault("agent", {})
+        if not agent_cfg.get("reasoning_effort"):
+            agent_cfg["reasoning_effort"] = "none"
+
         await adapter.write_config(fs, existing_config)
 
         current_env = _parse_dotenv(await fs.read_text(str(HERMES_ENV_REL)))
