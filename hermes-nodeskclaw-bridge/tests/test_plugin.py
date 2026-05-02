@@ -167,3 +167,48 @@ def test_shared_files_tool_returns_error_without_workspace(monkeypatch):
 
     assert payload["error"] is True
     assert "Workspace context is missing" in payload["message"]
+
+
+# ── _ThinkingPreambleFilter tests ─────────────────────
+
+from hermes_nodeskclaw_bridge.hermes_channel import _ThinkingPreambleFilter
+
+
+def test_filter_strips_english_preamble():
+    f = _ThinkingPreambleFilter()
+    assert f.feed("The user is asking me to ") == ""
+    assert f.feed("greet everyone. I should respond. ") == ""
+    result = f.feed("大家好！我是项目协调员。")
+    assert result == "大家好！我是项目协调员。"
+
+
+def test_filter_passes_pure_chinese():
+    f = _ThinkingPreambleFilter()
+    assert f.feed("你好世界") == "你好世界"
+
+
+def test_filter_strips_think_tags():
+    f = _ThinkingPreambleFilter()
+    assert f.feed("<think>reasoning here</think>回复内容") == "回复内容"
+
+
+def test_filter_strips_think_tags_across_chunks():
+    f = _ThinkingPreambleFilter()
+    assert f.feed("<think>start") == ""
+    assert f.feed(" reasoning</think>") == ""
+    assert f.feed("你好") == "你好"
+
+
+def test_filter_flush_returns_buffer_for_english_only():
+    f = _ThinkingPreambleFilter()
+    f.feed("Pure English response with no CJK.")
+    result = f.flush()
+    assert "Pure English" in result
+
+
+def test_filter_handles_mixed_preamble():
+    f = _ThinkingPreambleFilter()
+    assert f.feed("Let me think about this. ") == ""
+    result = f.feed("好的，这是我的回复。And some English after.")
+    assert result.startswith("好的")
+    assert "And some English after." in result
