@@ -1476,7 +1476,7 @@ async def clear_workspace_messages(
         .where(
             WorkspaceAgent.workspace_id == workspace_id,
             Instance.deleted_at.is_(None),
-            Instance.runtime == "openclaw",
+            Instance.runtime.in_(["openclaw", "hermes"]),
         )
     )
     instances = list(result.scalars().all())
@@ -1485,11 +1485,15 @@ async def clear_workspace_messages(
         from app.services.llm_config_service import restart_runtime
         from app.services.nfs_mount import remote_fs
         from app.services.openclaw_session import clear_main_session
+        from app.services.hermes_session import clear_workspace_session
 
         for instance in instances:
             try:
                 async with remote_fs(instance, db) as fs:
-                    await clear_main_session(fs)
+                    if instance.runtime == "hermes":
+                        await clear_workspace_session(fs, workspace_id)
+                    else:
+                        await clear_main_session(fs)
                 repaired_instances.append(instance.id)
             except Exception:
                 logger.warning("clear_workspace_messages: failed to clear session for %s", instance.id, exc_info=True)
