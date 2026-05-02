@@ -225,6 +225,18 @@ class WorkspaceMessageInfo(BaseModel):
     created_at: datetime
 
 
+# ── Collaboration ─────────────────────────────────────
+
+class CollaborationSendRequest(BaseModel):
+    target: str = Field(
+        ...,
+        description="Target identifier, e.g. 'agent:数据分析师' or 'agent:<instance_id>'",
+    )
+    text: str = Field(..., min_length=1, max_length=4096)
+    depth: int = Field(default=0, ge=0)
+    conversation_id: str | None = None
+
+
 # ── Blackboard BBS Posts ──────────────────────────────
 
 class PostCreate(BaseModel):

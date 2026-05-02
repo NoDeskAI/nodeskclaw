@@ -24,6 +24,7 @@ from app.schemas.workspace import (
     BlackboardSectionPatch,
     BlackboardUpdate,
     ChatMessageRequest,
+    CollaborationSendRequest,
     ObjectiveCreate,
     ObjectiveUpdate,
     TaskCreate,
@@ -1602,6 +1603,32 @@ async def list_workspace_messages(
         }
         for m in messages
     ])
+
+
+@router.post("/{workspace_id}/collaboration/send")
+async def send_collaboration_message(
+    workspace_id: str,
+    data: CollaborationSendRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    """Agent-callable HTTP endpoint to send a collaboration message to another agent."""
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    from app.core.security import get_auth_actor
+    actor = get_auth_actor()
+    if actor is None or actor.actor_type != "agent":
+        raise _error(403, 40305, "errors.collaboration.agent_only",
+                     "Only agents can send collaboration messages via this endpoint")
+    from app.services.collaboration_service import handle_collaboration_message
+    await handle_collaboration_message(
+        workspace_id=workspace_id,
+        source_instance_id=actor.actor_id,
+        target=data.target,
+        text=data.text,
+        depth=data.depth,
+        conversation_id=data.conversation_id,
+    )
+    return _ok({"sent": True})
 
 
 @router.get("/{workspace_id}/collaboration-timeline")
