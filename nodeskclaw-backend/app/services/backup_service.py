@@ -586,7 +586,7 @@ async def _load_instance(
 
 
 async def _find_pod(k8s, namespace: str, name: str) -> str:
-    pods = await k8s.core.list_namespaced_pod(namespace, label_selector=f"app={name}")
+    pods = await k8s.core.list_namespaced_pod(namespace, label_selector=f"app.kubernetes.io/name={name}")
     for pod in pods.items:
         if pod.status.phase == "Running":
             return pod.metadata.name

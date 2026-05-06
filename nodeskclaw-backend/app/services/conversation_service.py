@@ -264,12 +264,10 @@ async def sync_conversations_from_topology(
 
     for conv in existing_convs:
         if conv.id not in matched_existing_ids:
-            if conv.member_node_ids:
-                left = set(conv.member_node_ids)
-                conv.member_node_ids = []
-                conv.member_hash = _compute_member_hash([])
-                if left:
-                    membership_changes.append((conv, set(), left))
+            left = set(conv.member_node_ids or [])
+            if left:
+                membership_changes.append((conv, set(), left))
+            conv.soft_delete()
 
     # Generate system messages for membership changes
     from app.models.workspace_message import WorkspaceMessage

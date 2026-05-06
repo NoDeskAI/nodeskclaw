@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '@/stores/org'
 import { Settings, Loader2, KeyRound, Check, X, Save, Plus, Trash2, ChevronDown, Zap, CheckCircle, XCircle } from 'lucide-vue-next'
+import BaseUrlInput from '@/components/shared/BaseUrlInput.vue'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
@@ -674,9 +675,8 @@ onMounted(async () => {
                 {{ t('orgSettings.llmKeysBaseUrl') }}
                 <span v-if="isCustomProvider(dialogProvider)" class="text-destructive ml-0.5">*</span>
               </label>
-              <input
+              <BaseUrlInput
                 v-model="form.base_url"
-                class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
                 :placeholder="isCustomProvider(dialogProvider) ? t('orgSettings.customProviderBaseUrlRequired') : t('orgSettings.llmKeysBaseUrlPlaceholder')"
               />
               <label v-if="form.base_url" class="flex items-center gap-2 mt-1.5 cursor-pointer">

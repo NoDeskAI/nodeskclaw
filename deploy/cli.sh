@@ -413,7 +413,7 @@ generate_changelog() {
 
   local feats="" fixes="" refactors="" others=""
 
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^feat ]]; then
       feats+="- ${line}"$'\n'
     elif [[ "$line" =~ ^fix ]]; then

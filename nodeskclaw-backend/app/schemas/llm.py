@@ -1,6 +1,15 @@
 """Pydantic schemas for LLM key management APIs."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _normalize_base_url(v: str | None) -> str | None:
+    if not v or not v.strip():
+        return v
+    v = v.strip()
+    if not v.startswith(("http://", "https://")):
+        v = f"https://{v}"
+    return v
 
 
 # ── Model Info ───────────────────────────────────────────
@@ -29,6 +38,8 @@ class OrgModelProviderCreate(BaseModel):
     system_token_limit: int | None = None
     skip_ssl_verify: bool = False
 
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
+
 
 class OrgModelProviderUpdate(BaseModel):
     label: str | None = None
@@ -40,6 +51,8 @@ class OrgModelProviderUpdate(BaseModel):
     is_active: bool | None = None
     allowed_models: list[str] | None = None
     skip_ssl_verify: bool | None = None
+
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
 
 
 class OrgModelProviderInfo(BaseModel):
@@ -76,6 +89,8 @@ class UserLlmKeyCreate(BaseModel):
     api_type: str | None = None
     skip_ssl_verify: bool = False
 
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
+
 
 class UserLlmKeyInfo(BaseModel):
     id: str
@@ -98,6 +113,8 @@ class LlmConfigItem(BaseModel):
     base_url: str | None = None
     api_type: str | None = None
 
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
+
 
 # ── Instance Provider Config ────────────────────────────
 
@@ -116,6 +133,8 @@ class InstanceProviderConfigItem(BaseModel):
     selected_models: list[dict] | None = None
     base_url: str | None = None
     api_type: str | None = None
+
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
 
 
 class InstanceProviderConfigUpdate(BaseModel):
@@ -177,6 +196,8 @@ class LlmTestConnectionRequest(BaseModel):
     org_id: str | None = None
     skip_ssl_verify: bool = False
     model: str | None = None
+
+    _normalize_base_url_field = field_validator("base_url", mode="before")(_normalize_base_url)
 
 
 class LlmTestConnectionResult(BaseModel):

@@ -75,7 +75,7 @@ def _extract_proxy_token(request: Request) -> str | None:
 
 def _build_target_url(provider: str, path: str, base_url: str | None, api_key: str | None) -> str:
     base = (base_url or PROVIDER_DEFAULTS.get(provider, {}).get("base_url", "")).rstrip("/")
-    if base.endswith("/v1") and path.startswith("v1/"):
+    if base_url and path.startswith("v1/"):
         path = path[3:]
     url = f"{base}/{path}"
 
