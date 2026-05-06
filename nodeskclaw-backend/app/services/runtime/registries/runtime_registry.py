@@ -116,6 +116,33 @@ def _register_builtins() -> None:
         available=False,
         backup_dirs=(".nanobot", ".deskclaw/skills"),
     ))
+    RUNTIME_REGISTRY.register(RuntimeSpec(
+        runtime_id="hermes",
+        adapter=None,
+        gene_install_adapter=_noop_gene_adapter,
+        description="Hermes runtime -- general-purpose long-running agent.",
+        requires_companion=False,
+        display_name="Hermes 员工引擎",
+        display_description="面向长期运行 Agent 的通用执行引擎",
+        display_tags=("实验",),
+        display_powered_by="Hermes Agent",
+        gateway_port=8642,
+        health_probe_path="/health",
+        order=3,
+        image_registry_key="image_registry_hermes",
+        config_rel_path=".hermes/config.yaml",
+        config_format="yaml",
+        channels_section_key="platforms",
+        field_naming="camelCase",
+        supports_channel_plugins=False,
+        data_dir_container_path="/root/.hermes",
+        skills_dir_rel=".hermes/skills",
+        scripts_dir_rel=".hermes/scripts",
+        has_web_ui=False,
+        has_init_script=False,
+        available=True,
+        backup_dirs=(".hermes",),
+    ))
 
 
 _register_builtins()

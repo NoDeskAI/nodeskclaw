@@ -32,7 +32,7 @@ const { t, locale } = useI18n()
 const toast = useToast()
 
 const dataRoot = computed(() => getRuntimeCaps(instanceRuntime.value).dataRoot)
-const currentPath = ref('.openclaw')
+const currentPath = ref('')
 const loading = ref(true)
 const error = ref('')
 const listing = ref<FileListing | null>(null)
@@ -102,7 +102,7 @@ const filteredItems = computed(() => {
 const hasUnsavedChanges = computed(() => editing.value && panelContent.value !== panelOriginalContent.value)
 
 watch(dataRoot, (root) => {
-  if (currentPath.value === '.openclaw' || !currentPath.value) {
+  if (!currentPath.value || currentPath.value === '.openclaw') {
     currentPath.value = root
     fetchFiles()
   }

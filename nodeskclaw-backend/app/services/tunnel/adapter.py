@@ -521,6 +521,8 @@ class TunnelAdapter:
         )
 
         mention_targets: list[str] = data.extensions.get("mention_targets", [])
+        agent_members = [m for m in ws_ctx.members if m.get("type") == "agent"]
+        is_single_agent_workspace = len(agent_members) == 1
         is_mention_all = MENTION_ALL_SENTINEL in mention_targets
         is_mentioned = (
             is_mention_all
@@ -530,7 +532,7 @@ class TunnelAdapter:
         has_any_mention = len(mention_targets) > 0
         no_reply = False
 
-        if not has_any_mention:
+        if not has_any_mention and not is_single_agent_workspace:
             no_reply = True
         elif has_any_mention and not is_mentioned:
             no_reply = True

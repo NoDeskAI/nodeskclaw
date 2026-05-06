@@ -23,6 +23,9 @@ nodeskclaw-artifacts/
 │   ├── docker-entrypoint.sh     # 容器入口脚本
 │   ├── check-update.sh          # 版本检测脚本（查询 PyPI 最新稳定版、自动更新 Dockerfile）
 │   └── README.md                # 构建说明
+├── hermes-image/                # Hermes 员工引擎镜像
+│   ├── Dockerfile               # Base 镜像: python:3.12-slim + 官方 Hermes release 构建
+│   └── docker-entrypoint.sh     # 容器入口脚本（启动 Hermes gateway API server + tunnel bridge）
 ├── ingress-controller/          # Nginx Ingress Controller 部署清单
 │   ├── deploy.yaml              # 完整 K8s 资源（Namespace、RBAC、Deployment、Service）
 │   ├── tls-secret.yaml          # 通配符 TLS 证书 Secret 模板
@@ -65,6 +68,7 @@ cd nodeskclaw-artifacts
 # 单引擎（自动检测最新版）
 ./build.sh openclaw
 ./build.sh nanobot
+./build.sh hermes
 
 # 指定版本
 ./build.sh openclaw --version 2026.3.13
@@ -114,6 +118,7 @@ cd nodeskclaw-artifacts
 |---------|--------|-------------|
 | OpenClaw | npm `openclaw` | `npm view` 过滤 `YYYY.M.DD` 格式稳定版 |
 | Nanobot | PyPI `nanobot-ai` | PyPI JSON API 过滤 `X.Y.Z` 格式稳定版 |
+| Hermes | GitHub `NousResearch/hermes-agent` release | 读取最新 release tag |
 
 发现新版本时自动创建对应 PR，人工审核后合并。
 

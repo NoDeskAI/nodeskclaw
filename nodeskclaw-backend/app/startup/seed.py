@@ -30,6 +30,11 @@ async def run_seed(
 DEFAULT_REGISTRY_CONFIGS: dict[str, str] = {
     "image_registry": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-openclaw",
     "image_registry_nanobot": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-nanobot",
+    "image_registry_hermes": "ghcr.io/routin/deskclaw-hermes",
+}
+
+LEGACY_REGISTRY_CONFIGS: dict[str, str] = {
+    "image_registry_hermes": "nousresearch/hermes-agent",
 }
 
 
@@ -39,12 +44,14 @@ async def _seed_default_registry_configs(
     """Seed default image registry URLs so tag listing works out-of-the-box.
 
     Only inserts when a key does NOT exist at all.  If the admin deliberately
-    cleared a value (row exists, value=None), we leave it untouched.
+    cleared a value (row exists, value=None), we leave it untouched. Legacy
+    placeholder values are upgraded to the current runtime-specific defaults.
     """
     from app.models.system_config import SystemConfig
 
     async with session_factory() as db:
         seeded = 0
+        upgraded = 0
         for key, default_value in DEFAULT_REGISTRY_CONFIGS.items():
             row = (await db.execute(
                 select(SystemConfig).where(
@@ -55,9 +62,19 @@ async def _seed_default_registry_configs(
             if row is None:
                 db.add(SystemConfig(key=key, value=default_value))
                 seeded += 1
-        if seeded:
+                continue
+
+            legacy_value = LEGACY_REGISTRY_CONFIGS.get(key)
+            if legacy_value and row.value == legacy_value:
+                row.value = default_value
+                upgraded += 1
+        if seeded or upgraded:
             await db.commit()
-            logger.info("种子数据：已内置 %d 条默认镜像仓库配置", seeded)
+            logger.info(
+                "种子数据：已内置 %d 条默认镜像仓库配置，升级 %d 条遗留镜像仓库配置",
+                seeded,
+                upgraded,
+            )
 
 
 async def _seed_initial_admin(
