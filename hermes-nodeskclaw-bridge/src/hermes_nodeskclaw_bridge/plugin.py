@@ -38,6 +38,8 @@ def register(ctx) -> None:
     for name, schema, handler in (
         ("nodeskclaw_blackboard", _BLACKBOARD_SCHEMA, blackboard_tool),
         ("nodeskclaw_topology", _TOPOLOGY_SCHEMA, topology_tool),
+        ("nodeskclaw_collaboration", _COLLABORATION_SCHEMA, collaboration_tool),
+        ("nodeskclaw_shared_files", _SHARED_FILES_SCHEMA, shared_files_tool),
         ("nodeskclaw_performance", _PERFORMANCE_SCHEMA, performance_tool),
         ("nodeskclaw_proposals", _PROPOSALS_SCHEMA, proposals_tool),
         ("nodeskclaw_gene_discovery", _GENE_DISCOVERY_SCHEMA, gene_discovery_tool),
@@ -272,6 +274,130 @@ def topology_tool(args: dict[str, Any], **kwargs: Any) -> str:
                     reachable.append(node)
                     queue.append(neighbor)
         return _json_result(reachable)
+    return _json_result({"error": f"Unknown action: {action}"})
+
+
+def collaboration_tool(args: dict[str, Any], **kwargs: Any) -> str:
+    cfg = _resolve_tool_config(kwargs)
+    if not cfg.workspace_id:
+        return _json_result(_missing_workspace_payload())
+    if not cfg.instance_id:
+        return _json_result(_missing_instance_payload())
+
+    action = str(args.get("action") or "")
+    ws = cfg.workspace_id
+    if action == "send_message":
+        target = str(args.get("target") or "")
+        text = str(args.get("text") or "")
+        if not target or not text:
+            return _json_result({"error": "Both 'target' and 'text' are required."})
+        if not target.startswith("agent:") and not target.startswith("human:"):
+            target = f"agent:{target}"
+        return _json_result(
+            _api_fetch(
+                cfg,
+                f"/workspaces/{ws}/collaboration/send",
+                method="POST",
+                body={
+                    "target": target,
+                    "text": text,
+                    "depth": int(args.get("depth") or 0),
+                    "conversation_id": args.get("conversation_id"),
+                },
+            )
+        )
+    if action == "get_timeline":
+        params: dict[str, str] = {"limit": str(min(int(args.get("limit") or 50), 200))}
+        since = args.get("since")
+        if since:
+            params["since"] = str(since)
+        query = urllib.parse.urlencode(params)
+        return _json_result(_api_fetch(cfg, f"/workspaces/{ws}/collaboration-timeline?{query}"))
+    if action == "get_my_messages":
+        limit = str(min(int(args.get("limit") or 50), 200))
+        return _json_result(
+            _api_fetch(
+                cfg,
+                f"/workspaces/{ws}/agents/{cfg.instance_id}/collaboration-messages?limit={limit}",
+            )
+        )
+    return _json_result({"error": f"Unknown action: {action}"})
+
+
+def shared_files_tool(args: dict[str, Any], **kwargs: Any) -> str:
+    cfg = _resolve_tool_config(kwargs)
+    if not cfg.workspace_id:
+        return _json_result(_missing_workspace_payload())
+
+    action = str(args.get("action") or "")
+    ws = cfg.workspace_id
+    if action == "list":
+        parent_path = str(args.get("parent_path") or "/")
+        query = urllib.parse.urlencode({"parent_path": parent_path})
+        return _json_result(
+            _bb_api_fetch(cfg, f"/workspaces/{ws}/blackboard/files?{query}")
+        )
+    if action == "upload":
+        filename = str(args.get("filename") or "untitled.txt")
+        content = str(args.get("content") or "")
+        parent_path = str(args.get("parent_path") or "/")
+        content_type = str(args.get("content_type") or "text/plain")
+        return _json_result(
+            _bb_api_fetch(
+                cfg,
+                f"/workspaces/{ws}/blackboard/files/upload",
+                method="POST",
+                body={
+                    "filename": filename,
+                    "content": content,
+                    "parent_path": parent_path,
+                    "content_type": content_type,
+                },
+            )
+        )
+    if action == "mkdir":
+        path = str(args.get("path") or "")
+        if not path:
+            return _json_result({"error": "'path' is required for mkdir."})
+        return _json_result(
+            _bb_api_fetch(
+                cfg,
+                f"/workspaces/{ws}/blackboard/files/mkdir",
+                method="POST",
+                body={"path": path},
+            )
+        )
+    if action == "read":
+        file_id = str(args.get("file_id") or "")
+        if not file_id:
+            return _json_result({"error": "'file_id' is required for read."})
+        return _json_result(
+            _bb_api_fetch(cfg, f"/workspaces/{ws}/blackboard/files/{file_id}/content")
+        )
+    if action == "delete":
+        file_id = str(args.get("file_id") or "")
+        if not file_id:
+            return _json_result({"error": "'file_id' is required for delete."})
+        return _json_result(
+            _bb_api_fetch(
+                cfg,
+                f"/workspaces/{ws}/blackboard/files/{file_id}",
+                method="DELETE",
+            )
+        )
+    if action == "copy":
+        file_id = str(args.get("file_id") or "")
+        if not file_id:
+            return _json_result({"error": "'file_id' is required for copy."})
+        body = _filtered_body(args, "target_parent_path", "target_filename")
+        return _json_result(
+            _bb_api_fetch(
+                cfg,
+                f"/workspaces/{ws}/blackboard/files/{file_id}/copy",
+                method="POST",
+                body=body,
+            )
+        )
     return _json_result({"error": f"Unknown action: {action}"})
 
 
@@ -670,6 +796,70 @@ _TOPOLOGY_SCHEMA = {
                 "description": "Which topology operation to perform.",
             },
             "my_instance_id": {"type": "string", "description": "Optional override of current instance ID."},
+        },
+        "required": ["action"],
+    },
+}
+
+_COLLABORATION_SCHEMA = {
+    "name": "nodeskclaw_collaboration",
+    "description": (
+        "Send messages to other agents or humans in the workspace, "
+        "and query the collaboration timeline. "
+        "Use 'send_message' with target='agent:<name>' or target='agent:<instance_id>' "
+        "to talk to another agent. The target agent will receive your message and can reply."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["send_message", "get_timeline", "get_my_messages"],
+                "description": "Which collaboration operation to perform.",
+            },
+            "target": {
+                "type": "string",
+                "description": (
+                    "send_message: target identifier. Use 'agent:<display_name>' to reach "
+                    "another agent by name, or 'human:<display_name>' for a human member."
+                ),
+            },
+            "text": {"type": "string", "description": "send_message: message content."},
+            "depth": {"type": "number", "description": "send_message: collaboration chain depth (default 0)."},
+            "conversation_id": {"type": "string", "description": "send_message: optional conversation to continue."},
+            "limit": {"type": "number", "description": "get_timeline/get_my_messages: max results (default 50)."},
+            "since": {"type": "string", "description": "get_timeline: ISO 8601 timestamp filter."},
+        },
+        "required": ["action"],
+    },
+}
+
+_SHARED_FILES_SCHEMA = {
+    "name": "nodeskclaw_shared_files",
+    "description": (
+        "Manage shared files on the workspace blackboard. "
+        "List, upload (text content), read, delete, copy files and create directories. "
+        "Files here are visible to ALL workspace members in the blackboard Files tab."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["list", "upload", "read", "delete", "mkdir", "copy"],
+                "description": "Which file operation to perform.",
+            },
+            "parent_path": {
+                "type": "string",
+                "description": "list/upload: parent directory path (default '/').",
+            },
+            "filename": {"type": "string", "description": "upload: filename to create."},
+            "content": {"type": "string", "description": "upload: text content of the file."},
+            "content_type": {"type": "string", "description": "upload: MIME type (default 'text/plain')."},
+            "path": {"type": "string", "description": "mkdir: directory path to create."},
+            "file_id": {"type": "string", "description": "read/delete/copy: target file ID."},
+            "target_parent_path": {"type": "string", "description": "copy: destination parent path."},
+            "target_filename": {"type": "string", "description": "copy: destination filename."},
         },
         "required": ["action"],
     },

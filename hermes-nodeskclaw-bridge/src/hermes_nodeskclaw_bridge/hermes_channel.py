@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import unicodedata
 from typing import Any
 
 import httpx
@@ -12,6 +14,15 @@ import httpx
 from .client import TunnelClient
 
 logger = logging.getLogger("hermes_nodeskclaw_bridge.hermes")
+
+_CJK_RE = re.compile(
+    r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff"
+    r"\U00020000-\U0002a6df\U0002a700-\U0002ebef]"
+)
+_THINK_OPEN_RE = re.compile(r"<\s*(?:think(?:ing)?|thought|antthinking)\s*>", re.I)
+_THINK_CLOSE_RE = re.compile(r"<\s*/\s*(?:think(?:ing)?|thought|antthinking)\s*>", re.I)
+
+_PREAMBLE_BUF_LIMIT = 2000
 
 
 class HermesChannel:
@@ -82,6 +93,7 @@ class HermesChannel:
         body = dict(payload)
         body["stream"] = True
         url = f"{self._hermes_base_url}/v1/chat/completions"
+        filt = _ThinkingPreambleFilter()
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(1800.0, connect=10.0)) as http:
             async with http.stream("POST", url, headers=headers, json=body) as response:
@@ -104,8 +116,13 @@ class HermesChannel:
                         continue
                     content = _extract_chunk_text(chunk)
                     if content:
-                        await self._client.send_response_chunk(request_id, trace_id, content)
+                        visible = filt.feed(content)
+                        if visible:
+                            await self._client.send_response_chunk(request_id, trace_id, visible)
 
+        remaining = filt.flush()
+        if remaining:
+            await self._client.send_response_chunk(request_id, trace_id, remaining)
         await self._client.send_response_done(request_id, trace_id)
 
 
@@ -148,6 +165,80 @@ def _extract_chunk_text(chunk: dict[str, Any]) -> str:
         return ""
     content = delta.get("content", "")
     return content if isinstance(content, str) else ""
+
+
+class _ThinkingPreambleFilter:
+    """Strip LLM self-narration (English thinking preamble) from streaming output.
+
+    MiniMax-M2.7 often prefixes its Chinese reply with English internal
+    monologue like "The user is asking...", "I should...", "Let me...".
+    This filter buffers the initial stream, detects CJK characters as the
+    start of the real response, and discards everything before that point.
+
+    Also strips ``<think>...</think>`` tagged blocks anywhere in the stream.
+    """
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._preamble_done = False
+        self._inside_think = False
+        self._pending_tag = ""
+
+    def feed(self, text: str) -> str:
+        out = self._strip_think_tags(text)
+        if not out:
+            return ""
+        if self._preamble_done:
+            return out
+        self._buf += out
+        if len(self._buf) > _PREAMBLE_BUF_LIMIT:
+            self._preamble_done = True
+            return self._buf
+
+        m = _CJK_RE.search(self._buf)
+        if m:
+            self._preamble_done = True
+            visible = self._buf[m.start():]
+            stripped = self._buf[: m.start()]
+            if stripped.strip():
+                logger.debug("Stripped thinking preamble (%d chars)", len(stripped))
+            return visible
+        return ""
+
+    def flush(self) -> str:
+        if self._preamble_done:
+            return ""
+        self._preamble_done = True
+        return self._buf
+
+    def _strip_think_tags(self, text: str) -> str:
+        result: list[str] = []
+        buf = self._pending_tag + text
+        self._pending_tag = ""
+
+        while buf:
+            if self._inside_think:
+                cm = _THINK_CLOSE_RE.search(buf)
+                if cm is None:
+                    break
+                buf = buf[cm.end():]
+                self._inside_think = False
+            else:
+                om = _THINK_OPEN_RE.search(buf)
+                if om is None:
+                    tail_check = min(15, len(buf))
+                    if "<" in buf[-tail_check:]:
+                        cut = buf.rfind("<", len(buf) - tail_check)
+                        result.append(buf[:cut])
+                        self._pending_tag = buf[cut:]
+                    else:
+                        result.append(buf)
+                    break
+                result.append(buf[: om.start()])
+                buf = buf[om.end():]
+                self._inside_think = True
+
+        return "".join(result)
 
 
 def _extract_error_message(status_code: int, raw_body: bytes) -> str:

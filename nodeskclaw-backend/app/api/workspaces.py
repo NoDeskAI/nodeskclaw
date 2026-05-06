@@ -24,6 +24,7 @@ from app.schemas.workspace import (
     BlackboardSectionPatch,
     BlackboardUpdate,
     ChatMessageRequest,
+    CollaborationSendRequest,
     ObjectiveCreate,
     ObjectiveUpdate,
     TaskCreate,
@@ -1475,7 +1476,7 @@ async def clear_workspace_messages(
         .where(
             WorkspaceAgent.workspace_id == workspace_id,
             Instance.deleted_at.is_(None),
-            Instance.runtime == "openclaw",
+            Instance.runtime.in_(["openclaw", "hermes"]),
         )
     )
     instances = list(result.scalars().all())
@@ -1484,11 +1485,15 @@ async def clear_workspace_messages(
         from app.services.llm_config_service import restart_runtime
         from app.services.nfs_mount import remote_fs
         from app.services.openclaw_session import clear_main_session
+        from app.services.hermes_session import clear_workspace_session
 
         for instance in instances:
             try:
                 async with remote_fs(instance, db) as fs:
-                    await clear_main_session(fs)
+                    if instance.runtime == "hermes":
+                        await clear_workspace_session(fs, workspace_id)
+                    else:
+                        await clear_main_session(fs)
                 repaired_instances.append(instance.id)
             except Exception:
                 logger.warning("clear_workspace_messages: failed to clear session for %s", instance.id, exc_info=True)
@@ -1602,6 +1607,32 @@ async def list_workspace_messages(
         }
         for m in messages
     ])
+
+
+@router.post("/{workspace_id}/collaboration/send")
+async def send_collaboration_message(
+    workspace_id: str,
+    data: CollaborationSendRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(_get_current_user_or_agent_dep()),
+):
+    """Agent-callable HTTP endpoint to send a collaboration message to another agent."""
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    from app.core.security import get_auth_actor
+    actor = get_auth_actor()
+    if actor is None or actor.actor_type != "agent":
+        raise _error(403, 40305, "errors.collaboration.agent_only",
+                     "Only agents can send collaboration messages via this endpoint")
+    from app.services.collaboration_service import handle_collaboration_message
+    await handle_collaboration_message(
+        workspace_id=workspace_id,
+        source_instance_id=actor.actor_id,
+        target=data.target,
+        text=data.text,
+        depth=data.depth,
+        conversation_id=data.conversation_id,
+    )
+    return _ok({"sent": True})
 
 
 @router.get("/{workspace_id}/collaboration-timeline")
