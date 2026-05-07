@@ -30,11 +30,14 @@ async def run_seed(
 DEFAULT_REGISTRY_CONFIGS: dict[str, str] = {
     "image_registry": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-openclaw",
     "image_registry_nanobot": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-nanobot",
-    "image_registry_hermes": "ghcr.io/routin/deskclaw-hermes",
+    "image_registry_hermes": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-hermes",
 }
 
-LEGACY_REGISTRY_CONFIGS: dict[str, str] = {
-    "image_registry_hermes": "nousresearch/hermes-agent",
+LEGACY_REGISTRY_CONFIGS: dict[str, tuple[str, ...]] = {
+    "image_registry_hermes": (
+        "nousresearch/hermes-agent",
+        "ghcr.io/routin/deskclaw-hermes",
+    ),
 }
 
 
@@ -64,8 +67,8 @@ async def _seed_default_registry_configs(
                 seeded += 1
                 continue
 
-            legacy_value = LEGACY_REGISTRY_CONFIGS.get(key)
-            if legacy_value and row.value == legacy_value:
+            legacy_values = LEGACY_REGISTRY_CONFIGS.get(key, ())
+            if row.value in legacy_values:
                 row.value = default_value
                 upgraded += 1
         if seeded or upgraded:
