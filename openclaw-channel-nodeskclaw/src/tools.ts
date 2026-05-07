@@ -428,7 +428,7 @@ function createTopologyTool(cfg: ToolConfig): AnyAgentTool {
         case "get_topology":
           return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/topology`));
         case "get_members":
-          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/members`));
+          return jsonResult(await apiFetch(cfg, `/workspaces/${ws}/topology/reachable?instance_id=${cfg.instanceId}`));
         case "get_my_neighbors": {
           const topo = (await apiFetch(cfg, `/workspaces/${ws}/topology`)) as Record<string, unknown>;
           if (topo.error) return jsonResult(topo);

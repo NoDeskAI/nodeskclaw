@@ -1207,6 +1207,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
               content: data.content as string,
               message_type: 'system',
               created_at: (data.created_at as string) || new Date().toISOString(),
+              conversation_id: (data.conversation_id as string) || undefined,
             })
           }
         }

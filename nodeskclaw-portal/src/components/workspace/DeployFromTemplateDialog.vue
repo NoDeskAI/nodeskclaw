@@ -50,7 +50,8 @@ const deployId = ref<string | null>(null)
 const workspaceIdRef = ref<string | null>(null)
 const agentRows = ref<Array<{ display_name: string; status: string; error?: string }>>([])
 const overallMessage = ref('')
-const finalDone = ref(false)
+const finalStatus = ref<'success' | 'partial_success' | 'failed' | null>(null)
+const finalDone = computed(() => finalStatus.value !== null)
 
 const clusterOptions = computed(() =>
   (clusterStore.clusters || []).map((c) => ({
@@ -80,6 +81,24 @@ const progressDone = computed(() => agentRows.value.filter(r => DONE_STATUSES.ha
 const progressPercent = computed(() =>
   progressTotal.value > 0 ? Math.round((progressDone.value / progressTotal.value) * 100) : 0
 )
+
+const progressBarClass = computed(() => {
+  switch (finalStatus.value) {
+    case 'success': return 'bg-green-500'
+    case 'partial_success': return 'bg-amber-500'
+    case 'failed': return 'bg-red-500'
+    default: return 'bg-primary'
+  }
+})
+
+const progressLabel = computed(() => {
+  switch (finalStatus.value) {
+    case 'success': return t('deployFromTemplate.progressDone')
+    case 'partial_success': return t('deployFromTemplate.progressPartial')
+    case 'failed': return t('deployFromTemplate.progressFailed')
+    default: return t('deployFromTemplate.progressTitle', { done: progressDone.value, total: progressTotal.value })
+  }
+})
 
 const statusI18nMap: Record<string, string> = {
   pending: 'deployFromTemplate.statusPending',
@@ -157,7 +176,7 @@ function reset() {
   workspaceIdRef.value = null
   agentRows.value = []
   overallMessage.value = ''
-  finalDone.value = false
+  finalStatus.value = null
   submitting.value = false
   selectedSpecIndex.value = null
   deploySelectedKeys.value = new Set()
@@ -218,7 +237,7 @@ async function loadDeployState(id: string): Promise<boolean> {
     }
     const st = (d as { status?: string }).status
     if (st === 'success' || st === 'partial_success' || st === 'failed') {
-      finalDone.value = true
+      finalStatus.value = st
     }
     return true
   } catch (e) {
@@ -261,12 +280,22 @@ function startSse(id: string) {
           }
         }
         if (data.event === 'complete') {
-          for (let j = 0; j < agentRows.value.length; j++) {
-            if (!DONE_STATUSES.has(agentRows.value[j].status)) {
-              agentRows.value[j] = { ...agentRows.value[j], status: 'success' }
+          const st = data.status || 'success'
+          if (st === 'success') {
+            for (let j = 0; j < agentRows.value.length; j++) {
+              if (!DONE_STATUSES.has(agentRows.value[j].status)) {
+                agentRows.value[j] = { ...agentRows.value[j], status: 'success' }
+              }
+            }
+          } else if (st === 'failed') {
+            for (let j = 0; j < agentRows.value.length; j++) {
+              if (!DONE_STATUSES.has(agentRows.value[j].status)) {
+                agentRows.value[j] = { ...agentRows.value[j], status: 'failed', error: data.error }
+              }
             }
           }
-          finalDone.value = true
+          if (data.error) overallMessage.value = data.error
+          finalStatus.value = st
           abortSse()
         }
       } catch {
@@ -427,14 +456,14 @@ watch(
             <div class="space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-medium">
-                  {{ finalDone ? t('deployFromTemplate.progressDone') : t('deployFromTemplate.progressTitle', { done: progressDone, total: progressTotal }) }}
+                  {{ progressLabel }}
                 </span>
                 <span class="text-muted-foreground">{{ finalDone ? 100 : progressPercent }}%</span>
               </div>
               <div class="h-2 rounded-full bg-muted overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-500 ease-out"
-                  :class="finalDone ? 'bg-green-500' : 'bg-primary'"
+                  :class="progressBarClass"
                   :style="{ width: `${finalDone ? 100 : Math.max(progressPercent, progressTotal > 0 ? 5 : 0)}%` }"
                 />
               </div>
@@ -458,9 +487,12 @@ watch(
             <p v-if="agentRows.some(r => r.error)" class="text-xs text-red-400 px-1">
               {{ agentRows.find(r => r.error)?.error }}
             </p>
+            <p v-if="finalStatus === 'failed' && overallMessage" class="text-xs text-red-400 px-1">
+              {{ overallMessage }}
+            </p>
 
             <button
-              v-if="finalDone && workspaceIdRef"
+              v-if="finalStatus && finalStatus !== 'failed' && workspaceIdRef"
               type="button"
               class="w-full px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
               @click="enterWorkspace"

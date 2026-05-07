@@ -413,7 +413,7 @@ generate_changelog() {
 
   local feats="" fixes="" refactors="" others=""
 
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^feat ]]; then
       feats+="- ${line}"$'\n'
     elif [[ "$line" =~ ^fix ]]; then
@@ -475,7 +475,7 @@ cmd_release() {
       [[ "$tag_local" == true ]] && where+="本地"
       [[ "$tag_local" == true && "$tag_remote" == true ]] && where+=" + "
       [[ "$tag_remote" == true ]] && where+="远程"
-      warn "  - git tag $VERSION（${where}）"
+      warn "  - git tag ${VERSION}（${where}）"
       overwrite_tag=true
     fi
     [[ "$release_exists" == true ]] && warn "  - GitHub Release $VERSION" && overwrite_release=true

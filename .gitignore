@@ -10,6 +10,7 @@ openclaw/
 vibecraft/
 zeroclaw/
 nanobot/
+hermes-agent/
 
 # ========================
 # EE 模块（私有仓库，不纳入 CE 开源仓库）

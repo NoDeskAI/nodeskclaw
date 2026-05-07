@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, inject, type ComputedRef, type Ref } from 'vue'
-import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, HardDrive, Save, ChevronDown, Check, Link, Star, X, AlertTriangle, Zap, CheckCircle, XCircle } from 'lucide-vue-next'
+import { Loader2, Brain, Key, Trash2, Plus, RefreshCw, HardDrive, Save, ChevronDown, Check, Star, X, AlertTriangle, Zap, CheckCircle, XCircle } from 'lucide-vue-next'
+import BaseUrlInput, { stripProtocol } from '@/components/shared/BaseUrlInput.vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -689,24 +690,13 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   </div>
 
                   <div v-if="cfg.isCustom || cfg.showBaseUrl">
-                    <div class="relative">
-                      <Link class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <input
-                        v-model="cfg.baseUrl"
-                        type="text"
-                        :placeholder="cfg.isCustom ? t('llm.baseUrlPlaceholder') : t('llm.defaultBaseUrl', { url: PROVIDER_DEFAULT_URLS[cfg.provider] || '' })"
-                        :class="cfg.isCustom ? 'pr-3' : 'pr-8'"
-                        class="w-full pl-9 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        @input="markDirty"
-                      />
-                      <button
-                        v-if="!cfg.isCustom"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        @click="cfg.baseUrl = ''; cfg.showBaseUrl = false; markDirty()"
-                      >
-                        <X class="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <BaseUrlInput
+                      v-model="cfg.baseUrl"
+                      :placeholder="cfg.isCustom ? t('llm.baseUrlPlaceholder') : t('llm.defaultBaseUrl', { url: stripProtocol(PROVIDER_DEFAULT_URLS[cfg.provider] || '') })"
+                      :show-clear="!cfg.isCustom"
+                      @clear="cfg.baseUrl = ''; cfg.showBaseUrl = false; markDirty()"
+                      @input="markDirty"
+                    />
                     <label v-if="cfg.baseUrl" class="flex items-center gap-2 mt-1.5 cursor-pointer">
                       <input type="checkbox" v-model="cfg.skipSslVerify" class="accent-primary" @change="markDirty" />
                       <span class="text-xs">{{ t('orgSettings.llmKeysSkipSslVerify') }}</span>

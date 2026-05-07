@@ -471,13 +471,23 @@ const editor = useEditor({
             status: '',
             slug: '',
           }
-          const mentionIdsForBfs = new Set<string>()
-          for (const id of existingMentions) {
-            if (id !== '__all__') mentionIdsForBfs.add(id)
+          let candidateSet: Set<string>
+          const conv = props.conversationId
+            ? store.conversations.find(c => c.id === props.conversationId)
+            : undefined
+          const convMembers = conv?.member_node_ids ?? []
+
+          if (props.conversationId && convMembers.length > 0) {
+            candidateSet = new Set(convMembers)
+          } else {
+            const mentionIdsForBfs = new Set<string>()
+            for (const id of existingMentions) {
+              if (id !== '__all__') mentionIdsForBfs.add(id)
+            }
+            candidateSet = new Set(
+              computeMentionCandidates(store.topology, mentionIdsForBfs).map(c => c.agentId),
+            )
           }
-          const candidateSet = new Set(
-            computeMentionCandidates(store.topology, mentionIdsForBfs).map(c => c.agentId),
-          )
           const agentItems = agents.value
             .filter(a => candidateSet.has(a.instance_id))
             .filter(a => agentLabel(a).toLowerCase().includes(q))

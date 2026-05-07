@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import not_deleted
@@ -175,6 +176,24 @@ async def sync_conversations_from_topology(
     )
     existing_convs = list(existing_q.scalars().all())
 
+    # Build entity_id -> display_name mapping for system messages
+    entity_name_map: dict[str, str] = {}
+    for node in hex_map.values():
+        if node.entity_id and node.display_name:
+            entity_name_map[node.entity_id] = node.display_name
+
+    all_old_entity_ids: set[str] = set()
+    for conv in existing_convs:
+        all_old_entity_ids.update(conv.member_node_ids or [])
+    missing_ids = all_old_entity_ids - set(entity_name_map.keys())
+    if missing_ids:
+        from app.models.instance import Instance
+        inst_q = await db.execute(
+            select(Instance.id, Instance.name).where(Instance.id.in_(list(missing_ids)))
+        )
+        for inst_id, inst_name in inst_q.all():
+            entity_name_map[inst_id] = inst_name
+
     existing_bb = None
     existing_non_bb: list[Conversation] = []
     for conv in existing_convs:
@@ -185,6 +204,7 @@ async def sync_conversations_from_topology(
 
     matched_existing_ids: set[str] = set()
     result_conversations: list[Conversation] = []
+    membership_changes: list[tuple[Conversation, set[str], set[str]]] = []
 
     for group in computed_groups:
         member_ids = group["member_ids"]
@@ -193,11 +213,17 @@ async def sync_conversations_from_topology(
         name = group["name"]
 
         if is_bb and existing_bb:
+            old_set = set(existing_bb.member_node_ids or [])
             existing_bb.member_node_ids = member_ids
             existing_bb.member_hash = member_hash
             existing_bb.name = name
             matched_existing_ids.add(existing_bb.id)
             result_conversations.append(existing_bb)
+            new_set = set(member_ids)
+            joined = new_set - old_set
+            left = old_set - new_set
+            if joined or left:
+                membership_changes.append((existing_bb, joined, left))
             continue
 
         best_match: Conversation | None = None
@@ -214,12 +240,17 @@ async def sync_conversations_from_topology(
                 best_match = conv
 
         if best_match and best_score > 0:
+            old_set = set(best_match.member_node_ids or [])
             best_match.member_node_ids = member_ids
             best_match.member_hash = member_hash
             best_match.name = name
             best_match.is_blackboard_group = is_bb
             matched_existing_ids.add(best_match.id)
             result_conversations.append(best_match)
+            joined = new_set - old_set
+            left = old_set - new_set
+            if joined or left:
+                membership_changes.append((best_match, joined, left))
         else:
             conv = Conversation(
                 workspace_id=workspace_id,
@@ -233,11 +264,58 @@ async def sync_conversations_from_topology(
 
     for conv in existing_convs:
         if conv.id not in matched_existing_ids:
-            if conv.member_node_ids:
-                conv.member_node_ids = []
-                conv.member_hash = _compute_member_hash([])
+            left = set(conv.member_node_ids or [])
+            if left:
+                membership_changes.append((conv, set(), left))
+            conv.soft_delete()
+
+    # Generate system messages for membership changes
+    from app.models.workspace_message import WorkspaceMessage
+
+    broadcast_payloads: list[dict] = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for conv, joined, left in membership_changes:
+        parts: list[str] = []
+        if joined:
+            names = ", ".join(entity_name_map.get(eid, eid) for eid in sorted(joined))
+            parts.append(f"{names} 加入了群聊")
+        if left:
+            names = ", ".join(entity_name_map.get(eid, eid) for eid in sorted(left))
+            parts.append(f"{names} 离开了群聊")
+        content = "; ".join(parts)
+
+        msg = WorkspaceMessage(
+            workspace_id=workspace_id,
+            sender_type="system",
+            sender_id="system",
+            sender_name="System",
+            content=content,
+            message_type="system",
+            conversation_id=conv.id,
+        )
+        db.add(msg)
+        conv.last_message_at = func.now()
+        conv.last_message_preview = content[:100]
+
+        broadcast_payloads.append({
+            "id": msg.id,
+            "sender_type": "system",
+            "sender_id": "system",
+            "sender_name": "System",
+            "content": content,
+            "message_type": "system",
+            "conversation_id": conv.id,
+            "created_at": now_iso,
+        })
 
     await db.flush()
+
+    if broadcast_payloads:
+        from app.api.workspaces import broadcast_event
+        for payload in broadcast_payloads:
+            broadcast_event(workspace_id, "system:info", payload)
+
     return result_conversations
 
 

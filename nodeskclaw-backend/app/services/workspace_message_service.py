@@ -213,21 +213,16 @@ def build_context_prompt(
     reachable_names: list[str] | None = None,
 ) -> str:
     """Build the system prompt context injected into each Agent call."""
+    if reachable_names is not None:
+        reachable_set = set(reachable_names)
+        members = [m for m in members if m['name'] in reachable_set or m.get('type') == 'User']
+        reachable_section = "" if reachable_names else "\n你当前无法联系任何成员。\n"
+    else:
+        reachable_section = ""
+
     members_text = "\n".join(
         f"- [{m['type']}] {m['name']}" for m in members
     )
-
-    if reachable_names is not None:
-        if reachable_names:
-            reachable_lines = "\n".join(f"- {n}" for n in reachable_names)
-            reachable_section = (
-                f"\n你可以 @ 联系以下成员:\n{reachable_lines}\n"
-                "只有上述成员能收到你的消息，不要 @ 不在此列表中的成员。\n"
-            )
-        else:
-            reachable_section = "\n你当前无法联系任何成员。\n"
-    else:
-        reachable_section = ""
 
     all_messages = recent_messages
 
