@@ -88,6 +88,19 @@ def _compute_llm_providers(
             providers.add(c.provider)
     return sorted(providers) if providers else None
 
+
+def _should_sync_runtime_llm_config(
+    runtime: str,
+    has_llm_configs: bool,
+    org_active_providers: list[str] | None,
+) -> bool:
+    if runtime == "hermes":
+        return bool(has_llm_configs or org_active_providers)
+    if runtime == "openclaw":
+        return has_llm_configs
+    return False
+
+
 # 正在运行的部署任务引用（deploy_id -> asyncio.Task）
 _running_tasks: dict[str, asyncio.Task] = {}
 
@@ -387,6 +400,7 @@ class _DeployContext:
     api_server_url: str | None = None
     org_id: str | None = None
     has_llm_configs: bool = False
+    should_sync_runtime_llm_config: bool = False
     template_id: str | None = None
     template_gene_slugs: list[str] | None = None
     compute_provider: str = "k8s"
@@ -491,6 +505,12 @@ async def deploy_instance(
         )
     )
     org_active_providers = [r[0] for r in org_prov_result.all()]
+    has_llm_configs = bool(req.llm_configs)
+    should_sync_runtime_llm_config = _should_sync_runtime_llm_config(
+        req.runtime,
+        has_llm_configs,
+        org_active_providers,
+    )
 
     env_vars = dict(req.env_vars) if req.env_vars else {}
     gateway_token = env_vars.get("GATEWAY_TOKEN") or env_vars.get("OPENCLAW_GATEWAY_TOKEN")
@@ -624,7 +644,8 @@ async def deploy_instance(
         proxy_endpoint=cluster.proxy_endpoint,
         api_server_url=cluster.api_server_url,
         org_id=org_id,
-        has_llm_configs=bool(req.llm_configs),
+        has_llm_configs=has_llm_configs,
+        should_sync_runtime_llm_config=should_sync_runtime_llm_config,
         template_id=req.template_id,
         template_gene_slugs=template_gene_slugs,
         compute_provider=instance.compute_provider,
@@ -649,7 +670,7 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     from app.services.config_service import get_config
 
     steps = list(DEPLOY_STEPS_BASE)
-    if ctx.has_llm_configs:
+    if ctx.should_sync_runtime_llm_config:
         steps.append("应用实例配置")
     if ctx.template_gene_slugs:
         steps.append("安装模板技能基因")
@@ -834,7 +855,7 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
             try:
                 if ctx.runtime == "openclaw":
                     await ensure_openclaw_gateway_config(instance, db)
-                if ctx.has_llm_configs:
+                if ctx.should_sync_runtime_llm_config:
                     await sync_runtime_llm_config(instance, db)
             except Exception as e:
                 logger.warning(
@@ -1201,7 +1222,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     )
 
                     try:
-                        if ctx.has_llm_configs:
+                        if ctx.should_sync_runtime_llm_config:
                             config_step = len(DEPLOY_STEPS_BASE) + 1
                             _publish(config_step, "应用实例配置")
                             if ctx.runtime == "openclaw":
@@ -1217,7 +1238,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                             ctx.record_id, ctx.instance_id, e, exc_info=True,
                         )
                         llm_sync_warning = "（LLM 配置同步失败，可在管理后台手动重试）"
-                        if ctx.has_llm_configs:
+                        if ctx.should_sync_runtime_llm_config:
                             _publish(config_step, "应用实例配置", status="failed",
                                      message=str(e)[:200])
 
