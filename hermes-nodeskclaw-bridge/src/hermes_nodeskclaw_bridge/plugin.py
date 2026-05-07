@@ -690,7 +690,7 @@ def _filtered_body(args: dict[str, Any], *keys: str) -> dict[str, Any]:
 def _parse_content_disposition_filename(header: str | None) -> str | None:
     if not header:
         return None
-    utf8_match = re.search(r"filename\\*=UTF-8''(.+)", header, re.IGNORECASE)
+    utf8_match = re.search(r"filename\*=UTF-8''([^;]+)", header, re.IGNORECASE)
     if utf8_match:
         return urllib.parse.unquote(utf8_match.group(1))
     match = re.search(r'filename="?([^";\\n]+)"?', header, re.IGNORECASE)

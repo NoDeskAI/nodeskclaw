@@ -124,6 +124,58 @@ def test_resolve_unique_file_path_suffixes_existing_file(tmp_path):
     assert path == uploads.resolve() / "report(1).txt"
 
 
+def test_parse_content_disposition_filename_decodes_utf8_value():
+    assert (
+        plugin._parse_content_disposition_filename(
+            "attachment; filename*=UTF-8''report%20final.txt"
+        )
+        == "report final.txt"
+    )
+    assert (
+        plugin._parse_content_disposition_filename(
+            "attachment; filename*=UTF-8''%E6%8A%A5%E5%91%8A.txt"
+        )
+        == "报告.txt"
+    )
+    assert (
+        plugin._parse_content_disposition_filename(
+            "attachment; filename*=UTF-8''report.txt; size=12"
+        )
+        == "report.txt"
+    )
+
+
+def test_file_download_tool_uses_utf8_content_disposition_filename(monkeypatch, tmp_path):
+    class _Response:
+        headers = {
+            "Content-Type": "text/plain",
+            "Content-Disposition": "attachment; filename*=UTF-8''report%20final.txt",
+        }
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self) -> bytes:
+            return b"file-body"
+
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "secret")
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(plugin.urllib.request, "urlopen", lambda _request: _Response())
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.file_download_tool({"file_id": "file-1"}))
+
+    local_path = tmp_path / "uploads" / "report final.txt"
+    assert payload["name"] == "report final.txt"
+    assert payload["path"] == str(local_path)
+    assert local_path.read_bytes() == b"file-body"
+
+
 def test_collaboration_tool_returns_error_without_workspace(monkeypatch):
     monkeypatch.delenv("NODESKCLAW_WORKSPACE_ID", raising=False)
     monkeypatch.delenv("DESKCLAW_WORKSPACE_ID", raising=False)
