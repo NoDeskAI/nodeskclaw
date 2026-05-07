@@ -357,7 +357,7 @@ async def _build_hermes_provider_payload(
 
         if primary is None:
             primary = {
-                "provider": provider_name,
+                "provider": f"custom:{provider_name}",
                 "base_url": base_url.rstrip("/"),
                 "model": model_id,
             }

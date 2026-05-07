@@ -55,7 +55,7 @@ async def test_build_hermes_provider_payload_uses_named_custom_provider(monkeypa
     }]
     assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
     assert primary == {
-        "provider": "nodeskclaw-test-openai",
+        "provider": "custom:nodeskclaw-test-openai",
         "base_url": "http://llm-proxy.internal:4100/test-openai/v1",
         "model": "gpt-4.1",
     }
@@ -97,7 +97,7 @@ async def test_build_hermes_provider_payload_keeps_personal_provider_direct() ->
     }]
     assert env_updates == {"NODESKCLAW_PERSONAL_OPENAI_API_KEY": "personal-secret"}
     assert primary == {
-        "provider": "nodeskclaw-personal-openai",
+        "provider": "custom:nodeskclaw-personal-openai",
         "base_url": "https://personal.example.com/v1",
         "model": "gpt-4.1-mini",
     }
@@ -143,7 +143,7 @@ async def test_build_hermes_provider_payload_uses_org_gemini_allowed_model(monke
     }]
     assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
     assert primary == {
-        "provider": "nodeskclaw-gemini",
+        "provider": "custom:nodeskclaw-gemini",
         "base_url": "http://llm-proxy.internal:4100/gemini",
         "model": "gemini-2.5-flash",
     }
@@ -189,7 +189,7 @@ async def test_build_hermes_provider_payload_routes_personal_gemini_via_proxy(mo
     assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
     assert "personal-real-key" not in env_updates.values()
     assert primary == {
-        "provider": "nodeskclaw-gemini",
+        "provider": "custom:nodeskclaw-gemini",
         "base_url": "http://llm-proxy.internal:4100/gemini",
         "model": "gemini-2.5-pro",
     }
