@@ -188,6 +188,29 @@ def _hermes_custom_provider_name(provider: str) -> str:
     return f"nodeskclaw-{slug}"
 
 
+def _is_gemini_api_type(provider: str, api_type: str | None) -> bool:
+    return provider == "gemini" or (api_type or "").strip().lower() == "google-generative-ai"
+
+
+def _org_allowed_models_as_selected(
+    cfg,
+    org_keys: dict[str, OrgModelProvider],
+) -> list[dict] | None:
+    ok = org_keys.get(cfg.provider)
+    allowed = getattr(ok, "allowed_models", None) if ok else None
+    if not isinstance(allowed, list):
+        return None
+    selected: list[dict] = []
+    for item in allowed:
+        if isinstance(item, str) and item.strip():
+            selected.append({"id": item.strip(), "name": item.strip()})
+        elif isinstance(item, dict):
+            model_id = str(item.get("id", "") or item.get("name", "") or "").strip()
+            if model_id:
+                selected.append({"id": model_id, "name": str(item.get("name", "") or model_id)})
+    return selected or None
+
+
 def _resolve_direct_provider_credentials(
     cfg,
     *,
@@ -293,7 +316,8 @@ async def _build_hermes_provider_payload(
     for cfg in configs:
         cfg_api_type = getattr(cfg, "api_type", None)
         api_type = cfg_api_type or PROVIDER_API_TYPE.get(cfg.provider)
-        if cfg.key_source == "personal":
+        route_via_proxy = cfg.key_source != "personal" or _is_gemini_api_type(cfg.provider, api_type)
+        if not route_via_proxy:
             base_url, api_key, api_type = _resolve_direct_provider_credentials(
                 cfg,
                 user_keys=user_keys,
@@ -311,7 +335,10 @@ async def _build_hermes_provider_payload(
             base_url = _docker_rewrite_url(base_url)
 
         provider_name = _hermes_custom_provider_name(cfg.provider)
-        selected_models = normalize_selected_models(cfg.provider, cfg.selected_models)
+        selected_models = (
+            normalize_selected_models(cfg.provider, cfg.selected_models)
+            or _org_allowed_models_as_selected(cfg, org_keys)
+        )
         model_id = selected_models[0]["id"] if selected_models else ""
         if not model_id and _api_type_to_hermes_api_mode(api_type) in {"chat_completions", "codex_responses"}:
             model_id = await _discover_openai_compatible_model(base_url.rstrip("/"), api_key)

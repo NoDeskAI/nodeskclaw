@@ -3,6 +3,8 @@
 import json
 import logging
 import time
+import uuid
+from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
 import httpx
@@ -43,6 +45,8 @@ _API_TYPE_AUTH: dict[str, str] = {
     "anthropic-messages": "x-api-key",
     "google-generative-ai": "query_param",
 }
+
+_GEMINI_UNSUPPORTED_SCHEMA_KEYS = {"$schema", "additionalProperties", "strict"}
 
 _http_client: httpx.AsyncClient | None = None
 _http_client_no_verify: httpx.AsyncClient | None = None
@@ -196,6 +200,358 @@ def _strip_content_from_response(body: bytes) -> str | None:
         return None
 
 
+def _append_api_key_query(url: str, api_key: str | None) -> str:
+    if not api_key:
+        return url
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    qs["key"] = [api_key]
+    return urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
+
+
+def _normalize_gemini_base_url(base_url: str | None) -> str:
+    base = (base_url or PROVIDER_DEFAULTS["gemini"]["base_url"]).rstrip("/")
+    if base.endswith("/openai"):
+        base = base[: -len("/openai")]
+    if base.endswith("/v1") or base.endswith("/v1beta"):
+        return base
+    return f"{base}/v1beta"
+
+
+def _build_gemini_target_url(base_url: str | None, api_key: str | None, path: str) -> str:
+    url = f"{_normalize_gemini_base_url(base_url)}/{path.strip('/')}"
+    return _append_api_key_query(url, api_key)
+
+
+def _gemini_text_from_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                chunks.append(item)
+            elif isinstance(item, dict):
+                if isinstance(item.get("text"), str):
+                    chunks.append(item["text"])
+                elif isinstance(item.get("content"), str):
+                    chunks.append(item["content"])
+        return "\n".join(chunks)
+    return str(content)
+
+
+def _openai_content_to_gemini_parts(content: Any) -> list[dict]:
+    if content is None:
+        return []
+    if isinstance(content, str):
+        return [{"text": content}]
+    if not isinstance(content, list):
+        return [{"text": str(content)}]
+
+    parts: list[dict] = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append({"text": item})
+            continue
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type in {"text", "input_text"} and isinstance(item.get("text"), str):
+            parts.append({"text": item["text"]})
+            continue
+        if item_type == "image_url":
+            image_url = item.get("image_url")
+            url = image_url.get("url") if isinstance(image_url, dict) else image_url
+            if isinstance(url, str) and url.startswith("data:") and ";base64," in url:
+                header, data = url.split(";base64,", 1)
+                mime_type = header.removeprefix("data:") or "image/png"
+                parts.append({"inlineData": {"mimeType": mime_type, "data": data}})
+            elif isinstance(url, str) and url:
+                parts.append({"fileData": {"fileUri": url}})
+            continue
+        if isinstance(item.get("text"), str):
+            parts.append({"text": item["text"]})
+    return parts
+
+
+def _json_object_from_arguments(raw: Any) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"arguments": raw}
+    return parsed if isinstance(parsed, dict) else {"value": parsed}
+
+
+def _sanitize_gemini_schema(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_sanitize_gemini_schema(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    cleaned: dict[str, Any] = {}
+    for key, item in value.items():
+        if key in _GEMINI_UNSUPPORTED_SCHEMA_KEYS:
+            continue
+        cleaned[key] = _sanitize_gemini_schema(item)
+    return cleaned
+
+
+def _openai_tools_to_gemini(tools: Any) -> list[dict]:
+    if not isinstance(tools, list):
+        return []
+    declarations: list[dict] = []
+    for tool in tools:
+        if not isinstance(tool, dict) or tool.get("type") != "function":
+            continue
+        fn = tool.get("function")
+        if not isinstance(fn, dict):
+            continue
+        name = str(fn.get("name", "") or "").strip()
+        if not name:
+            continue
+        declaration: dict[str, Any] = {"name": name}
+        if isinstance(fn.get("description"), str):
+            declaration["description"] = fn["description"]
+        parameters = fn.get("parameters")
+        if isinstance(parameters, dict):
+            declaration["parameters"] = _sanitize_gemini_schema(parameters)
+        declarations.append(declaration)
+    return [{"functionDeclarations": declarations}] if declarations else []
+
+
+def _openai_tool_choice_to_gemini(tool_choice: Any) -> dict | None:
+    if tool_choice in (None, "auto"):
+        return None
+    if tool_choice == "none":
+        return {"functionCallingConfig": {"mode": "NONE"}}
+    if tool_choice == "required":
+        return {"functionCallingConfig": {"mode": "ANY"}}
+    if isinstance(tool_choice, dict):
+        fn = tool_choice.get("function")
+        name = fn.get("name") if isinstance(fn, dict) else None
+        if isinstance(name, str) and name.strip():
+            return {"functionCallingConfig": {"mode": "ANY", "allowedFunctionNames": [name.strip()]}}
+    return None
+
+
+def _openai_chat_to_gemini_request(payload: dict) -> dict:
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("Gemini 请求缺少 messages")
+
+    contents: list[dict] = []
+    system_parts: list[dict] = []
+    tool_call_names: dict[str, str] = {}
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role", "user") or "user")
+        if role in {"system", "developer"}:
+            text = _gemini_text_from_content(msg.get("content")).strip()
+            if text:
+                system_parts.append({"text": text})
+            continue
+
+        if role == "tool":
+            tool_call_id = str(msg.get("tool_call_id", "") or "")
+            name = str(msg.get("name", "") or tool_call_names.get(tool_call_id, "") or "tool_result")
+            contents.append({
+                "role": "user",
+                "parts": [{
+                    "functionResponse": {
+                        "name": name,
+                        "response": {"result": _gemini_text_from_content(msg.get("content"))},
+                    }
+                }],
+            })
+            continue
+
+        gemini_role = "model" if role == "assistant" else "user"
+        parts = _openai_content_to_gemini_parts(msg.get("content"))
+        if role == "assistant":
+            for tool_call in msg.get("tool_calls") or []:
+                if not isinstance(tool_call, dict):
+                    continue
+                fn = tool_call.get("function")
+                if not isinstance(fn, dict):
+                    continue
+                name = str(fn.get("name", "") or "").strip()
+                if not name:
+                    continue
+                tool_call_id = str(tool_call.get("id", "") or "")
+                if tool_call_id:
+                    tool_call_names[tool_call_id] = name
+                parts.append({
+                    "functionCall": {
+                        "name": name,
+                        "args": _json_object_from_arguments(fn.get("arguments")),
+                    }
+                })
+        if parts:
+            contents.append({"role": gemini_role, "parts": parts})
+
+    if not contents:
+        raise ValueError("Gemini 请求没有可发送内容")
+
+    request_body: dict[str, Any] = {"contents": contents}
+    if system_parts:
+        request_body["systemInstruction"] = {"parts": system_parts}
+
+    generation_config: dict[str, Any] = {}
+    if "temperature" in payload and payload.get("temperature") is not None:
+        generation_config["temperature"] = payload["temperature"]
+    if "top_p" in payload and payload.get("top_p") is not None:
+        generation_config["topP"] = payload["top_p"]
+    if "max_tokens" in payload and payload.get("max_tokens") is not None:
+        generation_config["maxOutputTokens"] = payload["max_tokens"]
+    stop = payload.get("stop")
+    if isinstance(stop, str):
+        generation_config["stopSequences"] = [stop]
+    elif isinstance(stop, list):
+        generation_config["stopSequences"] = [str(item) for item in stop if item]
+    if generation_config:
+        request_body["generationConfig"] = generation_config
+
+    tools = _openai_tools_to_gemini(payload.get("tools"))
+    if tools:
+        request_body["tools"] = tools
+    tool_config = _openai_tool_choice_to_gemini(payload.get("tool_choice"))
+    if tool_config:
+        request_body["toolConfig"] = tool_config
+
+    return request_body
+
+
+def _map_gemini_finish_reason(reason: str, has_tool_calls: bool) -> str:
+    if has_tool_calls:
+        return "tool_calls"
+    normalized = (reason or "").upper()
+    if normalized in {"STOP", ""}:
+        return "stop"
+    if normalized == "MAX_TOKENS":
+        return "length"
+    if normalized in {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST"}:
+        return "content_filter"
+    return "stop"
+
+
+def _gemini_usage_to_openai(payload: dict) -> dict:
+    usage = payload.get("usageMetadata") if isinstance(payload.get("usageMetadata"), dict) else {}
+    prompt_tokens = usage.get("promptTokenCount", 0) or 0
+    completion_tokens = usage.get("candidatesTokenCount", 0) or 0
+    total_tokens = usage.get("totalTokenCount") or (prompt_tokens + completion_tokens)
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _gemini_response_to_openai(payload: dict, model: str) -> dict:
+    choices: list[dict] = []
+    candidates = payload.get("candidates") if isinstance(payload.get("candidates"), list) else []
+    for index, candidate in enumerate(candidates):
+        content = candidate.get("content") if isinstance(candidate, dict) else {}
+        parts = content.get("parts") if isinstance(content, dict) and isinstance(content.get("parts"), list) else []
+        text_chunks: list[str] = []
+        tool_calls: list[dict] = []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if isinstance(part.get("text"), str):
+                text_chunks.append(part["text"])
+            function_call = part.get("functionCall")
+            if isinstance(function_call, dict):
+                name = str(function_call.get("name", "") or "")
+                args = function_call.get("args")
+                tool_calls.append({
+                    "id": f"call_{uuid.uuid4().hex[:24]}",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(args if isinstance(args, dict) else {}, ensure_ascii=False),
+                    },
+                })
+        message: dict[str, Any] = {
+            "role": "assistant",
+            "content": "".join(text_chunks) if text_chunks else (None if tool_calls else ""),
+        }
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+        choices.append({
+            "index": index,
+            "message": message,
+            "finish_reason": _map_gemini_finish_reason(
+                str(candidate.get("finishReason", "") if isinstance(candidate, dict) else ""),
+                bool(tool_calls),
+            ),
+        })
+
+    if not choices:
+        choices.append({
+            "index": 0,
+            "message": {"role": "assistant", "content": ""},
+            "finish_reason": "stop",
+        })
+
+    return {
+        "id": f"chatcmpl-gemini-{uuid.uuid4().hex}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model,
+        "choices": choices,
+        "usage": _gemini_usage_to_openai(payload),
+    }
+
+
+def _gemini_models_to_openai(payload: dict) -> dict:
+    data: list[dict] = []
+    models = payload.get("models") if isinstance(payload.get("models"), list) else []
+    for item in models:
+        if not isinstance(item, dict):
+            continue
+        methods = item.get("supportedGenerationMethods")
+        if isinstance(methods, list) and "generateContent" not in methods:
+            continue
+        raw_name = str(item.get("name", "") or "").strip()
+        model_id = raw_name.removeprefix("models/")
+        if not model_id:
+            continue
+        data.append({
+            "id": model_id,
+            "object": "model",
+            "created": 0,
+            "owned_by": "google",
+        })
+    return {"object": "list", "data": data}
+
+
+def _gemini_error_from_response(resp: httpx.Response) -> dict:
+    message = resp.text[:512] if resp.text else f"Gemini upstream HTTP {resp.status_code}"
+    code = None
+    try:
+        payload = resp.json()
+        err = payload.get("error") if isinstance(payload, dict) else None
+        if isinstance(err, dict):
+            message = str(err.get("message") or message)
+            code = err.get("status") or err.get("code")
+    except ValueError:
+        pass
+    return {
+        "error": {
+            "message": message,
+            "type": "google_gemini_error",
+            "code": code,
+        }
+    }
+
+
 def _is_codex_path(path: str, *candidates: str) -> bool:
     normalized = path.strip("/")
     return normalized in candidates
@@ -321,6 +677,169 @@ async def _handle_codex_proxy(
     return JSONResponse(status_code=200, content=response_data)
 
 
+async def _handle_gemini_proxy(
+    request: Request,
+    path: str,
+    ctx: "_RequestContext",
+    *,
+    client: httpx.AsyncClient,
+    base_url: str | None,
+    api_key: str | None,
+) -> JSONResponse | Response:
+    normalized_path = path.strip("/")
+
+    if not api_key:
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "Gemini API Key 缺失", "type": "invalid_request_error"}},
+        )
+
+    if request.method == "GET" and _is_codex_path(normalized_path, "v1/models", "models"):
+        try:
+            resp = await client.get(_build_gemini_target_url(base_url, api_key, "models"), timeout=30)
+        except httpx.RequestError as e:
+            return JSONResponse(status_code=502, content={"error": {"message": f"上游请求失败: {e}"}})
+        if resp.status_code >= 400:
+            return JSONResponse(status_code=resp.status_code, content=_gemini_error_from_response(resp))
+        try:
+            return JSONResponse(status_code=200, content=_gemini_models_to_openai(resp.json()))
+        except ValueError:
+            return JSONResponse(
+                status_code=502,
+                content={"error": {"message": "Gemini models 响应不是合法 JSON", "type": "upstream_error"}},
+            )
+
+    if request.method != "POST" or not _is_codex_path(
+        normalized_path,
+        "v1/chat/completions",
+        "chat/completions",
+    ):
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"message": f"Gemini 暂不支持路径 /{normalized_path or path}"}},
+        )
+
+    start = time.monotonic()
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        latency_ms = int((time.monotonic() - start) * 1000)
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=400,
+            latency_ms=latency_ms,
+            error_message="请求体不是合法 JSON",
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "请求体不是合法 JSON", "type": "invalid_request_error"}},
+        )
+
+    if payload.get("stream") is True:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=400,
+            latency_ms=latency_ms,
+            error_message="Gemini proxy 暂不支持 stream=true",
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "Gemini proxy 暂不支持 stream=true", "type": "invalid_request_error"}},
+        )
+
+    model = payload.get("model")
+    if not isinstance(model, str) or not model.strip():
+        latency_ms = int((time.monotonic() - start) * 1000)
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=400,
+            latency_ms=latency_ms,
+            error_message="Gemini 请求缺少 model",
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "Gemini 请求缺少 model", "type": "invalid_request_error"}},
+        )
+    model = model.strip()
+
+    try:
+        req_body = _openai_chat_to_gemini_request(payload)
+    except ValueError as e:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        error_message = str(e)
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=400,
+            latency_ms=latency_ms,
+            error_message=error_message,
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": error_message, "type": "invalid_request_error"}},
+        )
+
+    target_url = _build_gemini_target_url(base_url, api_key, f"models/{model}:generateContent")
+    try:
+        resp = await client.post(target_url, json=req_body, headers={}, timeout=300)
+    except httpx.RequestError as e:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        error_message = f"上游请求失败: {e}"
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=502,
+            latency_ms=latency_ms,
+            error_message=error_message[:512],
+        )
+        return JSONResponse(status_code=502, content={"error": {"message": error_message, "type": "upstream_error"}})
+
+    latency_ms = int((time.monotonic() - start) * 1000)
+    if resp.status_code >= 400:
+        error_payload = _gemini_error_from_response(resp)
+        error_message = str(error_payload.get("error", {}).get("message", ""))[:512]
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=resp.status_code,
+            latency_ms=latency_ms,
+            error_message=error_message,
+            response_body=_strip_content_from_response(resp.content),
+        )
+        return JSONResponse(status_code=resp.status_code, content=error_payload)
+
+    try:
+        response_data = _gemini_response_to_openai(resp.json(), model)
+    except ValueError:
+        await _record_usage(
+            ctx,
+            usage={},
+            status_code=502,
+            latency_ms=latency_ms,
+            error_message="Gemini 响应不是合法 JSON",
+        )
+        return JSONResponse(
+            status_code=502,
+            content={"error": {"message": "Gemini 响应不是合法 JSON", "type": "upstream_error"}},
+        )
+
+    response_body = json.dumps(response_data, ensure_ascii=False).encode("utf-8")
+    usage = _parse_usage_from_response(response_body)
+    await _record_usage(
+        ctx,
+        usage=usage,
+        status_code=200,
+        latency_ms=latency_ms,
+        response_body=_strip_content_from_response(response_body),
+    )
+    return JSONResponse(status_code=200, content=response_data)
+
+
 @router.post("/internal/test-connection")
 async def internal_test_connection(request: Request):
     """Test upstream provider connectivity using the same URL construction as real traffic."""
@@ -340,8 +859,7 @@ async def internal_test_connection(request: Request):
     t0 = time.monotonic()
     try:
         if api_type == "google-generative-ai":
-            path = f"v1beta/models/{model}:generateContent"
-            target_url = _build_target_url(provider, path, base_url, api_key)
+            target_url = _build_gemini_target_url(base_url, api_key, f"models/{model}:generateContent")
             req_body = {
                 "contents": [{"parts": [{"text": "hi"}]}],
                 "generationConfig": {"maxOutputTokens": 1},
@@ -510,14 +1028,24 @@ async def llm_proxy(provider: str, path: str, request: Request):
     )
 
     if provider == CODEX_PROVIDER:
-        if config.key_source != "personal":
+        if key_source != "personal":
             return JSONResponse(status_code=400, content={"error": "Codex 仅支持个人配置"})
         return await _handle_codex_proxy(request, path, ctx, api_key=real_key)
 
+    client = _get_http_client(skip_ssl_verify=skip_ssl_verify)
+
+    if provider == "gemini" or api_type == "google-generative-ai":
+        return await _handle_gemini_proxy(
+            request,
+            path,
+            ctx,
+            client=client,
+            base_url=base_url,
+            api_key=real_key,
+        )
+
     target_url = _build_target_url(provider, path, base_url, real_key)
     req_headers = _build_auth_headers(provider, real_key, dict(request.headers), api_type=api_type)
-
-    client = _get_http_client(skip_ssl_verify=skip_ssl_verify)
 
     if is_stream:
         return await _handle_stream(client, request.method, target_url, req_headers, body, ctx)

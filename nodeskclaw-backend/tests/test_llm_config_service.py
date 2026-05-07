@@ -103,6 +103,98 @@ async def test_build_hermes_provider_payload_keeps_personal_provider_direct() ->
     }
 
 
+async def test_build_hermes_provider_payload_uses_org_gemini_allowed_model(monkeypatch) -> None:
+    configs = [
+        SimpleNamespace(
+            provider="gemini",
+            key_source="org",
+            selected_models=None,
+            base_url=None,
+            api_type=None,
+        )
+    ]
+    org_keys = {
+        "gemini": SimpleNamespace(
+            provider="gemini",
+            api_key="org-real-key",
+            base_url="https://generativelanguage.googleapis.com",
+            api_type="google-generative-ai",
+            allowed_models=["gemini-2.5-flash"],
+        )
+    }
+
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy.internal:4100")
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_URL", "https://llm-proxy.example.com")
+
+    providers, env_updates, primary = await llm_config_service._build_hermes_provider_payload(
+        configs,
+        wp_api_key="wp-token",
+        user_keys={},
+        org_keys=org_keys,
+        use_external_proxy=False,
+    )
+
+    assert providers == [{
+        "name": "nodeskclaw-gemini",
+        "base_url": "http://llm-proxy.internal:4100/gemini",
+        "key_env": "NODESKCLAW_WP_API_KEY",
+        "api_mode": "chat_completions",
+        "model": "gemini-2.5-flash",
+    }]
+    assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
+    assert primary == {
+        "provider": "nodeskclaw-gemini",
+        "base_url": "http://llm-proxy.internal:4100/gemini",
+        "model": "gemini-2.5-flash",
+    }
+
+
+async def test_build_hermes_provider_payload_routes_personal_gemini_via_proxy(monkeypatch) -> None:
+    configs = [
+        SimpleNamespace(
+            provider="gemini",
+            key_source="personal",
+            selected_models=[{"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro"}],
+            base_url=None,
+            api_type=None,
+        )
+    ]
+    user_keys = {
+        "gemini": SimpleNamespace(
+            provider="gemini",
+            api_key="personal-real-key",
+            base_url="https://generativelanguage.googleapis.com",
+            api_type="google-generative-ai",
+        )
+    }
+
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy.internal:4100")
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_URL", "https://llm-proxy.example.com")
+
+    providers, env_updates, primary = await llm_config_service._build_hermes_provider_payload(
+        configs,
+        wp_api_key="wp-token",
+        user_keys=user_keys,
+        org_keys={},
+        use_external_proxy=False,
+    )
+
+    assert providers == [{
+        "name": "nodeskclaw-gemini",
+        "base_url": "http://llm-proxy.internal:4100/gemini",
+        "key_env": "NODESKCLAW_WP_API_KEY",
+        "api_mode": "chat_completions",
+        "model": "gemini-2.5-pro",
+    }]
+    assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
+    assert "personal-real-key" not in env_updates.values()
+    assert primary == {
+        "provider": "nodeskclaw-gemini",
+        "base_url": "http://llm-proxy.internal:4100/gemini",
+        "model": "gemini-2.5-pro",
+    }
+
+
 def test_dotenv_roundtrip_preserves_values() -> None:
     raw = 'OPENAI_API_KEY="abc123"\nOTHER=value\n'
 
