@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import re
-import unicodedata
 from typing import Any
 
 import httpx

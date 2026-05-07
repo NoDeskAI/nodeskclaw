@@ -52,7 +52,6 @@ def register(ctx) -> None:
             schema=schema,
             handler=handler,
             description=schema.get("description", ""),
-            emoji="🧩",
         )
 
 

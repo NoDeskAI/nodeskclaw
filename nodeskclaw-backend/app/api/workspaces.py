@@ -85,6 +85,37 @@ def _get_current_user_or_agent_dep():
     return get_current_user_or_agent
 
 
+def _get_current_agent_id() -> str | None:
+    from app.core.security import get_auth_actor
+    actor = get_auth_actor()
+    if actor is None or actor.actor_type != "agent":
+        return None
+    return actor.actor_id
+
+
+async def _require_agent_in_workspace(
+    workspace_id: str,
+    instance_id: str,
+    db: AsyncSession,
+) -> None:
+    result = await db.execute(
+        sa_select(WorkspaceAgent.id)
+        .where(
+            WorkspaceAgent.workspace_id == workspace_id,
+            WorkspaceAgent.instance_id == instance_id,
+            WorkspaceAgent.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if result.scalar_one_or_none() is None:
+        raise _error(
+            403,
+            40306,
+            "errors.workspace.agent_not_in_workspace",
+            "AI 员工不在该办公室中",
+        )
+
+
 # ── Workspace CRUD ───────────────────────────────────
 
 @router.post("")
@@ -1618,15 +1649,15 @@ async def send_collaboration_message(
 ):
     """Agent-callable HTTP endpoint to send a collaboration message to another agent."""
     await wm_service.check_workspace_member(workspace_id, user, db)
-    from app.core.security import get_auth_actor
-    actor = get_auth_actor()
-    if actor is None or actor.actor_type != "agent":
+    agent_id = _get_current_agent_id()
+    if agent_id is None:
         raise _error(403, 40305, "errors.collaboration.agent_only",
                      "Only agents can send collaboration messages via this endpoint")
+    await _require_agent_in_workspace(workspace_id, agent_id, db)
     from app.services.collaboration_service import handle_collaboration_message
     await handle_collaboration_message(
         workspace_id=workspace_id,
-        source_instance_id=actor.actor_id,
+        source_instance_id=agent_id,
         target=data.target,
         text=data.text,
         depth=data.depth,
@@ -1641,10 +1672,13 @@ async def list_collaboration_timeline(
     limit: int = Query(default=100, le=500),
     since: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
+    user=Depends(_get_current_user_or_agent_dep()),
 ):
     """List all collaboration messages in a workspace as a timeline."""
     await wm_service.check_workspace_member(workspace_id, user, db)
+    agent_id = _get_current_agent_id()
+    if agent_id is not None:
+        await _require_agent_in_workspace(workspace_id, agent_id, db)
     from datetime import datetime as dt, timezone
     since_dt = None
     if since:
@@ -1681,10 +1715,20 @@ async def list_agent_collaboration_messages(
     instance_id: str,
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
+    user=Depends(_get_current_user_or_agent_dep()),
 ):
     """List collaboration messages sent to or from a specific agent."""
     await wm_service.check_workspace_member(workspace_id, user, db)
+    agent_id = _get_current_agent_id()
+    if agent_id is not None:
+        await _require_agent_in_workspace(workspace_id, agent_id, db)
+        if agent_id != instance_id:
+            raise _error(
+                403,
+                40307,
+                "errors.collaboration.agent_scope_forbidden",
+                "AI 员工只能读取自己的协作消息",
+            )
     messages = await msg_service.get_agent_collaboration_messages(
         db, workspace_id, instance_id, limit,
     )
