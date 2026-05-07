@@ -13,6 +13,7 @@ from app.models.base import not_deleted
 from app.models.decision_record import DecisionRecord
 from app.models.trust_policy import TrustPolicy
 from app.models.workspace import Workspace
+from app.services.workspace_actor_access import get_current_agent_id, require_agent_in_workspace
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,6 +54,26 @@ async def _get_workspace(workspace_id: str, org, db: AsyncSession) -> Workspace:
     if not workspace:
         raise _trust_http_error(404, 40490, "errors.workspace.not_found", "办公室不存在")
     return workspace
+
+
+async def _resolve_agent_scope(
+    workspace_id: str,
+    requested_agent_id: str | None,
+    db: AsyncSession,
+) -> str | None:
+    current_agent_id = get_current_agent_id()
+    if current_agent_id is None:
+        return requested_agent_id
+
+    await require_agent_in_workspace(workspace_id, current_agent_id, db)
+    if requested_agent_id and requested_agent_id != current_agent_id:
+        raise _trust_http_error(
+            403,
+            40307,
+            "errors.collaboration.agent_scope_forbidden",
+            "AI 员工只能访问自己的决策记录",
+        )
+    return current_agent_id
 
 
 class TrustPolicyCreate(BaseModel):
@@ -133,10 +154,11 @@ async def check_trust(
     """Check if an agent has an 'always' trust policy for a given action."""
     _, org = org_ctx
     await _get_workspace(workspace_id, org, db)
+    effective_agent_id = await _resolve_agent_scope(workspace_id, agent_instance_id, db)
     result = await db.execute(
         select(TrustPolicy).where(
             TrustPolicy.workspace_id == workspace_id,
-            TrustPolicy.agent_instance_id == agent_instance_id,
+            TrustPolicy.agent_instance_id == effective_agent_id,
             TrustPolicy.action_type == action_type,
             TrustPolicy.grant_type == "always",
             not_deleted(TrustPolicy),
@@ -157,12 +179,13 @@ async def submit_approval_request(
 
     _, org = org_ctx
     ws = await _get_workspace(body.workspace_id, org, db)
+    effective_agent_id = await _resolve_agent_scope(body.workspace_id, body.agent_instance_id, db)
     has_topo = await corridor_router.has_any_connections(body.workspace_id, db)
     if not has_topo:
         return _ok({"status": "no_topology", "message": "No corridor topology configured"})
 
     hex_pos = await corridor_router.get_agent_hex_in_workspace(
-        body.agent_instance_id, body.workspace_id, db,
+        effective_agent_id, body.workspace_id, db,
     )
     if hex_pos is None:
         return _ok({"status": "agent_not_placed"})
@@ -177,7 +200,7 @@ async def submit_approval_request(
     record = DecisionRecord(
         id=str(uuid.uuid4()),
         workspace_id=body.workspace_id,
-        agent_instance_id=body.agent_instance_id,
+        agent_instance_id=effective_agent_id,
         decision_type=body.action_type,
         context_summary=body.context_summary or f"AI Employee requested approval for {body.action_type}",
         proposal=body.proposal,
@@ -211,7 +234,7 @@ async def submit_approval_request(
                 )
                 await adapter.send_approval_request(
                     channel_config=hh.channel_config,
-                    agent_name=body.agent_instance_id,
+                    agent_name=effective_agent_id,
                     action_type=body.action_type,
                     proposal=body.proposal or {},
                     workspace_name=workspace_name,
@@ -282,12 +305,13 @@ async def list_decision_records(
 ):
     _, org = org_ctx
     await _get_workspace(workspace_id, org, db)
+    effective_agent_id = await _resolve_agent_scope(workspace_id, agent_id, db)
     query = select(DecisionRecord).where(
         DecisionRecord.workspace_id == workspace_id,
         not_deleted(DecisionRecord),
     )
-    if agent_id:
-        query = query.where(DecisionRecord.agent_instance_id == agent_id)
+    if effective_agent_id:
+        query = query.where(DecisionRecord.agent_instance_id == effective_agent_id)
     if decision_type:
         query = query.where(DecisionRecord.decision_type == decision_type)
     result = await db.execute(query)

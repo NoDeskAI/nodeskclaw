@@ -210,6 +210,100 @@ def test_collaboration_tool_auto_prefixes_target(monkeypatch):
     assert isinstance(result, dict)
 
 
+def test_proposals_schema_does_not_expose_agent_override():
+    properties = plugin._PROPOSALS_SCHEMA["parameters"]["properties"]
+
+    assert "agent_instance_id" not in properties
+
+
+def test_proposals_tool_check_trust_uses_current_instance(monkeypatch):
+    recorded = {}
+
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        recorded["path"] = path
+        recorded["method"] = method
+        recorded["body"] = body
+        return {"ok": True}
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_INSTANCE_ID", "inst-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.proposals_tool(
+            {
+                "action": "check_trust_policy",
+                "agent_instance_id": "inst-other",
+                "action_type": "deploy",
+            }
+        )
+    )
+
+    assert payload == {"ok": True}
+    assert "agent_instance_id=inst-1" in recorded["path"]
+    assert "inst-other" not in recorded["path"]
+
+
+def test_proposals_tool_submit_uses_current_instance(monkeypatch):
+    recorded = {}
+
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        recorded["path"] = path
+        recorded["method"] = method
+        recorded["body"] = body
+        return {"ok": True}
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_INSTANCE_ID", "inst-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.proposals_tool(
+            {
+                "action": "submit_approval_request",
+                "agent_instance_id": "inst-other",
+                "action_type": "deploy",
+                "proposal": {"kind": "deployment"},
+            }
+        )
+    )
+
+    assert payload == {"ok": True}
+    assert recorded["path"] == "/workspaces/approval-requests"
+    assert recorded["method"] == "POST"
+    assert recorded["body"]["agent_instance_id"] == "inst-1"
+
+
+def test_proposals_tool_list_decisions_uses_current_instance(monkeypatch):
+    recorded = {}
+
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        recorded["path"] = path
+        recorded["method"] = method
+        recorded["body"] = body
+        return {"ok": True}
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_INSTANCE_ID", "inst-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.proposals_tool({"action": "list_my_decisions", "agent_instance_id": "inst-other"})
+    )
+
+    assert payload == {"ok": True}
+    assert recorded["path"] == "/workspaces/ws-1/decision-records?agent_id=inst-1"
+
+
 def test_shared_files_tool_returns_error_without_workspace(monkeypatch):
     monkeypatch.delenv("NODESKCLAW_WORKSPACE_ID", raising=False)
     monkeypatch.delenv("DESKCLAW_WORKSPACE_ID", raising=False)

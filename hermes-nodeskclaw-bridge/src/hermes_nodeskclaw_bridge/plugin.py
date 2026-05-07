@@ -426,7 +426,7 @@ def proposals_tool(args: dict[str, Any], **kwargs: Any) -> str:
         return _json_result(_missing_workspace_payload())
 
     action = str(args.get("action") or "")
-    agent_id = str(args.get("agent_instance_id") or cfg.instance_id or "")
+    agent_id = str(cfg.instance_id or "")
     if action in {"submit_approval_request", "check_trust_policy", "list_my_decisions"} and not agent_id:
         return _json_result(_missing_instance_payload())
 
@@ -895,7 +895,6 @@ _PROPOSALS_SCHEMA = {
             "action_type": {"type": "string", "description": "Proposal action type."},
             "proposal": {"type": "object", "description": "Structured proposal payload."},
             "context_summary": {"type": "string", "description": "Why the proposal is needed."},
-            "agent_instance_id": {"type": "string", "description": "Optional override of current instance ID."},
         },
         "required": ["action"],
     },
