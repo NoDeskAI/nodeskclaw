@@ -39,6 +39,10 @@ from app.schemas.workspace import (
 from app.services import workspace_service
 from app.services import workspace_message_service as msg_service
 from app.services import workspace_member_service as wm_service
+from app.services.workspace_actor_access import (
+    require_workspace_actor_access,
+    require_workspace_actor_member,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -85,48 +89,12 @@ def _get_current_user_or_agent_dep():
     return get_current_user_or_agent
 
 
-def _get_current_agent_id() -> str | None:
-    from app.core.security import get_auth_actor
-    actor = get_auth_actor()
-    if actor is None or actor.actor_type != "agent":
-        return None
-    return actor.actor_id
-
-
-async def _require_agent_in_workspace(
-    workspace_id: str,
-    instance_id: str,
-    db: AsyncSession,
-) -> None:
-    result = await db.execute(
-        sa_select(WorkspaceAgent.id)
-        .where(
-            WorkspaceAgent.workspace_id == workspace_id,
-            WorkspaceAgent.instance_id == instance_id,
-            WorkspaceAgent.deleted_at.is_(None),
-        )
-        .limit(1)
-    )
-    if result.scalar_one_or_none() is None:
-        raise _error(
-            403,
-            40306,
-            "errors.workspace.agent_not_in_workspace",
-            "AI 员工不在该办公室中",
-        )
-
-
 async def _require_collaboration_workspace_access(
     workspace_id: str,
     user,
     db: AsyncSession,
 ) -> str | None:
-    agent_id = _get_current_agent_id()
-    if agent_id is not None:
-        await _require_agent_in_workspace(workspace_id, agent_id, db)
-        return agent_id
-    await wm_service.check_workspace_member(workspace_id, user, db)
-    return None
+    return await require_workspace_actor_member(workspace_id, user, db)
 
 
 # ── Workspace CRUD ───────────────────────────────────
@@ -327,7 +295,7 @@ async def get_blackboard(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     bb = await workspace_service.get_blackboard(db, workspace_id)
@@ -343,7 +311,7 @@ async def update_blackboard(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     bb = await workspace_service.update_blackboard(db, workspace_id, data)
@@ -359,7 +327,7 @@ async def patch_blackboard_section(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     bb = await workspace_service.patch_blackboard_section(db, workspace_id, data)
@@ -461,7 +429,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     if paginated:
@@ -488,7 +456,7 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     from app.core.security import get_auth_actor
@@ -514,7 +482,7 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     result = await workspace_service.update_task(db, workspace_id, task_id, data)
@@ -567,7 +535,7 @@ async def archive_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     task = await workspace_service.archive_task(db, workspace_id, task_id)
@@ -584,7 +552,7 @@ async def list_objectives(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     objs = await workspace_service.list_objectives(db, workspace_id)
@@ -598,7 +566,7 @@ async def create_objective(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     obj = await workspace_service.create_objective(db, workspace_id, data, user.id)
@@ -614,7 +582,7 @@ async def update_objective(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     from app.api.blackboard import _enforce_agent_blackboard_topology
     await _enforce_agent_blackboard_topology(workspace_id, db)
     obj = await workspace_service.update_objective(db, workspace_id, objective_id, data)
@@ -634,7 +602,7 @@ async def get_performance(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """Agent/team performance aggregated from workspace_tasks."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.models.workspace_task import WorkspaceTask
 
     base_q = sa_select(WorkspaceTask).where(
@@ -705,7 +673,7 @@ async def collect_performance(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """Aggregate per-agent performance stats from workspace_tasks."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.models.workspace_task import WorkspaceTask
 
     rows = (await db.execute(
@@ -754,7 +722,7 @@ async def get_agent_performance(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """Per-agent performance metrics with reliability, investment/output, schedule reliability."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     from app.models.workspace_task import WorkspaceTask
     from app.models.workspace_schedule import WorkspaceSchedule
     from sqlalchemy import case, extract
@@ -1177,7 +1145,7 @@ async def list_members(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     members = await workspace_service.list_workspace_members(db, workspace_id)
     return _ok([m.model_dump(mode="json") for m in members])
 
@@ -1365,7 +1333,7 @@ async def download_workspace_file(
     if not storage_service.is_configured():
         raise _error(503, 50301, "errors.storage.not_configured", "对象存储未配置")
 
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
 
     result = await db.execute(
         sa_select(WorkspaceFile).where(

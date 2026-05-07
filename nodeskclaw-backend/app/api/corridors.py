@@ -33,6 +33,7 @@ from app.schemas.corridor import (
 from app.services import corridor_router
 from app.services import workspace_member_service as wm_service
 from app.services.runtime import node_card as node_card_service
+from app.services.workspace_actor_access import require_workspace_actor_member
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -661,7 +662,7 @@ async def get_topology(
 ):
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     topo = await corridor_router.get_topology(workspace_id, db)
     return _ok(TopologyInfo(
         nodes=[
@@ -690,7 +691,7 @@ async def get_reachable_from_instance(
     """Return agents/humans reachable from the given instance via corridor traversal."""
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     hex_pos = await corridor_router.get_agent_hex_in_workspace(instance_id, workspace_id, db)
     if hex_pos is None:
         return _ok({"reachable": []})
@@ -715,7 +716,7 @@ async def get_topology_health(
     """Return topology health: islands, single points of failure, message flow stats."""
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     islands = await corridor_router.detect_islands(workspace_id, db)
     spof = await corridor_router.detect_single_points_of_failure(workspace_id, db)
     flow = await corridor_router.get_message_flow_stats(workspace_id, db)
@@ -737,7 +738,7 @@ async def get_topology_message_flow(
     """Return message count per sender-receiver hex pair from workspace_messages."""
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     flow = await corridor_router.get_message_flow_stats(workspace_id, db)
     return _ok([
         {"sender_hex_key": p.sender_hex_key, "receiver_hex_key": p.receiver_hex_key, "count": p.count}

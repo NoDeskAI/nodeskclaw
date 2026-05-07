@@ -15,7 +15,11 @@ from app.schemas.workspace import (
     PostUpdate,
     ReplyCreate,
 )
-from app.services import workspace_service, workspace_member_service as wm_service
+from app.services import workspace_service
+from app.services.workspace_actor_access import (
+    require_workspace_actor_access,
+    require_workspace_actor_member,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +105,7 @@ async def list_posts(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     posts, total = await workspace_service.list_posts(db, workspace_id, page, size)
     return _ok({"items": [p.model_dump(mode="json") for p in posts], "total": total})
@@ -114,7 +118,7 @@ async def create_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     author_type, author_id, author_name = _caller_info()
     post_info, mentions = await workspace_service.create_post(
@@ -135,7 +139,7 @@ async def get_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     post = await workspace_service.get_post(db, workspace_id, post_id)
     if post is None:
@@ -151,7 +155,7 @@ async def update_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     _, author_id, _ = _caller_info()
     post = await workspace_service.update_post(db, workspace_id, post_id, author_id, data)
@@ -168,7 +172,7 @@ async def delete_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     ok = await workspace_service.delete_post(db, workspace_id, post_id)
     if ok:
@@ -183,7 +187,7 @@ async def pin_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     post = await workspace_service.pin_post(db, workspace_id, post_id, True)
     if post is None:
@@ -199,7 +203,7 @@ async def unpin_post(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     post = await workspace_service.pin_post(db, workspace_id, post_id, False)
     if post is None:
@@ -218,7 +222,7 @@ async def create_reply(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     author_type, author_id, author_name = _caller_info()
     result = await workspace_service.create_reply(
@@ -247,7 +251,7 @@ async def mark_read(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     reader_type, reader_id, _ = _caller_info()
     await workspace_service.mark_post_read(db, post_id, reader_type, reader_id)
@@ -260,7 +264,7 @@ async def unread_count(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     reader_type, reader_id, _ = _caller_info()
     count = await workspace_service.get_unread_count(
@@ -278,7 +282,7 @@ async def list_files(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     files = await workspace_service.list_shared_files(db, workspace_id, parent_path)
     return _ok([f.model_dump(mode="json") for f in files])
@@ -291,7 +295,7 @@ async def mkdir(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
     info = await workspace_service.create_shared_directory(
@@ -308,7 +312,7 @@ async def upload_file(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
     info = await workspace_service.upload_shared_file(
@@ -328,7 +332,7 @@ async def upload_file_multipart(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
     file_bytes = await file.read()
@@ -353,7 +357,7 @@ async def copy_file(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
     info = await workspace_service.copy_shared_file(
@@ -373,7 +377,7 @@ async def get_file_url(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     url = await workspace_service.get_shared_file_url(db, workspace_id, file_id)
     if url is None:
@@ -388,7 +392,7 @@ async def read_file_content(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await require_workspace_actor_member(workspace_id, user, db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     result = await workspace_service.read_shared_file(db, workspace_id, file_id)
     if result is None:
@@ -404,7 +408,7 @@ async def delete_file(
     db: AsyncSession = Depends(get_db),
     user=Depends(_get_current_user_or_agent_dep()),
 ):
-    await wm_service.check_workspace_access(workspace_id, user, "edit_blackboard", db)
+    await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     ok = await workspace_service.delete_shared_file(db, workspace_id, file_id)
     if ok:
