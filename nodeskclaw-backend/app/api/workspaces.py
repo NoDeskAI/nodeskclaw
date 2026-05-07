@@ -1605,7 +1605,7 @@ async def list_workspace_messages(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """List recent workspace messages for chat history."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
+    await _require_collaboration_workspace_access(workspace_id, user, db)
     from datetime import datetime as dt, timezone
 
     def _parse_dt(value: str | None):

@@ -198,3 +198,61 @@ async def test_user_auth_reads_agent_messages_through_workspace_member(monkeypat
     assert response["code"] == 0
     check_member.assert_awaited_once()
     get_messages.assert_awaited_once()
+
+
+async def test_agent_auth_can_read_workspace_chat_history(monkeypatch, agent_actor):
+    monkeypatch.setattr(
+        workspaces.wm_service,
+        "check_workspace_member",
+        AsyncMock(side_effect=_unexpected_workspace_member_check),
+    )
+    get_recent_messages = AsyncMock(return_value=[
+        SimpleNamespace(
+            id="msg-1",
+            workspace_id="ws-1",
+            sender_type="user",
+            sender_id="user-1",
+            sender_name="Alice",
+            content="hello",
+            message_type="chat",
+            attachments=[],
+            created_at=None,
+        )
+    ])
+    monkeypatch.setattr(workspaces.msg_service, "get_recent_messages", get_recent_messages)
+
+    response = await workspaces.list_workspace_messages(
+        "ws-1",
+        limit=20,
+        q=None,
+        from_at=None,
+        to_at=None,
+        db=_WorkspaceAgentDb(has_agent=True),
+        user=SimpleNamespace(id="user-1"),
+    )
+
+    assert response["code"] == 0
+    assert response["data"][0]["id"] == "msg-1"
+    workspaces.wm_service.check_workspace_member.assert_not_awaited()
+    get_recent_messages.assert_awaited_once()
+
+
+async def test_user_auth_reads_workspace_chat_history_through_workspace_member(monkeypatch, user_actor):
+    check_member = AsyncMock()
+    monkeypatch.setattr(workspaces.wm_service, "check_workspace_member", check_member)
+    search_messages = AsyncMock(return_value=[])
+    monkeypatch.setattr(workspaces.msg_service, "search_messages", search_messages)
+
+    response = await workspaces.list_workspace_messages(
+        "ws-1",
+        limit=20,
+        q="hello",
+        from_at=None,
+        to_at=None,
+        db=_WorkspaceAgentDb(has_agent=False),
+        user=SimpleNamespace(id="user-1"),
+    )
+
+    assert response["code"] == 0
+    check_member.assert_awaited_once()
+    search_messages.assert_awaited_once()
