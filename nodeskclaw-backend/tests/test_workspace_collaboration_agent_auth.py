@@ -105,3 +105,20 @@ async def test_agent_auth_can_only_read_own_collaboration_messages(monkeypatch, 
     assert exc.value.status_code == 403
     assert exc.value.detail["message_key"] == "errors.collaboration.agent_scope_forbidden"
     get_messages.assert_not_awaited()
+
+
+async def test_agent_auth_can_read_own_collaboration_messages(monkeypatch, agent_actor):
+    monkeypatch.setattr(workspaces.wm_service, "check_workspace_member", AsyncMock())
+    get_messages = AsyncMock(return_value=[])
+    monkeypatch.setattr(workspaces.msg_service, "get_agent_collaboration_messages", get_messages)
+
+    response = await workspaces.list_agent_collaboration_messages(
+        "ws-1",
+        "inst-1",
+        limit=50,
+        db=_WorkspaceAgentDb(has_agent=True),
+        user=SimpleNamespace(id="user-1"),
+    )
+
+    assert response["code"] == 0
+    get_messages.assert_awaited_once()
