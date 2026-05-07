@@ -116,6 +116,19 @@ async def _require_agent_in_workspace(
         )
 
 
+async def _require_collaboration_workspace_access(
+    workspace_id: str,
+    user,
+    db: AsyncSession,
+) -> str | None:
+    agent_id = _get_current_agent_id()
+    if agent_id is not None:
+        await _require_agent_in_workspace(workspace_id, agent_id, db)
+        return agent_id
+    await wm_service.check_workspace_member(workspace_id, user, db)
+    return None
+
+
 # ── Workspace CRUD ───────────────────────────────────
 
 @router.post("")
@@ -1648,12 +1661,10 @@ async def send_collaboration_message(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """Agent-callable HTTP endpoint to send a collaboration message to another agent."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
-    agent_id = _get_current_agent_id()
+    agent_id = await _require_collaboration_workspace_access(workspace_id, user, db)
     if agent_id is None:
         raise _error(403, 40305, "errors.collaboration.agent_only",
                      "Only agents can send collaboration messages via this endpoint")
-    await _require_agent_in_workspace(workspace_id, agent_id, db)
     from app.services.collaboration_service import handle_collaboration_message
     await handle_collaboration_message(
         workspace_id=workspace_id,
@@ -1675,10 +1686,7 @@ async def list_collaboration_timeline(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """List all collaboration messages in a workspace as a timeline."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
-    agent_id = _get_current_agent_id()
-    if agent_id is not None:
-        await _require_agent_in_workspace(workspace_id, agent_id, db)
+    await _require_collaboration_workspace_access(workspace_id, user, db)
     from datetime import datetime as dt, timezone
     since_dt = None
     if since:
@@ -1718,10 +1726,8 @@ async def list_agent_collaboration_messages(
     user=Depends(_get_current_user_or_agent_dep()),
 ):
     """List collaboration messages sent to or from a specific agent."""
-    await wm_service.check_workspace_member(workspace_id, user, db)
-    agent_id = _get_current_agent_id()
+    agent_id = await _require_collaboration_workspace_access(workspace_id, user, db)
     if agent_id is not None:
-        await _require_agent_in_workspace(workspace_id, agent_id, db)
         if agent_id != instance_id:
             raise _error(
                 403,
