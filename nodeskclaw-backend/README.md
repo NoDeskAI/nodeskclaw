@@ -445,8 +445,21 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 | `SKILL_REGISTRIES` | JSON 数组，配置外部技能基因 Registry 列表。为空则仅使用本地数据库。示例：`[{"type":"genehub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"}]` |
 | `GENEHUB_REGISTRY_URL` | （旧版兼容）GeneHub Registry 地址。非空时自动注册为 type=genehub 的 adapter |
 | `GENEHUB_API_KEY` | （旧版兼容）GeneHub Registry API Key |
+| `GENEHUB_WEB_URL` | GeneHub Web 前端地址，用于在 Portal 中生成跳转链接 |
+| `GENEHUB_DATABASE_URL` | K8s GeneHub Registry 数据库连接。`deploy/init.sh` 会写入 `nodeskclaw-backend-env` Secret，GeneHub Registry 通过该值连接 PostgreSQL |
+| `GENEHUB_ADMIN_TOKEN` | GeneHub 管理 Token，用于 Registry 管理端点或 Gitea 初始化 |
+| `GENEHUB_JWT_SECRET` | GeneHub JWT 签名密钥 |
+| `GENEHUB_ADMIN_LOGINS` | GeneHub 管理员登录白名单 |
+| `GENEHUB_WEBHOOK_SECRET` | GeneHub Webhook 签名密钥 |
 
 支持的 adapter 类型：`genehub`（GeneHub/DeskHub 协议）、`clawhub`（ClawHub，当前 stub）。系统始终包含本地 LocalAdapter，无外部 Registry 时纯本地运行。
+
+合并后的 GeneHub 运行方式：
+
+- 本地开发 `./dev.sh` 默认同时启动 Backend（后端 API）、LLM Proxy（LLM 代理）、Portal（用户门户）、GeneHub Registry（基因库 API）和 GeneHub Web（基因库前端）。如需跳过 GeneHub，使用 `./dev.sh --skip-genehub`。
+- Docker Compose 部署默认启动 `genehub-registry` 和 `genehub-gitea`，其中 Gitea 数据通过 `genehub_gitea_data` volume（持久化卷）保存。
+- K8s 部署默认应用 `deploy/k8s/genehub.yaml`，其中 Gitea 使用 `genehub-gitea-data` PVC（持久化卷声明）保存 gene 文件。
+- Portal 的 Gene Market（基因市场）会聚合本地和 GeneHub 数据。卡片或详情页标记 `Local` 表示本地基因，标记 `GeneHub` 表示来自 GeneHub Registry。
 
 文件存储配置：
 
@@ -491,6 +504,7 @@ docker compose up -d
 
 Docker Compose 部署注意事项：
 - `DATABASE_URL` 默认指向内置 PostgreSQL，无需手动配置
+- `GENEHUB_DATABASE_URL` 在 Docker Compose 中由 compose 文件自动生成，默认指向内置 PostgreSQL 的 `genehub` 数据库；K8s 部署必须在 `.env` 中显式配置
 - `DATABASE_NAME_SUFFIX` 在 Docker 部署时**必须留空**（compose 文件已强制覆盖为空字符串）。`auto` 模式会用容器 hostname（随机 ID）拼接库名导致连接失败
 - `CORS_ORIGINS` 需根据实际访问端口调整（Docker 默认 Portal 端口 80，Admin 端口 8001）
 - 如需使用外部数据库，在项目根目录 `.env` 设置 `DATABASE_URL`，然后 `docker compose up -d nodeskclaw-backend portal`
