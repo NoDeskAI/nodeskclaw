@@ -71,6 +71,15 @@ cmd_init() {
   echo "NODESKCLAW_EDITION=${edition_val}" >> "$clean_env"
   log "NODESKCLAW_EDITION=${edition_val}（由 --ee 标志决定）"
 
+  local genehub_database_url
+  genehub_database_url=$(grep '^GENEHUB_DATABASE_URL=' "$clean_env" | head -1 | cut -d= -f2- || true)
+  if [[ -z "$genehub_database_url" || "$genehub_database_url" == *"<"* || "$genehub_database_url" == *">"* ]]; then
+    err "GENEHUB_DATABASE_URL 未配置，GeneHub Registry 无法连接数据库"
+    echo "请在 $env_file 中设置独立的 GeneHub PostgreSQL 连接，例如:"
+    echo "  GENEHUB_DATABASE_URL=postgres://<user>:<password>@<host>:5432/genehub"
+    exit 1
+  fi
+
   local env_count; env_count=$(wc -l < "$clean_env" | xargs)
   local secret_name="nodeskclaw-backend-env"
 

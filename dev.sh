@@ -291,6 +291,7 @@ require_port_free 4510 "backend"
 require_port_free 4511 "llm-proxy"
 if [ "$SKIP_GENEHUB" = false ]; then
   require_port_free 4520 "genehub-registry"
+  require_port_free 5173 "genehub-web"
 fi
 
 # ── 启动服务 ──────────────────────────────────────────────

@@ -30,7 +30,6 @@ spec:
                 secretKeyRef:
                   name: nodeskclaw-backend-env
                   key: GENEHUB_DATABASE_URL
-                  optional: true
             - name: GITEA_URL
               value: "http://genehub-gitea:3000"
             - name: GENEHUB_ADMIN_TOKEN
@@ -151,7 +150,21 @@ spec:
             periodSeconds: 10
       volumes:
         - name: gitea-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: genehub-gitea-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genehub-gitea-data
+  labels:
+    app: genehub-gitea
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
