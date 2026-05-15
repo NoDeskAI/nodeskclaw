@@ -3,10 +3,12 @@ services:
     image: postgres:16-alpine
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./scripts/init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh:ro
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nodeskclaw}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nodeskclaw}
       POSTGRES_DB: ${POSTGRES_DB:-nodeskclaw}
+      GENEHUB_DB: ${GENEHUB_DB:-genehub}
       TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nodeskclaw}"]
@@ -27,6 +29,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      genehub-registry:
+        condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -51,6 +55,9 @@ services:
       # AI 员工回连后端地址（仅管理 Docker 实例时可保持默认 localhost）
       # 若管理远端 K8s 集群上的 AI 员工，必须改为 K8s Pod 可达的外部地址
       AGENT_API_BASE_URL: ${AGENT_API_BASE_URL:-http://localhost:4510/api/v1}
+      GENEHUB_REGISTRY_URL: ${GENEHUB_REGISTRY_URL:-http://genehub-registry:3000}
+      GENEHUB_API_KEY: ${GENEHUB_API_KEY:-}
+      GENEHUB_WEB_URL: ${GENEHUB_WEB_URL:-http://localhost:${GENEHUB_PORT:-4520}}
       DEBUG: ${DEBUG:-true}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-bytes-base64-key__=}
@@ -97,5 +104,58 @@ services:
       - "${PORTAL_PORT:-80}:80"
     restart: unless-stopped
 
+  # ── GeneHub 基因库服务 ─────────────────────────────────
+
+  genehub-gitea:
+    image: gitea/gitea:1.22
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__ROOT_URL: http://genehub-gitea:3000
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__api__ENABLE_SWAGGER: "false"
+    volumes:
+      - genehub_gitea_data:/data
+    ports:
+      - "${GENEHUB_GITEA_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  genehub-registry:
+    image: nodesk-center-cn-beijing.cr.volces.com/public/genehub-registry:${DESKCLAW_VERSION}
+    build:
+      context: genehub
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      genehub-gitea:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nodeskclaw}:${POSTGRES_PASSWORD:-nodeskclaw}@postgres:5432/${GENEHUB_DB:-genehub}
+      PORT: "3000"
+      PUBLIC_DIR: ./public
+      GITEA_URL: http://genehub-gitea:3000
+      GENEHUB_ADMIN_TOKEN: ${GENEHUB_ADMIN_TOKEN:-}
+      GENEHUB_JWT_SECRET: ${GENEHUB_JWT_SECRET:-genehub-dev-jwt-secret}
+      GENEHUB_ADMIN_LOGINS: ${GENEHUB_ADMIN_LOGINS:-}
+      GENEHUB_WEBHOOK_SECRET: ${GENEHUB_WEBHOOK_SECRET:-}
+      NODESKCLAW_DATABASE_URL: postgres://${POSTGRES_USER:-nodeskclaw}:${POSTGRES_PASSWORD:-nodeskclaw}@postgres:5432/${POSTGRES_DB:-nodeskclaw}
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${GENEHUB_PORT:-4520}:3000"
+    restart: unless-stopped
+
 volumes:
   pg_data:
+  genehub_gitea_data:

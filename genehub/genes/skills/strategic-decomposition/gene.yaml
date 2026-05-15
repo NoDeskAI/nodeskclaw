@@ -1,0 +1,47 @@
+slug: "strategic-decomposition"
+name: "战略拆解"
+version: "1.0.0"
+description: |
+  将任何目标变成可执行计划的能力框架。目标澄清、分解方法、依赖图谱、
+  并行化策略与检查点设计，把大象分成可以吃的部分。
+short_description: "战略拆解：把大象分成可以吃的部分"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "git-branch-plus"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "analytical-thinking"
+
+skill:
+  name: "strategic-decomposition"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "拿到目标先澄清成功样子与约束，再分解"
+    - "掌握目标→阶段→任务与任务六要素"
+    - "画出依赖与关键路径，设计检查点"
+  scenarios:
+    - title: "模糊业务目标"
+      context: "业务方说「把用户体验做上去」"
+      expected_focus: "澄清可衡量成功标准与约束后再拆"
+    - title: "多团队协作项目"
+      context: "前后端与数据依赖交织"
+      expected_focus: "依赖图谱与关键路径，识别可并行与阻塞点"

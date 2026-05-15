@@ -1,0 +1,41 @@
+slug: "genehub-learner"
+name: "GeneHub 学习引擎"
+version: "1.2.1"
+description: |
+  GeneHub 基因管理与学习引擎。提供从 GeneHub 搜索、安装、深度学习基因的完整能力——
+  包括 CLI 命令操作、学习任务处理、个性化技能版本生成、学习心得记录。
+short_description: "基因管理 + 深度学习引擎"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "brain-circuit"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies: []
+
+skill:
+  name: "genehub-learner"
+  always: true
+  file: "SKILL.md"
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握 genehub CLI 的搜索、安装、学习、卸载命令"
+    - "能够处理 learning-tasks/ 中的学习任务并提交结果"
+    - "能够生成个性化技能版本"
+  scenarios: []

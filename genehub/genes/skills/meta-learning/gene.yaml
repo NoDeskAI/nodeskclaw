@@ -1,0 +1,48 @@
+slug: "meta-learning"
+name: "元学习"
+version: "1.0.0"
+description: |
+  Agent 学习元技能。评估基因内容复杂度，决定直装或深度学习；处理社交基因推荐；
+  从任务上下文中自主推导 Expert Skill；与 skill-creator 组合实现格式标准化。
+short_description: "学习能力的能力：评估、决策、推导、自省"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "brain"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "genehub-learner"
+
+skill:
+  name: "meta-learning"
+  always: true
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: true
+  objectives:
+    - "掌握基因复杂度评估与直装/深度学习的决策逻辑"
+    - "能够在协作场景中发起和响应社交基因推荐"
+    - "从任务上下文自主推导 Expert Skill，区分 Tool Skill 与 Expert Skill"
+    - "定期自评已学习基因的实际效用，必要时建议移除"
+  scenarios:
+    - title: "遇到简单工具基因"
+      context: "基因内容是一个 CLI 工具的操作说明，Agent 已熟悉该工具"
+      expected_focus: "判断为直装，跳过深度学习流程"
+    - title: "任务需要新领域专业能力"
+      context: "用户要求进行学术论文分析，现有技能无法覆盖"
+      expected_focus: "触发 Expert Skill 推导流程，生成领域专家技能"

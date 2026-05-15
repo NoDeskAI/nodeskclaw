@@ -1,0 +1,47 @@
+slug: "obstacle-resilience"
+name: "障碍应变"
+version: "1.0.0"
+description: |
+  遇到障碍时的系统化应对方法。撞墙时先停后析：障碍分类、尝试边界、
+  升级报告模板与恢复纪律，让障碍成为信息而非挫败。
+short_description: "障碍应变：撞墙时的系统化反应"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "shield-alert"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "analytical-thinking"
+
+skill:
+  name: "obstacle-resilience"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握障碍分类与对应动作：信息不足、能力不达、环境阻碍、需求矛盾"
+    - "遵守尝试边界：最多 2 种替代方案，然后升级"
+    - "使用标准升级报告模板，附带完整上下文"
+  scenarios:
+    - title: "执行中缺少关键信息"
+      context: "任务依赖某数据源，但无法访问"
+      expected_focus: "向上确认，不猜测"
+    - title: "尝试两种方案后仍失败"
+      context: "已试方案 A 和 B，均未解决"
+      expected_focus: "立即升级，附模板化报告"

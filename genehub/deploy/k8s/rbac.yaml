@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: genehub-deployer
+  namespace: genehub
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: genehub-deployer-role
+  namespace: genehub
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec", "pods/portforward", "services", "configmaps", "secrets", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: genehub-deployer-binding
+  namespace: genehub
+subjects:
+  - kind: ServiceAccount
+    name: genehub-deployer
+    namespace: genehub
+roleRef:
+  kind: Role
+  name: genehub-deployer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: genehub-deployer-token
+  namespace: genehub
+  annotations:
+    kubernetes.io/service-account.name: genehub-deployer
+type: kubernetes.io/service-account-token

@@ -1,0 +1,44 @@
+{
+  "name": "@nodeskai/genehub-registry",
+  "version": "2026.3.5-1",
+  "description": "GeneHub Gene Registry Service",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx/esm --watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "mcp": "node dist/mcp/index.js",
+    "mcp:dev": "tsx src/mcp/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "import:nodeskclaw": "tsx src/scripts/import-nodeskclaw.ts",
+    "migrate:gitea": "tsx src/scripts/migrate-genes-to-gitea.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@nodeskai/genehub-types": "workspace:*",
+    "drizzle-orm": "^0.38",
+    "hono": "^4.6",
+    "postgres": "^3.4",
+    "semver": "^7.7.4",
+    "yaml": "^2.7",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0",
+    "@types/semver": "^7.7.1",
+    "drizzle-kit": "^0.30",
+    "tsup": "^8.3",
+    "tsx": "^4.19",
+    "typescript": "^5.7",
+    "vitest": "^3.0"
+  },
+  "license": "MIT"
+}

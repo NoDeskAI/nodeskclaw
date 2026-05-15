@@ -98,11 +98,11 @@ cmd_init() {
   fi
 
   log "应用 K8s 部署清单（Deployment + Service）..."
-  for f in backend.yaml admin.yaml portal.yaml; do
+  for f in backend.yaml admin.yaml portal.yaml genehub.yaml; do
     [[ "$f" == "admin.yaml" && "$EE_MODE" != true ]] && continue
     if [[ -f "$DEPLOY_DIR/k8s/$f" ]]; then
       local comp_name="${f%.yaml}"
-      local comp_reg; comp_reg="$(get_component_registry "$comp_name")"
+      local comp_reg; comp_reg="$(get_component_registry "$comp_name" 2>/dev/null || echo "${PUBLIC_REGISTRY:-$REGISTRY}")"
       sed "s|<YOUR_REGISTRY>/<YOUR_NAMESPACE>|${comp_reg}|g" "$DEPLOY_DIR/k8s/$f" \
         | $KUBECTL -n "$NAMESPACE" apply -f -
       ok "$f"

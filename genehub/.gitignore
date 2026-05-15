@@ -1,0 +1,15 @@
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+deploy/k8s/kubeconfig-*.yaml
+.pnpm-store
+/nodeskclaw/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache
+.mypy_cache
+*.egg-info/

@@ -16,10 +16,11 @@ usage() {
   finalize <version>   将 GitHub Release 标记为正式版
 
 选项:
-  --ee            EE 模式（包含 admin，启用 ee/ 代码注入）
-  --skip-proxy    create 时跳过 proxy 镜像
-  --mirrors NAME  使用镜像源预设（如 cn），加速构建依赖下载
-  --no-cache      create 时不使用 Docker 缓存
+  --ee              EE 模式（包含 admin，启用 ee/ 代码注入）
+  --skip-proxy      create 时跳过 proxy 镜像
+  --skip-genehub    create 时跳过 genehub 镜像
+  --mirrors NAME    使用镜像源预设（如 cn），加速构建依赖下载
+  --no-cache        create 时不使用 Docker 缓存
 EOF
   exit "$exit_code"
 }
@@ -79,6 +80,7 @@ cmd_create() {
 
   local targets=(backend portal)
   [[ "$SKIP_PROXY" != true ]] && targets+=(proxy)
+  [[ "$SKIP_GENEHUB" != true ]] && targets+=(genehub)
 
   log "生成 changelog..."
   local notes_file; notes_file="$(generate_changelog "$VERSION")"
@@ -166,6 +168,7 @@ cmd_finalize() {
 COMMAND="$1"; shift
 VERSION=""
 SKIP_PROXY=false
+SKIP_GENEHUB=false
 EE_MODE=false
 CE_ONLY=true
 MIRRORS="${MIRRORS:-}"
@@ -190,12 +193,13 @@ esac
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ee)          EE_MODE=true ;;
-    --skip-proxy)  SKIP_PROXY=true ;;
-    --mirrors)     require_option_value "$1" "${2:-}"; MIRRORS="$2"; shift ;;
-    --no-cache)    NO_CACHE="--no-cache" ;;
-    --help|-h)     usage 0 ;;
-    *)             err "未知参数: $1"; usage 1 ;;
+    --ee)            EE_MODE=true ;;
+    --skip-proxy)    SKIP_PROXY=true ;;
+    --skip-genehub)  SKIP_GENEHUB=true ;;
+    --mirrors)       require_option_value "$1" "${2:-}"; MIRRORS="$2"; shift ;;
+    --no-cache)      NO_CACHE="--no-cache" ;;
+    --help|-h)       usage 0 ;;
+    *)               err "未知参数: $1"; usage 1 ;;
   esac
   shift
 done

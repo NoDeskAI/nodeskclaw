@@ -9,6 +9,7 @@ NoDeskClaw 是 DeskClaw 实例可视化管理系统，通过 Web 界面管理 K8
 | 后端 | Python 3.12 + FastAPI + SQLAlchemy + PostgreSQL | CE + EE |
 | 管理前端 | Vue 3 + Vite + TypeScript + Tailwind CSS + shadcn-vue | EE-only |
 | 用户门户 | Vue 3 + Vite + TypeScript + Tailwind CSS + Three.js | CE + EE |
+| GeneHub 基因库 | Node.js + Hono + Drizzle + PostgreSQL + React/Vite | CE + EE |
 
 ## 构建/测试命令
 
@@ -23,6 +24,19 @@ uv run pytest tests/test_xxx.py            # 运行指定文件
 uv run pytest tests/test_xxx.py::test_func # 运行指定函数
 uv run ruff check .                        # Lint 检查
 uv run ruff check --fix .                  # 自动修复
+```
+
+### GeneHub 基因库（genehub/）
+
+```bash
+cd genehub
+pnpm install
+PORT=4520 pnpm dev:registry                  # Registry API（端口 4520）
+pnpm dev:web                                  # Web 前端（端口 5173）
+pnpm build                                    # 构建所有包
+pnpm test                                     # 运行测试
+pnpm db:migrate                               # 数据库迁移
+pnpm db:seed                                  # 导入种子数据
 ```
 
 ### 前端（ee/nodeskclaw-frontend / nodeskclaw-portal）

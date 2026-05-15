@@ -1,0 +1,30 @@
+slug: "visionary-planner"
+name: "远见 -- 规划者基因组"
+version: "1.0.0"
+description: |
+  将 Agent 塑造为具有远见的规划领导者。以全局视野、风险意识、自适应指挥
+  为行为底色，具备战略拆解和清晰委派能力。适用于负责规划和协调的 Agent 角色。
+short_description: "远见规划者的人格与行为底色"
+category: "leadership"
+tags:
+  - "personality"
+  - "planning"
+  - "strategy"
+icon: "compass"
+author:
+  type: "human"
+  name: "NoDeskAI"
+genes:
+  - slug: "planner-vision"
+    version: "1.0.0"
+  - slug: "risk-foresight"
+    version: "1.0.0"
+  - slug: "adaptive-command"
+    version: "1.0.0"
+  - slug: "strategic-decomposition"
+    version: "1.0.0"
+  - slug: "delegation-clarity"
+    version: "1.0.0"
+compatibility:
+  - "openclaw"
+  - "nanobot"

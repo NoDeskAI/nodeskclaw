@@ -1,0 +1,52 @@
+{
+  "name": "@nodeskai/genehub",
+  "version": "2026.3.5-1",
+  "description": "GeneHub CLI - AI 员工基因管理命令行工具",
+  "type": "module",
+  "bin": {
+    "genehub": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.3.0",
+    "@nodeskai/genehub-sdk": "workspace:*",
+    "@nodeskai/genehub-types": "workspace:*",
+    "chalk": "^5.4",
+    "cli-table3": "^0.6",
+    "commander": "^13.1",
+    "ora": "^8.1",
+    "tar": "^7.5.9",
+    "yaml": "^2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0",
+    "tsup": "^8.3",
+    "tsx": "^4.19",
+    "typescript": "^5.7",
+    "vitest": "^3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoDeskAI/genehub.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/NoDeskAI/genehub",
+  "keywords": [
+    "genehub",
+    "ai",
+    "agent",
+    "gene",
+    "skill",
+    "cli"
+  ],
+  "license": "MIT"
+}

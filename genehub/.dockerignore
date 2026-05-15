@@ -1,0 +1,7 @@
+node_modules
+**/node_modules
+**/dist
+**/.git
+deploy/k8s/kubeconfig-*.yaml
+.pnpm-store
+.cursor

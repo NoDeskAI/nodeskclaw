@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: genehub-app-secret
+  namespace: genehub
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://genehub:<CHANGE_ME>@genehub-postgres:5432/genehub"
+  NODESKCLAW_DATABASE_URL: "postgres://nodeskclaw:<CHANGE_ME>@nodeskclaw-postgres:5432/nodeskclaw"
+  GENEHUB_WEBHOOK_SECRET: "<CHANGE_ME>"
+  GENEHUB_ADMIN_TOKEN: "ghb_admin_<CHANGE_ME>"
+  MINIMAX_API_KEY: "<CHANGE_ME>"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genehub
+  namespace: genehub
+  labels:
+    app: genehub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genehub
+  template:
+    metadata:
+      labels:
+        app: genehub
+    spec:
+      # imagePullSecrets:
+      #   - name: your-registry-secret
+      containers:
+        - name: genehub
+          image: your-registry.example.com/genehub:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: DATABASE_URL
+            - name: NODESKCLAW_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: NODESKCLAW_DATABASE_URL
+            - name: GENEHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: GENEHUB_WEBHOOK_SECRET
+            - name: GENEHUB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: GENEHUB_ADMIN_TOKEN
+            - name: GENEHUB_ADMIN_LOGINS
+              value: "<CHANGE_ME>"
+            - name: GITEA_URL
+              value: "http://genehub-gitea:3000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genehub
+  namespace: genehub
+  labels:
+    app: genehub
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+  selector:
+    app: genehub
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: genehub-nginx-route
+  namespace: genehub
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: genehub.nodeskai.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: genehub
+                port:
+                  number: 80

@@ -47,6 +47,7 @@ ctag() {
     admin)   echo -e "${RED}admin${NC}" ;;
     portal)  echo -e "${GREEN}portal${NC}" ;;
     proxy)   echo -e "${AMBER}proxy${NC}" ;;
+    genehub) echo -e "${CYAN}genehub${NC}" ;;
     *)       echo "$1" ;;
   esac
 }
@@ -57,6 +58,7 @@ get_image_name() {
     admin)   echo "nodeskclaw-admin" ;;
     portal)  echo "nodeskclaw-portal" ;;
     proxy)   echo "nodeskclaw-llm-proxy" ;;
+    genehub) echo "genehub-registry" ;;
     *)       return 1 ;;
   esac
 }
@@ -67,6 +69,7 @@ get_build_context() {
     admin)   echo "$PROJECT_ROOT/ee/nodeskclaw-frontend" ;;
     portal)  echo "$PROJECT_ROOT/nodeskclaw-portal" ;;
     proxy)   echo "$PROJECT_ROOT/nodeskclaw-llm-proxy" ;;
+    genehub) echo "$PROJECT_ROOT/genehub" ;;
     *)       return 1 ;;
   esac
 }
@@ -77,6 +80,7 @@ get_dockerfile() {
     admin)   echo "$PROJECT_ROOT/ee/nodeskclaw-frontend/Dockerfile" ;;
     portal)  echo "$PROJECT_ROOT/nodeskclaw-portal/Dockerfile" ;;
     proxy)   echo "$PROJECT_ROOT/nodeskclaw-llm-proxy/Dockerfile" ;;
+    genehub) echo "$PROJECT_ROOT/genehub/Dockerfile" ;;
     *)       return 1 ;;
   esac
 }
@@ -87,14 +91,16 @@ get_k8s_deployment() {
     admin)   echo "nodeskclaw-admin" ;;
     portal)  echo "nodeskclaw-portal" ;;
     proxy)   echo "nodeskclaw-llm-proxy" ;;
+    genehub) echo "genehub" ;;
     *)       return 1 ;;
   esac
 }
 
 get_k8s_container() {
   case "$1" in
-    proxy) echo "llm-proxy" ;;
-    *)     get_image_name "$1" ;;
+    proxy)   echo "llm-proxy" ;;
+    genehub) echo "genehub" ;;
+    *)       get_image_name "$1" ;;
   esac
 }
 
@@ -186,6 +192,7 @@ get_all_targets() {
   local targets=(backend portal)
   [[ "${EE_MODE:-false}" == true ]] && targets=(backend admin portal)
   [[ "${SKIP_PROXY:-false}" != true ]] && targets+=(proxy)
+  [[ "${SKIP_GENEHUB:-false}" != true ]] && targets+=(genehub)
   echo "${targets[@]}"
 }
 

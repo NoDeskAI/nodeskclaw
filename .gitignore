@@ -27,6 +27,7 @@ nodeskclaw-frontend/
 # ========================
 .env
 .env.*
+!.env.example
 
 # ========================
 # Python / 后端
@@ -75,6 +76,12 @@ pnpm-debug.log*
 *.sln
 *.sw?
 Thumbs.db
+
+# ========================
+# GeneHub（合并到主仓库）
+# ========================
+genehub/deploy/k8s/kubeconfig-*.yaml
+genehub/.pnpm-store/
 
 # ========================
 # 数据文件

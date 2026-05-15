@@ -7,6 +7,7 @@ BACKEND_DIR="$SCRIPT_DIR/nodeskclaw-backend"
 LLM_PROXY_DIR="$SCRIPT_DIR/nodeskclaw-llm-proxy"
 PORTAL_DIR="$SCRIPT_DIR/nodeskclaw-portal"
 ADMIN_DIR="$EE_DIR/nodeskclaw-frontend"
+GENEHUB_DIR="$SCRIPT_DIR/genehub"
 
 BLUE=$'\033[0;34m'
 GREEN=$'\033[0;32m'
@@ -19,6 +20,7 @@ RESET=$'\033[0m'
 PIDS=()
 FRESH=false
 DOCKER_PG=false
+SKIP_GENEHUB=false
 DOCKER_PG_CONTAINER="nodeskclaw-pg"
 DOCKER_PG_VOLUME="nodeskclaw_pg_dev"
 IS_MSYS=false
@@ -28,7 +30,7 @@ fi
 
 usage() {
   cat <<EOF
-用法: ./dev.sh [ce|ee] [--fresh] [--docker-pg] [--help]
+用法: ./dev.sh [ce|ee] [--fresh] [--docker-pg] [--skip-genehub] [--help]
 
 模式:
   (无参数)   自动检测：ee/ 存在 → EE，否则 → CE
@@ -36,15 +38,18 @@ usage() {
   ee         强制 EE 模式（backend + portal + admin）
 
 选项:
-  --fresh      强制重新安装依赖（删除 .venv / node_modules 后重装）
-  --docker-pg  使用 Docker 启动本地 PostgreSQL（无需自行安装 PG）
-  --help       显示本帮助
+  --fresh          强制重新安装依赖（删除 .venv / node_modules 后重装）
+  --docker-pg      使用 Docker 启动本地 PostgreSQL（无需自行安装 PG）
+  --skip-genehub   跳过 GeneHub 基因库服务启动
+  --help           显示本帮助
 
 服务端口:
-  backend    http://localhost:4510
-  llm-proxy  http://localhost:4511
-  portal     http://localhost:4517
-  admin(EE)  http://localhost:4518
+  backend         http://localhost:4510
+  llm-proxy       http://localhost:4511
+  portal          http://localhost:4517
+  admin(EE)       http://localhost:4518
+  genehub-registry http://localhost:4520
+  genehub-web     http://localhost:5173
 EOF
   exit 0
 }
@@ -83,7 +88,7 @@ cleanup() {
   for pid in "${PIDS[@]}"; do
     wait "$pid" 2>/dev/null || true
   done
-  for port in 4510 4511; do
+  for port in 4510 4511 4520 5173; do
     local remaining
     remaining=$(_find_pids_on_port "$port")
     if [ -n "$remaining" ]; then
@@ -108,6 +113,7 @@ for arg in "$@"; do
     ee)      MODE="ee" ;;
     --fresh) FRESH=true ;;
     --docker-pg) DOCKER_PG=true ;;
+    --skip-genehub) SKIP_GENEHUB=true ;;
     --help|-h) usage ;;
     *) err "未知参数: $arg"; usage ;;
   esac
@@ -205,6 +211,7 @@ if [ "$FRESH" = true ]; then
   rm -rf "$LLM_PROXY_DIR/.venv"
   rm -rf "$PORTAL_DIR/node_modules"
   [ "$MODE" = "ee" ] && rm -rf "$ADMIN_DIR/node_modules"
+  [ "$SKIP_GENEHUB" = false ] && rm -rf "$GENEHUB_DIR/node_modules"
 fi
 
 if [ ! -d "$BACKEND_DIR/.venv" ]; then
@@ -237,6 +244,21 @@ if [ "$MODE" = "ee" ]; then
   fi
 fi
 
+# ── GeneHub 依赖 ──────────────────────────────────────────
+if [ "$SKIP_GENEHUB" = false ] && [ -d "$GENEHUB_DIR" ]; then
+  if ! command -v pnpm &>/dev/null; then
+    log "${YELLOW}未找到 pnpm，跳过 GeneHub 依赖安装（GeneHub 需要 pnpm >= 9）${RESET}"
+    SKIP_GENEHUB=true
+  else
+    if [ ! -d "$GENEHUB_DIR/node_modules" ]; then
+      log "安装 GeneHub 依赖 (pnpm install)..."
+      (cd "$GENEHUB_DIR" && pnpm install)
+    else
+      log "GeneHub 依赖已就绪，跳过安装"
+    fi
+  fi
+fi
+
 # ── 带颜色前缀的输出函数 ──────────────────────────────────
 prefix_output() {
   local color="$1"
@@ -247,6 +269,11 @@ prefix_output() {
 # ── 数据库迁移 ────────────────────────────────────────────
 log "执行数据库迁移 (alembic upgrade head)..."
 (cd "$BACKEND_DIR" && uv run alembic upgrade head)
+
+if [ "$SKIP_GENEHUB" = false ] && [ -d "$GENEHUB_DIR" ]; then
+  log "执行 GeneHub 数据库迁移 (drizzle-kit migrate)..."
+  (cd "$GENEHUB_DIR" && pnpm db:migrate) || log "${YELLOW}GeneHub 数据库迁移跳过（可能需要先配置 DATABASE_URL）${RESET}"
+fi
 
 # ── 端口检查 ──────────────────────────────────────────────
 require_port_free() {
@@ -262,6 +289,9 @@ require_port_free() {
 
 require_port_free 4510 "backend"
 require_port_free 4511 "llm-proxy"
+if [ "$SKIP_GENEHUB" = false ]; then
+  require_port_free 4520 "genehub-registry"
+fi
 
 # ── 启动服务 ──────────────────────────────────────────────
 log "启动服务..."
@@ -270,6 +300,11 @@ export NODESKCLAW_EDITION="$MODE"
 export LLM_PROXY_URL="http://localhost:4511"
 export LLM_PROXY_INTERNAL_URL="http://localhost:4511"
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+
+if [ "$SKIP_GENEHUB" = false ]; then
+  export GENEHUB_REGISTRY_URL="http://localhost:4520"
+  export GENEHUB_WEB_URL="http://localhost:5173"
+fi
 
 if [ -z "${DATABASE_URL:-}" ]; then
   DATABASE_URL=$(grep '^DATABASE_URL=' "$BACKEND_DIR/.env" | head -1 | cut -d= -f2-)
@@ -298,6 +333,16 @@ if [ "$MODE" = "ee" ]; then
   PIDS+=($!)
 fi
 
+if [ "$SKIP_GENEHUB" = false ] && [ -d "$GENEHUB_DIR" ]; then
+  (cd "$GENEHUB_DIR" && PORT=4520 pnpm dev:registry) \
+    2>&1 | prefix_output "$RED" "ghub-r " &
+  PIDS+=($!)
+
+  (cd "$GENEHUB_DIR" && pnpm dev:web) \
+    2>&1 | prefix_output "$BOLD" "ghub-w " &
+  PIDS+=($!)
+fi
+
 sleep 2
 
 # ── 打印摘要 ──────────────────────────────────────────────
@@ -306,11 +351,15 @@ MODE_UPPER=$(echo "$MODE" | tr '[:lower:]' '[:upper:]')
 echo "${BOLD}========================================${RESET}"
 echo "${BOLD} NoDeskClaw 本地开发环境 (${MODE_UPPER})${RESET}"
 echo "${BOLD}========================================${RESET}"
-echo "  ${BLUE}Backend${RESET}  http://localhost:4510"
-echo "  ${CYAN}LLM Prx${RESET}  http://localhost:4511"
-echo "  ${GREEN}Portal${RESET}   http://localhost:4517"
+echo "  ${BLUE}Backend${RESET}   http://localhost:4510"
+echo "  ${CYAN}LLM Prx${RESET}   http://localhost:4511"
+echo "  ${GREEN}Portal${RESET}    http://localhost:4517"
 if [ "$MODE" = "ee" ]; then
-  echo "  ${YELLOW}Admin${RESET}    http://localhost:4518"
+  echo "  ${YELLOW}Admin${RESET}     http://localhost:4518"
+fi
+if [ "$SKIP_GENEHUB" = false ] && [ -d "$GENEHUB_DIR" ]; then
+  echo "  ${RED}GeneHub${RESET}   http://localhost:4520 (API)"
+  echo "  ${BOLD}GeneHub${RESET}   http://localhost:5173 (Web)"
 fi
 echo "${BOLD}========================================${RESET}"
 echo "  Ctrl+C 停止所有服务"

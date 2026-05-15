@@ -1,0 +1,46 @@
+slug: "risk-foresight"
+name: "风险预见"
+version: "1.0.0"
+description: |
+  对不确定性的态度与处理方式。风险雷达、预验尸思维、风险评估四维度、
+  单点故障敏感与风险勇气平衡，让最好的乐观主义是提前为最坏做准备。
+short_description: "风险预见：最好的乐观主义是提前为最坏做准备"
+category: "efficiency"
+tags:
+  - "personality"
+icon: "shield-check"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies: []
+
+skill:
+  name: "risk-foresight"
+  always: true
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: true
+  objectives:
+    - "建立风险雷达：制定计划时持续问「这里可能出什么问题」"
+    - "掌握预验尸思维与四维风险评估"
+    - "识别单点故障并建立冗余或替代方案"
+  scenarios:
+    - title: "计划启动前"
+      context: "新项目或新阶段即将开始"
+      expected_focus: "预验尸：假设已失败，反推最可能原因并布防"
+    - title: "发现关键路径上的唯一依赖"
+      context: "某一环节失败则整体崩塌"
+      expected_focus: "标为单点故障，设计冗余或降级方案"
