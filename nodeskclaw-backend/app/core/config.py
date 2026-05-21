@@ -21,6 +21,21 @@ def _detect_platform_namespace() -> str:
         return "nodeskclaw-system"
 
 
+def _qualify_k8s_service_url(url: str, service_name: str, namespace: str) -> str:
+    normalized = url.rstrip("/")
+    parsed = urlsplit(normalized)
+    if parsed.hostname != service_name:
+        return normalized
+
+    namespace = namespace.strip()
+    if not namespace:
+        return normalized
+
+    host = f"{service_name}.{namespace}.svc.cluster.local"
+    netloc = f"{host}:{parsed.port}" if parsed.port else host
+    return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)).rstrip("/")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -109,6 +124,16 @@ class Settings(BaseSettings):
     NODESKCLAW_HOST: str = ""  # 外部可达域名，如 https://nodeskclaw.example.com（废弃，保留兼容）
     LLM_PROXY_URL: str = ""  # 独立 LLM Proxy 服务外部地址，如 https://llm-proxy.example.com
     LLM_PROXY_INTERNAL_URL: str = ""  # K8s 集群内网地址，用于 openclaw.json 中的 baseUrl（绕过 ALB）
+
+    @model_validator(mode="after")
+    def _qualify_llm_proxy_internal_url(self) -> "Settings":
+        if self.LLM_PROXY_INTERNAL_URL:
+            self.LLM_PROXY_INTERNAL_URL = _qualify_k8s_service_url(
+                self.LLM_PROXY_INTERNAL_URL,
+                "nodeskclaw-llm-proxy",
+                self.PLATFORM_NAMESPACE,
+            )
+        return self
 
     # ── Agent API（AI 员工 Pod 回调后端的内网地址）────────
     AGENT_API_BASE_URL: str = "http://localhost:4510/api/v1"
