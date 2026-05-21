@@ -17,6 +17,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init-multi-db.sh:/scripts/init-multi-db.sh:ro
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nodeskclaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nodeskclaw}
+      POSTGRES_DB: ${POSTGRES_DB:-nodeskclaw}
+      GENEHUB_DB: ${GENEHUB_DB:-genehub}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-nodeskclaw}
+      PGHOST: postgres
+      TZ: ${TZ:-Asia/Shanghai}
+    command: ["/bin/sh", "/scripts/init-multi-db.sh"]
+    restart: "no"
+
   nodeskclaw-backend:
     image: nodesk-center-cn-beijing.cr.volces.com/public/nodeskclaw-backend:${DESKCLAW_VERSION}
     build:
@@ -138,8 +156,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       genehub-gitea:
         condition: service_healthy
+    command: ["sh", "-c", "node dist/db/migrate.js && node dist/index.js"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-nodeskclaw}:${POSTGRES_PASSWORD:-nodeskclaw}@postgres:5432/${GENEHUB_DB:-genehub}
       PORT: "3000"

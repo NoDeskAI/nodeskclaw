@@ -31,11 +31,13 @@ FROM ${NODE_IMAGE}
 WORKDIR /app
 
 COPY --from=build /app/packages/registry/dist/ ./dist/
+COPY --from=build /app/packages/registry/drizzle/ ./drizzle/
 COPY --from=build /app/packages/web/dist ./public
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV PUBLIC_DIR=./public
+ENV GENEHUB_MIGRATIONS_DIR=./drizzle
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]

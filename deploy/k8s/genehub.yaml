@@ -14,6 +14,19 @@ spec:
       labels:
         app: genehub
     spec:
+      initContainers:
+        - name: genehub-migrate
+          image: <YOUR_REGISTRY>/<YOUR_NAMESPACE>/genehub-registry:latest
+          imagePullPolicy: Always
+          command: ["node", "dist/db/migrate.js"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_DATABASE_URL
+            - name: NODE_ENV
+              value: "production"
       containers:
         - name: genehub
           image: <YOUR_REGISTRY>/<YOUR_NAMESPACE>/genehub-registry:latest

@@ -95,7 +95,7 @@ kubectl --context <CTX> -n <NS> apply -f deploy/k8s/ingress.yaml
 
 GeneHub 已合并到主仓库，但在 K8s 中仍作为独立服务部署：
 
-- `genehub`（GeneHub Registry，基因库 API）读取 `GENEHUB_DATABASE_URL`（GeneHub 数据库连接）连接 PostgreSQL。
+- `genehub`（GeneHub Registry，基因库 API）读取 `GENEHUB_DATABASE_URL`（GeneHub 数据库连接）连接 PostgreSQL，并在 Pod 启动前通过 initContainer（初始化容器）执行数据库迁移。
 - `genehub-gitea`（基因文件 Git 存储）使用 `genehub-gitea-data` PVC（持久化卷声明）保存仓库数据，避免 Pod 重建后丢失 gene 文件。
 - Backend（后端 API）通过 `GENEHUB_REGISTRY_URL`（GeneHub Registry 地址）把 GeneHub 数据聚合到 Portal（用户门户）的 Gene Market（基因市场）。
 
@@ -111,7 +111,7 @@ GENEHUB_ADMIN_LOGINS=<optional-admin-login-list>
 GENEHUB_WEBHOOK_SECRET=<optional-webhook-secret>
 ```
 
-`GENEHUB_DATABASE_URL`（GeneHub 数据库连接）是必填项。`deploy/init.sh` 会在创建 `nodeskclaw-backend-env` Secret（后端环境变量 Secret）前校验它，未配置或仍是占位符时会直接失败，避免 GeneHub Registry 在集群内回落到 localhost 默认数据库。
+`GENEHUB_DATABASE_URL`（GeneHub 数据库连接）未显式配置时，`deploy/init.sh` 会尝试从 `DATABASE_URL`（NoDeskClaw 主数据库连接）派生同一 PostgreSQL 实例下的 `genehub` 数据库连接，并写入 `nodeskclaw-backend-env` Secret（后端环境变量 Secret）。如果无法派生，初始化会直接失败，避免 GeneHub Registry 在集群内回落到 localhost 默认数据库。
 
 ## 标准流程
 
