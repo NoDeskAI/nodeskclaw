@@ -380,7 +380,11 @@ async def cancel_deploy(deploy_id: str) -> str:
         instance = inst_result.scalar_one_or_none()
         if not instance:
             return "实例记录不存在"
-        step_names = await _progress_step_names_for_record(record, db)
+        step_names = await _progress_step_names_for_record(
+            record,
+            db,
+            getattr(instance, "compute_provider", None),
+        )
         total_steps = len(step_names)
 
         # 2. 先杀后台协程（防止它继续操作 K8s / DB）
@@ -501,12 +505,17 @@ async def _persist_deploy_progress_step_names(
     await db.commit()
 
 
-async def _legacy_progress_step_names(record: DeployRecord, db: AsyncSession) -> list[str]:
+async def _legacy_progress_step_names(
+    record: DeployRecord,
+    db: AsyncSession,
+    compute_provider: str | None = None,
+) -> list[str]:
     action = getattr(record, "action", None)
     if action in (DeployAction.rebuild, DeployAction.restore):
         return list(REBUILD_STEPS)
 
-    compute_provider = getattr(record, "compute_provider", None)
+    if not compute_provider:
+        compute_provider = getattr(record, "compute_provider", None)
     instance = getattr(record, "instance", None)
     if not compute_provider and instance is not None:
         compute_provider = getattr(instance, "compute_provider", None)
@@ -525,8 +534,16 @@ async def _legacy_progress_step_names(record: DeployRecord, db: AsyncSession) ->
     return list(DEPLOY_STEPS_BASE)
 
 
-async def _progress_step_names_for_record(record: DeployRecord, db: AsyncSession) -> list[str]:
-    return _extract_progress_step_names(record) or await _legacy_progress_step_names(record, db)
+async def _progress_step_names_for_record(
+    record: DeployRecord,
+    db: AsyncSession,
+    compute_provider: str | None = None,
+) -> list[str]:
+    return _extract_progress_step_names(record) or await _legacy_progress_step_names(
+        record,
+        db,
+        compute_provider,
+    )
 
 
 async def get_deploy_progress_snapshot(

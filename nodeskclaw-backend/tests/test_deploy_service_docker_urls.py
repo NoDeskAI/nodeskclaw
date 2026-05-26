@@ -245,6 +245,47 @@ async def test_cancel_deploy_uses_saved_progress_step_names(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_cancel_deploy_uses_loaded_instance_provider_for_legacy_steps(monkeypatch) -> None:
+    record = SimpleNamespace(
+        id="deploy-1",
+        instance_id="instance-1",
+        status=DeployStatus.running,
+        message=None,
+        finished_at=None,
+        config_snapshot=None,
+    )
+    instance = SimpleNamespace(
+        id="instance-1",
+        name="demo",
+        status=InstanceStatus.deploying,
+        compute_provider="docker",
+    )
+    session = _SequenceSession([record, instance])
+    published: list[dict] = []
+    finalizers: list[str] = []
+
+    monkeypatch.setattr("app.core.deps.async_session_factory", lambda: session)
+    monkeypatch.setattr(
+        "app.services.instance_service.schedule_instance_deletion_finalizer",
+        lambda instance_id: finalizers.append(instance_id),
+    )
+    monkeypatch.setattr(
+        deploy_service.event_bus,
+        "publish",
+        lambda _topic, payload: published.append(payload),
+    )
+
+    result = await deploy_service.cancel_deploy("deploy-1")
+
+    assert result == "已取消，资源清理已开始"
+    assert session.values == []
+    assert finalizers == ["instance-1"]
+    assert published[-1]["step_names"] == DOCKER_DEPLOY_STEPS
+    assert published[-1]["step"] == len(DOCKER_DEPLOY_STEPS)
+    assert published[-1]["total_steps"] == len(DOCKER_DEPLOY_STEPS)
+
+
+@pytest.mark.asyncio
 async def test_precheck_rejects_removed_nanobot_runtime_before_db_access() -> None:
     class FailingDb:
         async def execute(self, *_args, **_kwargs):
