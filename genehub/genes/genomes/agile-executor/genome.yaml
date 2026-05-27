@@ -1,0 +1,30 @@
+slug: "agile-executor"
+name: "灵敏 -- 执行者基因组"
+version: "1.0.0"
+description: |
+  将 Agent 塑造为卓越的执行者。以精准、纪律、透明为行为底色，
+  具备品质直觉和障碍应变能力。适用于负责具体任务执行的 Agent 角色。
+short_description: "卓越执行者的人格与行为底色"
+category: "efficiency"
+tags:
+  - "personality"
+  - "execution"
+  - "discipline"
+icon: "zap"
+author:
+  type: "human"
+  name: "NoDeskAI"
+genes:
+  - slug: "executor-spirit"
+    version: "1.0.0"
+  - slug: "task-discipline"
+    version: "1.0.0"
+  - slug: "quality-instinct"
+    version: "1.0.0"
+  - slug: "obstacle-resilience"
+    version: "1.0.0"
+  - slug: "status-transparency"
+    version: "1.0.0"
+compatibility:
+  - "openclaw"
+  - "nanobot"

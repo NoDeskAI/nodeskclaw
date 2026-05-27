@@ -1,0 +1,56 @@
+{
+  "name": "@nodeskai/genehub-types",
+  "version": "2026.3.5-1",
+  "description": "GeneHub 共享类型定义与 Zod schemas",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0",
+    "tsup": "^8.3",
+    "typescript": "^5.7",
+    "vitest": "^3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoDeskAI/genehub.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://github.com/NoDeskAI/genehub",
+  "keywords": [
+    "genehub",
+    "ai",
+    "agent",
+    "gene",
+    "types"
+  ],
+  "license": "MIT"
+}

@@ -24,6 +24,19 @@ EOF
   exit "$exit_code"
 }
 
+derive_genehub_database_url() {
+  local raw="$1"
+  [[ -z "$raw" || "$raw" == *"<"* || "$raw" == *">"* ]] && return 1
+
+  local normalized
+  normalized="$(printf '%s' "$raw" | sed 's|^postgresql+asyncpg://|postgres://|; s|^postgresql://|postgres://|')"
+  if [[ "$normalized" =~ ^(postgres://[^?]*/)[^/?]+(\?.*)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}genehub${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
 cmd_init() {
   ensure_edition
   set_namespace
@@ -71,6 +84,24 @@ cmd_init() {
   echo "NODESKCLAW_EDITION=${edition_val}" >> "$clean_env"
   log "NODESKCLAW_EDITION=${edition_val}（由 --ee 标志决定）"
 
+  local genehub_database_url
+  genehub_database_url=$(grep '^GENEHUB_DATABASE_URL=' "$clean_env" | head -1 | cut -d= -f2- || true)
+  if [[ -z "$genehub_database_url" || "$genehub_database_url" == *"<"* || "$genehub_database_url" == *">"* ]]; then
+    local nodeskclaw_database_url
+    nodeskclaw_database_url=$(grep '^DATABASE_URL=' "$clean_env" | head -1 | cut -d= -f2- || true)
+    if genehub_database_url="$(derive_genehub_database_url "$nodeskclaw_database_url")"; then
+      grep -v '^GENEHUB_DATABASE_URL=' "$clean_env" > "${clean_env}.tmp" || true
+      mv "${clean_env}.tmp" "$clean_env"
+      echo "GENEHUB_DATABASE_URL=${genehub_database_url}" >> "$clean_env"
+      log "GENEHUB_DATABASE_URL 未显式配置，已从 DATABASE_URL 派生 genehub 数据库连接"
+    else
+      err "GENEHUB_DATABASE_URL 未配置，且无法从 DATABASE_URL 派生"
+      echo "请在 $env_file 中设置独立的 GeneHub PostgreSQL 连接，例如:"
+      echo "  GENEHUB_DATABASE_URL=postgres://<user>:<password>@<host>:5432/genehub"
+      exit 1
+    fi
+  fi
+
   local env_count; env_count=$(wc -l < "$clean_env" | xargs)
   local secret_name="nodeskclaw-backend-env"
 
@@ -98,11 +129,11 @@ cmd_init() {
   fi
 
   log "应用 K8s 部署清单（Deployment + Service）..."
-  for f in backend.yaml admin.yaml portal.yaml; do
+  for f in backend.yaml admin.yaml portal.yaml genehub.yaml; do
     [[ "$f" == "admin.yaml" && "$EE_MODE" != true ]] && continue
     if [[ -f "$DEPLOY_DIR/k8s/$f" ]]; then
       local comp_name="${f%.yaml}"
-      local comp_reg; comp_reg="$(get_component_registry "$comp_name")"
+      local comp_reg; comp_reg="$(get_component_registry "$comp_name" 2>/dev/null || echo "${PUBLIC_REGISTRY:-$REGISTRY}")"
       sed "s|<YOUR_REGISTRY>/<YOUR_NAMESPACE>|${comp_reg}|g" "$DEPLOY_DIR/k8s/$f" \
         | $KUBECTL -n "$NAMESPACE" apply -f -
       ok "$f"

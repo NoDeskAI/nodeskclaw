@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: genehub
+spec:
+  # storageClassName: ebs-ssd  # change to your cluster's storage class
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genehub-gitea
+  namespace: genehub
+  labels:
+    app: genehub-gitea
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: genehub-gitea
+  template:
+    metadata:
+      labels:
+        app: genehub-gitea
+    spec:
+      # imagePullSecrets:
+      #   - name: your-registry-secret
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__server__ROOT_URL
+              value: http://genehub-gitea:3000
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "false"
+            - name: GITEA__api__ENABLE_SWAGGER
+              value: "false"
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /var/lib/gitea
+            - name: gitea-config
+              mountPath: /etc/gitea
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: gitea-data
+          persistentVolumeClaim:
+            claimName: gitea-data
+        - name: gitea-config
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genehub-gitea
+  namespace: genehub
+  labels:
+    app: genehub-gitea
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: genehub-gitea

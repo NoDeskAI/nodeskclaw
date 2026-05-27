@@ -1,0 +1,99 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gene-curator
+  namespace: genehub
+spec:
+  schedule: "0 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          # imagePullSecrets:
+          #   - name: your-registry-secret
+          containers:
+            - name: curator
+              image: your-registry.example.com/genehub-curator:latest
+              workingDir: /app/curator
+              command:
+                - opencode
+                - run
+                - --model
+                - minimax/MiniMax-M2.5
+                - "执行基因库全面巡检"
+              env:
+                - name: MINIMAX_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: genehub-app-secret
+                      key: MINIMAX_API_KEY
+                - name: GENEHUB_ADMIN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: genehub-app-secret
+                      key: GENEHUB_ADMIN_TOKEN
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gene-curator-listener
+  namespace: genehub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gene-curator-listener
+  template:
+    metadata:
+      labels:
+        app: gene-curator-listener
+    spec:
+      # imagePullSecrets:
+      #   - name: your-registry-secret
+      containers:
+        - name: listener
+          image: your-registry.example.com/genehub-curator:latest
+          workingDir: /app/curator
+          command:
+            - tsx
+            - listener.ts
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: DATABASE_URL
+            - name: OPENCODE_BIN_PATH
+              value: /usr/local/lib/node_modules/opencode-ai/node_modules/opencode-linux-x64-musl/bin/opencode
+            - name: CURATOR_CMD
+              value: opencode
+            - name: MINIMAX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: MINIMAX_API_KEY
+            - name: GENEHUB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-app-secret
+                  key: GENEHUB_ADMIN_TOKEN
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

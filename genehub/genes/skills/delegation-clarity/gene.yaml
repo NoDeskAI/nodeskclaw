@@ -1,0 +1,46 @@
+slug: "delegation-clarity"
+name: "委派清晰"
+version: "1.0.0"
+description: |
+  向执行者分配任务的方法论。任务简报框架（What/Why/Done/Bounds/Resources/Timeline）、
+  自由度校准与确认闭环，让好的指令成为好结果的一半。
+short_description: "委派清晰：好的指令是好的结果的一半"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "send"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "communication-style"
+
+skill:
+  name: "delegation-clarity"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "每个委派包含 What/Why/Done/Bounds/Resources/Timeline"
+    - "根据任务与执行者校准指令细致程度"
+    - "委派后确认执行者理解一致"
+  scenarios:
+    - title: "委派调研类任务"
+      context: "需要对比三个方案并给出建议"
+      expected_focus: "明确交付物形式、成功标准与时间线"
+    - title: "执行者交回的结果偏离预期"
+      context: "先审视指令是否足够清晰，再反馈"

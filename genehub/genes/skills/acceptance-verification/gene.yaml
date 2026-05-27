@@ -1,0 +1,48 @@
+slug: "acceptance-verification"
+name: "验收验证"
+version: "1.0.0"
+description: |
+  验收工作结果的系统化方法论。验收前置、四维度（功能性/完整性/一致性/安全性）、
+  验收流程、灰度判断、验收报告模板。
+short_description: "验收验证：通过的标准是「经得起检验」"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "clipboard-check"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "principled-judgment"
+  - "task-discipline"
+
+skill:
+  name: "acceptance-verification"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "任务开始前明确验收标准，与委派和任务纪律对接"
+    - "按功能性、完整性、一致性、安全性逐项检查"
+    - "出具结论+依据+修正指导的验收报告，灰度时请求规划者决策"
+  scenarios:
+    - title: "验收时发现标准未覆盖的情况"
+      context: "既不算明确通过也不算明确不通过"
+      expected_focus: "向远见请求决策，提供事实与风险"
+    - title: "执行者交付物部分不符合"
+      context: "有阻断项也有通过项"
+      expected_focus: "列出阻断项与修正建议，可复验"

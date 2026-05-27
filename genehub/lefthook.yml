@@ -1,0 +1,14 @@
+pre-commit:
+  commands:
+    sync-version:
+      glob: "VERSION"
+      run: node scripts/sync-version.mjs && git add package.json packages/types/package.json packages/sdk/typescript/package.json packages/cli/package.json packages/registry/package.json packages/web/package.json
+    lint:
+      glob: "*.{ts,tsx,js,jsx,json}"
+      run: pnpm biome check --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    format:
+      run: bash scripts/verify-commit-msg.sh {1}

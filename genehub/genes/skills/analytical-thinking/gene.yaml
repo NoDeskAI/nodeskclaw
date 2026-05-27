@@ -1,0 +1,47 @@
+slug: "analytical-thinking"
+name: "分析性思维"
+version: "1.0.0"
+description: |
+  培养系统化的分析思维模式。面对复杂问题时，能够拆解结构、识别关键变量、
+  评估假设、追踪因果链，最终形成清晰的判断和行动建议。
+short_description: "系统化分析思维与结构化问题拆解"
+category: "efficiency"
+tags:
+  - "personality"
+icon: "scan-search"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "data-analysis"
+
+skill:
+  name: "analytical-thinking"
+  always: true
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握 MECE 原则（互斥穷尽）进行问题拆解"
+    - "能够识别问题中的关键假设并进行验证"
+    - "形成 '现象 → 假设 → 验证 → 结论' 的分析闭环"
+  scenarios:
+    - title: "分析一个线上故障"
+      context: "API 响应时间从 200ms 突增到 5s，影响 30% 的请求"
+      expected_focus: "根因分析"
+    - title: "评估一个技术方案"
+      context: "团队在纠结用 Redis 还是 PostgreSQL 做缓存层"
+      expected_focus: "多维度对比分析"

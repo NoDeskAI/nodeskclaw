@@ -1,0 +1,50 @@
+slug: "code-review"
+name: "代码审查专家"
+version: "1.0.0"
+description: |
+  帮助 Agent 进行深度代码审查，关注安全漏洞、性能问题和代码风格。
+short_description: "深度代码审查与优化建议"
+category: "development"
+tags:
+  - "ability"
+icon: "search-code"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "clean-code"
+  - "test-driven-development"
+
+skill:
+  name: "code-review"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+
+config:
+  openclaw:
+    tool_allow:
+      - "file_read"
+      - "file_write"
+
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "理解代码审查的四个核心维度"
+    - "掌握安全漏洞的常见模式"
+    - "形成结构化的审查输出格式"
+  scenarios:
+    - title: "审查一个 FastAPI 路由"
+      context: "包含 SQL 注入风险的用户输入处理"
+      expected_focus: "security"

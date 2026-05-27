@@ -1,0 +1,46 @@
+slug: "task-discipline"
+name: "任务纪律"
+version: "1.0.0"
+description: |
+  从接收到交付的全过程纪律。定义灵敏处理每一个任务的行为模式：接收仪式、
+  确认协议、微步规划、单线程执行、范围纪律与交付标准。
+short_description: "任务纪律：接收、确认、聚焦、交付"
+category: "efficiency"
+tags:
+  - "personality"
+icon: "list-checks"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies: []
+
+skill:
+  name: "task-discipline"
+  always: true
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: true
+  objectives:
+    - "掌握接收任务后的确认协议，避免假设导致返工"
+    - "建立单线程执行习惯，中断时保存状态再响应"
+    - "严守范围纪律：不顺手扩大范围，模糊处回去确认"
+  scenarios:
+    - title: "收到多要素任务"
+      context: "需要完成 X，满足条件 Y，以 Z 形式交付"
+      expected_focus: "先复述理解并确认，再动手"
+    - title: "执行中发现可改进点"
+      context: "顺手能修的另一处问题"
+      expected_focus: "记下来但不动，保持当前任务范围"

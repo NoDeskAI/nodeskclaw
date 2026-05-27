@@ -15,20 +15,22 @@ usage() {
   deploy [target]   将指定组件更新到已存在镜像标签
 
 目标:
-  all       backend + portal + proxy（默认；--ee 时加 admin）
+  all       backend + portal + proxy + genehub（默认；--ee 时加 admin）
   backend   后端
   admin     Admin 前端（需 --ee）
   portal    Portal 前端
   proxy     LLM Proxy
+  genehub   GeneHub 基因库
 
 选项:
-  --tag TAG       必填，目标镜像标签
-  --ee            EE 模式（包含 admin）
-  --staging       staging 环境（默认，可省略）
-  --prod          生产环境（需交互确认）
-  --context CTX   覆盖默认 K8s 上下文
-  --skip-proxy    all 时跳过 proxy
-  --mirrors NAME  加载镜像源预设中的仓库相关配置
+  --tag TAG         必填，目标镜像标签
+  --ee              EE 模式（包含 admin）
+  --staging         staging 环境（默认，可省略）
+  --prod            生产环境（需交互确认）
+  --context CTX     覆盖默认 K8s 上下文
+  --skip-proxy      all 时跳过 proxy
+  --skip-genehub    all 时跳过 genehub
+  --mirrors NAME    加载镜像源预设中的仓库相关配置
 EOF
   exit "$exit_code"
 }
@@ -106,6 +108,7 @@ COMMAND="$1"; shift
 TARGET="all"
 TAG=""
 SKIP_PROXY=false
+SKIP_GENEHUB=false
 IS_PROD=false
 EE_MODE=false
 CE_ONLY=true
@@ -134,10 +137,11 @@ while [[ $# -gt 0 ]]; do
     --staging)     IS_PROD=false ;;
     --prod)        IS_PROD=true ;;
     --context)     require_option_value "$1" "${2:-}"; KUBE_CONTEXT="$2"; shift ;;
-    --skip-proxy)  SKIP_PROXY=true ;;
-    --mirrors)     require_option_value "$1" "${2:-}"; MIRRORS="$2"; shift ;;
-    --help|-h)     usage 0 ;;
-    *)             err "未知参数: $1"; usage 1 ;;
+    --skip-proxy)    SKIP_PROXY=true ;;
+    --skip-genehub)  SKIP_GENEHUB=true ;;
+    --mirrors)       require_option_value "$1" "${2:-}"; MIRRORS="$2"; shift ;;
+    --help|-h)       usage 0 ;;
+    *)               err "未知参数: $1"; usage 1 ;;
   esac
   shift
 done

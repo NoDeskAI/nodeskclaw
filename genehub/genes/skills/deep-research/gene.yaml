@@ -1,0 +1,48 @@
+slug: "deep-research"
+name: "深度探查"
+version: "1.0.0"
+description: |
+  系统化的知识获取与验证方法论。问题定义、来源分级、交叉验证、
+  知识边界标注、适时停止、研究日志。
+short_description: "深度探查：系统化的知识获取与验证"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "search"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "source-integrity"
+  - "knowledge-distillation"
+
+skill:
+  name: "deep-research"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "明确要回答的问题，避免无边际搜索"
+    - "按来源分级优先使用权威来源，关键信息交叉验证"
+    - "标注查到了什么与没查到什么，适时停止并整理"
+  scenarios:
+    - title: "模糊需求「帮忙查一下 X」"
+      context: "需求不具体"
+      expected_focus: "先转化为可回答的具体问题再查"
+    - title: "只能找到单一来源"
+      context: "关键结论无法交叉验证"
+      expected_focus: "标注单源未经交叉验证，不当作事实"

@@ -224,14 +224,22 @@ cp .env.example .env
 #### 2. One-command Start
 
 ```bash
-./dev.sh              # Start all services (backend + portal)
+./dev.sh              # Start all services (backend + llm-proxy + portal + GeneHub)
 ./dev.sh --docker-pg  # Start a Docker PostgreSQL (no local PG install needed)
 ./dev.sh --fresh      # Force reinstall all dependencies
+./dev.sh --skip-genehub # Start without GeneHub registry/web
 ```
 
-The script handles dependency installation, starts all services with colored log prefixes, and cleans up on Ctrl+C. `--docker-pg` launches a local PostgreSQL container automatically.
+The script handles dependency installation, starts all services with colored log prefixes, checks required ports before startup, and cleans up on Ctrl+C. `--docker-pg` launches a local PostgreSQL container automatically.
 
-Services: backend (4510) + llm-proxy (4511) + portal (4517)
+Services: backend (4510) + llm-proxy (4511) + portal (4517) + GeneHub Registry (4520) + GeneHub Web (5173). GeneHub lives in this repository under `genehub/`; it is not a separate checkout in the merged layout.
+
+Gene Market shows a source label on each gene:
+
+- `Local` means the gene comes from the NoDeskClaw local database.
+- `GeneHub` means the gene comes from the configured GeneHub Registry.
+
+The Portal still opens at `http://localhost:4517`; GeneHub data is aggregated into the Portal Gene Market rather than replacing the Portal UI.
 
 Manual Start (alternative)
 
@@ -306,6 +314,16 @@ For quick self-hosted deployment without Kubernetes:
 docker compose up -d                   # CE mode (default)
 docker compose up -d --build           # Rebuild images
 ```
+
+Docker Compose also starts the embedded GeneHub stack:
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Backend（后端 API） | `http://localhost:4510` | NoDeskClaw API |
+| LLM Proxy（LLM 代理） | `http://localhost:4511` | Model proxy |
+| Portal（用户门户） | `http://localhost:80` | Gene Market UI lives here |
+| GeneHub Registry（基因库 API） | `http://localhost:4520` | Registry API and GeneHub integration source |
+| GeneHub Gitea（基因文件 Git 存储） | `http://localhost:3001` | Stores gene files with a persistent Docker volume |
 
 ### Build Mirrors
 

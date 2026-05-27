@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: genehub-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: genehub
+      POSTGRES_PASSWORD: genehub
+      POSTGRES_DB: genehub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gitea:
+    image: gitea/gitea:1.22
+    container_name: genehub-gitea
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__ROOT_URL: http://localhost:3001
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__api__ENABLE_SWAGGER: "false"
+    volumes:
+      - gitea-data:/data
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  pgdata:
+  gitea-data:

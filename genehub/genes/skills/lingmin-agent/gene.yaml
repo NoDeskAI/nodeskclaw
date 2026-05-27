@@ -1,0 +1,17 @@
+slug: lingmin-agent
+name: 灵敏 AI 员工基因
+version: 1.0.0
+description: 灵敏的核心基因，包含自主任务执行、环境管理与项目协作能力。使 Agent 具备 NoDeskAI 体系下的自主协作与环境感知能力。
+short_description: 灵敏 AI 员工核心能力基因
+category: efficiency
+tags:
+  - ability
+author:
+  type: human
+  name: 灵敏
+compatibility:
+  - product: openclaw
+    min_version: 0.5.0
+skill:
+  name: 灵敏核心能力
+  file: SKILL.md

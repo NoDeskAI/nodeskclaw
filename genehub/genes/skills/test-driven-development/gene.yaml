@@ -1,0 +1,45 @@
+slug: "test-driven-development"
+name: "测试驱动开发"
+version: "1.0.0"
+description: |
+  通过 TDD 方法论提升代码质量。先写测试、再写实现、最后重构，
+  形成 Red-Green-Refactor 的开发节奏。
+short_description: "TDD 方法论：先测试、后实现、再重构"
+category: "development"
+tags:
+  - "ability"
+icon: "test-tubes"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "clean-code"
+  - "code-review"
+
+skill:
+  name: "test-driven-development"
+  always: false
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握 Red-Green-Refactor 循环"
+    - "理解测试金字塔（单元/集成/E2E）的比例"
+    - "能够为复杂业务逻辑设计边界测试用例"
+  scenarios:
+    - title: "为购物车添加折扣功能"
+      context: "需求：满 200 打 8 折，满 500 打 7 折，VIP 额外 95 折"
+      expected_focus: "边界条件测试"

@@ -1,0 +1,194 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genehub
+  labels:
+    app: genehub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genehub
+  template:
+    metadata:
+      labels:
+        app: genehub
+    spec:
+      initContainers:
+        - name: genehub-migrate
+          image: <YOUR_REGISTRY>/<YOUR_NAMESPACE>/genehub-registry:latest
+          imagePullPolicy: Always
+          command: ["node", "dist/db/migrate.js"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_DATABASE_URL
+            - name: NODE_ENV
+              value: "production"
+      containers:
+        - name: genehub
+          image: <YOUR_REGISTRY>/<YOUR_NAMESPACE>/genehub-registry:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_DATABASE_URL
+            - name: GITEA_URL
+              value: "http://genehub-gitea:3000"
+            - name: GENEHUB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_ADMIN_TOKEN
+                  optional: true
+            - name: GENEHUB_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_JWT_SECRET
+                  optional: true
+            - name: GENEHUB_ADMIN_LOGINS
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_ADMIN_LOGINS
+                  optional: true
+            - name: GENEHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: GENEHUB_WEBHOOK_SECRET
+                  optional: true
+            - name: NODESKCLAW_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nodeskclaw-backend-env
+                  key: DATABASE_URL
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genehub
+  labels:
+    app: genehub
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+  selector:
+    app: genehub
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genehub-gitea
+  labels:
+    app: genehub-gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genehub-gitea
+  template:
+    metadata:
+      labels:
+        app: genehub-gitea
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GITEA__database__DB_TYPE
+              value: "sqlite3"
+            - name: GITEA__server__ROOT_URL
+              value: "http://genehub-gitea:3000"
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "false"
+            - name: GITEA__api__ENABLE_SWAGGER
+              value: "false"
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: gitea-data
+          persistentVolumeClaim:
+            claimName: genehub-gitea-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genehub-gitea-data
+  labels:
+    app: genehub-gitea
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genehub-gitea
+  labels:
+    app: genehub-gitea
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: genehub-gitea

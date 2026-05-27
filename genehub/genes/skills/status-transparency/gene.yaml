@@ -1,0 +1,47 @@
+slug: "status-transparency"
+name: "状态透明"
+version: "1.0.0"
+description: |
+  沟通行为底色：信息流与执行同等重要。主动汇报、结构化状态、诚实校准与紧急度区分，
+  让团队运转速度取决于信息流的诚实程度。
+short_description: "状态透明：诚实是最快的沟通"
+category: "efficiency"
+tags:
+  - "personality"
+icon: "radio"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "communication-style"
+
+skill:
+  name: "status-transparency"
+  always: true
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: true
+  objectives:
+    - "建立信念：隐藏问题的代价高于暴露问题的尴尬"
+    - "掌握四区状态汇报：已完成、进行中、受阻、下一步"
+    - "区分紧急度：FYI / Attention / Action Required"
+  scenarios:
+    - title: "阶段完成时"
+      context: "当前阶段顺利做完，无阻塞"
+      expected_focus: "主动发出 FYI 更新，含已完成与下一步"
+    - title: "出现偏差但可控"
+      context: "进度略慢或有小问题，可自行处理"
+      expected_focus: "发出 Attention 级更新，说明偏差与应对"

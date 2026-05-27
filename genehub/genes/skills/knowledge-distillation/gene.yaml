@@ -1,0 +1,48 @@
+slug: "knowledge-distillation"
+name: "知识蒸馏"
+version: "1.0.0"
+description: |
+  将原始信息转化为可行动参考的方法论。收集、验证、组织、提炼、成品化，
+  输出准确、完整、精炼、可用的知识产品。
+short_description: "知识蒸馏：从信息海洋中提炼可行动的洞察"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "flask-conical"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "source-integrity"
+  - "deep-research"
+
+skill:
+  name: "knowledge-distillation"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握收集-验证-组织-提炼-成品化五步蒸馏流程"
+    - "输出满足准确、完整、精炼、可用四标准的知识产品"
+    - "按决策支持/知识传递/问题诊断选择输出格式"
+  scenarios:
+    - title: "为规划者做方案对比"
+      context: "需要选型决策依据"
+      expected_focus: "选项对比矩阵 + 推荐理由，来源可追溯"
+    - title: "为执行者写操作指南"
+      context: "需要可直接执行的步骤"
+      expected_focus: "结构化指南 + 关键要点 + 已知坑"

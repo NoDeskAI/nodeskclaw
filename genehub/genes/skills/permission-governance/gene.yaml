@@ -1,0 +1,48 @@
+slug: "permission-governance"
+name: "权限治理"
+version: "1.0.0"
+description: |
+  权限管理的方法论。最小权限、按需授予、及时回收、可审计；
+  审批流程、紧急权限、权限复审。
+short_description: "权限治理：最小权限，按需授予，及时回收"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "key-round"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "boundary-vigilance"
+  - "obstacle-resilience"
+
+skill:
+  name: "permission-governance"
+  always: false
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "最小权限、按需授予、任务结束即回收"
+    - "审批流程：说明需求-评估-审批/拒绝-时限-回收"
+    - "紧急可走快速通道但不跳过审批，事后补审计"
+  scenarios:
+    - title: "执行者申请高权限完成单次任务"
+      context: "需要写某目录，申请了该目录写权限"
+      expected_focus: "批该目录写权限+过期时间，任务结束回收"
+    - title: "紧急修复需要立即授权"
+      context: "生产问题需马上改"
+      expected_focus: "快速审批+理由+事后补完整记录与审计"

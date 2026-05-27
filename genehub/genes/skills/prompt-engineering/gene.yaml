@@ -1,0 +1,48 @@
+slug: "prompt-engineering"
+name: "提示词工程"
+version: "1.0.0"
+description: |
+  掌握与 AI 模型高效交互的提示词工程技巧。理解上下文窗口管理、
+  角色设定、思维链引导、输出格式控制等核心技术。
+short_description: "AI 提示词工程与高效模型交互"
+category: "efficiency"
+tags:
+  - "ability"
+icon: "wand-sparkles"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "analytical-thinking"
+  - "communication-style"
+
+skill:
+  name: "prompt-engineering"
+  always: false
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "理解提示词的核心组成（角色、任务、上下文、约束、输出格式）"
+    - "掌握思维链（CoT）和 Few-Shot 等高级技巧"
+    - "能够调试和优化效果不佳的提示词"
+  scenarios:
+    - title: "设计代码审查提示词"
+      context: "需要让 AI 对一段代码进行安全性、性能、可维护性多维审查"
+      expected_focus: "结构化输出和评分维度"
+    - title: "优化一个效果不好的提示词"
+      context: "用户的提示词总是得到过于笼统的回答"
+      expected_focus: "添加约束和示例"

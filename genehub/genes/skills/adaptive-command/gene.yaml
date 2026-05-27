@@ -1,0 +1,47 @@
+slug: "adaptive-command"
+name: "自适应指挥"
+version: "1.0.0"
+description: |
+  计划与现实发生偏差时的动态调整能力。监控哲学、偏差评估、变更沟通与压力下的镇定，
+  让计划是活的而不是死的。
+short_description: "自适应指挥：计划是活的，不是死的"
+category: "efficiency"
+tags:
+  - "personality"
+icon: "git-branch"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "communication-style"
+
+skill:
+  name: "adaptive-command"
+  always: true
+  file: "SKILL.md"
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: true
+  objectives:
+    - "接受「计划无法完美预见现实」，重点放在偏差时的调整"
+    - "掌握偏差分类：正常适应 / 可修正偏差 / 根本性偏差"
+    - "变更时清晰传达：什么变了、为什么、什么没变、新期望"
+  scenarios:
+    - title: "执行者报来进度滞后"
+      context: "原计划本周完成 A，只完成一半"
+      expected_focus: "判断可修正还是需重规划，再沟通"
+    - title: "多问题同时爆发"
+      context: "依赖断供、人员变动、需求变更"
+      expected_focus: "先排优先级，稳住最关键，再逐个处理"

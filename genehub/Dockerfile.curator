@@ -1,0 +1,20 @@
+ARG NODE_IMAGE=node:22-alpine
+
+FROM ${NODE_IMAGE}
+
+RUN apk add --no-cache git gcompat && \
+    npm config set registry https://registry.npmmirror.com && \
+    npm install -g opencode-ai tsx && \
+    npm cache clean --force && \
+    rm -rf /tmp/*
+
+WORKDIR /app/curator
+
+COPY packages/registry/curator/opencode-k8s.json ./opencode.json
+COPY packages/registry/curator/AGENTS.md         ./AGENTS.md
+COPY packages/registry/curator/listener.ts       ./listener.ts
+
+# postgres driver for the listener (LISTEN/NOTIFY)
+RUN npm init -y > /dev/null 2>&1 && npm install postgres
+
+ENV NODE_ENV=production

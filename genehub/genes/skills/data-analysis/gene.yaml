@@ -1,0 +1,44 @@
+slug: "data-analysis"
+name: "数据分析"
+version: "1.0.0"
+description: |
+  数据分析与洞察提取能力。能够从原始数据中发现模式、验证假设、
+  生成可视化建议，并将分析结果转化为可执行的业务建议。
+short_description: "数据分析、模式发现与洞察提取"
+category: "data"
+tags:
+  - "ability"
+icon: "bar-chart-3"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "analytical-thinking"
+
+skill:
+  name: "data-analysis"
+  always: false
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "掌握描述性统计的核心指标（均值、中位数、标准差、百分位）"
+    - "能够选择合适的可视化方式展示数据"
+    - "形成 '数据 → 洞察 → 建议' 的分析闭环"
+  scenarios:
+    - title: "分析用户留存数据"
+      context: "一款 SaaS 产品的 D1/D7/D30 留存率分别为 60%/35%/15%"
+      expected_focus: "留存曲线分析和改进建议"

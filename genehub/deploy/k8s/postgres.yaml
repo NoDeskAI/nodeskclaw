@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: genehub-postgres-secret
+  namespace: genehub
+type: Opaque
+stringData:
+  POSTGRES_USER: genehub
+  POSTGRES_PASSWORD: "<CHANGE_ME>"
+  POSTGRES_DB: genehub
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: genehub-postgres
+  namespace: genehub
+  labels:
+    app: genehub-postgres
+spec:
+  serviceName: genehub-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genehub-postgres
+  template:
+    metadata:
+      labels:
+        app: genehub-postgres
+    spec:
+      # imagePullSecrets:
+      #   - name: your-registry-secret
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: genehub-postgres-secret
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "genehub"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName: ebs-ssd  # change to your cluster's storage class
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genehub-postgres
+  namespace: genehub
+  labels:
+    app: genehub-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: genehub-postgres

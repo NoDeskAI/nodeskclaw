@@ -1,0 +1,48 @@
+slug: "clean-code"
+name: "整洁代码"
+version: "1.0.0"
+description: |
+  编写和维护整洁、可读、可维护的代码。遵循 SOLID 原则、设计模式最佳实践，
+  持续改进代码质量，减少技术债务。
+short_description: "编写整洁、可读、可维护的代码"
+category: "development"
+tags:
+  - "ability"
+icon: "code"
+author:
+  type: "human"
+  name: "NoDeskAI"
+
+compatibility:
+  - product: "openclaw"
+    min_version: "0.5.0"
+  - product: "nanobot"
+    min_version: "0.1.0"
+
+dependencies: []
+synergies:
+  - "code-review"
+  - "test-driven-development"
+
+skill:
+  name: "clean-code"
+  always: false
+  content: ""
+
+rules: []
+config: {}
+mcp_servers: []
+
+learning:
+  force_deep_learn: false
+  objectives:
+    - "理解 SOLID 五大原则及其在实际代码中的应用"
+    - "掌握命名、函数粒度、注释等代码整洁基本功"
+    - "能够识别和消除常见的代码异味（Code Smells）"
+  scenarios:
+    - title: "重构一个 God Class"
+      context: "一个 UserService 类有 800 行代码，包含用户注册、登录、权限、通知等功能"
+      expected_focus: "职责分离"
+    - title: "改善函数可读性"
+      context: "一个函数有 5 层嵌套 if-else，60 行代码，无注释"
+      expected_focus: "提取函数、早返回"

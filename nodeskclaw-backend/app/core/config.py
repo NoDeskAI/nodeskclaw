@@ -159,10 +159,11 @@ class Settings(BaseSettings):
     #  {"type":"clawhub","id":"clawhub","url":"https://clawhub.ai","api_key":"","name":"ClawHub"}]
     SKILL_REGISTRIES: str = ""
 
-    # Legacy — non-empty value auto-registers as type=genehub, id=genehub adapter
-    GENEHUB_REGISTRY_URL: str = "https://skills.deskclaw.me"
+    # GeneHub Registry（合并到主仓库后默认使用内部服务地址）
+    # Docker Compose 中通过 http://genehub-registry:3000 访问，本地开发用 http://localhost:4520
+    GENEHUB_REGISTRY_URL: str = "http://localhost:4520"
     GENEHUB_API_KEY: str = ""
-    GENEHUB_WEB_URL: str = "https://skills.deskclaw.me"
+    GENEHUB_WEB_URL: str = "http://localhost:5173"
 
     # ── S3 兼容对象存储 ─────────────────────────────────
     S3_ENDPOINT: str = ""
