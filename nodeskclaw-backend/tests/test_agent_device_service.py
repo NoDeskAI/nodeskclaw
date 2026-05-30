@@ -218,6 +218,45 @@ async def _connect_agent_to_device(db: AsyncSession, workspace: Workspace, agent
     await db.flush()
 
 
+async def _seed_workspace_for_existing_agent(
+    db: AsyncSession,
+    *,
+    source_workspace: Workspace,
+    agent: Instance,
+    suffix: str,
+) -> Workspace:
+    workspace = Workspace(
+        id=f"ws-device-{suffix}",
+        org_id=source_workspace.org_id,
+        name="Second Workspace",
+        description="",
+        color="#222222",
+        icon="bot",
+        created_by=source_workspace.created_by,
+        cluster_id=source_workspace.cluster_id,
+    )
+    workspace_agent = WorkspaceAgent(
+        id=f"wa-device-agent-{suffix}",
+        workspace_id=workspace.id,
+        instance_id=agent.id,
+        hex_q=1,
+        hex_r=0,
+        display_name="Agent",
+    )
+    agent_card = NodeCard(
+        id=f"card-device-agent-{suffix}",
+        node_type="agent",
+        node_id=agent.id,
+        workspace_id=workspace.id,
+        hex_q=1,
+        hex_r=0,
+        name="Agent",
+    )
+    db.add_all([workspace, workspace_agent, agent_card])
+    await db.flush()
+    return workspace
+
+
 @pytest.mark.asyncio
 async def test_create_device_registers_node_card_and_blocks_hex(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
@@ -800,6 +839,130 @@ async def test_withdraw_gene_binding_keeps_shared_auto_gene_until_last_device(mo
             instance=agent,
             gene_slug=gene.slug,
             reason="device_deleted",
+        )
+        await db.flush()
+
+        assert uninstall_calls == [(agent.id, gene.id)]
+
+
+@pytest.mark.asyncio
+async def test_withdraw_workspace_agent_bindings_preserves_gene_used_by_other_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    from app.services import gene_service
+
+    uninstall_calls = []
+
+    async def fake_uninstall_gene(db: AsyncSession, instance_id: str, gene_id: str):
+        uninstall_calls.append((instance_id, gene_id))
+
+    monkeypatch.setattr(gene_service, "uninstall_gene", fake_uninstall_gene)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, _delegate_agent = await _seed_workspace(db, "gene-cross")
+        other_workspace = await _seed_workspace_for_existing_agent(
+            db,
+            source_workspace=workspace,
+            agent=agent,
+            suffix="gene-cross-other",
+        )
+        first_device = await _place_available_device(
+            monkeypatch,
+            db,
+            workspace,
+            user,
+            display_name="Browser Pilot A",
+            hex_q=3,
+            hex_r=0,
+        )
+        second_device = await _place_available_device(
+            monkeypatch,
+            db,
+            other_workspace,
+            user,
+            display_name="Browser Pilot B",
+            hex_q=3,
+            hex_r=0,
+        )
+        gene = Gene(
+            id="gene-bpilot-cross",
+            name="Agent Device Browser Pilot Cross",
+            slug="agent-device-browser-bpilot",
+            description="",
+            short_description="",
+            category="agent-device",
+        )
+        instance_gene = InstanceGene(
+            id="ig-bpilot-cross",
+            instance_id=agent.id,
+            gene_id=gene.id,
+            status=InstanceGeneStatus.installed,
+            installed_version="1.0.0",
+        )
+        db.add_all([gene, instance_gene])
+        await db.flush()
+        db.add(AgentDeviceGeneBinding(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace.id,
+            device_id=first_device.id,
+            instance_id=agent.id,
+            gene_id=gene.id,
+            gene_slug=gene.slug,
+            instance_gene_id=instance_gene.id,
+            was_preexisting=False,
+            sync_reason="test",
+        ))
+        await db.flush()
+
+        await agent_device_service.ensure_gene_binding(
+            db,
+            workspace_id=other_workspace.id,
+            device=second_device,
+            instance=agent,
+            gene_slug=gene.slug,
+            reason="topology_sync",
+        )
+        await db.flush()
+
+        second_binding = (await db.execute(
+            select(AgentDeviceGeneBinding).where(
+                AgentDeviceGeneBinding.device_id == second_device.id,
+                not_deleted(AgentDeviceGeneBinding),
+            )
+        )).scalar_one()
+        assert second_binding.was_preexisting is False
+
+        await agent_device_service.withdraw_workspace_agent_device_gene_bindings(
+            db,
+            workspace_id=workspace.id,
+            instance_id=agent.id,
+            reason="agent_removed",
+        )
+        await db.flush()
+
+        active_first_binding_id = (await db.execute(
+            select(AgentDeviceGeneBinding.id).where(
+                AgentDeviceGeneBinding.device_id == first_device.id,
+                not_deleted(AgentDeviceGeneBinding),
+            )
+        )).scalar_one_or_none()
+        active_second_binding_id = (await db.execute(
+            select(AgentDeviceGeneBinding.id).where(
+                AgentDeviceGeneBinding.device_id == second_device.id,
+                not_deleted(AgentDeviceGeneBinding),
+            )
+        )).scalar_one_or_none()
+        assert active_first_binding_id is None
+        assert active_second_binding_id == second_binding.id
+        assert uninstall_calls == []
+
+        await agent_device_service.withdraw_workspace_agent_device_gene_bindings(
+            db,
+            workspace_id=other_workspace.id,
+            instance_id=agent.id,
+            reason="agent_removed",
         )
         await db.flush()
 

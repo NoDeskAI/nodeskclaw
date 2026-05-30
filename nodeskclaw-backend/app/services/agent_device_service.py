@@ -1331,7 +1331,6 @@ async def ensure_gene_binding(
 
     sibling_origins = (await db.execute(
         select(AgentDeviceGeneBinding.was_preexisting).where(
-            AgentDeviceGeneBinding.workspace_id == workspace_id,
             AgentDeviceGeneBinding.instance_id == instance.id,
             AgentDeviceGeneBinding.gene_slug == gene_slug,
             not_deleted(AgentDeviceGeneBinding),
@@ -1401,18 +1400,50 @@ async def withdraw_gene_binding(
         return
     binding.sync_reason = reason
     binding.soft_delete()
+    await _uninstall_auto_gene_if_unused(db, binding=binding, instance=instance)
+
+
+async def withdraw_workspace_agent_device_gene_bindings(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    instance_id: str,
+    reason: str,
+) -> None:
+    bindings = (await db.execute(
+        select(AgentDeviceGeneBinding).where(
+            AgentDeviceGeneBinding.workspace_id == workspace_id,
+            AgentDeviceGeneBinding.instance_id == instance_id,
+            not_deleted(AgentDeviceGeneBinding),
+        )
+    )).scalars().all()
+    if not bindings:
+        return
+    instance = await db.get(Instance, instance_id)
+    for binding in bindings:
+        binding.sync_reason = reason
+        binding.soft_delete()
+        if instance is not None:
+            await _uninstall_auto_gene_if_unused(db, binding=binding, instance=instance)
+
+
+async def _uninstall_auto_gene_if_unused(
+    db: AsyncSession,
+    *,
+    binding: AgentDeviceGeneBinding,
+    instance: Instance,
+) -> None:
     if binding.was_preexisting or not binding.gene_id:
         return
-    sibling_binding = (await db.execute(
+    active_binding = (await db.execute(
         select(AgentDeviceGeneBinding.id).where(
-            AgentDeviceGeneBinding.workspace_id == workspace_id,
             AgentDeviceGeneBinding.instance_id == instance.id,
-            AgentDeviceGeneBinding.gene_slug == gene_slug,
+            AgentDeviceGeneBinding.gene_slug == binding.gene_slug,
             AgentDeviceGeneBinding.id != binding.id,
             not_deleted(AgentDeviceGeneBinding),
         ).limit(1)
     )).scalar_one_or_none()
-    if sibling_binding is not None:
+    if active_binding is not None:
         return
     try:
         from app.services.gene_service import uninstall_gene
@@ -1421,6 +1452,6 @@ async def withdraw_gene_binding(
         logger.warning(
             "Agent Device Gene 自动撤回失败 instance=%s gene=%s err=%s",
             instance.id,
-            gene_slug,
+            binding.gene_slug,
             exc,
         )
