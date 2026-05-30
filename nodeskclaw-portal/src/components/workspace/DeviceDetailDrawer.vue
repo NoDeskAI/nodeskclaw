@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, MonitorCog, RefreshCw, ShieldCheck, Bot, User, Clock, MapPin, AlertCircle } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -160,6 +160,10 @@ watch(() => props.deviceId, () => {
 
 watch(selectedAgentId, () => {
   if (props.open && props.deviceId) void loadDeviceContext()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
 })
 </script>
 

@@ -21,7 +21,8 @@ def _reset_audited():
 @pytest.mark.asyncio
 async def test_user_operation_is_persisted():
     """actor_type=user 应该写入数据库。"""
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
@@ -48,7 +49,8 @@ async def test_user_operation_is_persisted():
 @pytest.mark.asyncio
 async def test_agent_operation_is_persisted():
     """actor_type=agent 应该写入数据库。"""
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
@@ -73,7 +75,8 @@ async def test_agent_operation_is_persisted():
 @pytest.mark.asyncio
 async def test_org_operation_is_skipped():
     """actor_type=org 应该被跳过，不写入数据库。"""
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
 

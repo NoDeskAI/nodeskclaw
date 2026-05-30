@@ -428,7 +428,7 @@ async function placeDeviceOnSelectedHex() {
   const presets = store.devicePresets.length
     ? store.devicePresets
     : await store.fetchDevicePresets(workspaceId.value)
-  const preset = presets.find(p => p.enabled) || presets[0]
+  const preset = presets.find(p => p.enabled)
   if (!preset) {
     toast.error(t('hexAction.noDevicePresets'))
     return
