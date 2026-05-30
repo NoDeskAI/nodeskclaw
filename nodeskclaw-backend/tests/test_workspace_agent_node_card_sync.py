@@ -1,7 +1,10 @@
+import uuid
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.models.cluster import Cluster
 from app.models.corridor import HumanHex
@@ -17,7 +20,7 @@ from app.services import conversation_service
 import app.services.corridor_router as corridor_router
 
 TEST_DATABASE_URL = "postgresql+asyncpg://nodeskclaw:nodeskclaw@localhost:5432/nodeskclaw_test"
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 TestSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -39,16 +42,19 @@ async def test_update_agent_syncs_node_card_position(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(corridor_router, "auto_connect_hex", noop)
 
     async with TestSessionLocal() as db:
-        org = Organization(id="org-agent-sync", name="Org", slug="org-agent-sync")
-        user = User(id="user-agent-sync", name="Tester", username="tester-agent-sync")
+        suffix = uuid.uuid4().hex[:8]
+        org = Organization(id=f"org-agent-sync-{suffix}", name="Org", slug=f"org-agent-sync-{suffix}")
+        user = User(id=f"user-agent-sync-{suffix}", name="Tester", username=f"tester-agent-sync-{suffix}")
+        db.add_all([org, user])
+        await db.flush()
         cluster = Cluster(
-            id="cluster-agent-sync",
+            id=f"cluster-agent-sync-{suffix}",
             name="Cluster",
             org_id=org.id,
             created_by=user.id,
         )
         workspace = Workspace(
-            id="ws-agent-sync",
+            id=f"ws-agent-sync-{suffix}",
             org_id=org.id,
             name="Workspace",
             description="",
@@ -57,9 +63,9 @@ async def test_update_agent_syncs_node_card_position(monkeypatch: pytest.MonkeyP
             created_by=user.id,
         )
         instance = Instance(
-            id="inst-agent-sync",
+            id=f"inst-agent-sync-{suffix}",
             name="Agent",
-            slug="agent-sync",
+            slug=f"agent-sync-{suffix}",
             cluster_id=cluster.id,
             namespace="default",
             image_version="latest",
@@ -69,7 +75,7 @@ async def test_update_agent_syncs_node_card_position(monkeypatch: pytest.MonkeyP
             status="running",
         )
         agent = WorkspaceAgent(
-            id="wa-agent-sync",
+            id=f"wa-agent-sync-{suffix}",
             workspace_id=workspace.id,
             instance_id=instance.id,
             hex_q=1,
@@ -77,7 +83,7 @@ async def test_update_agent_syncs_node_card_position(monkeypatch: pytest.MonkeyP
             display_name="Agent",
         )
         card = NodeCard(
-            id="card-agent-sync",
+            id=f"card-agent-sync-{suffix}",
             node_type="agent",
             node_id=instance.id,
             workspace_id=workspace.id,
@@ -85,7 +91,7 @@ async def test_update_agent_syncs_node_card_position(monkeypatch: pytest.MonkeyP
             hex_r=0,
             name="Agent",
         )
-        db.add_all([org, user, cluster, workspace, instance, agent, card])
+        db.add_all([cluster, workspace, instance, agent, card])
         await db.commit()
 
         updated = await workspace_service.update_agent(
@@ -112,16 +118,19 @@ async def test_update_agent_syncs_node_card_name_on_rename(monkeypatch: pytest.M
     monkeypatch.setattr(corridor_router, "auto_connect_hex", noop)
 
     async with TestSessionLocal() as db:
-        org = Organization(id="org-agent-rename", name="Org", slug="org-agent-rename")
-        user = User(id="user-agent-rename", name="Tester", username="tester-agent-rename")
+        suffix = uuid.uuid4().hex[:8]
+        org = Organization(id=f"org-agent-rename-{suffix}", name="Org", slug=f"org-agent-rename-{suffix}")
+        user = User(id=f"user-agent-rename-{suffix}", name="Tester", username=f"tester-agent-rename-{suffix}")
+        db.add_all([org, user])
+        await db.flush()
         cluster = Cluster(
-            id="cluster-agent-rename",
+            id=f"cluster-agent-rename-{suffix}",
             name="Cluster",
             org_id=org.id,
             created_by=user.id,
         )
         workspace = Workspace(
-            id="ws-agent-rename",
+            id=f"ws-agent-rename-{suffix}",
             org_id=org.id,
             name="Workspace",
             description="",
@@ -130,9 +139,9 @@ async def test_update_agent_syncs_node_card_name_on_rename(monkeypatch: pytest.M
             created_by=user.id,
         )
         instance = Instance(
-            id="inst-agent-rename",
+            id=f"inst-agent-rename-{suffix}",
             name="Agent Origin",
-            slug="agent-rename",
+            slug=f"agent-rename-{suffix}",
             cluster_id=cluster.id,
             namespace="default",
             image_version="latest",
@@ -142,7 +151,7 @@ async def test_update_agent_syncs_node_card_name_on_rename(monkeypatch: pytest.M
             status="running",
         )
         agent = WorkspaceAgent(
-            id="wa-agent-rename",
+            id=f"wa-agent-rename-{suffix}",
             workspace_id=workspace.id,
             instance_id=instance.id,
             hex_q=1,
@@ -150,7 +159,7 @@ async def test_update_agent_syncs_node_card_name_on_rename(monkeypatch: pytest.M
             display_name="Agent Origin",
         )
         card = NodeCard(
-            id="card-agent-rename",
+            id=f"card-agent-rename-{suffix}",
             node_type="agent",
             node_id=instance.id,
             workspace_id=workspace.id,
@@ -158,7 +167,7 @@ async def test_update_agent_syncs_node_card_name_on_rename(monkeypatch: pytest.M
             hex_r=0,
             name="Agent Origin",
         )
-        db.add_all([org, user, cluster, workspace, instance, agent, card])
+        db.add_all([cluster, workspace, instance, agent, card])
         await db.commit()
 
         updated = await workspace_service.update_agent(
@@ -193,16 +202,19 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
     monkeypatch.setattr(workspace_service, "_send_welcome_message", noop)
 
     async with TestSessionLocal() as db:
-        org = Organization(id="org-agent-add", name="Org", slug="org-agent-add")
-        user = User(id="user-agent-add", name="Tester", username="tester-agent-add")
+        suffix = uuid.uuid4().hex[:8]
+        org = Organization(id=f"org-agent-add-{suffix}", name="Org", slug=f"org-agent-add-{suffix}")
+        user = User(id=f"user-agent-add-{suffix}", name="Tester", username=f"tester-agent-add-{suffix}")
+        db.add_all([org, user])
+        await db.flush()
         cluster = Cluster(
-            id="cluster-agent-add",
+            id=f"cluster-agent-add-{suffix}",
             name="Cluster",
             org_id=org.id,
             created_by=user.id,
         )
         workspace = Workspace(
-            id="ws-agent-add",
+            id=f"ws-agent-add-{suffix}",
             org_id=org.id,
             name="Workspace",
             description="",
@@ -213,9 +225,9 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
         )
         existing_instances = [
             Instance(
-                id=f"inst-agent-add-{idx}",
+                id=f"inst-agent-add-{suffix}-{idx}",
                 name=f"Agent {idx}",
-                slug=f"agent-add-{idx}",
+                slug=f"agent-add-{suffix}-{idx}",
                 cluster_id=cluster.id,
                 namespace="default",
                 image_version="latest",
@@ -228,7 +240,7 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
         existing_positions = [(1, 0), (1, -1), (0, -1)]
         existing_agents = [
             WorkspaceAgent(
-                id=f"wa-agent-add-{idx}",
+                id=f"wa-agent-add-{suffix}-{idx}",
                 workspace_id=workspace.id,
                 instance_id=inst.id,
                 hex_q=pos[0],
@@ -239,7 +251,7 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
         ]
         existing_cards = [
             NodeCard(
-                id="card-blackboard-add",
+                id=f"card-blackboard-add-{suffix}",
                 node_type="blackboard",
                 node_id=workspace.id,
                 workspace_id=workspace.id,
@@ -249,7 +261,7 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
             ),
             *[
                 NodeCard(
-                    id=f"card-agent-add-{idx}",
+                    id=f"card-agent-add-{suffix}-{idx}",
                     node_type="agent",
                     node_id=inst.id,
                     workspace_id=workspace.id,
@@ -260,9 +272,9 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
                 for idx, (inst, pos) in enumerate(zip(existing_instances, existing_positions))
             ],
             NodeCard(
-                id="card-human-add",
+                id=f"card-human-add-{suffix}",
                 node_type="human",
-                node_id="human-agent-add",
+                node_id=f"human-agent-add-{suffix}",
                 workspace_id=workspace.id,
                 hex_q=-1,
                 hex_r=0,
@@ -270,7 +282,7 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
             ),
         ]
         human = HumanHex(
-            id="human-agent-add",
+            id=f"human-agent-add-{suffix}",
             workspace_id=workspace.id,
             user_id=user.id,
             hex_q=-1,
@@ -279,9 +291,9 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
             created_by=user.id,
         )
         new_instance = Instance(
-            id="inst-agent-add-new",
+            id=f"inst-agent-add-new-{suffix}",
             name="Agent New",
-            slug="agent-add-new",
+            slug=f"agent-add-new-{suffix}",
             cluster_id=cluster.id,
             namespace="default",
             image_version="latest",
@@ -290,7 +302,7 @@ async def test_add_agent_auto_position_skips_occupied_node_cards(monkeypatch: py
             status="running",
         )
         db.add_all([
-            org, user, cluster, workspace, *existing_instances, *existing_agents,
+            cluster, workspace, *existing_instances, *existing_agents,
             *existing_cards, human, new_instance,
         ])
         await db.commit()

@@ -14,7 +14,7 @@ import type { AgentBrief, TopologyNode, TopologyEdge, MessageFlowPair } from '@/
 
 const { t } = useI18n()
 
-type HexType = 'empty' | 'agent' | 'blackboard' | 'human' | 'corridor'
+type HexType = 'empty' | 'agent' | 'blackboard' | 'human' | 'corridor' | 'device'
 
 interface PerfSummary {
   totalTasks: number
@@ -77,13 +77,16 @@ watch(selectedId, (id) => {
   } else if (id.startsWith('human:')) {
     const node = props.topologyNodes?.find(n => n.node_type === 'human' && n.entity_id === id.slice(6))
     if (node) emit('hex-click', { q: node.hex_q, r: node.hex_r, type: 'human', entityId: node.entity_id ?? undefined })
+  } else if (id.startsWith('device:')) {
+    const node = props.topologyNodes?.find(n => n.node_type === 'device' && n.entity_id === id.slice(7))
+    if (node) emit('hex-click', { q: node.hex_q, r: node.hex_r, type: 'device', entityId: node.entity_id ?? undefined })
   } else {
     const agent = props.agents.find((a) => a.instance_id === id)
     if (agent) emit('hex-click', { q: agent.hex_q, r: agent.hex_r, type: 'agent', agentId: id })
   }
 })
 watch(dblclickId, (id) => {
-  if (id && !id.startsWith('__') && !id.startsWith('empty:')) emit('agent-dblclick', id)
+  if (id && props.agents.some(a => a.instance_id === id)) emit('agent-dblclick', id)
 })
 
 // Environment setup
@@ -335,6 +338,7 @@ watch(() => props.perfSummary, () => {
 }, { deep: true })
 
 const HUMAN_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.7, HEX_SIZE * 0.7, 0.5, 6)
+const DEVICE_HEX_GEO = new THREE.CylinderGeometry(HEX_SIZE * 0.68, HEX_SIZE * 0.68, 0.42, 6)
 
 function createAgentLabelSprite(name: string, label?: string | null): THREE.Sprite {
   const canvas = document.createElement('canvas')
@@ -381,6 +385,25 @@ function createCorridorLabelSprite(name: string): THREE.Sprite {
   return sprite
 }
 
+function createDeviceLabelSprite(name: string): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 44
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = 'transparent'
+  ctx.fillRect(0, 0, 256, 44)
+  ctx.font = 'bold 17px sans-serif'
+  ctx.fillStyle = '#5eead4'
+  ctx.textAlign = 'center'
+  ctx.fillText(name.slice(0, 16), 128, 28)
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(mat)
+  sprite.scale.set(1.2, 0.22, 1)
+  sprite.userData.baseScale = { x: 1.2, y: 0.22 }
+  return sprite
+}
+
 function createHumanHexMesh(node: TopologyNode): THREE.Group {
   const group = new THREE.Group()
   const { x, y } = axialToWorld(node.hex_q, node.hex_r)
@@ -405,6 +428,35 @@ function createHumanHexMesh(node: TopologyNode): THREE.Group {
   const edgeColor = color.clone().offsetHSL(0, 0.1, 0.1)
   const edgeGeo = new THREE.EdgesGeometry(HUMAN_HEX_GEO)
   const edgeMat = new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.7 })
+  group.add(new THREE.LineSegments(edgeGeo, edgeMat))
+
+  return group
+}
+
+function createDeviceHexMesh(node: TopologyNode): THREE.Group {
+  const group = new THREE.Group()
+  const { x, y } = axialToWorld(node.hex_q, node.hex_r)
+  group.position.set(x, 0.22, y)
+  const hexId = `device:${node.entity_id}`
+  const status = (node.extra?.status as string) || ''
+  const colorHex = status === 'provider_unconfigured' ? '#f59e0b' : '#14b8a6'
+  group.userData = { hexId, isHex: true, displayColor: colorHex, hexQ: node.hex_q, hexR: node.hex_r }
+  const color = new THREE.Color(colorHex)
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color.clone(),
+    emissiveIntensity: 0.28,
+    metalness: 0.25,
+    roughness: 0.5,
+    transparent: true,
+    opacity: 0.9,
+  })
+  const mesh = new THREE.Mesh(DEVICE_HEX_GEO, mat)
+  mesh.userData = { hexId, isHex: true }
+  group.add(mesh)
+
+  const edgeGeo = new THREE.EdgesGeometry(DEVICE_HEX_GEO)
+  const edgeMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 })
   group.add(new THREE.LineSegments(edgeGeo, edgeMat))
 
   return group
@@ -444,6 +496,7 @@ function syncScene() {
 
   const corridorNodes = (props.topologyNodes || []).filter(n => n.node_type === 'corridor')
   const humanNodes = (props.topologyNodes || []).filter(n => n.node_type === 'human')
+  const deviceNodes = (props.topologyNodes || []).filter(n => n.node_type === 'device')
 
   const occupied = new Set<string>()
   occupied.add('0:0')
@@ -454,6 +507,9 @@ function syncScene() {
     occupied.add(`${node.hex_q}:${node.hex_r}`)
   }
   for (const node of humanNodes) {
+    occupied.add(`${node.hex_q}:${node.hex_r}`)
+  }
+  for (const node of deviceNodes) {
     occupied.add(`${node.hex_q}:${node.hex_r}`)
   }
 
@@ -489,6 +545,18 @@ function syncScene() {
     const group = createHumanHexMesh(node)
     scene.add(group)
     hexMeshes.set(`human:${node.entity_id}`, group)
+  }
+
+  for (const node of deviceNodes) {
+    const group = createDeviceHexMesh(node)
+    if (node.display_name) {
+      const label = createDeviceLabelSprite(node.display_name)
+      label.position.set(0, 0.42, 0)
+      group.add(label)
+      labelSprites.add(label)
+    }
+    scene.add(group)
+    hexMeshes.set(`device:${node.entity_id}`, group)
   }
 
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
@@ -770,6 +838,19 @@ addToLoop(() => {
       continue
     }
 
+    if (id.startsWith('device:')) {
+      const mesh = group.children[0] as THREE.Mesh
+      if (!mesh?.material) continue
+      const mat = mesh.material as THREE.MeshStandardMaterial
+      const isHovered = hoveredId.value === id
+      const isSelectedHex = props.selectedHex?.q === group.userData.hexQ && props.selectedHex?.r === group.userData.hexR
+      const targetY = isHovered ? 0.34 : isSelectedHex ? 0.3 : 0.22
+      group.position.y += (targetY - group.position.y) * 0.1
+      mat.emissive.set(group.userData.displayColor || '#14b8a6')
+      mat.emissiveIntensity = isSelectedHex ? 0.55 + Math.sin(t * 3) * 0.15 : isHovered ? 0.45 : 0.28
+      continue
+    }
+
     const isHovered = hoveredId.value === id
     const isSelected = props.selectedAgentId === id
     const isSelectedHex = props.selectedHex?.q !== undefined &&
@@ -821,7 +902,7 @@ addToLoop(() => {
   if (props.isMovingHex && props.movingHexSource) {
     const src = props.movingHexSource
     for (const [id, group] of hexMeshes) {
-      if (!id.startsWith('corridor:') && !id.startsWith('human:')) continue
+      if (!id.startsWith('corridor:') && !id.startsWith('human:') && !id.startsWith('device:')) continue
       const hq = group.userData.hexQ ?? (group.userData as Record<string, unknown>).hexQ
       const hr = group.userData.hexR ?? (group.userData as Record<string, unknown>).hexR
       if (hq === src.q && hr === src.r) {
@@ -871,6 +952,7 @@ onUnmounted(() => {
   AGENT_BASE_EDGE_GEO.dispose()
   EMPTY_HEX_GEO.dispose()
   HUMAN_HEX_GEO.dispose()
+  DEVICE_HEX_GEO.dispose()
   FLOW_SPHERE_GEO.dispose()
   for (const flow of activeFlows) {
     flowGroup.remove(flow.mesh)

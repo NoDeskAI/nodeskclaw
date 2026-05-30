@@ -14,6 +14,7 @@ from app.core.exceptions import NotFoundError
 from app.models.base import not_deleted
 from app.models.corridor import CorridorHex, HexConnection, HumanHex, is_adjacent, ordered_pair
 from app.models.instance import Instance
+from app.models.node_card import NodeCard
 from app.models.workspace import Workspace
 from app.models.workspace_agent import WorkspaceAgent
 from app.models.workspace_member import WorkspaceMember
@@ -86,6 +87,16 @@ async def _check_workspace(workspace_id: str, org, db: AsyncSession) -> Workspac
 
 async def _is_hex_occupied(workspace_id: str, q: int, r: int, db: AsyncSession) -> bool:
     if (q, r) == (0, 0):
+        return True
+    card_q = await db.execute(
+        select(NodeCard.id).where(
+            NodeCard.workspace_id == workspace_id,
+            NodeCard.hex_q == q,
+            NodeCard.hex_r == r,
+            not_deleted(NodeCard),
+        ).limit(1)
+    )
+    if card_q.scalar_one_or_none():
         return True
     agent_result = await db.execute(
         select(WorkspaceAgent).where(

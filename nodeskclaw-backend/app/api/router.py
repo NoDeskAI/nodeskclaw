@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.audit import router as audit_router
+from app.api.agent_devices import router as agent_device_router
 from app.api.auth import router as auth_router
 from app.api.genes import router as gene_router
 from app.api.clusters import router as cluster_router
@@ -135,6 +136,7 @@ api_router.include_router(workspace_router, prefix="/workspaces", tags=["赛博�
 api_router.include_router(blackboard_router, prefix="/workspaces", tags=["黑板讨论区"])
 api_router.include_router(conversation_router, prefix="/workspaces", tags=["群聊"])
 api_router.include_router(corridor_router, prefix="/workspaces", tags=["过道系统"])
+api_router.include_router(agent_device_router, prefix="/workspaces", tags=["办公设施"])
 api_router.include_router(observability_router, prefix="/workspaces", tags=["可观测性"])
 api_router.include_router(trust_router, prefix="/workspaces", tags=["渐进式信任"])
 api_router.include_router(instance_template_router, tags=["AI 员工模板"])
@@ -162,6 +164,7 @@ admin_router.include_router(workspace_router, prefix="/workspaces", tags=["Admin
 admin_router.include_router(blackboard_router, prefix="/workspaces", tags=["Admin - 黑板讨论区"])
 admin_router.include_router(conversation_router, prefix="/workspaces", tags=["Admin - 群聊"])
 admin_router.include_router(corridor_router, prefix="/workspaces", tags=["Admin - 过道系统"])
+admin_router.include_router(agent_device_router, prefix="/workspaces", tags=["Admin - 办公设施"])
 admin_router.include_router(observability_router, prefix="/workspaces", tags=["Admin - 可观测性"])
 admin_router.include_router(trust_router, prefix="/workspaces", tags=["Admin - 渐进式信任"])
 admin_router.include_router(channel_config_router, prefix="/instances", tags=["Admin - Channel 配置"])

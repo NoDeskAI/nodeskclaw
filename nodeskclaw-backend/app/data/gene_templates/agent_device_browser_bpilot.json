@@ -1,0 +1,22 @@
+{
+  "name": "agent-device-browser-bpilot",
+  "slug": "agent-device-browser-bpilot",
+  "description": "Operation guide for using Browser Pilot Agent Devices through the governed Agent Device API.",
+  "category": "tools",
+  "tags": ["tools", "agent-device", "browser", "bpilot"],
+  "version": "1.0.0",
+  "manifest": {
+    "skill": {
+      "name": "agent-device-browser-bpilot",
+      "content": "---\nname: agent-device-browser-bpilot\ndescription: Use Browser Pilot Agent Devices only through governed Agent Device APIs\nalways: true\n---\n\n## Browser Pilot Agent Device\n\nBrowser Pilot is exposed as an Agent Device placed in the office topology.\n\nUse the `deskclaw_agent_device.py` script to discover reachable devices, inspect visibility, acquire leases, invoke provider actions, and release leases.\n\n```bash\npython3 ~/.deskclaw/tools/deskclaw_agent_device.py list_reachable\npython3 ~/.deskclaw/tools/deskclaw_agent_device.py visibility --device-id <id>\npython3 ~/.deskclaw/tools/deskclaw_agent_device.py acquire_lease --device-id <id>\npython3 ~/.deskclaw/tools/deskclaw_agent_device.py invoke --device-id <id> --lease-id <lease> --provider-action page.goto --payload-json '{\"url\":\"https://example.com\"}'\npython3 ~/.deskclaw/tools/deskclaw_agent_device.py release_lease --device-id <id> --lease-id <lease>\n```\n\n### Rules\n- Discover devices through the office Agent Device visibility and reachable-device APIs.\n- Treat device identity, status, permission, topology reachability, grants, leases, and audit as controller-owned state.\n- Do not invent a device or assume access from this skill alone.\n- Acquire an exclusive lease before invoking the Browser Pilot provider.\n- Release the lease after the task is complete.\n\n### Capability Shape\n- Preset: `browser.bpilot.session`\n- Provider: `browser.bpilot`\n- Lease mode: exclusive\n- Typical actions: `session.create`, `session.use`, `page.goto`, `page.observe`, `page.click`, `page.type`\n\n### Provider Constraint\nInvoke only through the Agent Device invoke endpoint with a valid lease. If the provider is `provider_unconfigured`, report that Browser Pilot is not configured instead of retrying unrelated tools."
+    },
+    "tool_allow": ["nodeskclaw_agent_device"],
+    "scripts": ["deskclaw_agent_device.py"],
+    "agent_device": {
+      "preset_id": "browser.bpilot.session",
+      "provider_id": "browser.bpilot",
+      "lease_mode": "exclusive",
+      "capabilities": ["session.create", "session.use", "page.goto", "page.observe", "page.click", "page.type"]
+    }
+  }
+}

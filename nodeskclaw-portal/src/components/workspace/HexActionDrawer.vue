@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Move, PenSquare, Crosshair, GitBranch } from 'lucide-vue-next'
+import { X, Plus, MessageSquare, ExternalLink, Trash2, Eye, Route, User, Palette, Move, PenSquare, Crosshair, GitBranch, MonitorCog, ShieldCheck } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { Button } from '@/components/ui/button'
 
@@ -10,7 +10,7 @@ const store = useWorkspaceStore()
 
 const props = withDefaults(defineProps<{
   open: boolean
-  hexType: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human'
+  hexType: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human' | 'device'
   hexPosition: { q: number, r: number }
   agentInfo?: { id: string, name: string }
   entityInfo?: { id: string, name?: string }
@@ -24,17 +24,28 @@ const emit = defineEmits<{
 }>()
 
 const SHORTCUT_MAP: Record<string, Record<string, string>> = {
-  empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human' },
+  empty: { a: 'add-agent', c: 'place-corridor', h: 'place-human', d: 'place-device' },
   agent: { f: 'focus-hex', c: 'open-chat', d: 'view-detail', l: 'view-collaboration', r: 'rename-agent', p: 'change-agent-color', m: 'move-hex', Delete: 'remove-agent', Backspace: 'remove-agent' },
   corridor: { f: 'focus-hex', r: 'rename-corridor', m: 'move-hex', Delete: 'remove-corridor', Backspace: 'remove-corridor' },
   human: { f: 'focus-hex', r: 'rename-human', p: 'change-color', m: 'move-hex', Delete: 'remove-human', Backspace: 'remove-human' },
+  device: { f: 'focus-hex', d: 'view-device', r: 'rename-device', g: 'manage-device-grants', m: 'move-hex', Delete: 'remove-device', Backspace: 'remove-device' },
   blackboard: { f: 'focus-hex', e: 'view-blackboard' },
 }
 
-const ACTION_PERM: Record<string, string> = {
-  'add-agent': 'manage_agents',
-  'place-corridor': 'edit_topology',
-  'place-human': 'edit_topology',
+const ACTION_PERMS: Record<string, string[]> = {
+  'add-agent': ['manage_agents'],
+  'place-corridor': ['edit_topology'],
+  'place-human': ['edit_topology'],
+  'place-device': ['manage_devices', 'edit_topology'],
+  'rename-device': ['manage_devices'],
+  'manage-device-grants': ['manage_devices'],
+  'remove-device': ['manage_devices', 'edit_topology'],
+}
+
+function canRunAction(action: string): boolean {
+  const requiredPerms = ACTION_PERMS[action]
+  if (!requiredPerms) return true
+  return requiredPerms.every((perm) => store.hasPermission(perm))
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -46,8 +57,7 @@ function onKeydown(e: KeyboardEvent) {
 
   const action = map[e.key] || map[e.key.toLowerCase()]
   if (action) {
-    const requiredPerm = ACTION_PERM[action]
-    if (requiredPerm && !store.hasPermission(requiredPerm)) return
+    if (!canRunAction(action)) return
     e.preventDefault()
     e.stopPropagation()
     emit('action', action)
@@ -87,6 +97,9 @@ onUnmounted(() => {
           </template>
           <template v-else-if="hexType === 'human'">
             {{ entityInfo?.name || t('hexAction.humanHex') }}
+          </template>
+          <template v-else-if="hexType === 'device'">
+            {{ entityInfo?.name || t('hexAction.device') }}
           </template>
           <template v-else>
             {{ t('hexAction.centralBlackboard') }}
@@ -129,6 +142,15 @@ onUnmounted(() => {
             <User class="w-4 h-4 text-amber-400" />
             <span>{{ t('hexAction.placeHuman') }}</span>
             <kbd class="kbd-hint">H</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            v-if="canRunAction('place-device')"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'place-device')"
+          >
+            <MonitorCog class="w-4 h-4 text-teal-400" />
+            <span>{{ t('hexAction.placeDevice') }}</span>
+            <kbd class="kbd-hint">D</kbd>
           </Button>
         </template>
 
@@ -273,6 +295,61 @@ onUnmounted(() => {
           <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
             @click="emit('action', 'remove-human')"
+          >
+            <Trash2 class="w-4 h-4" />
+            <span>{{ t('hexAction.remove') }}</span>
+            <kbd class="kbd-hint">Del</kbd>
+          </Button>
+        </template>
+
+        <!-- Device hex actions -->
+        <template v-else-if="hexType === 'device'">
+          <Button variant="unstyled" size="unstyled"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'focus-hex')"
+          >
+            <Crosshair class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.focusHex') }}</span>
+            <kbd class="kbd-hint">F</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'view-device')"
+          >
+            <MonitorCog class="w-4 h-4 text-teal-400" />
+            <span>{{ t('hexAction.viewDevice') }}</span>
+            <kbd class="kbd-hint">D</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            v-if="canRunAction('manage-device-grants')"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'manage-device-grants')"
+          >
+            <ShieldCheck class="w-4 h-4 text-emerald-400" />
+            <span>{{ t('hexAction.deviceGrants') }}</span>
+            <kbd class="kbd-hint">G</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            v-if="canRunAction('rename-device')"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'rename-device')"
+          >
+            <PenSquare class="w-4 h-4 text-cyan-400" />
+            <span>{{ t('hexAction.renameDevice') }}</span>
+            <kbd class="kbd-hint">R</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+            @click="emit('action', 'move-hex')"
+          >
+            <Move class="w-4 h-4 text-muted-foreground" />
+            <span>{{ t('hexAction.move') }}</span>
+            <kbd class="kbd-hint">M</kbd>
+          </Button>
+          <Button variant="unstyled" size="unstyled"
+            v-if="canRunAction('remove-device')"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors text-sm"
+            @click="emit('action', 'remove-device')"
           >
             <Trash2 class="w-4 h-4" />
             <span>{{ t('hexAction.remove') }}</span>

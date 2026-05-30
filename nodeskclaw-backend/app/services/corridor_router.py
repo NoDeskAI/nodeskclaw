@@ -84,6 +84,14 @@ async def _build_hex_map(workspace_id: str, db: AsyncSession) -> dict[tuple[int,
                 "channel_type": meta.get("channel_type"),
                 "channel_config": meta.get("channel_config"),
             }
+        elif card.node_type == "device":
+            extra = {
+                "preset_id": meta.get("preset_id"),
+                "provider_id": meta.get("provider_id"),
+                "status": card.status,
+                "status_reason": meta.get("status_reason"),
+                "protocol_name": meta.get("protocol_name", "Agent Device"),
+            }
         hex_map[(card.hex_q, card.hex_r)] = TopologyNode(
             card.hex_q, card.hex_r, card.node_type,
             entity_id=card.node_id,

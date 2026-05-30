@@ -188,6 +188,13 @@ async def add_agent(
     except ValueError as e:
         raise _error(400, 40031, "errors.workspace.add_agent_invalid", str(e))
     await hooks.emit("operation_audit", action="workspace.agent_added", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": data.instance_id})
+    try:
+        from app.services.agent_device_service import sync_workspace_device_genes
+        await sync_workspace_device_genes(db, workspace_id=workspace_id, reason="agent_added")
+        await db.commit()
+    except Exception as e:
+        logger.warning("办公设施 Gene 同步失败 workspace=%s instance=%s error=%s", workspace_id, data.instance_id, e)
+        await db.rollback()
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -267,6 +274,13 @@ async def update_agent(
     if agent is None:
         raise _error(404, 40431, "errors.workspace.agent_not_found", "AI 员工不存在")
     await hooks.emit("operation_audit", action="workspace.agent_updated", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": instance_id})
+    try:
+        from app.services.agent_device_service import sync_workspace_device_genes
+        await sync_workspace_device_genes(db, workspace_id=workspace_id, reason="agent_updated")
+        await db.commit()
+    except Exception as e:
+        logger.warning("办公设施 Gene 同步失败 workspace=%s instance=%s error=%s", workspace_id, instance_id, e)
+        await db.rollback()
     return _ok(agent.model_dump(mode="json"))
 
 
@@ -282,6 +296,13 @@ async def remove_agent(
     if not ok:
         raise _error(404, 40432, "errors.workspace.agent_not_in_workspace", "AI 员工不在该办公室中")
     await hooks.emit("operation_audit", action="workspace.agent_removed", target_type="workspace", target_id=workspace_id, actor_id=user.id, details={"instance_id": instance_id})
+    try:
+        from app.services.agent_device_service import sync_workspace_device_genes
+        await sync_workspace_device_genes(db, workspace_id=workspace_id, reason="agent_removed")
+        await db.commit()
+    except Exception as e:
+        logger.warning("办公设施 Gene 同步失败 workspace=%s instance=%s error=%s", workspace_id, instance_id, e)
+        await db.rollback()
     return _ok(message="已移除")
 
 

@@ -1,4 +1,4 @@
-"""CE 审计 handler 单元测试 — 验证只记录 user 操作，跳过 agent/org。"""
+"""CE 审计 handler 单元测试 — 验证记录 user/agent 操作，跳过 org。"""
 
 from __future__ import annotations
 
@@ -46,8 +46,8 @@ async def test_user_operation_is_persisted():
 
 
 @pytest.mark.asyncio
-async def test_agent_operation_is_skipped():
-    """actor_type=agent 应该被跳过，不写入数据库。"""
+async def test_agent_operation_is_persisted():
+    """actor_type=agent 应该写入数据库。"""
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
@@ -61,11 +61,13 @@ async def test_agent_operation_is_skipped():
             actor_type="agent",
         )
 
-    mock_session.add.assert_not_called()
-    mock_session.commit.assert_not_awaited()
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_awaited_once()
 
-    from app.core.hooks import is_audited
-    assert is_audited() is True
+    audit_obj = mock_session.add.call_args[0][0]
+    assert audit_obj.action == "agent.message_sent"
+    assert audit_obj.actor_type == "agent"
+    assert audit_obj.actor_id == "agent-001"
 
 
 @pytest.mark.asyncio

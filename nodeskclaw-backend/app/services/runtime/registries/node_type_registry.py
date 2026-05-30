@@ -172,3 +172,15 @@ NODE_TYPE_REGISTRY.register(NodeTypeDefinitionSpec(
     hooks=["on_message_passing"],
     description="Shared blackboard node providing workspace-wide context.",
 ))
+
+NODE_TYPE_REGISTRY.register(NodeTypeDefinitionSpec(
+    type_id="device",
+    routing_role=RoutingRole.SENSOR,
+    transport="agent_device",
+    propagates=False,
+    consumes=False,
+    is_addressable=False,
+    can_originate=False,
+    hooks=[],
+    description="Governed Agent Device placed on topology; discoverable through device APIs only.",
+))
