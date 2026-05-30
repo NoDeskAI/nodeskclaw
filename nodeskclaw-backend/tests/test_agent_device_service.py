@@ -8,7 +8,8 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-from app.models.agent_device import AgentDeviceGeneBinding, AgentDeviceLease
+from app.models.agent_device import AgentDeviceGeneBinding, AgentDeviceGrant, AgentDeviceLease
+from app.models.base import not_deleted
 from app.models.cluster import Cluster
 from app.models.corridor import HexConnection
 from app.models.gene import Gene, InstanceGene, InstanceGeneStatus
@@ -427,6 +428,134 @@ async def test_agent_can_delegate_subset_to_another_agent(monkeypatch: pytest.Mo
                 granted_by_id=agent.id,
                 org_id=workspace.org_id,
             )
+
+
+@pytest.mark.asyncio
+async def test_child_grant_requires_active_parent_chain(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, delegate_agent = await _seed_workspace(db, "parent-chain")
+        device = await _place_available_device(monkeypatch, db, workspace, user)
+        parent = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=None,
+            expires_at=None,
+            granted_by_type="user",
+            granted_by_id=user.id,
+            org_id=workspace.org_id,
+        )
+        await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            scopes=["discover", "lease"],
+            can_delegate=False,
+            parent_grant_id=parent.id,
+            expires_at=None,
+            granted_by_type="agent",
+            granted_by_id=agent.id,
+            org_id=workspace.org_id,
+        )
+
+        parent.revoked_at = agent_device_service.utc_now()
+        parent.soft_delete()
+        await db.flush()
+
+        assert await agent_device_service.find_valid_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            required_scope="lease",
+        ) is None
+
+
+@pytest.mark.asyncio
+async def test_revoking_parent_grant_revokes_children_and_reclaims_leases(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, delegate_agent = await _seed_workspace(db, "cascade-revoke")
+        device = await _place_available_device(monkeypatch, db, workspace, user)
+        parent = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=None,
+            expires_at=None,
+            granted_by_type="user",
+            granted_by_id=user.id,
+            org_id=workspace.org_id,
+        )
+        child = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            scopes=["discover", "lease"],
+            can_delegate=False,
+            parent_grant_id=parent.id,
+            expires_at=None,
+            granted_by_type="agent",
+            granted_by_id=agent.id,
+            org_id=workspace.org_id,
+        )
+        lease = AgentDeviceLease(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace.id,
+            device_id=device.id,
+            holder_agent_id=delegate_agent.id,
+            grant_id=child.id,
+            status="active",
+            expires_at=agent_device_service.utc_now() + timedelta(seconds=60),
+        )
+        db.add(lease)
+        await db.flush()
+
+        await agent_device_service.revoke_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            grant_id=parent.id,
+            actor_type="user",
+            actor_id=user.id,
+            org_id=workspace.org_id,
+        )
+        await db.flush()
+
+        assert child.revoked_at is not None
+        active_child_id = (await db.execute(
+            select(AgentDeviceGrant.id).where(
+                AgentDeviceGrant.id == child.id,
+                not_deleted(AgentDeviceGrant),
+            )
+        )).scalar_one_or_none()
+        assert active_child_id is None
+        assert lease.status == "reclaimed"
+        assert lease.released_at is not None
+        assert await agent_device_service.find_valid_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            required_scope="lease",
+        ) is None
 
 
 @pytest.mark.asyncio

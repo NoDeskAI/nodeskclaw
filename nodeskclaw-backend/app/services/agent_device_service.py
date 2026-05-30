@@ -498,10 +498,45 @@ async def find_valid_grant(
         subject_id=subject_id,
     )
     result = await db.execute(stmt)
+    now = utc_now()
     for grant in result.scalars().all():
-        if required_scope in (grant.scopes or []):
+        if required_scope in (grant.scopes or []) and await _grant_parent_chain_is_valid(
+            db,
+            workspace_id=workspace_id,
+            device_id=device_id,
+            grant=grant,
+            now=now,
+        ):
             return grant
     return None
+
+
+async def _grant_parent_chain_is_valid(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    device_id: str,
+    grant: AgentDeviceGrant,
+    now: datetime,
+) -> bool:
+    current_id = grant.parent_grant_id
+    visited = {grant.id}
+    while current_id:
+        if current_id in visited:
+            return False
+        visited.add(current_id)
+        parent = await db.get(AgentDeviceGrant, current_id)
+        if (
+            parent is None
+            or parent.workspace_id != workspace_id
+            or parent.device_id != device_id
+            or parent.revoked_at is not None
+            or parent.deleted_at is not None
+            or (parent.expires_at is not None and parent.expires_at <= now)
+        ):
+            return False
+        current_id = parent.parent_grant_id
+    return True
 
 
 async def create_grant(
@@ -617,8 +652,23 @@ async def revoke_grant(
         raise NotFoundError("设备授权不存在", "errors.agent_device.grant_not_found")
     if actor_type == "agent" and grant.granted_by_id != actor_id:
         raise ForbiddenError("Agent 只能撤销自己委托的设备授权", "errors.agent_device.revoke_forbidden")
-    grant.revoked_at = utc_now()
-    grant.soft_delete()
+    descendants = await _descendant_grants(
+        db,
+        workspace_id=workspace_id,
+        device_id=device_id,
+        grant_id=grant.id,
+    )
+    revoked_at = utc_now()
+    revoked_grants = [grant, *descendants]
+    for revoked_grant in revoked_grants:
+        revoked_grant.revoked_at = revoked_at
+        revoked_grant.soft_delete()
+    reclaimed_lease_count = await _reclaim_active_leases_for_grants(
+        db,
+        workspace_id=workspace_id,
+        device_id=device_id,
+        grant_ids=[revoked_grant.id for revoked_grant in revoked_grants],
+    )
     await hooks.emit(
         "operation_audit",
         action="agent_device.grant_revoked",
@@ -628,9 +678,71 @@ async def revoke_grant(
         actor_type=actor_type,
         org_id=org_id,
         workspace_id=workspace_id,
-        details={"grant_id": grant_id, "subject_type": grant.subject_type, "subject_id": grant.subject_id},
+        details={
+            "grant_id": grant_id,
+            "subject_type": grant.subject_type,
+            "subject_id": grant.subject_id,
+            "descendant_grant_ids": [descendant.id for descendant in descendants],
+            "reclaimed_lease_count": reclaimed_lease_count,
+        },
     )
     return grant
+
+
+async def _descendant_grants(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    device_id: str,
+    grant_id: str,
+) -> list[AgentDeviceGrant]:
+    descendants: list[AgentDeviceGrant] = []
+    pending = [grant_id]
+    visited = {grant_id}
+    while pending:
+        current_id = pending.pop()
+        result = await db.execute(
+            select(AgentDeviceGrant).where(
+                AgentDeviceGrant.workspace_id == workspace_id,
+                AgentDeviceGrant.device_id == device_id,
+                AgentDeviceGrant.parent_grant_id == current_id,
+                not_deleted(AgentDeviceGrant),
+            )
+        )
+        for child in result.scalars().all():
+            if child.id in visited:
+                continue
+            visited.add(child.id)
+            descendants.append(child)
+            pending.append(child.id)
+    return descendants
+
+
+async def _reclaim_active_leases_for_grants(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    device_id: str,
+    grant_ids: list[str],
+) -> int:
+    if not grant_ids:
+        return 0
+    result = await db.execute(
+        select(AgentDeviceLease).where(
+            AgentDeviceLease.workspace_id == workspace_id,
+            AgentDeviceLease.device_id == device_id,
+            AgentDeviceLease.grant_id.in_(grant_ids),
+            AgentDeviceLease.status == "active",
+            not_deleted(AgentDeviceLease),
+        )
+    )
+    reclaimed_at = utc_now()
+    reclaimed_count = 0
+    for lease in result.scalars().all():
+        lease.status = "reclaimed"
+        lease.released_at = reclaimed_at
+        reclaimed_count += 1
+    return reclaimed_count
 
 
 async def _is_grant_ancestor(
