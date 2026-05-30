@@ -1217,6 +1217,14 @@ async def ensure_gene_binding(
         logger.warning("Agent Device Gene 不存在，跳过同步: %s", gene_slug)
         return
 
+    sibling_origins = (await db.execute(
+        select(AgentDeviceGeneBinding.was_preexisting).where(
+            AgentDeviceGeneBinding.workspace_id == workspace_id,
+            AgentDeviceGeneBinding.instance_id == instance.id,
+            AgentDeviceGeneBinding.gene_slug == gene_slug,
+            not_deleted(AgentDeviceGeneBinding),
+        )
+    )).scalars().all()
     existing_instance_gene = (await db.execute(
         select(InstanceGene).where(
             InstanceGene.instance_id == instance.id,
@@ -1225,7 +1233,7 @@ async def ensure_gene_binding(
             not_deleted(InstanceGene),
         )
     )).scalar_one_or_none()
-    was_preexisting = existing_instance_gene is not None
+    was_preexisting = all(sibling_origins) if sibling_origins else existing_instance_gene is not None
     if existing_instance_gene is None:
         try:
             from app.services.gene_service import install_gene_prerestart
@@ -1282,6 +1290,17 @@ async def withdraw_gene_binding(
     binding.sync_reason = reason
     binding.soft_delete()
     if binding.was_preexisting or not binding.gene_id:
+        return
+    sibling_binding = (await db.execute(
+        select(AgentDeviceGeneBinding.id).where(
+            AgentDeviceGeneBinding.workspace_id == workspace_id,
+            AgentDeviceGeneBinding.instance_id == instance.id,
+            AgentDeviceGeneBinding.gene_slug == gene_slug,
+            AgentDeviceGeneBinding.id != binding.id,
+            not_deleted(AgentDeviceGeneBinding),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if sibling_binding is not None:
         return
     try:
         from app.services.gene_service import uninstall_gene
