@@ -520,6 +520,61 @@ async def test_child_grant_requires_active_parent_chain(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
+async def test_agent_delegation_rejects_invalid_parent_chain(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, delegate_agent = await _seed_workspace(db, "delegate-chain")
+        device = await _place_available_device(monkeypatch, db, workspace, user)
+        parent = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=None,
+            expires_at=None,
+            granted_by_type="user",
+            granted_by_id=user.id,
+            org_id=workspace.org_id,
+        )
+        await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=parent.id,
+            expires_at=None,
+            granted_by_type="agent",
+            granted_by_id=agent.id,
+            org_id=workspace.org_id,
+        )
+        parent.expires_at = agent_device_service.utc_now() - timedelta(seconds=1)
+        await db.flush()
+
+        with pytest.raises(ForbiddenError):
+            await agent_device_service.create_grant(
+                db,
+                workspace_id=workspace.id,
+                device_id=device.id,
+                subject_type="agent",
+                subject_id="inst-device-third-delegate-chain",
+                scopes=["discover"],
+                can_delegate=False,
+                parent_grant_id=None,
+                expires_at=None,
+                granted_by_type="agent",
+                granted_by_id=delegate_agent.id,
+                org_id=workspace.org_id,
+            )
+
+
+@pytest.mark.asyncio
 async def test_revoking_parent_grant_revokes_children_and_reclaims_leases(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
 
@@ -734,6 +789,80 @@ async def test_agent_reclaim_requires_own_or_ancestor_delegation(monkeypatch: py
 
 
 @pytest.mark.asyncio
+async def test_agent_reclaim_rejects_invalid_parent_chain(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, delegate_agent = await _seed_workspace(db, "reclaim-chain")
+        device = await _place_available_device(monkeypatch, db, workspace, user)
+        parent = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=None,
+            expires_at=None,
+            granted_by_type="user",
+            granted_by_id=user.id,
+            org_id=workspace.org_id,
+        )
+        child = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id=delegate_agent.id,
+            scopes=["discover", "lease", "invoke", "delegate"],
+            can_delegate=True,
+            parent_grant_id=parent.id,
+            expires_at=None,
+            granted_by_type="agent",
+            granted_by_id=agent.id,
+            org_id=workspace.org_id,
+        )
+        grandchild = await agent_device_service.create_grant(
+            db,
+            workspace_id=workspace.id,
+            device_id=device.id,
+            subject_type="agent",
+            subject_id="inst-device-worker-reclaim-chain",
+            scopes=["lease"],
+            can_delegate=False,
+            parent_grant_id=child.id,
+            expires_at=None,
+            granted_by_type="agent",
+            granted_by_id=delegate_agent.id,
+            org_id=workspace.org_id,
+        )
+        lease = AgentDeviceLease(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace.id,
+            device_id=device.id,
+            holder_agent_id=grandchild.subject_id,
+            grant_id=grandchild.id,
+            status="active",
+            expires_at=agent_device_service.utc_now() + timedelta(seconds=60),
+        )
+        db.add(lease)
+        parent.expires_at = agent_device_service.utc_now() - timedelta(seconds=1)
+        await db.flush()
+
+        with pytest.raises(ForbiddenError):
+            await agent_device_service.reclaim_lease(
+                db,
+                workspace_id=workspace.id,
+                device_id=device.id,
+                lease_id=lease.id,
+                actor_type="agent",
+                actor_id=delegate_agent.id,
+                org_id=workspace.org_id,
+            )
+
+
+@pytest.mark.asyncio
 async def test_withdraw_gene_binding_keeps_shared_auto_gene_until_last_device(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
 
@@ -843,6 +972,50 @@ async def test_withdraw_gene_binding_keeps_shared_auto_gene_until_last_device(mo
         await db.flush()
 
         assert uninstall_calls == [(agent.id, gene.id)]
+
+
+@pytest.mark.asyncio
+async def test_ensure_gene_binding_skips_binding_when_auto_install_fails(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_device_service.hooks, "emit", _noop)
+
+    from app.services import gene_service
+
+    async def fake_install_gene_prerestart(instance_id: str, gene_slug: str):
+        raise RuntimeError(f"install failed for {instance_id}:{gene_slug}")
+
+    monkeypatch.setattr(gene_service, "install_gene_prerestart", fake_install_gene_prerestart)
+
+    async with TestSessionLocal() as db:
+        _org, user, workspace, agent, _delegate_agent = await _seed_workspace(db, "gene-fail")
+        device = await _place_available_device(monkeypatch, db, workspace, user)
+        gene = Gene(
+            id="gene-agent-device-install-fail",
+            name="Agent Device Install Fail",
+            slug="agent-device-browser-bpilot",
+            description="",
+            short_description="",
+            category="agent-device",
+        )
+        db.add(gene)
+        await db.flush()
+
+        await agent_device_service.ensure_gene_binding(
+            db,
+            workspace_id=workspace.id,
+            device=device,
+            instance=agent,
+            gene_slug=gene.slug,
+            reason="topology_sync",
+        )
+        await db.flush()
+
+        binding_id = (await db.execute(
+            select(AgentDeviceGeneBinding.id).where(
+                AgentDeviceGeneBinding.device_id == device.id,
+                not_deleted(AgentDeviceGeneBinding),
+            )
+        )).scalar_one_or_none()
+        assert binding_id is None
 
 
 @pytest.mark.asyncio

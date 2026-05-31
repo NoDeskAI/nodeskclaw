@@ -563,6 +563,7 @@ async def create_grant(
 
     parent: AgentDeviceGrant | None = None
     if granted_by_type == "agent":
+        now = utc_now()
         parent_stmt = await _valid_grant_query(
             workspace_id=workspace_id,
             device_id=device_id,
@@ -578,6 +579,13 @@ async def create_grant(
                 candidate.can_delegate
                 and "delegate" in parent_scopes
                 and set(normalized_scopes).issubset(parent_scopes)
+                and await _grant_parent_chain_is_valid(
+                    db,
+                    workspace_id=workspace_id,
+                    device_id=device_id,
+                    grant=candidate,
+                    now=now,
+                )
             ):
                 parent = candidate
                 break
@@ -586,13 +594,29 @@ async def create_grant(
         parent_grant_id = parent.id
         parent_expiry = parent.expires_at
         if expires_at is None:
-            expires_at = utc_now() + timedelta(minutes=DEFAULT_DELEGATE_TTL_MINUTES)
+            expires_at = now + timedelta(minutes=DEFAULT_DELEGATE_TTL_MINUTES)
         if parent_expiry is not None and expires_at > parent_expiry:
             expires_at = parent_expiry
         can_delegate = can_delegate and "delegate" in normalized_scopes
     elif parent_grant_id:
-        parent = await db.get(AgentDeviceGrant, parent_grant_id)
-        if parent is None or parent.device_id != device_id:
+        now = utc_now()
+        parent = (await db.execute(
+            select(AgentDeviceGrant).where(
+                AgentDeviceGrant.id == parent_grant_id,
+                AgentDeviceGrant.workspace_id == workspace_id,
+                AgentDeviceGrant.device_id == device_id,
+                AgentDeviceGrant.revoked_at.is_(None),
+                or_(AgentDeviceGrant.expires_at.is_(None), AgentDeviceGrant.expires_at > now),
+                not_deleted(AgentDeviceGrant),
+            )
+        )).scalar_one_or_none()
+        if parent is None or not await _grant_parent_chain_is_valid(
+            db,
+            workspace_id=workspace_id,
+            device_id=device_id,
+            grant=parent,
+            now=now,
+        ):
             raise BadRequestError("父授权不存在", "errors.agent_device.parent_grant_not_found")
 
     grant = AgentDeviceGrant(
@@ -791,8 +815,17 @@ async def _agent_can_reclaim_lease(
         subject_id=actor_agent_id,
     )
     result = await db.execute(grant_stmt)
+    now = utc_now()
     for grant in result.scalars().all():
         if not grant.can_delegate or "delegate" not in (grant.scopes or []):
+            continue
+        if not await _grant_parent_chain_is_valid(
+            db,
+            workspace_id=workspace_id,
+            device_id=device_id,
+            grant=grant,
+            now=now,
+        ):
             continue
         if await _is_grant_ancestor(
             db,
@@ -1364,6 +1397,14 @@ async def ensure_gene_binding(
                 not_deleted(InstanceGene),
             )
         )).scalar_one_or_none()
+    if existing_instance_gene is None:
+        logger.warning(
+            "Agent Device Gene 未安装成功，跳过绑定 instance=%s gene=%s reason=%s",
+            instance.id,
+            gene_slug,
+            reason,
+        )
+        return
 
     db.add(AgentDeviceGeneBinding(
         id=str(uuid.uuid4()),
