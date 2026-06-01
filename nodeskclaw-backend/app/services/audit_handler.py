@@ -1,4 +1,4 @@
-"""CE 操作审计 handler — 监听 operation_audit 事件，只写 actor_type=user 的记录。
+"""CE 操作审计 handler — 监听 operation_audit 事件，记录 user / agent 操作。
 
 EE 模式下此 handler 不会注册（由 EE 自己的 handler 接管）。
 """
@@ -29,7 +29,7 @@ async def _on_operation_audit(
     details: dict | None = None,
     **_kwargs,
 ) -> None:
-    if actor_type != "user":
+    if actor_type not in {"user", "agent"}:
         hooks.mark_audited()
         return
 
@@ -62,4 +62,4 @@ async def _on_operation_audit(
 
 def register_ce_audit_handler() -> None:
     hooks.register("operation_audit", _on_operation_audit)
-    logger.info("CE 操作审计 handler 已注册（仅记录 user 操作）")
+    logger.info("CE 操作审计 handler 已注册（记录 user / agent 操作）")

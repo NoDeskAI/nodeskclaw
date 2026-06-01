@@ -12,6 +12,7 @@ from app.models.base import BaseModel
 WORKSPACE_PERMISSIONS: list[str] = [
     "manage_settings",
     "manage_agents",
+    "manage_devices",
     "manage_members",
     "edit_blackboard",
     "send_chat",
@@ -20,7 +21,7 @@ WORKSPACE_PERMISSIONS: list[str] = [
 ]
 
 PERMISSION_PRESETS: dict[str, list[str]] = {
-    "collaborator": ["manage_agents", "edit_blackboard", "send_chat", "edit_topology"],
+    "collaborator": ["manage_agents", "manage_devices", "edit_blackboard", "send_chat", "edit_topology"],
     "observer": ["send_chat"],
 }
 

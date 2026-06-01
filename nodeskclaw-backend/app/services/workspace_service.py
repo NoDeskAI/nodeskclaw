@@ -789,6 +789,7 @@ _NODE_TYPE_LABELS = {
     "corridor": "走廊",
     "agent": "AI 员工",
     "human": "成员",
+    "device": "办公设施",
 }
 
 

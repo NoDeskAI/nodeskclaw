@@ -14,6 +14,7 @@ import ConversationList from '@/components/chat/ConversationList.vue'
 import LocaleSelect from '@/components/shared/LocaleSelect.vue'
 import BlackboardOverlay from '@/components/blackboard/BlackboardOverlay.vue'
 import HexActionDrawer from '@/components/workspace/HexActionDrawer.vue'
+import DeviceDetailDrawer from '@/components/workspace/DeviceDetailDrawer.vue'
 import AgentCollaborationPanel from '@/components/workspace/AgentCollaborationPanel.vue'
 import AgentDetailDialog from '@/components/workspace/AgentDetailDialog.vue'
 import AddAgentDialog from '@/components/workspace/AddAgentDialog.vue'
@@ -129,7 +130,7 @@ watch(chatOpen, (v) => {
 interface SelectedHex {
   q: number
   r: number
-  type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human'
+  type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human' | 'device'
   agentId?: string
   entityId?: string
 }
@@ -160,6 +161,10 @@ const hexEntityName = computed(() => {
       return member?.user_name || ''
     }
     return ''
+  }
+  if (selectedHex.value.type === 'device') {
+    const node = store.topologyNodes.find((n: any) => n.entity_id === selectedHex.value!.entityId)
+    return node?.display_name || store.devices.find(d => d.id === selectedHex.value!.entityId)?.display_name || ''
   }
   return ''
 })
@@ -207,6 +212,8 @@ async function refreshWorkspaceData(wsId: string) {
   await Promise.all([
     store.fetchWorkspace(wsId),
     store.fetchTopology(wsId),
+    store.fetchDevicePresets(wsId),
+    store.fetchDevices(wsId),
     store.fetchBlackboard(wsId),
     loadPerfSummary(wsId),
   ])
@@ -219,6 +226,8 @@ async function bootstrapWorkspaceCritical(wsId: string): Promise<number | null> 
     store.fetchMyPermissions(wsId),
     store.fetchBlackboard(wsId),
     store.fetchTopology(wsId),
+    store.fetchDevicePresets(wsId),
+    store.fetchDevices(wsId),
   ])
   if (generation !== workspaceBootstrapGeneration) return null
   await nextTick()
@@ -365,7 +374,7 @@ function toggleMode() {
 
 let clickHandled = false
 
-function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }) {
+function onHexClick(payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human' | 'device', agentId?: string, entityId?: string }) {
   clickHandled = true
 
   if (isPickingHexForAgent.value) {
@@ -406,6 +415,36 @@ function onAgentDblClick(_id: string) {
   clickHandled = true
   collabPanelOpen.value = false
   chatOpen.value = true
+}
+
+const deviceDetailVisible = ref(false)
+const deviceDetailId = ref<string | null>(null)
+
+async function placeDeviceOnSelectedHex() {
+  const q = selectedHex.value?.q
+  const r = selectedHex.value?.r
+  if (q === undefined || r === undefined) return
+
+  const presets = store.devicePresets.length
+    ? store.devicePresets
+    : await store.fetchDevicePresets(workspaceId.value)
+  const preset = presets.find(p => p.enabled)
+  if (!preset) {
+    toast.error(t('hexAction.noDevicePresets'))
+    return
+  }
+
+  try {
+    await store.createDevice(workspaceId.value, {
+      preset_id: preset.preset_id,
+      display_name: preset.display_name || t('hexAction.device'),
+      hex_q: q,
+      hex_r: r,
+    })
+    toast.success(t('hexAction.devicePlaced'))
+  } catch (err: any) {
+    toast.error(err?.response?.data?.detail?.message || t('hexAction.devicePlaceFailed'))
+  }
 }
 
 async function onHexAction(action: string) {
@@ -480,11 +519,26 @@ async function onHexAction(action: string) {
       hexDrawerOpen.value = false
       break
     }
+    case 'place-device':
+      await placeDeviceOnSelectedHex()
+      hexDrawerOpen.value = false
+      break
+    case 'view-device':
+    case 'manage-device-grants':
+      if (selectedHex.value?.entityId) {
+        deviceDetailId.value = selectedHex.value.entityId
+        deviceDetailVisible.value = true
+      }
+      hexDrawerOpen.value = false
+      break
     case 'move-hex':
       enterMoveMode()
       break
     case 'rename-corridor':
       openRenameDialog()
+      break
+    case 'rename-device':
+      openRenameDeviceDialog()
       break
     case 'rename-agent':
       openRenameAgentDialog()
@@ -520,6 +574,18 @@ async function onHexAction(action: string) {
         try {
           await store.deleteHumanHex(workspaceId.value, selectedHex.value.entityId)
           toast.success(t('hexAction.humanRemoved'))
+        } catch {
+          toast.error(t('hexAction.removeFailed'))
+        }
+        selectedHex.value = null
+        hexDrawerOpen.value = false
+      }
+      break
+    case 'remove-device':
+      if (selectedHex.value?.entityId) {
+        try {
+          await store.deleteDevice(workspaceId.value, selectedHex.value.entityId)
+          toast.success(t('hexAction.deviceRemoved'))
         } catch {
           toast.error(t('hexAction.removeFailed'))
         }
@@ -601,6 +667,31 @@ async function handleRenameHuman() {
     showRenameHumanDialog.value = false
   } finally {
     renameHumanSaving.value = false
+  }
+}
+
+const showRenameDeviceDialog = ref(false)
+const renameDeviceValue = ref('')
+const renameDeviceSaving = ref(false)
+const renameDeviceId = ref('')
+
+function openRenameDeviceDialog() {
+  renameDeviceId.value = selectedHex.value?.entityId || ''
+  renameDeviceValue.value = hexEntityName.value
+  showRenameDeviceDialog.value = true
+  hexDrawerOpen.value = false
+}
+
+async function handleRenameDevice() {
+  const name = renameDeviceValue.value.trim()
+  if (!renameDeviceId.value || !name) return
+  renameDeviceSaving.value = true
+  try {
+    await store.updateDevice(workspaceId.value, renameDeviceId.value, { display_name: name })
+    toast.success(t('hexAction.deviceRenamed'))
+    showRenameDeviceDialog.value = false
+  } finally {
+    renameDeviceSaving.value = false
   }
 }
 
@@ -745,7 +836,7 @@ async function handleRestartAll() {
 }
 
 type MovingHexSource = {
-  type: 'agent' | 'corridor' | 'human'
+  type: 'agent' | 'corridor' | 'human' | 'device'
   id: string
   q: number
   r: number
@@ -764,6 +855,8 @@ function enterMoveMode() {
     source = { type: 'corridor', id: hex.entityId, q: hex.q, r: hex.r }
   } else if (hex.type === 'human' && hex.entityId) {
     source = { type: 'human', id: hex.entityId, q: hex.q, r: hex.r }
+  } else if (hex.type === 'device' && hex.entityId) {
+    source = { type: 'device', id: hex.entityId, q: hex.q, r: hex.r }
   }
   if (!source) return
   movingHexSource.value = source
@@ -786,6 +879,8 @@ async function moveHexTo(targetQ: number, targetR: number) {
       await store.moveCorridorHex(workspaceId.value, src.id, targetQ, targetR)
     } else if (src.type === 'human') {
       await store.moveHumanHex(workspaceId.value, src.id, targetQ, targetR)
+    } else if (src.type === 'device') {
+      await store.updateDevice(workspaceId.value, src.id, { hex_q: targetQ, hex_r: targetR })
     }
     toast.success(t('hexAction.moveSuccess', { q: targetQ, r: targetR }))
     selectedHex.value = null
@@ -1302,6 +1397,40 @@ function handleKeydown(e: KeyboardEvent) {
       </Transition>
     </Teleport>
 
+    <!-- Rename Device Dialog -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showRenameDeviceDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="showRenameDeviceDialog = false" />
+          <div class="relative bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-lg space-y-4">
+            <h3 class="text-sm font-semibold">{{ t('hexAction.renameDeviceTitle') }}</h3>
+            <Input
+              v-model="renameDeviceValue"
+              type="text"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              :placeholder="t('hexAction.deviceNamePlaceholder')"
+              @keydown.enter="handleRenameDevice"
+            />
+            <div class="flex justify-end gap-3">
+              <Button variant="unstyled" size="unstyled"
+                class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                @click="showRenameDeviceDialog = false"
+              >
+                {{ t('common.cancel') }}
+              </Button>
+              <Button variant="unstyled" size="unstyled"
+                class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="renameDeviceSaving"
+                @click="handleRenameDevice"
+              >
+                {{ renameDeviceSaving ? t('common.saving') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Rename Agent Dialog -->
     <Teleport to="body">
       <Transition name="fade">
@@ -1465,6 +1594,13 @@ function handleKeydown(e: KeyboardEvent) {
       :instance-id="agentDetailId"
       @navigate="openAgentDetailPage"
       @deleted="store.fetchWorkspace(workspaceId)"
+    />
+
+    <DeviceDetailDrawer
+      v-model:open="deviceDetailVisible"
+      :workspace-id="workspaceId"
+      :device-id="deviceDetailId"
+      :agents="agents"
     />
 
     <!-- Focus Mode Dialog -->

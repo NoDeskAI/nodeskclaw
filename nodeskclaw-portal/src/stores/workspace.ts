@@ -207,10 +207,100 @@ export interface ConnectionInfo {
   created_at: string
 }
 
+export interface AgentDevicePresetInfo {
+  preset_id: string
+  provider_id: string
+  display_name: string
+  description: string
+  gene_slug: string
+  capability_schema: Record<string, unknown>
+  enabled: boolean
+  config: Record<string, unknown> | null
+  provider_status: string
+  provider_status_reason: string | null
+}
+
+export interface AgentDeviceInfo {
+  id: string
+  workspace_id: string
+  preset_id: string
+  provider_id: string
+  display_name: string
+  hex_q: number
+  hex_r: number
+  status: string
+  status_reason: string | null
+  config: Record<string, unknown>
+  metadata: Record<string, unknown>
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentDeviceGrantInfo {
+  id: string
+  workspace_id: string
+  device_id: string
+  subject_type: 'human' | 'agent'
+  subject_id: string
+  scopes: Array<'discover' | 'lease' | 'invoke' | 'delegate'>
+  can_delegate: boolean
+  parent_grant_id: string | null
+  granted_by_type: string
+  granted_by_id: string
+  expires_at: string | null
+  revoked_at: string | null
+  created_at: string
+}
+
+export interface AgentDeviceLeaseInfo {
+  id: string
+  workspace_id: string
+  device_id: string
+  holder_agent_id: string
+  grant_id: string
+  status: string
+  expires_at: string
+  renewed_at: string | null
+  released_at: string | null
+  created_at: string
+}
+
+export interface AgentDeviceVisibilityInfo {
+  device_id: string
+  visible: boolean
+  reasons: string[]
+  status: string
+  status_reason: string | null
+  preset_id: string
+  provider_id: string
+  display_name: string
+  hex_q: number
+  hex_r: number
+  grant_id: string | null
+  topology_reachable: boolean
+  reachability_source: string | null
+  topology_path_ref: string | null
+  topology_reason: string
+  active_lease: AgentDeviceLeaseInfo | null
+}
+
+export interface AgentDeviceReachableInfo {
+  id: string
+  workspace_id: string
+  preset_id: string
+  provider_id: string
+  display_name: string
+  hex_q: number
+  hex_r: number
+  status: string
+  visibility: AgentDeviceVisibilityInfo
+}
+
 export interface TopologyNode {
   hex_q: number
   hex_r: number
-  node_type: 'blackboard' | 'corridor' | 'agent' | 'human'
+  node_type: 'blackboard' | 'corridor' | 'agent' | 'human' | 'device'
   entity_id: string | null
   display_name: string | null
   extra: Record<string, unknown>
@@ -318,6 +408,7 @@ export const WORKSPACE_PERMISSIONS = [
   'edit_blackboard',
   'send_chat',
   'edit_topology',
+  'manage_devices',
   'delete_workspace',
 ] as const
 
@@ -325,7 +416,7 @@ export type WorkspacePermission = typeof WORKSPACE_PERMISSIONS[number]
 
 export const PERMISSION_PRESETS: Record<string, { is_admin: boolean; permissions: string[] }> = {
   administrator: { is_admin: true, permissions: [] },
-  collaborator: { is_admin: false, permissions: ['manage_agents', 'edit_blackboard', 'send_chat', 'edit_topology'] },
+  collaborator: { is_admin: false, permissions: ['manage_agents', 'edit_blackboard', 'send_chat', 'edit_topology', 'manage_devices'] },
   observer: { is_admin: false, permissions: ['send_chat'] },
 }
 
@@ -342,6 +433,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const corridorHexes = ref<CorridorHexInfo[]>([])
   const connections = ref<ConnectionInfo[]>([])
+  const devicePresets = ref<AgentDevicePresetInfo[]>([])
+  const devices = ref<AgentDeviceInfo[]>([])
   const topology = ref<TopologyInfo | null>(null)
   const messageFlowStats = ref<MessageFlowPair[]>([])
   const heatmap = ref<HeatmapEntry[]>([])
@@ -767,6 +860,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await Promise.all([
       fetchWorkspace(workspaceId),
       fetchTopology(workspaceId),
+      fetchDevicePresets(workspaceId),
+      fetchDevices(workspaceId),
       fetchConversations(workspaceId),
     ])
     activeConversationId.value = resolveActiveConversationId(conversations.value, activeConversationId.value)
@@ -1367,6 +1462,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       'corridor:hex_placed', 'corridor:hex_updated', 'corridor:hex_removed',
       'connection:created', 'connection:removed',
       'human:hex_placed', 'human:hex_updated', 'human:hex_removed', 'human:channel_updated',
+      'device:preset_updated', 'device:created', 'device:updated', 'device:deleted',
+      'device:grant_created', 'device:grant_revoked',
+      'device:lease_acquired', 'device:lease_renewed', 'device:lease_released', 'device:lease_reclaimed',
     ]
     for (const eventName of topologyEvents) {
       eventSource.addEventListener(eventName, (e: MessageEvent) => {
@@ -1580,6 +1678,145 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await refreshWorkspaceStructure(workspaceId)
   }
 
+  async function fetchDevicePresets(workspaceId: string) {
+    try {
+      const res = await api.get(`/workspaces/${workspaceId}/device-presets`)
+      devicePresets.value = res.data.data || []
+    } catch (e) {
+      console.error('fetchDevicePresets error:', e)
+      devicePresets.value = []
+    }
+    return devicePresets.value
+  }
+
+  async function updateDevicePreset(workspaceId: string, presetId: string, enabled: boolean, config?: Record<string, unknown> | null) {
+    const res = await api.put(`/workspaces/${workspaceId}/device-presets/${presetId}`, {
+      enabled,
+      config,
+    })
+    await fetchDevicePresets(workspaceId)
+    await fetchDevices(workspaceId)
+    return res.data.data as AgentDevicePresetInfo
+  }
+
+  async function fetchDevices(workspaceId: string) {
+    try {
+      const res = await api.get(`/workspaces/${workspaceId}/devices`)
+      devices.value = res.data.data || []
+    } catch (e) {
+      console.error('fetchDevices error:', e)
+      devices.value = []
+    }
+    return devices.value
+  }
+
+  async function createDevice(workspaceId: string, data: {
+    preset_id: string
+    display_name: string
+    hex_q: number
+    hex_r: number
+    config?: Record<string, unknown> | null
+    metadata?: Record<string, unknown> | null
+  }) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices`, data)
+    await refreshWorkspaceStructure(workspaceId)
+    return res.data.data as AgentDeviceInfo
+  }
+
+  async function updateDevice(workspaceId: string, deviceId: string, data: {
+    display_name?: string
+    hex_q?: number
+    hex_r?: number
+    config?: Record<string, unknown> | null
+    metadata?: Record<string, unknown> | null
+  }) {
+    const res = await api.patch(`/workspaces/${workspaceId}/devices/${deviceId}`, data)
+    await refreshWorkspaceStructure(workspaceId)
+    return res.data.data as AgentDeviceInfo
+  }
+
+  async function deleteDevice(workspaceId: string, deviceId: string) {
+    try {
+      await api.delete(`/workspaces/${workspaceId}/devices/${deviceId}`)
+    } catch (err: any) {
+      if (err?.response?.status !== 404) throw err
+    }
+    devices.value = devices.value.filter(d => d.id !== deviceId)
+    await refreshWorkspaceStructure(workspaceId)
+  }
+
+  async function fetchDeviceGrants(workspaceId: string, deviceId: string) {
+    const res = await api.get(`/workspaces/${workspaceId}/devices/${deviceId}/grants`)
+    return (res.data.data || []) as AgentDeviceGrantInfo[]
+  }
+
+  async function createDeviceGrant(workspaceId: string, deviceId: string, data: {
+    subject_type: 'human' | 'agent'
+    subject_id: string
+    scopes: AgentDeviceGrantInfo['scopes']
+    can_delegate?: boolean
+    parent_grant_id?: string | null
+    expires_at?: string | null
+  }) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/grants`, data)
+    return res.data.data as AgentDeviceGrantInfo
+  }
+
+  async function revokeDeviceGrant(workspaceId: string, deviceId: string, grantId: string) {
+    await api.delete(`/workspaces/${workspaceId}/devices/${deviceId}/grants/${grantId}`)
+  }
+
+  async function fetchReachableDevices(workspaceId: string, instanceId?: string) {
+    const res = await api.get(`/workspaces/${workspaceId}/reachable-devices`, {
+      params: instanceId ? { instance_id: instanceId } : undefined,
+    })
+    return (res.data.data || []) as AgentDeviceReachableInfo[]
+  }
+
+  async function fetchDeviceVisibility(workspaceId: string, deviceId: string, instanceId?: string) {
+    const res = await api.get(`/workspaces/${workspaceId}/devices/${deviceId}/visibility`, {
+      params: instanceId ? { instance_id: instanceId } : undefined,
+    })
+    return res.data.data as AgentDeviceVisibilityInfo
+  }
+
+  async function acquireDeviceLease(workspaceId: string, deviceId: string, ttlSeconds?: number) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/leases`, {
+      ttl_seconds: ttlSeconds,
+    })
+    return res.data.data as AgentDeviceLeaseInfo
+  }
+
+  async function renewDeviceLease(workspaceId: string, deviceId: string, leaseId: string, ttlSeconds?: number) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/leases/${leaseId}/renew`, {
+      ttl_seconds: ttlSeconds,
+    })
+    return res.data.data as AgentDeviceLeaseInfo
+  }
+
+  async function releaseDeviceLease(workspaceId: string, deviceId: string, leaseId: string) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/leases/${leaseId}/release`)
+    return res.data.data as AgentDeviceLeaseInfo
+  }
+
+  async function reclaimDeviceLease(workspaceId: string, deviceId: string, leaseId: string) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/leases/${leaseId}/reclaim`)
+    return res.data.data as AgentDeviceLeaseInfo
+  }
+
+  async function invokeDevice(workspaceId: string, deviceId: string, data: {
+    lease_id: string
+    action: string
+    payload?: Record<string, unknown>
+  }) {
+    const res = await api.post(`/workspaces/${workspaceId}/devices/${deviceId}/invoke`, {
+      lease_id: data.lease_id,
+      action: data.action,
+      payload: data.payload || {},
+    })
+    return res.data.data as Record<string, unknown>
+  }
+
   const humanHexes = ref<HumanHexInfo[]>([])
 
   async function fetchHumanHexes(workspaceId: string) {
@@ -1706,6 +1943,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     activeConversationId.value = ''
     corridorHexes.value = []
     connections.value = []
+    devicePresets.value = []
+    devices.value = []
     heatmap.value = []
     typingAgents.value.clear()
     unreadCount.value = 0
@@ -1729,6 +1968,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     unreadCount,
     corridorHexes,
     connections,
+    devicePresets,
+    devices,
     topology,
     topologyNodes: computed(() => topology.value?.nodes || []),
     topologyEdges: computed(() => topology.value?.edges || []),
@@ -1808,6 +2049,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     fetchConnections,
     createConnection,
     deleteConnection,
+    fetchDevicePresets,
+    updateDevicePreset,
+    fetchDevices,
+    createDevice,
+    updateDevice,
+    deleteDevice,
+    fetchDeviceGrants,
+    createDeviceGrant,
+    revokeDeviceGrant,
+    fetchReachableDevices,
+    fetchDeviceVisibility,
+    acquireDeviceLease,
+    renewDeviceLease,
+    releaseDeviceLease,
+    reclaimDeviceLease,
+    invokeDevice,
     humanHexes,
     fetchHumanHexes,
     createHumanHex,

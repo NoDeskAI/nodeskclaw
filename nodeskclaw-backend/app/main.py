@@ -354,6 +354,7 @@ async def lifespan(app: FastAPI):
                     "mcp_performance_reader.json",
                     "mcp_topology_awareness.json",
                     "mcp_shared_files.json",
+                    "agent_device_browser_bpilot.json",
                     "meta_gene_ai_hc.json",
                     "meta_gene_reorg.json",
                     "meta_gene_culture.json",
@@ -932,6 +933,10 @@ if feature_gate.is_ee:
 if not feature_gate.is_ee:
     from app.services.audit_handler import register_ce_audit_handler
     register_ce_audit_handler()
+
+from app.services.agent_device_gene_sync_service import register_agent_device_gene_sync_hooks  # noqa: E402
+
+register_agent_device_gene_sync_hooks()
 
 # ── Static files (前端 build 产物) ───────────────────
 # 生产环境：Vite build 后的 dist 目录会被复制到 static/

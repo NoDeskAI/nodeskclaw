@@ -13,7 +13,7 @@ const { t } = useI18n()
 interface TopologyNode {
   hex_q: number
   hex_r: number
-  node_type: 'agent' | 'blackboard' | 'corridor' | 'human'
+  node_type: 'agent' | 'blackboard' | 'corridor' | 'human' | 'device'
   entity_id?: string
   display_name?: string
   extra?: Record<string, unknown>
@@ -61,7 +61,7 @@ function formatK(n: number): string {
 }
 
 const emit = defineEmits<{
-  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human', agentId?: string, entityId?: string }): void
+  (e: 'hex-click', payload: { q: number, r: number, type: 'empty' | 'agent' | 'blackboard' | 'corridor' | 'human' | 'device', agentId?: string, entityId?: string }): void
   (e: 'agent-dblclick', id: string): void
   (e: 'agent-hover', id: string | null): void
   (e: 'toggle-node', key: string): void
@@ -256,8 +256,20 @@ const humanNodes = computed(() =>
     })
 )
 
+const deviceNodes = computed(() =>
+  (props.topologyNodes || [])
+    .filter(n => n.node_type === 'device')
+    .map(n => {
+      const pos = worldPos(n.hex_q, n.hex_r)
+      const status = (n.extra?.status as string) || ''
+      const color = status === 'provider_unconfigured' ? '#f59e0b' : '#14b8a6'
+      return { ...n, px: pos.px, py: pos.py, color }
+    })
+)
+
 const CORRIDOR_RADIUS = HEX_RADIUS * 0.65
 const HUMAN_RADIUS = HEX_RADIUS * 0.75
+const DEVICE_RADIUS = HEX_RADIUS * 0.72
 
 const AXIAL_DIRS: [number, number][] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]
 const ARM_LEN_2D = HEX_SIZE * 0.88 * Math.sqrt(3) / 2 * SCALE
@@ -286,6 +298,7 @@ const corridorPaths = computed(() => {
   for (const a of props.agents) occupied.add(`${a.hex_q}:${a.hex_r}`)
   for (const n of corridorNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
   for (const n of humanNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
+  for (const n of deviceNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
 
   return corridorNodes.value.map(ch => {
     const arms: RailArm[] = []
@@ -319,6 +332,15 @@ function corridorHexPoints(cx: number, cy: number): string {
 
 function humanHexPoints(cx: number, cy: number): string {
   return hexPointsStr(cx, cy, HUMAN_RADIUS)
+}
+
+function deviceHexPoints(cx: number, cy: number): string {
+  return hexPointsStr(cx, cy, DEVICE_RADIUS)
+}
+
+function shortNodeLabel(value?: string | null): string {
+  if (!value) return ''
+  return value.length > 14 ? value.slice(0, 13) + '...' : value
 }
 
 function axialDirIndex(dq: number, dr: number): number {
@@ -411,6 +433,7 @@ const emptyHexes = computed(() => {
   for (const a of props.agents) occupied.add(`${a.hex_q}:${a.hex_r}`)
   for (const n of corridorNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
   for (const n of humanNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
+  for (const n of deviceNodes.value) occupied.add(`${n.hex_q}:${n.hex_r}`)
   const hexes: { q: number, r: number, px: number, py: number }[] = []
   for (let q = -GRID_RANGE; q <= GRID_RANGE; q++) {
     for (let r = -GRID_RANGE; r <= GRID_RANGE; r++) {
@@ -692,6 +715,65 @@ const emptyHexes = computed(() => {
         />
         <text y="4" text-anchor="middle" :fill="hh.color || '#f59e0b'" font-size="10" font-weight="500">
           {{ hh.display_name }}
+        </text>
+      </g>
+
+      <!-- Device hexes -->
+      <g
+        v-for="dev in deviceNodes"
+        :key="'device-' + dev.entity_id"
+        :class="selectable ? 'cursor-default' : 'cursor-pointer transition-transform'"
+        :transform="`translate(${dev.px}, ${dev.py}) ${!selectable && hoveredId === 'device-' + dev.entity_id ? 'scale(1.06)' : ''}`"
+        @click.stop="selectable || emit('hex-click', { q: dev.hex_q, r: dev.hex_r, type: 'device', entityId: dev.entity_id })"
+        @pointerenter="selectable || (hoveredId = 'device-' + dev.entity_id)"
+        @pointerleave="selectable || (hoveredId = null)"
+      >
+        <polygon
+          v-if="!selectable && selectedHex?.q === dev.hex_q && selectedHex?.r === dev.hex_r"
+          :points="deviceHexPoints(0, 0)"
+          fill="none"
+          stroke="#60a5fa"
+          stroke-width="3"
+          opacity="0.8"
+          class="animate-selected-ring"
+        />
+        <polygon
+          :points="deviceHexPoints(0, 0)"
+          :fill="dev.color + '22'"
+          :stroke="dev.color"
+          stroke-width="2"
+          opacity="0.92"
+        />
+        <rect
+          :x="-DEVICE_RADIUS * 0.38"
+          :y="-DEVICE_RADIUS * 0.26"
+          :width="DEVICE_RADIUS * 0.76"
+          :height="DEVICE_RADIUS * 0.44"
+          rx="3"
+          :stroke="dev.color"
+          stroke-width="2"
+          fill="transparent"
+        />
+        <line
+          :x1="-DEVICE_RADIUS * 0.16"
+          :y1="DEVICE_RADIUS * 0.28"
+          :x2="DEVICE_RADIUS * 0.16"
+          :y2="DEVICE_RADIUS * 0.28"
+          :stroke="dev.color"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+        <line
+          x1="0"
+          :y1="DEVICE_RADIUS * 0.18"
+          x2="0"
+          :y2="DEVICE_RADIUS * 0.28"
+          :stroke="dev.color"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+        <text y="28" text-anchor="middle" fill="#d1fae5" font-size="9" font-weight="600">
+          {{ shortNodeLabel(dev.display_name || t('hexAction.device')) }}
         </text>
       </g>
 

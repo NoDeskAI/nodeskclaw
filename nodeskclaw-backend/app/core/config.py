@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     # ── Agent Tunnel（实例通过 WebSocket 主动连接后端的地址）────
     TUNNEL_BASE_URL: str = ""
 
+    # ── Browser Pilot Agent Device（办公设施 provider，可选）────
+    BPILOT_BASE_URL: str = ""
+    BPILOT_API_KEY: str = ""
+    BPILOT_TIMEOUT_SECONDS: int = 30
+
     # ── 出站代理（用于访问 OpenAI/Anthropic 等外部 API）────
     HTTPS_PROXY: str = ""
 
