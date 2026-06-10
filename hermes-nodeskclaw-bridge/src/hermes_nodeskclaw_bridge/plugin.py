@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -281,16 +280,30 @@ def shared_files_tool(args: dict[str, Any], **kwargs: Any) -> str:
         content = str(args.get("content") or "")
         parent_path = str(args.get("parent_path") or "/")
         content_type = str(args.get("content_type") or "text/plain")
-        result = _bb_api_fetch(
+        result = _bb_multipart_upload(
             cfg,
-            f"/workspaces/{ws}/blackboard/files/upload",
-            method="POST",
-            body={
-                "filename": filename,
-                "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-                "parent_path": parent_path,
-                "content_type": content_type,
-            },
+            f"/workspaces/{ws}/blackboard/files/upload-multipart",
+            content.encode("utf-8"),
+            filename,
+            {"parent_path": parent_path, "filename": filename, "content_type": content_type},
+        )
+        return _json_result(_normalize_file_upload_result(result))
+    if action == "upload_local":
+        local_path = str(args.get("local_path") or "")
+        if not local_path:
+            return _json_result({"error": "'local_path' is required for upload_local."})
+        fp = Path(local_path)
+        if not fp.is_file():
+            return _json_result({"error": f"File not found: {local_path}"})
+        file_content = fp.read_bytes()
+        filename = str(args.get("filename") or "") or fp.name
+        parent_path = str(args.get("parent_path") or "/")
+        result = _bb_multipart_upload(
+            cfg,
+            f"/workspaces/{ws}/blackboard/files/upload-multipart",
+            file_content,
+            filename,
+            {"parent_path": parent_path, "filename": filename},
         )
         return _json_result(_normalize_file_upload_result(result))
     if action == "mkdir":
@@ -604,6 +617,69 @@ def _bb_api_fetch(
     return result
 
 
+def _bb_multipart_upload(
+    cfg: ToolConfig,
+    path: str,
+    file_content: bytes,
+    filename: str,
+    fields: dict[str, str] | None = None,
+) -> Any:
+    """POST multipart/form-data with a file field to a blackboard endpoint."""
+    boundary = f"----HermesBoundary{os.urandom(8).hex()}"
+    parts: list[bytes] = []
+    parts.append(
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n".encode()
+    )
+    parts.append(file_content)
+    parts.append(b"\r\n")
+    for name, value in (fields or {}).items():
+        parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n".encode()
+        )
+    parts.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(parts)
+
+    url = f"{cfg.api_url}{path}"
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if cfg.token:
+        headers["Authorization"] = f"Bearer {cfg.token}"
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(request) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        result: dict[str, Any] = {"error": True, "status": exc.code, "message": detail or exc.reason}
+        if exc.code == 403:
+            try:
+                parsed = json.loads(detail or "{}")
+            except json.JSONDecodeError:
+                parsed = {}
+            det = parsed.get("detail") if isinstance(parsed, dict) else None
+            message_key = det.get("message_key", "") if isinstance(det, dict) else ""
+            if isinstance(message_key, str) and message_key.startswith("errors.topology."):
+                return {
+                    "error": "topology_unreachable",
+                    "message": (
+                        "You are not connected to the blackboard via corridor topology. "
+                        "Use nodeskclaw_topology get_my_neighbors to check your reachable nodes."
+                    ),
+                }
+        return result
+    except (urllib.error.URLError, OSError) as exc:
+        return {"error": True, "message": f"Network error: {exc}"}
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"error": True, "message": "Response is not valid JSON"}
+
+
 def _mkdir_body_from_path(path: str) -> dict[str, str]:
     normalized = path.strip()
     if not normalized:
@@ -808,7 +884,7 @@ _SHARED_FILES_SCHEMA = {
     "name": "nodeskclaw_shared_files",
     "description": (
         "Manage shared files on the workspace blackboard. "
-        "List, upload (text content), read, delete, copy files and create directories. "
+        "List, upload (text content), upload_local (local file), read, delete, copy files and create directories. "
         "Files here are visible to ALL workspace members in the blackboard Files tab."
     ),
     "parameters": {
@@ -816,16 +892,17 @@ _SHARED_FILES_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["list", "upload", "read", "delete", "mkdir", "copy"],
+                "enum": ["list", "upload", "upload_local", "read", "delete", "mkdir", "copy"],
                 "description": "Which file operation to perform.",
             },
             "parent_path": {
                 "type": "string",
-                "description": "list/upload: parent directory path (default '/').",
+                "description": "list/upload/upload_local: parent directory path (default '/').",
             },
-            "filename": {"type": "string", "description": "upload: filename to create."},
+            "filename": {"type": "string", "description": "upload/upload_local: filename to create (upload_local defaults to basename of local_path)."},
             "content": {"type": "string", "description": "upload: text content of the file."},
             "content_type": {"type": "string", "description": "upload: MIME type (default 'text/plain')."},
+            "local_path": {"type": "string", "description": "upload_local: local file path to upload."},
             "path": {"type": "string", "description": "mkdir: directory path to create."},
             "file_id": {"type": "string", "description": "read/delete/copy: target file ID."},
             "target_parent_path": {"type": "string", "description": "copy: destination parent path."},

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import sys
 from pathlib import Path
@@ -364,26 +363,27 @@ def test_shared_files_tool_returns_error_without_workspace(monkeypatch):
     assert "Workspace context is missing" in payload["message"]
 
 
-def test_shared_files_upload_encodes_text_content(monkeypatch):
+def test_shared_files_upload_uses_multipart(monkeypatch):
     recorded = {}
 
-    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+    def fake_multipart_upload(cfg, path, file_content, filename, fields=None):
         recorded["path"] = path
-        recorded["method"] = method
-        recorded["body"] = body
+        recorded["file_content"] = file_content
+        recorded["filename"] = filename
+        recorded["fields"] = fields
         return {
             "code": 0,
             "data": {
                 "id": "file-1",
-                "name": body["filename"],
-                "parent_path": body["parent_path"],
+                "name": filename,
+                "parent_path": (fields or {}).get("parent_path", "/"),
             },
         }
 
     monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
     monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
     monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
-    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    monkeypatch.setattr(plugin, "_bb_multipart_upload", fake_multipart_upload)
     plugin._on_post_tool_call()
 
     payload = json.loads(
@@ -398,14 +398,71 @@ def test_shared_files_upload_encodes_text_content(monkeypatch):
         )
     )
 
-    assert recorded["path"] == "/workspaces/ws-1/blackboard/files/upload"
-    assert recorded["method"] == "POST"
-    assert recorded["body"]["filename"] == "daily-tech-news.md"
-    assert recorded["body"]["parent_path"] == "/news"
-    assert recorded["body"]["content_type"] == "text/markdown"
-    assert base64.b64decode(recorded["body"]["content"]).decode("utf-8") == "# 科技新闻\n\n中文内容"
+    assert recorded["path"] == "/workspaces/ws-1/blackboard/files/upload-multipart"
+    assert recorded["file_content"] == "# 科技新闻\n\n中文内容".encode("utf-8")
+    assert recorded["filename"] == "daily-tech-news.md"
+    assert recorded["fields"]["parent_path"] == "/news"
+    assert recorded["fields"]["filename"] == "daily-tech-news.md"
+    assert recorded["fields"]["content_type"] == "text/markdown"
     assert payload["data"]["file_id"] == "file-1"
     assert payload["data"]["filename"] == "daily-tech-news.md"
+
+
+def test_shared_files_upload_local(monkeypatch, tmp_path):
+    recorded = {}
+
+    def fake_multipart_upload(cfg, path, file_content, filename, fields=None):
+        recorded["path"] = path
+        recorded["file_content"] = file_content
+        recorded["filename"] = filename
+        recorded["fields"] = fields
+        return {
+            "code": 0,
+            "data": {"id": "file-2", "name": filename},
+        }
+
+    test_file = tmp_path / "report.pdf"
+    test_file.write_bytes(b"\x00\x01\x02binary content")
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_bb_multipart_upload", fake_multipart_upload)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.shared_files_tool(
+            {
+                "action": "upload_local",
+                "local_path": str(test_file),
+                "parent_path": "/reports",
+            }
+        )
+    )
+
+    assert recorded["path"] == "/workspaces/ws-1/blackboard/files/upload-multipart"
+    assert recorded["file_content"] == b"\x00\x01\x02binary content"
+    assert recorded["filename"] == "report.pdf"
+    assert recorded["fields"]["parent_path"] == "/reports"
+    assert payload["data"]["file_id"] == "file-2"
+
+
+def test_shared_files_upload_local_missing_file(monkeypatch):
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.shared_files_tool(
+            {
+                "action": "upload_local",
+                "local_path": "/nonexistent/path/file.txt",
+            }
+        )
+    )
+
+    assert "File not found" in payload["error"]
 
 
 def test_shared_files_mkdir_splits_path_for_backend(monkeypatch):
@@ -437,24 +494,24 @@ def test_shared_files_mkdir_splits_path_for_backend(monkeypatch):
 
 
 def test_shared_files_tool_keeps_backend_error(monkeypatch):
-    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+    def fake_multipart_upload(cfg, path, file_content, filename, fields=None):
         return {
             "error": True,
             "status": 400,
-            "message": '{"detail":{"message_key":"errors.file.invalid_base64","message":"文件内容不是有效的 Base64"}}',
+            "message": "Bad request: file too large",
         }
 
     monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
     monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
     monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
-    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    monkeypatch.setattr(plugin, "_bb_multipart_upload", fake_multipart_upload)
     plugin._on_post_tool_call()
 
     payload = json.loads(plugin.shared_files_tool({"action": "upload", "content": "hello"}))
 
     assert payload["error"] is True
     assert payload["status"] == 400
-    assert "errors.file.invalid_base64" in payload["message"]
+    assert "file too large" in payload["message"]
 
 
 # ── _ThinkingPreambleFilter tests ─────────────────────
