@@ -80,8 +80,6 @@ def resolve_runtime_url(
         raise PlatformEndpointConfigError(f"{label} 未配置，无法生成运行时可达地址")
 
     compute = (compute_provider or "").strip().lower()
-    if compute == "docker":
-        return rewrite_localhost_for_docker(normalized)
     if compute == "k8s":
         return _resolve_k8s_url(
             normalized,
@@ -90,15 +88,6 @@ def resolve_runtime_url(
             label=label,
         )
     return normalized
-
-
-def rewrite_localhost_for_docker(url: str) -> str:
-    parsed = urlsplit(url)
-    if not parsed.scheme or not parsed.netloc:
-        return url
-    if _is_local_host(parsed.hostname):
-        return _replace_hostname(parsed, "host.docker.internal")
-    return url
 
 
 def _resolve_llm_proxy_base_url(
@@ -124,7 +113,7 @@ def _resolve_llm_proxy_base_url(
             label="LLM_PROXY_URL",
         ) or ""
 
-    if compute_provider in {"docker", "process"}:
+    if compute_provider == "process":
         source = (external_url or internal_url or "").strip()
     else:
         source = (internal_url or external_url or "").strip()

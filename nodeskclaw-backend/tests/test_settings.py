@@ -49,19 +49,6 @@ def test_settings_keeps_non_k8s_llm_proxy_service_url() -> None:
     assert settings.LLM_PROXY_INTERNAL_URL == "http://llm-proxy:8080"
 
 
-def test_resolve_docker_localhost_to_host_docker_internal() -> None:
-    endpoints = resolve_platform_endpoints(
-        compute_provider="docker",
-        runtime="openclaw",
-        instance_namespace="default",
-        cluster_proxy_endpoint=None,
-        platform_namespace="nodeskclaw-system",
-        settings=_settings(llm_proxy_url="http://localhost:4511"),
-    )
-
-    assert endpoints.llm_proxy_base_url == "http://host.docker.internal:4511"
-
-
 def test_resolve_process_keeps_localhost() -> None:
     endpoints = resolve_platform_endpoints(
         compute_provider="process",

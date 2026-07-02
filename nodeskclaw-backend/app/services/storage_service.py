@@ -210,9 +210,6 @@ def _ensure_storage_available() -> None:
 def _get_local_dir() -> Path:
     if settings.LOCAL_STORAGE_DIR:
         return Path(settings.LOCAL_STORAGE_DIR)
-    docker_data = os.environ.get("DOCKER_DATA_DIR")
-    if docker_data:
-        return Path(docker_data) / "shared-files"
     return Path.home() / ".nodeskclaw" / "shared-files"
 
 
