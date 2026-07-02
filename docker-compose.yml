@@ -31,15 +31,12 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - type: bind
-        source: /var/run/docker.sock
-        target: /var/run/docker.sock
-      - type: bind
-        source: ${NODESKCLAW_DATA_DIR:-${HOME:-.}/.nodeskclaw/docker-instances}
-        target: /nodeskclaw-data
-      - type: bind
         source: .
         target: /host-config
         read_only: true
+      - type: volume
+        source: shared_files
+        target: /data/shared-files
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://nodeskclaw:nodeskclaw@postgres:5432/nodeskclaw}
       DATABASE_NAME_SUFFIX: ""
@@ -47,10 +44,9 @@ services:
       LLM_PROXY_INTERNAL_URL: http://llm-proxy:8080
       LLM_ATTRIBUTION_SECRET: ${LLM_ATTRIBUTION_SECRET:-}
       NODESKCLAW_EDITION: ce
-      DOCKER_DATA_DIR: /nodeskclaw-data
-      DOCKER_HOST_DATA_DIR: ${NODESKCLAW_DATA_DIR:-${HOME:-.}/.nodeskclaw/docker-instances}
-      # AI 员工回连后端地址（仅管理 Docker 实例时可保持默认 localhost）
-      # 若管理远端 K8s 集群上的 AI 员工，必须改为 K8s Pod 可达的外部地址
+      # 本地共享文件存储目录（S3 未配置时使用，命名卷持久化）
+      LOCAL_STORAGE_DIR: /data/shared-files
+      # AI 员工回连后端地址，必须为 K8s Pod 可达的外部地址
       AGENT_API_BASE_URL: ${AGENT_API_BASE_URL:-http://localhost:4510/api/v1}
       AGENT_FILE_DOWNLOAD_BASE_URL: ${AGENT_FILE_DOWNLOAD_BASE_URL:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -129,3 +125,4 @@ services:
 
 volumes:
   pg_data:
+  shared_files:
