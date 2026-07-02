@@ -6,11 +6,10 @@
 
 ## 1. Overview
 
-NoDeskClaw uses a **Compute Provider** abstraction to manage the runtime environment for AI instances. A "cluster" is essentially an instance of a compute provider. Two types are currently supported:
+NoDeskClaw uses a **Compute Provider** abstraction to manage the runtime environment for AI instances. A "cluster" is essentially an instance of a compute provider. Kubernetes is the supported compute provider for instance deployment:
 
 | Compute Provider | Use Case | Credentials | Instance Runtime |
 |---|---|---|---|
-| `docker` | Local dev, small-scale trial | None (Docker daemon must be accessible) | One Docker Compose project per instance |
 | `k8s` | Production, multi-instance | KubeConfig | Deployment + Service + Ingress |
 
 > `process` (local subprocess) is registered but not wired into the standard deployment flow — reserved for future use.
@@ -23,10 +22,6 @@ User creates instance in Portal
         ▼
   deploy_service routes by cluster type
         │
-        ├── compute_provider == "docker"
-        │       └── DockerComputeProvider
-        │               └── docker compose up -d
-        │
         └── compute_provider == "k8s"
                 └── Built-in K8s deploy pipeline
                         └── Namespace → ConfigMap → PVC → Deployment → Service → Ingress
@@ -34,106 +29,7 @@ User creates instance in Portal
 
 ---
 
-## 2. Docker Cluster (Local Dev / Trial)
-
-### Prerequisites
-
-- **Docker Engine** and **Docker Compose V2** installed on the host (`docker compose version` must work)
-- The backend process can reach the Docker daemon (via Docker socket)
-
-### 2.1 Docker Compose Deployment (Recommended)
-
-The root `docker-compose.yml` comes pre-configured for Docker compute:
-
-```yaml
-nodeskclaw-backend:
-  volumes:
-    - type: bind
-      source: /var/run/docker.sock
-      target: /var/run/docker.sock
-    - type: bind
-      source: ${NODESKCLAW_DATA_DIR:-${HOME:-.}/.nodeskclaw/docker-instances}
-      target: /nodeskclaw-data
-  environment:
-    DOCKER_DATA_DIR: /nodeskclaw-data
-    DOCKER_HOST_DATA_DIR: ${NODESKCLAW_DATA_DIR:-${HOME:-.}/.nodeskclaw/docker-instances}
-```
-
-**Key volume mounts:**
-
-| Mount | Purpose |
-|---|---|
-| `/var/run/docker.sock` | Allows `docker compose` inside the backend container to control the host Docker daemon |
-| `NODESKCLAW_DATA_DIR` / `$HOME/.nodeskclaw/docker-instances` | Host instance data directory, mounted into the backend container at `/nodeskclaw-data` |
-
-**Windows (Docker Desktop) note:**
-
-macOS/Linux can use the default `$HOME/.nodeskclaw/docker-instances`. On Windows, `$HOME` is unreliable, so you must set `NODESKCLAW_DATA_DIR` in the project root `.env` to an absolute host path or Compose will fail immediately. Example:
-
-```bash
-NODESKCLAW_DATA_DIR=C:\Users\yourname\.nodeskclaw\docker-instances
-```
-
-After starting the platform, go to **Org Settings → Clusters** in the Portal, click "Add Cluster", and select **Docker**. The backend automatically runs `docker compose version` to verify the environment.
-
-### 2.2 Local Development (`./dev.sh`)
-
-When running locally, the backend runs directly on the host and can natively access the Docker daemon — no extra configuration needed.
-
-When running the backend directly on the host, `DOCKER_DATA_DIR` defaults to `~/.nodeskclaw/docker-instances` when unset. In Docker Compose deployments, macOS/Linux default to `$HOME/.nodeskclaw/docker-instances`; Windows fails immediately if `NODESKCLAW_DATA_DIR` is missing, and `DOCKER_DATA_DIR` is fixed to `/nodeskclaw-data`.
-
-### 2.3 How Docker Instances Work
-
-When a Docker instance is created, the system:
-
-1. **Allocates a host port** — starting from `13000`, incrementing to avoid conflicts with existing instances
-2. **Generates a Compose file** — written to `{DOCKER_DATA_DIR}/{slug}/docker-compose.yml`
-3. **Starts the container** — `docker compose -f <path> up -d`
-4. **Persists data** — instance data is bound from `{DOCKER_HOST_DATA_DIR}/{slug}/data`, while the backend container accesses the same files at `{DOCKER_DATA_DIR}/{slug}/data`
-
-Generated Compose file structure:
-
-```yaml
-services:
-  agent:
-    image: deskclaw:latest       # determined by deploy parameters
-    container_name: my-instance
-    ports:
-      - "13000:18789"            # host port : container gateway port
-    volumes:
-      - type: bind
-        source: /host/path/to/docker-instances/my-instance/data
-        target: /root/.openclaw
-    platform: linux/amd64
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-networks:
-  my-instance-net:
-    driver: bridge
-```
-
-### 2.4 Docker Instance Lifecycle
-
-| Operation | Underlying Command |
-|---|---|
-| Create / Deploy | `docker compose -f <path> up -d` |
-| Restart | `docker compose -f <path> restart` |
-| View Logs | `docker logs --tail 50 <container>` |
-| Scale | `docker compose -f <path> up -d --scale agent=N` |
-| Delete | `docker compose -f <path> down -v` |
-| Health Check | `docker inspect` + HTTP Probe |
-
-### 2.5 Resource Limits & Auto-adaptation
-
-- All instances share host resources; basic isolation via `mem_limit` / `cpus`
-- **CPU auto-adaptation**: If the requested CPU count (default 2 cores) exceeds the host's available CPUs, the system automatically skips the CPU limit (i.e., no cap, uses all available CPUs) to prevent Docker daemon from rejecting container creation
-- Instance URLs are `localhost:{port}` — no custom domains or HTTPS
-- K8s-specific features are unavailable: cluster overview (node/CPU/memory stats), StorageClass selection, Pod Events, kubectl exec
-
----
-
-## 3. Kubernetes Cluster (Production)
+## 2. Kubernetes Cluster
 
 ### Prerequisites
 
@@ -142,7 +38,7 @@ networks:
 - An **Ingress Controller** deployed in the cluster (default: nginx)
 - **`ENCRYPTION_KEY`** configured in `.env` (used to encrypt stored KubeConfig)
 
-### 3.1 KubeConfig Permission Requirements
+### 2.1 KubeConfig Permission Requirements
 
 NoDeskClaw requires the following K8s API permissions to manage instances:
 
@@ -161,7 +57,7 @@ NoDeskClaw requires the following K8s API permissions to manage instances:
 
 > We recommend creating a dedicated ServiceAccount + ClusterRole for NoDeskClaw instead of using an admin kubeconfig.
 
-### 3.2 Adding a K8s Cluster
+### 2.2 Adding a K8s Cluster
 
 In the Portal under **Org Settings → Clusters**:
 
@@ -173,7 +69,7 @@ In the Portal under **Org Settings → Clusters**:
 6. (Optional) Fill in Proxy Endpoint — for routing traffic through a gateway cluster
 7. On submit, the system automatically runs a connection test (`VersionApi.get_code` + `list_node`)
 
-### 3.3 KubeConfig Authentication Methods
+### 2.3 KubeConfig Authentication Methods
 
 The system auto-parses the KubeConfig and identifies the auth method:
 
@@ -184,7 +80,7 @@ The system auto-parses the KubeConfig and identifies the auth method:
 | `exec-based` | External command for credentials | Backend environment must have the CLI tool installed |
 | `oidc` | OpenID Connect | OIDC Provider must be reachable |
 
-### 3.4 Cluster Configuration
+### 2.4 Cluster Configuration
 
 Fields written to `provider_config` (JSONB) on cluster creation:
 
@@ -196,7 +92,7 @@ Fields written to `provider_config` (JSONB) on cluster creation:
 | `ingress_class` | Ingress Controller class name | `nginx` |
 | `k8s_version` | K8s version (obtained during connection test) | — |
 
-### 3.5 K8s Instance Deployment Pipeline
+### 2.5 K8s Instance Deployment Pipeline
 
 When a user creates an instance on a K8s cluster, the backend runs a full async pipeline:
 
@@ -220,7 +116,7 @@ When a user creates an instance on a K8s cluster, the backend runs a full async 
 ⑨ Post-deploy steps (LLM config sync, Gene installation, etc.)
 ```
 
-### 3.6 K8s Infrastructure Requirements
+### 2.6 K8s Infrastructure Requirements
 
 #### Ingress Controller
 
@@ -249,26 +145,11 @@ A NetworkPolicy is automatically created to control instance egress traffic. Rel
 
 ---
 
-## 4. Environment Variable Reference
-
-### Common (All Compute Providers)
+## 3. Environment Variable Reference
 
 | Variable | Required | Description | Default |
 |---|---|---|---|
-| `ENCRYPTION_KEY` | Yes (for K8s) | KubeConfig encryption key (32 bytes, base64) | — |
-
-### Docker-Specific
-
-| Variable | Required | Description | Default |
-|---|---|---|---|
-| `DOCKER_DATA_DIR` | No | Backend working directory; fixed to `/nodeskclaw-data` in Compose deployments | `~/.nodeskclaw/docker-instances` |
-| `DOCKER_HOST_DATA_DIR` | No | Host path used when the backend generates bind mounts for child containers | Same as `NODESKCLAW_DATA_DIR` or `$HOME/.nodeskclaw/docker-instances` |
-| `NODESKCLAW_DATA_DIR` | Required on Windows | Compose host bind source path | macOS/Linux default: `$HOME/.nodeskclaw/docker-instances` |
-
-### K8s-Specific
-
-| Variable | Required | Description | Default |
-|---|---|---|---|
+| `ENCRYPTION_KEY` | Yes | KubeConfig encryption key (32 bytes, base64) | — |
 | `VKE_SUBNET_ID` | For Volcengine VKE | VKE subnet ID | — |
 | `EGRESS_DENY_CIDRS` | No | NetworkPolicy egress deny CIDRs | — |
 | `EGRESS_ALLOW_PORTS` | No | NetworkPolicy egress allow ports | — |
@@ -276,32 +157,21 @@ A NetworkPolicy is automatically created to control instance egress traffic. Rel
 
 ---
 
-## 5. Cluster Management API
+## 4. Cluster Management API
 
-| Method | Path | Description | Docker/K8s |
-|---|---|---|---|
-| `POST` | `/clusters` | Create cluster | Both |
-| `GET` | `/clusters` | List clusters | Both |
-| `GET` | `/clusters/{id}` | Cluster details | Both |
-| `PUT` | `/clusters/{id}` | Update cluster info | Both |
-| `DELETE` | `/clusters/{id}` | Delete cluster (cascading soft-delete of instances) | Both |
-| `POST` | `/clusters/{id}/test` | Test connection | Both (Docker: verify compose; K8s: verify API Server) |
-| `POST` | `/clusters/{id}/kubeconfig` | Update KubeConfig | K8s only |
-| `GET` | `/clusters/{id}/overview` | Cluster resource overview (nodes/CPU/memory) | K8s only |
-| `GET` | `/clusters/{id}/health` | Cluster health status | K8s only |
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/clusters` | Create cluster |
+| `GET` | `/clusters` | List clusters |
+| `GET` | `/clusters/{id}` | Cluster details |
+| `PUT` | `/clusters/{id}` | Update cluster info |
+| `DELETE` | `/clusters/{id}` | Delete cluster (cascading soft-delete of instances) |
+| `POST` | `/clusters/{id}/test` | Test connection (verify API Server) |
+| `POST` | `/clusters/{id}/kubeconfig` | Update KubeConfig |
+| `GET` | `/clusters/{id}/overview` | Cluster resource overview (nodes/CPU/memory) |
+| `GET` | `/clusters/{id}/health` | Cluster health status |
 
-### Create Cluster Request Examples
-
-Docker cluster:
-
-```json
-{
-  "name": "Local Docker",
-  "compute_provider": "docker"
-}
-```
-
-K8s cluster:
+### Create Cluster Request Example
 
 ```json
 {
@@ -315,7 +185,7 @@ K8s cluster:
 
 ---
 
-## 6. Proxy Endpoint (Optional, Gateway Proxy)
+## 5. Proxy Endpoint (Optional, Gateway Proxy)
 
 For scenarios where the instance cluster is not directly exposed to the public internet. When configured, the system creates an ExternalName Service on the **gateway cluster** to proxy traffic to the instance cluster.
 
@@ -328,16 +198,7 @@ User Browser → Gateway Cluster Ingress → ExternalName Service → Instance C
 
 ---
 
-## 7. Troubleshooting
-
-### Docker cluster creation failed: cannot connect to Docker daemon
-
-**Cause**: The backend cannot access the Docker socket.
-
-**Steps**:
-1. Docker Compose deployment: verify `/var/run/docker.sock` is correctly mounted in `docker-compose.yml`
-2. Running directly on host: verify the current user is in the `docker` group
-3. Test command: `docker compose version`
+## 6. Troubleshooting
 
 ### K8s cluster connection test failed
 
@@ -345,21 +206,6 @@ User Browser → Gateway Cluster Ingress → ExternalName Service → Instance C
 1. Verify the API Server address in the KubeConfig is reachable from the backend network
 2. Verify credentials have not expired (Token / certificate)
 3. Verify `ENCRYPTION_KEY` is configured correctly (mismatched keys will fail to decrypt the KubeConfig)
-
-### Docker deployment failed: Error response from daemon: range of CPUs
-
-**Cause**: Requested CPU count exceeds the host's available CPUs. Older versions used a fixed default of `cpus: 2.0`, which fails on single-core machines.
-
-**Fix**: Upgrade to a version with CPU auto-adaptation. The system automatically detects available CPUs and skips limits that exceed the host capacity.
-
-### Docker instance inaccessible
-
-**Cause**: Port conflict or Docker networking issue.
-
-**Steps**:
-1. Check if the assigned port (starting from 13000) is occupied by another process on the host
-2. Check container status: `docker ps -a | grep <slug>`
-3. View container logs: `docker logs <slug>`
 
 ### K8s instance stuck in "Deploying"
 

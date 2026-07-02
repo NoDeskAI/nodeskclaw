@@ -51,7 +51,7 @@ docker compose -f docker-compose.yml -f docker-compose.ee.yml up -d  # EE 模式
 # cp .env.example nodeskclaw-backend/.env && vi nodeskclaw-backend/.env
 ```
 
-Docker Compose 部署自动配置 Docker socket 挂载和数据目录映射，支持创建 Docker 类型集群。Mac/Linux 默认使用 `$HOME/.nodeskclaw/docker-instances`，Windows 必须显式设置 `NODESKCLAW_DATA_DIR`，后端容器内 `DOCKER_DATA_DIR` 固定为 `/nodeskclaw-data`，`NODESKCLAW_EDITION` 由 compose 文件自动设置。
+Docker Compose 仅用于自托管部署平台自身（postgres + backend + llm-proxy + portal），实例部署统一使用 K8s 集群（Docker 类型集群已移除）。本地共享文件通过命名卷持久化在 `LOCAL_STORAGE_DIR=/data/shared-files`，`NODESKCLAW_EDITION` 由 compose 文件自动设置。
 
 ### 后端（Python）
 

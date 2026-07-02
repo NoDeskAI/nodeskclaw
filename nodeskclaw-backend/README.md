@@ -99,7 +99,7 @@ nodeskclaw-backend/
 │   │   │   ├── openclaw_gene_install_adapter.py # OpenClaw 基因安装适配器
 │   │   │   ├── noop_gene_install_adapter.py     # 无基因支持 runtime 的 fallback 空实现
 │   │   │   ├── context_bridges/  # 上下文注入桥接（ChannelPlugin/SystemPrompt/MCP）
-│   │   │   ├── compute/          # 计算资源提供者（K8s/Docker/Process）
+│   │   │   ├── compute/          # 计算资源提供者（K8s/Process）
 │   │   │   ├── transport/        # 消息投递适配器（Agent/Channel）
 │   │   │   ├── messaging/        # 消息系统核心
 │   │   │   │   ├── envelope.py   # CloudEvents 对齐的 MessageEnvelope
@@ -218,7 +218,6 @@ API 路由同时挂载在两个前缀下：
 
 - `Instance.storage_class` 字段为 nullable，默认 `None`（使用 K8s 集群标记为 default 的 StorageClass）
 - 前端创建实例页面会从 `GET /storage-classes?scope=all` 获取集群可用 SC 列表，用户可手动选择
-- Docker Compose 集群无 PVC，不涉及 StorageClass
 
 ### RBAC 双表职责分离
 
@@ -336,14 +335,13 @@ deploy_service 根据 Instance.compute_provider 字段分发部署：
 | compute_provider | 实现 | 场景 | capabilities |
 |------------------|------|------|-------------|
 | k8s（默认） | K8sComputeProvider | 生产环境 | k8s_events, pod_logs, storage_classes, k8s_overview, configmap, exec |
-| docker | DockerComputeProvider | 本地开发/测试（端口 13000 起） | (无 K8s 特有能力) |
 | process | ProcessComputeProvider | 单机调试 | (无) |
 
-**Cluster 模型架构**：K8s 专属字段（`auth_type`, `ingress_class`, `k8s_version` 等）存储在 `provider_config: JSONB` 中，加密凭证存储在 `credentials_encrypted: Text`（K8s=加密的 kubeconfig, Docker=NULL）。通过 `@property` 方法保持 API 向后兼容。
+**Cluster 模型架构**：K8s 专属字段（`auth_type`, `ingress_class`, `k8s_version` 等）存储在 `provider_config: JSONB` 中，加密凭证存储在 `credentials_encrypted: Text`（加密的 kubeconfig）。通过 `@property` 方法保持 API 向后兼容。
 
 **统一入口**：`require_k8s_client(cluster)` 检查集群类型并获取 K8s 客户端，非 K8s 集群自动抛出 `BadRequestError`，替代了此前 20+ 处直接调用 `k8s_manager.get_or_create()` 的模式。
 
-Docker 部署常量定义在 `app/services/docker_constants.py`。远程文件操作通过 `DockerFS`（主机直接读写）或 `PodFS`（kubectl exec）完成，由 `remote_fs()` 按 `compute_provider` 自动分发。
+远程文件操作通过 `PodFS`（kubectl exec）完成，由 `remote_fs()` 统一提供。
 
 ### Agent 生命周期
 
@@ -458,7 +456,7 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 | `S3_ACCESS_KEY_ID` | S3 Access Key |
 | `S3_SECRET_ACCESS_KEY` | S3 Secret Key |
 | `S3_KEY_PREFIX` | 对象 key 前缀（本地开发可设为 dev，生产留空） |
-| `LOCAL_STORAGE_DIR` | 本地文件存储目录。S3 未配置时自动启用本地存储：Docker 容器内默认 `/nodeskclaw-data/shared-files`，本地开发默认 `~/.nodeskclaw/shared-files` |
+| `LOCAL_STORAGE_DIR` | 本地文件存储目录。S3 未配置时自动启用本地存储：Docker Compose 部署默认 `/data/shared-files`（命名卷），本地开发默认 `~/.nodeskclaw/shared-files` |
 
 上传策略配置：
 
@@ -519,14 +517,8 @@ Docker Compose 部署注意事项：
 - `DATABASE_NAME_SUFFIX` 在 Docker 部署时**必须留空**（compose 文件已强制覆盖为空字符串）。`auto` 模式会用容器 hostname（随机 ID）拼接库名导致连接失败
 - `CORS_ORIGINS` 需根据实际访问端口调整（Docker 默认 Portal 端口 80，Admin 端口 8001）
 - 如需使用外部数据库，在项目根目录 `.env` 设置 `DATABASE_URL`，然后 `docker compose up -d nodeskclaw-backend portal`
-
-#### Docker 集群支持
-
-Docker Compose 部署默认支持创建 Docker 类型集群（后端镜像内置 Docker CLI）。关键配置：
-
-- **Docker socket 挂载**：`docker-compose.yml` 已配置 `/var/run/docker.sock` 挂载，后端容器通过宿主机 Docker daemon 管理 AI 实例容器
-- **数据目录映射**：Docker Compose 部署时，Mac/Linux 默认使用 `$HOME/.nodeskclaw/docker-instances`；Windows 必须显式设置 `NODESKCLAW_DATA_DIR`；后端容器内固定挂载到 `/nodeskclaw-data`，并通过 `DOCKER_HOST_DATA_DIR` 保存宿主机原始路径
-- **自定义数据目录**：如需修改，在项目根目录 `.env` 中设置 `NODESKCLAW_DATA_DIR=/your/path`。Mac/Linux 可直接使用 POSIX 路径，Windows 使用完整宿主机绝对路径
+- **共享文件存储**：S3 未配置时使用本地存储，`docker-compose.yml` 通过命名卷 `shared_files` 挂载到容器内 `/data/shared-files`（`LOCAL_STORAGE_DIR`），数据随卷持久化
+- **实例部署**：AI 实例统一部署在 K8s 集群上，Docker Compose 仅用于自托管平台自身（postgres + backend + llm-proxy + portal）
 - **CE/EE 模式**：`docker-compose.yml` 默认设置 `NODESKCLAW_EDITION=ce`；EE 部署使用 `docker compose -f docker-compose.yml -f docker-compose.ee.yml up -d`
 
 ### Docker 构建（单独构建镜像）

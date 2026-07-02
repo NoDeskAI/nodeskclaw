@@ -331,6 +331,10 @@ docker compose --env-file deploy/mirrors/cn.env up -d --build
 - **重大版本升级前请先备份数据库。**
 - 查看 [GitHub Releases](https://github.com/NoDeskAI/nodeskclaw/releases) 了解版本变更和不兼容改动。
 - 如果数据库此前未由 Alembic 管理，首次升级前可能需要执行一次 `alembic stamp head`，详见[后端 README](nodeskclaw-backend/README.md)。
+- **自下一版本起移除 Docker 类型集群**，实例部署统一使用 K8s 集群：
+  - 老版本自托管用户的共享文件位于 `$NODESKCLAW_DATA_DIR/shared-files`（默认 `~/.nodeskclaw/docker-instances/shared-files`），升级后需手动迁移到新的命名卷 `shared_files`（后端容器内挂载路径 `/data/shared-files`）
+  - 存量 Docker 集群/实例记录会在启动时被数据迁移软删除
+  - 宿主机上仍在运行的 `docker-{slug}` compose 项目不再由平台管理，需手动执行 `docker compose down` 停止
 
 ## 文档
 

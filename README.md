@@ -332,6 +332,10 @@ Available presets are in `deploy/mirrors/`. See [deploy/mirrors/README.md](deplo
 - **Back up your database** before any major version upgrade.
 - Check [GitHub Releases](https://github.com/NoDeskAI/nodeskclaw/releases) for release notes and breaking changes.
 - If your database was not previously managed by Alembic, you may need to run `alembic stamp head` once before upgrading. See [Backend README](nodeskclaw-backend/README.md) for details.
+- **Docker-type clusters are removed starting with the next release** — instance deployment now supports Kubernetes clusters only:
+  - Shared files of older self-hosted deployments lived in `$NODESKCLAW_DATA_DIR/shared-files` (default `~/.nodeskclaw/docker-instances/shared-files`). After upgrading, manually migrate them into the new named volume `shared_files` (mounted at `/data/shared-files` inside the backend container).
+  - Existing Docker cluster/instance records are soft-deleted by the data migration on startup.
+  - Any `docker-{slug}` compose projects still running on the host are no longer managed by the platform — stop them manually with `docker compose down`.
 
 ## Documentation
 
