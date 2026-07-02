@@ -2,7 +2,7 @@
 
 Enforces:
   - Workspace isolation: messages, blackboard, topology, members never cross workspaces
-  - Agent sandbox integration hooks for ComputeProvider (NetworkPolicy / Docker network)
+  - Agent sandbox integration hooks for ComputeProvider (NetworkPolicy)
 
 Topology-based message permission is enforced in corridor_router and RoutingMiddleware.
 """
@@ -95,13 +95,3 @@ def build_k8s_network_policy(
     }
 
 
-def build_docker_network_config(instance_id: str, policy: SandboxPolicy) -> dict:
-    """Build Docker network configuration for agent sandboxing."""
-    return {
-        "network_name": f"deskclaw-sandbox-{instance_id}",
-        "driver": "bridge",
-        "internal": len(policy.allow_egress_to) == 0,
-        "options": {
-            "com.docker.network.bridge.enable_icc": "true",
-        },
-    }

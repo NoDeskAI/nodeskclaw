@@ -63,7 +63,6 @@ async def require_k8s_client(cluster) -> K8sClient:
 
 
 def _register_builtins() -> None:
-    from app.services.runtime.compute.docker_provider import DockerComputeProvider
     from app.services.runtime.compute.k8s_provider import K8sComputeProvider
     from app.services.runtime.compute.process_provider import ProcessComputeProvider
 
@@ -77,13 +76,6 @@ def _register_builtins() -> None:
             ComputeCapability.STORAGE_CLASSES, ComputeCapability.K8S_OVERVIEW,
             ComputeCapability.CONFIGMAP, ComputeCapability.EXEC,
         }),
-    ))
-    COMPUTE_REGISTRY.register(ComputeSpec(
-        compute_id="docker",
-        provider=DockerComputeProvider(),
-        description="Docker compose compute -- local container orchestration.",
-        supports_sidecar=True,
-        capabilities=frozenset(),
     ))
     COMPUTE_REGISTRY.register(ComputeSpec(
         compute_id="process",

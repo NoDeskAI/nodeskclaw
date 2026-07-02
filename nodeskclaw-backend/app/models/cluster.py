@@ -15,7 +15,6 @@ class ClusterProvider(str, Enum):
     ack = "ack"
     tke = "tke"
     custom = "custom"
-    docker = "docker"
 
 
 class ClusterStatus(str, Enum):

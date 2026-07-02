@@ -1,4 +1,4 @@
-"""ComputeProvider — protocol for managing agent compute resources (K8s, Docker, etc.)."""
+"""ComputeProvider — protocol for managing agent compute resources (K8s, process, etc.)."""
 
 from __future__ import annotations
 
