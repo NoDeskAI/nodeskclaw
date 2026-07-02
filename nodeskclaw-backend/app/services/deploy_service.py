@@ -69,15 +69,6 @@ def _collect_platform_host_endpoints() -> list[tuple[str, int]]:
     return endpoints
 
 
-def _rewrite_docker_callback_url(url: str) -> str:
-    """Rewrite host callback URLs so Docker Desktop containers can reach the backend."""
-    return _re.sub(
-        r"(https?://|wss?://)(localhost|127\.0\.0\.1|0\.0\.0\.0|172\.17\.0\.1)(:\d+)?",
-        r"\1host.docker.internal\3",
-        url,
-    )
-
-
 def _compute_llm_providers(
     llm_configs: list | None, org_active_providers: list[str],
 ) -> list[str] | None:
@@ -602,11 +593,7 @@ async def cancel_deploy(deploy_id: str) -> str:
         instance = inst_result.scalar_one_or_none()
         if not instance:
             return "实例记录不存在"
-        step_names = await _progress_step_names_for_record(
-            record,
-            db,
-            getattr(instance, "compute_provider", None),
-        )
+        step_names = _progress_step_names_for_record(record)
         total_steps = len(step_names)
 
         # 2. 先杀后台协程（防止它继续操作 K8s / DB）
@@ -656,8 +643,6 @@ DEPLOY_STEPS_BASE = [
 ]
 
 
-DOCKER_DEPLOY_STEPS = ["环境预检查", "启动容器", "等待容器就绪", "部署完成"]
-
 PROGRESS_STEP_NAMES_KEY = "progress_step_names"
 
 
@@ -693,20 +678,12 @@ def _set_progress_step_names(record: DeployRecord, step_names: list[str]) -> Non
     record.config_snapshot = _dump_deploy_config_snapshot(snapshot)
 
 
-def _deploy_progress_step_names_for_provider(
-    compute_provider: str | None,
-    post_ready_steps: list[str],
-) -> list[str]:
-    if compute_provider and compute_provider != "k8s":
-        return [*DOCKER_DEPLOY_STEPS[:-1], *post_ready_steps, DOCKER_DEPLOY_STEPS[-1]]
+def _deploy_progress_step_names(post_ready_steps: list[str]) -> list[str]:
     return [*DEPLOY_STEPS_BASE, *post_ready_steps]
 
 
 def _deploy_progress_step_names_for_context(ctx: "_DeployContext") -> list[str]:
-    return _deploy_progress_step_names_for_provider(
-        ctx.compute_provider,
-        _post_ready_step_names(ctx),
-    )
+    return _deploy_progress_step_names(_post_ready_step_names(ctx))
 
 
 async def _persist_deploy_progress_step_names(
@@ -727,45 +704,15 @@ async def _persist_deploy_progress_step_names(
     await db.commit()
 
 
-async def _legacy_progress_step_names(
-    record: DeployRecord,
-    db: AsyncSession,
-    compute_provider: str | None = None,
-) -> list[str]:
+def _legacy_progress_step_names(record: DeployRecord) -> list[str]:
     action = getattr(record, "action", None)
     if action in (DeployAction.rebuild, DeployAction.restore):
         return list(REBUILD_STEPS)
-
-    if not compute_provider:
-        compute_provider = getattr(record, "compute_provider", None)
-    instance = getattr(record, "instance", None)
-    if not compute_provider and instance is not None:
-        compute_provider = getattr(instance, "compute_provider", None)
-    instance_id = getattr(record, "instance_id", None)
-    if not compute_provider and instance_id:
-        result = await db.execute(
-            select(Instance.compute_provider).where(
-                Instance.id == instance_id,
-                Instance.deleted_at.is_(None),
-            )
-        )
-        compute_provider = result.scalar_one_or_none()
-
-    if compute_provider and compute_provider != "k8s":
-        return list(DOCKER_DEPLOY_STEPS)
     return list(DEPLOY_STEPS_BASE)
 
 
-async def _progress_step_names_for_record(
-    record: DeployRecord,
-    db: AsyncSession,
-    compute_provider: str | None = None,
-) -> list[str]:
-    return _extract_progress_step_names(record) or await _legacy_progress_step_names(
-        record,
-        db,
-        compute_provider,
-    )
+def _progress_step_names_for_record(record: DeployRecord) -> list[str]:
+    return _extract_progress_step_names(record) or _legacy_progress_step_names(record)
 
 
 async def get_deploy_progress_snapshot(
@@ -784,7 +731,7 @@ async def get_deploy_progress_snapshot(
 
     status = "success" if record.status == DeployStatus.success else "failed"
     current_step = "完成" if status == "success" else "失败"
-    step_names = await _progress_step_names_for_record(record, db)
+    step_names = _progress_step_names_for_record(record)
     total_steps = len(step_names)
     return DeployProgress(
         deploy_id=deploy_id,
@@ -905,36 +852,10 @@ async def precheck(req: DeployRequest, db: AsyncSession) -> PrecheckResult:
         return PrecheckResult(passed=False, items=items)
     items.append(PrecheckItem(name="集群", status="pass", message=f"集群 {cluster.name} 可用"))
 
-    if cluster.compute_provider == "docker":
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "docker", "compose", "version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-            if proc.returncode == 0:
-                items.append(PrecheckItem(name="Docker", status="pass", message=stdout.decode().strip()))
-            else:
-                err_text = stderr.decode().strip()
-                if "permission denied" in err_text.lower() or "connect" in err_text.lower():
-                    err_text = "无法连接 Docker daemon，请确认 Docker socket 已挂载（/var/run/docker.sock）"
-                items.append(PrecheckItem(name="Docker", status="fail", message=err_text or "Docker Compose 不可用"))
-                return PrecheckResult(passed=False, items=items)
-        except FileNotFoundError:
-            items.append(PrecheckItem(name="Docker", status="fail", message="Docker CLI 未安装"))
-            return PrecheckResult(passed=False, items=items)
-        except asyncio.TimeoutError:
-            items.append(PrecheckItem(name="Docker", status="fail", message="Docker 环境检查超时"))
-            return PrecheckResult(passed=False, items=items)
-        except Exception:
-            items.append(PrecheckItem(name="Docker", status="fail", message="Docker 环境检查失败"))
-            return PrecheckResult(passed=False, items=items)
-    else:
-        if cluster.status != "connected":
-            items.append(PrecheckItem(name="连接", status="fail", message="集群未连接"))
-            return PrecheckResult(passed=False, items=items)
-        items.append(PrecheckItem(name="连接", status="pass", message="集群已连接"))
+    if cluster.status != "connected":
+        items.append(PrecheckItem(name="连接", status="fail", message="集群未连接"))
+        return PrecheckResult(passed=False, items=items)
+    items.append(PrecheckItem(name="连接", status="pass", message="集群已连接"))
 
     # Check name uniqueness（仅检查未删除的实例，已删除的名称可复用）
     existing = await db.execute(
@@ -1049,51 +970,23 @@ async def deploy_instance(
 
     namespace = req.namespace or auto_ns
 
-    is_docker = cluster.compute_provider == "docker"
-
-    # Docker: 分配宿主机端口
-    docker_host_port: int | None = None
-    if is_docker:
-        from app.services.docker_constants import DOCKER_BASE_PORT
-        used_ports: set[int] = set()
-        port_result = await db.execute(
-            select(Instance.env_vars).where(
-                Instance.compute_provider == "docker",
-                Instance.deleted_at.is_(None),
-            )
+    _parsed = _urlparse(settings.AGENT_API_BASE_URL or "")
+    if _parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+        raise BadRequestError(
+            message="AGENT_API_BASE_URL 当前为 localhost，K8s 集群中的 AI 员工无法通过此地址连接后端。"
+                    "请在后端 .env 中将 AGENT_API_BASE_URL 设置为 K8s Pod 可达的外部地址后重启后端。",
+            message_key="errors.deploy.localhost_not_reachable",
         )
-        for row in port_result.scalars().all():
-            if row:
-                try:
-                    ev = _json.loads(row)
-                    p = ev.get("DOCKER_HOST_PORT")
-                    if p:
-                        used_ports.add(int(p))
-                except (ValueError, TypeError):
-                    pass
-        docker_host_port = DOCKER_BASE_PORT
-        while docker_host_port in used_ports:
-            docker_host_port += 1
-        namespace = f"docker-{slug}"
 
-    if not is_docker:
-        _parsed = _urlparse(settings.AGENT_API_BASE_URL or "")
-        if _parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
-            raise BadRequestError(
-                message="AGENT_API_BASE_URL 当前为 localhost，K8s 集群中的 AI 员工无法通过此地址连接后端。"
-                        "请在后端 .env 中将 AGENT_API_BASE_URL 设置为 K8s Pod 可达的外部地址后重启后端。",
-                message_key="errors.deploy.localhost_not_reachable",
-            )
-
-        from app.services.config_service import get_config
-        _ingress_domain = await get_config("ingress_base_domain", db)
-        if not _ingress_domain:
-            raise BadRequestError(
-                message="K8s 部署需要配置访问域名（ingress_base_domain），"
-                        "否则 AI 员工将无法通过浏览器访问 Web UI。"
-                        "请在系统设置中配置后再部署。",
-                message_key="errors.deploy.ingress_base_domain_required",
-            )
+    from app.services.config_service import get_config
+    _ingress_domain = await get_config("ingress_base_domain", db)
+    if not _ingress_domain:
+        raise BadRequestError(
+            message="K8s 部署需要配置访问域名（ingress_base_domain），"
+                    "否则 AI 员工将无法通过浏览器访问 Web UI。"
+                    "请在系统设置中配置后再部署。",
+            message_key="errors.deploy.ingress_base_domain_required",
+        )
 
     from app.models.org_llm_key import OrgModelProvider
     org_prov_result = await db.execute(
@@ -1152,17 +1045,10 @@ async def deploy_instance(
 
     api_url = settings.AGENT_API_BASE_URL
     tunnel_url = settings.TUNNEL_BASE_URL
-    if is_docker:
-        api_url = _rewrite_docker_callback_url(api_url)
-        if tunnel_url:
-            tunnel_url = _rewrite_docker_callback_url(tunnel_url)
 
     env_vars.setdefault("NODESKCLAW_API_URL", api_url)
     if tunnel_url:
         env_vars.setdefault("NODESKCLAW_TUNNEL_URL", tunnel_url)
-
-    if docker_host_port is not None:
-        env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
 
     if template_secret_env_refs:
         existing_refs = advanced_config.setdefault("secret_env_refs", [])
@@ -1180,9 +1066,9 @@ async def deploy_instance(
         cpu_limit=req.cpu_limit,
         mem_request=req.mem_request,
         mem_limit=req.mem_limit,
-        service_type="ClusterIP" if not is_docker else "docker",
-        ingress_domain=f"localhost:{docker_host_port}" if is_docker else None,
-        compute_provider="docker" if is_docker else "k8s",
+        service_type="ClusterIP",
+        ingress_domain=None,
+        compute_provider="k8s",
         proxy_token=gateway_token,
         wp_api_key=f"nodeskclaw-wp-{_secrets.token_hex(32)}",
         env_vars=_json.dumps(env_vars),
@@ -1253,8 +1139,7 @@ async def deploy_instance(
         action=DeployAction.deploy,
         image_version=req.image_version,
         config_snapshot=_dump_deploy_config_snapshot({
-            PROGRESS_STEP_NAMES_KEY: _deploy_progress_step_names_for_provider(
-                instance.compute_provider,
+            PROGRESS_STEP_NAMES_KEY: _deploy_progress_step_names(
                 _post_ready_step_names_from_values(
                     should_sync_runtime_llm_config=should_sync_runtime_llm_config,
                     template_agent_bundle_manifest=template_agent_bundle_manifest,
@@ -1303,13 +1188,22 @@ async def deploy_instance(
 
 
 async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
-    """
-    后台异步阶段：根据 compute_provider 选择部署方式。
-    K8s 走完整的内置管道；Docker/Process 等委托给 ComputeProvider。
-    """
+    """后台异步阶段：仅支持 K8s 集群的部署管道。"""
     if ctx.compute_provider != "k8s":
+        message = f"不支持的集群类型 '{ctx.compute_provider}'，仅支持 K8s 集群部署"
+        logger.error("部署失败: %s (instance=%s)", message, ctx.name)
         try:
-            await _execute_via_compute_provider(ctx)
+            await _mark_deploy_failed(ctx, message)
+            step_names = _deploy_progress_step_names_for_context(ctx)
+            event_bus.publish(
+                "deploy_progress",
+                DeployProgress(
+                    deploy_id=ctx.record_id, step=len(step_names), total_steps=len(step_names),
+                    current_step="失败", status="failed",
+                    message=message, percent=100,
+                    step_names=step_names,
+                ).model_dump(),
+            )
         finally:
             _unregister_deploy_task(ctx.record_id)
         return
@@ -1326,227 +1220,6 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
         await _execute_deploy_inner(ctx, async_session_factory, get_config, total, steps)
     finally:
         _unregister_deploy_task(ctx.record_id)
-
-
-async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
-    """非 K8s 环境：通过 COMPUTE_REGISTRY 查找对应 provider 并委托部署。"""
-    from app.core.deps import async_session_factory
-    from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
-    from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
-    from app.services.runtime.compute.base import InstanceComputeConfig
-
-    spec = COMPUTE_REGISTRY.get(ctx.compute_provider)
-    if spec is None or spec.provider is None:
-        logger.error("未注册的 compute_provider: %s", ctx.compute_provider)
-        await _mark_deploy_failed(ctx, f"未注册的 compute_provider: {ctx.compute_provider}")
-        return
-
-    provider = spec.provider
-    step_names = _deploy_progress_step_names_for_context(ctx)
-    total = len(step_names)
-    async with async_session_factory() as db:
-        await _persist_deploy_progress_step_names(db, ctx.record_id, step_names)
-
-    env_vars = dict(ctx.env_vars or {})
-    if "DOCKER_IMAGE" not in env_vars:
-        async with async_session_factory() as db:
-            from app.services.registry_service import resolve_image_registry
-            image_registry = await resolve_image_registry(db, ctx.runtime) or ctx.runtime or "openclaw"
-            env_vars["DOCKER_IMAGE"] = f"{image_registry}:{ctx.image_version}"
-
-    rt_spec = RUNTIME_REGISTRY.get(ctx.runtime)
-    gw_port = rt_spec.gateway_port if rt_spec else 18789
-
-    config = InstanceComputeConfig(
-        instance_id=ctx.instance_id,
-        name=ctx.name,
-        slug=ctx.name,
-        namespace=ctx.namespace,
-        image_version=ctx.image_version,
-        runtime=ctx.runtime,
-        gateway_port=gw_port,
-        replicas=ctx.replicas,
-        cpu_request=ctx.cpu_request,
-        cpu_limit=ctx.cpu_limit,
-        mem_request=ctx.mem_request,
-        mem_limit=ctx.mem_limit,
-        storage_class=ctx.storage_class,
-        storage_size=ctx.storage_size,
-        env_vars=env_vars,
-        advanced_config=ctx.advanced_config or {},
-    )
-
-    event_bus.publish(
-        "deploy_progress",
-        DeployProgress(
-            deploy_id=ctx.record_id, step=1, total_steps=total,
-            current_step=step_names[0], status="in_progress",
-            message=None, percent=10,
-            step_names=step_names,
-        ).model_dump(),
-    )
-
-    event_bus.publish(
-        "deploy_progress",
-        DeployProgress(
-            deploy_id=ctx.record_id, step=2, total_steps=total,
-            current_step=step_names[1], status="in_progress",
-            message=None, percent=30,
-            step_names=step_names,
-        ).model_dump(),
-    )
-
-    try:
-        result = await provider.create_instance(config)
-        logger.info("ComputeProvider[%s] 部署完成: %s", ctx.compute_provider, result)
-    except Exception as e:
-        logger.exception("ComputeProvider[%s] 部署失败", ctx.compute_provider)
-        await _mark_deploy_failed(ctx, str(e)[:500])
-        event_bus.publish(
-            "deploy_progress",
-            DeployProgress(
-                deploy_id=ctx.record_id, step=total, total_steps=total,
-                current_step="失败", status="failed",
-                message=str(e)[:200], percent=100,
-                step_names=step_names,
-            ).model_dump(),
-        )
-        return
-
-    # ── 等待容器就绪（对齐 K8s Step 9 的 readiness 门控） ──
-    probe_path = rt_spec.health_probe_path if rt_spec else "/healthz"
-    container_ready = False
-
-    event_bus.publish(
-        "deploy_progress",
-        DeployProgress(
-            deploy_id=ctx.record_id, step=3, total_steps=total,
-            current_step=step_names[2], status="in_progress",
-            message=None, percent=50,
-            step_names=step_names,
-        ).model_dump(),
-    )
-
-    if probe_path and result.endpoint:
-        from app.services.runtime.compute.base import http_probe
-
-        for tick in range(30):  # 30 x 2s = 60s
-            probe_result = await http_probe(result.endpoint, path=probe_path)
-            if probe_result.get("healthy"):
-                container_ready = True
-                break
-            pct = 50 + min(tick, 15)  # 50 → 65, 不超过 65
-            event_bus.publish(
-                "deploy_progress",
-                DeployProgress(
-                    deploy_id=ctx.record_id, step=3, total_steps=total,
-                    current_step=step_names[2], status="in_progress",
-                    message=f"等待容器健康检查通过... ({(tick + 1) * 2}s/60s)",
-                    percent=pct,
-                    step_names=step_names,
-                ).model_dump(),
-            )
-            await asyncio.sleep(2)
-    else:
-        await asyncio.sleep(5)
-        container_ready = True
-
-    if not container_ready:
-        timeout_msg = "容器健康检查超时（60s）"
-        logger.error("Docker 部署超时: instance=%s endpoint=%s path=%s", ctx.name, result.endpoint, probe_path)
-        try:
-            await provider.destroy_instance(result)
-        except Exception:
-            logger.warning("健康检查超时后清理容器失败", exc_info=True)
-        await _mark_deploy_failed(ctx, timeout_msg)
-        event_bus.publish(
-            "deploy_progress",
-            DeployProgress(
-                deploy_id=ctx.record_id, step=total, total_steps=total,
-                current_step="失败", status="failed",
-                message=timeout_msg, percent=100,
-                step_names=step_names,
-            ).model_dump(),
-        )
-        return
-
-    async with async_session_factory() as db:
-        rec_result = await db.execute(
-            select(DeployRecord).where(
-                DeployRecord.id == ctx.record_id,
-                DeployRecord.deleted_at.is_(None),
-            )
-        )
-        record = rec_result.scalar_one()
-
-        inst_result = await db.execute(
-            select(Instance).where(
-                Instance.id == ctx.instance_id,
-                Instance.deleted_at.is_(None),
-            )
-        )
-        instance = inst_result.scalar_one()
-        instance.status = InstanceStatus.running
-
-        if hasattr(result, "extra") and result.extra.get("compose_path"):
-            adv = _json.loads(instance.advanced_config) if instance.advanced_config else {}
-            adv["compose_path"] = result.extra["compose_path"]
-            instance.advanced_config = _json.dumps(adv)
-
-        await db.commit()
-
-        def _publish(step: int, name: str, status: str = "in_progress", message: str | None = None) -> None:
-            event_bus.publish(
-                "deploy_progress",
-                DeployProgress(
-                    deploy_id=ctx.record_id, step=step, total_steps=total,
-                    current_step=name, status=status,
-                    message=message, percent=min(90, 65 + step * 5),
-                    step_names=step_names,
-                ).model_dump(),
-            )
-
-        try:
-            success_msg = await _run_post_ready_instance_steps(
-                ctx,
-                instance,
-                db,
-                start_step=len(DOCKER_DEPLOY_STEPS),
-                publish=_publish,
-            )
-        except Exception as e:
-            logger.exception("ComputeProvider post-ready steps failed: %s", ctx.name)
-            record.status = DeployStatus.failed
-            record.message = str(e)[:500]
-            record.finished_at = datetime.now(timezone.utc)
-            instance.status = InstanceStatus.deleting
-            await db.commit()
-            from app.services.instance_service import schedule_instance_deletion_finalizer
-            schedule_instance_deletion_finalizer(ctx.instance_id)
-            event_bus.publish(
-                "deploy_progress",
-                DeployProgress(
-                    deploy_id=ctx.record_id, step=total, total_steps=total,
-                    current_step="失败", status="failed",
-                    message=f"{str(e)[:170]}，资源清理已开始", percent=100,
-                    step_names=step_names,
-                ).model_dump(),
-            )
-            return
-        record.status = DeployStatus.success
-        record.message = success_msg
-        record.finished_at = datetime.now(timezone.utc)
-        await db.commit()
-
-    event_bus.publish(
-        "deploy_progress",
-        DeployProgress(
-            deploy_id=ctx.record_id, step=total, total_steps=total,
-            current_step=step_names[-1], status="success",
-            message=success_msg, percent=100,
-            step_names=step_names,
-        ).model_dump(),
-    )
 
 
 async def _mark_deploy_failed(ctx: _DeployContext, message: str) -> None:
