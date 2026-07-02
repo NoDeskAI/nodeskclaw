@@ -126,25 +126,6 @@ def _k8s_name(instance: Instance) -> str:
     return instance.slug or instance.name
 
 
-def _build_docker_handle(instance: Instance) -> ComputeHandle:
-    advanced = json.loads(instance.advanced_config) if instance.advanced_config else {}
-    return ComputeHandle(
-        provider="docker", instance_id=instance.id,
-        namespace=instance.namespace, endpoint=instance.ingress_domain or "",
-        status=instance.status,
-        extra={"compose_path": advanced.get("compose_path", ""), "slug": instance.slug, "runtime": instance.runtime},
-    )
-
-
-def _get_docker_provider():
-    from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
-    spec = COMPUTE_REGISTRY.get("docker")
-    if spec and spec.provider:
-        return spec.provider
-    from app.services.runtime.compute.docker_provider import DockerComputeProvider
-    return DockerComputeProvider()
-
-
 def _get_compute_provider(compute_provider: str):
     from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
     spec = COMPUTE_REGISTRY.get(compute_provider)
@@ -273,20 +254,21 @@ async def _soft_delete_instance_records(instance: Instance, db: AsyncSession) ->
 
 
 async def _destroy_non_k8s_instance(instance: Instance) -> bool:
-    provider = (
-        _get_docker_provider()
-        if instance.compute_provider == "docker"
-        else _get_compute_provider(instance.compute_provider)
-    )
+    """销毁非 K8s 实例的运行资源；provider 未注册时跳过资源销毁，放行记录清理。"""
+    provider = _get_compute_provider(instance.compute_provider)
     if provider is None or not hasattr(provider, "destroy_instance"):
         logger.warning(
-            "实例 %s 使用的 compute_provider=%s 没有可用销毁器",
+            "实例 %s 使用的 compute_provider=%s 未注册销毁器，跳过运行资源清理",
             instance.id, instance.compute_provider,
         )
-        return False
+        return True
 
-    handle = _build_docker_handle(instance)
-    handle.provider = instance.compute_provider
+    handle = ComputeHandle(
+        provider=instance.compute_provider, instance_id=instance.id,
+        namespace=instance.namespace, endpoint=instance.ingress_domain or "",
+        status=instance.status,
+        extra={"slug": instance.slug, "runtime": instance.runtime},
+    )
     await provider.destroy_instance(handle)
     logger.info("已销毁 %s 运行资源（实例 %s）", instance.compute_provider, instance.name)
     return True
@@ -414,9 +396,7 @@ def _compute_endpoint_url(instance: Instance, *, tls_enabled: bool = True) -> st
     spec = RUNTIME_REGISTRY.get(instance.runtime)
     if spec and not spec.has_web_ui:
         return None
-    if instance.compute_provider == "docker" and instance.ingress_domain:
-        return f"http://{instance.ingress_domain}"
-    elif instance.ingress_domain:
+    if instance.ingress_domain:
         proto = "https" if tls_enabled else "http"
         return f"{proto}://{instance.ingress_domain}"
     return None
@@ -686,40 +666,7 @@ async def get_instance_detail(instance_id: str, db: AsyncSession, org_id: str | 
     )
     detail.workspaces = workspaces
 
-    if instance.compute_provider == "docker":
-        provider = _get_docker_provider()
-        handle = _build_docker_handle(instance)
-        try:
-            status = await provider.get_status(handle)
-            detail.pods = [{
-                "name": instance.slug,
-                "status": "Running" if status == "running" else status.capitalize(),
-                "ready": status == "running",
-                "node": "localhost",
-                "ip": "127.0.0.1",
-                "restart_count": 0,
-                "containers": [{
-                    "name": instance.slug,
-                    "image": f"deskclaw:{instance.image_version}",
-                    "ready": status == "running",
-                    "restart_count": 0,
-                    "state": status,
-                }],
-            }]
-            if instance.status == InstanceStatus.running:
-                probe = await provider.health_check(handle)
-                if probe["healthy"] is True:
-                    detail.health_status = "healthy"
-                elif probe["healthy"] is False:
-                    if await _in_deploy_grace(instance.id, db):
-                        detail.health_status = "unknown"
-                    else:
-                        detail.health_status = "unhealthy"
-                else:
-                    detail.health_status = "unknown"
-        except Exception as e:
-            logger.warning("Failed to get Docker status for instance %s: %s", instance_id, e)
-    elif cluster and cluster.is_k8s and cluster.credentials_encrypted:
+    if cluster and cluster.is_k8s and cluster.credentials_encrypted:
         try:
             from app.services.runtime.registries.compute_registry import require_k8s_client
             k8s = await require_k8s_client(cluster)
@@ -775,7 +722,6 @@ async def get_instance_detail(instance_id: str, db: AsyncSession, org_id: str | 
 
     if (
         not instance.ingress_domain
-        and instance.compute_provider != "docker"
         and cluster
         and cluster.is_k8s
         and cluster.credentials_encrypted
@@ -828,14 +774,6 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
 async def scale_instance(instance_id: str, replicas: int, db: AsyncSession, org_id: str | None = None):
     instance = await get_instance(instance_id, db, org_id)
 
-    if instance.compute_provider == "docker":
-        provider = _get_docker_provider()
-        handle = _build_docker_handle(instance)
-        await provider.scale_instance(handle, replicas)
-        instance.replicas = replicas
-        await db.commit()
-        return
-
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
     )
@@ -853,25 +791,6 @@ async def scale_instance(instance_id: str, replicas: int, db: AsyncSession, org_
 
 async def restart_instance(instance_id: str, db: AsyncSession, org_id: str | None = None):
     instance = await get_instance(instance_id, db, org_id)
-
-    if instance.compute_provider == "docker":
-        provider = _get_docker_provider()
-        handle = _build_docker_handle(instance)
-        prev_status = instance.status
-        instance.status = InstanceStatus.restarting
-        await db.commit()
-        try:
-            await provider.restart_instance(handle)
-            instance.status = InstanceStatus.running
-            instance.health_status = "unknown"
-            await db.commit()
-            logger.info("Docker 实例 %s 重启完成", instance.name)
-        except Exception as e:
-            logger.error("Docker 重启失败: instance=%s error=%s", instance.name, e)
-            instance.status = prev_status
-            await db.commit()
-            raise
-        return
 
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
@@ -997,11 +916,6 @@ async def get_pod_logs(
     org_id: str | None = None,
 ) -> str:
     instance = await get_instance(instance_id, db, org_id)
-
-    if instance.compute_provider == "docker":
-        provider = _get_docker_provider()
-        handle = _build_docker_handle(instance)
-        return await provider.get_logs(handle, tail=tail_lines)
 
     cluster_result = await db.execute(
         select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
@@ -1176,92 +1090,61 @@ async def _execute_config_update(
     await db.commit()
     await db.refresh(instance)
 
-    if instance.compute_provider == "docker":
-        try:
-            provider = _get_docker_provider()
-            handle = _build_docker_handle(instance)
-            from app.services.runtime.compute.base import InstanceComputeConfig
-            new_config = InstanceComputeConfig(
-                instance_id=instance.id,
-                name=_k8s_name(instance),
-                slug=instance.slug,
-                namespace=instance.namespace,
-                image_version=instance.image_version,
-                replicas=instance.replicas,
-                cpu_request=instance.cpu_request,
-                cpu_limit=instance.cpu_limit,
-                mem_request=instance.mem_request,
-                mem_limit=instance.mem_limit,
-                env_vars=json.loads(instance.env_vars) if instance.env_vars else {},
-                advanced_config=json.loads(instance.advanced_config) if instance.advanced_config else {},
-            )
-            await provider.update_instance(handle, new_config)
-            instance.status = InstanceStatus.running
-            instance.current_revision = next_rev
-            record.status = DeployStatus.success
-            record.finished_at = datetime.now(timezone.utc)
-        except Exception as e:
-            logger.exception("Docker 配置更新失败: %s", instance.name)
-            instance.status = InstanceStatus.failed
-            record.status = DeployStatus.failed
-            record.message = str(e)[:500]
-            record.finished_at = datetime.now(timezone.utc)
-    else:
-        try:
-            from app.services.runtime.registries.compute_registry import require_k8s_client
-            k8s = await require_k8s_client(cluster)
+    try:
+        from app.services.runtime.registries.compute_registry import require_k8s_client
+        k8s = await require_k8s_client(cluster)
 
-            from app.services.registry_service import resolve_image_registry
+        from app.services.registry_service import resolve_image_registry
 
-            image_registry = await resolve_image_registry(db, instance.runtime) or "openclaw"
-            image = f"{image_registry}:{instance.image_version}"
-            patch_body = {
-                "spec": {
-                    "replicas": instance.replicas,
-                    "template": {
-                        "metadata": {
-                            "annotations": {
-                                "nodeskclaw/updatedAt": datetime.now(timezone.utc).isoformat()
-                            }
-                        },
-                        "spec": {
-                            "containers": [{
-                                "name": _k8s_name(instance),
-                                "image": image,
-                                "resources": {
-                                    "requests": {"cpu": instance.cpu_request, "memory": instance.mem_request},
-                                    "limits": {"cpu": instance.cpu_limit, "memory": instance.mem_limit},
-                                },
-                            }]
-                        },
+        image_registry = await resolve_image_registry(db, instance.runtime) or "openclaw"
+        image = f"{image_registry}:{instance.image_version}"
+        patch_body = {
+            "spec": {
+                "replicas": instance.replicas,
+                "template": {
+                    "metadata": {
+                        "annotations": {
+                            "nodeskclaw/updatedAt": datetime.now(timezone.utc).isoformat()
+                        }
                     },
-                }
+                    "spec": {
+                        "containers": [{
+                            "name": _k8s_name(instance),
+                            "image": image,
+                            "resources": {
+                                "requests": {"cpu": instance.cpu_request, "memory": instance.mem_request},
+                                "limits": {"cpu": instance.cpu_limit, "memory": instance.mem_limit},
+                            },
+                        }]
+                    },
+                },
             }
-            k_name = _k8s_name(instance)
-            await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
+        }
+        k_name = _k8s_name(instance)
+        await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
 
-            if req.env_vars is not None:
-                labels = build_labels(k_name, instance.id, instance.image_version)
-                cm = build_configmap(f"{k_name}-config", instance.namespace, req.env_vars, labels)
-                try:
-                    await k8s.core.replace_namespaced_config_map(
-                        f"{k_name}-config", instance.namespace, cm
-                    )
-                except Exception:
-                    await k8s.create_or_skip(
-                        k8s.core.create_namespaced_config_map, instance.namespace, cm
-                    )
+        if req.env_vars is not None:
+            labels = build_labels(k_name, instance.id, instance.image_version)
+            cm = build_configmap(f"{k_name}-config", instance.namespace, req.env_vars, labels)
+            try:
+                await k8s.core.replace_namespaced_config_map(
+                    f"{k_name}-config", instance.namespace, cm
+                )
+            except Exception:
+                await k8s.create_or_skip(
+                    k8s.core.create_namespaced_config_map, instance.namespace, cm
+                )
 
-            instance.status = InstanceStatus.running
-            instance.current_revision = next_rev
-            record.status = DeployStatus.success
-            record.finished_at = datetime.now(timezone.utc)
-        except Exception as e:
-            logger.exception("配置更新失败: %s", instance.name)
-            instance.status = InstanceStatus.failed
-            record.status = DeployStatus.failed
-            record.message = str(e)[:500]
-            record.finished_at = datetime.now(timezone.utc)
+        instance.status = InstanceStatus.running
+        instance.current_revision = next_rev
+        record.status = DeployStatus.success
+        record.finished_at = datetime.now(timezone.utc)
+    except Exception as e:
+        logger.exception("配置更新失败: %s", instance.name)
+        instance.status = InstanceStatus.failed
+        record.status = DeployStatus.failed
+        record.message = str(e)[:500]
+        record.finished_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(instance)
@@ -1292,7 +1175,7 @@ async def sync_gateway_token(instance_id: str, db: AsyncSession, org_id: str | N
         raise NotFoundError("集群不存在")
 
     if not cluster.is_k8s:
-        raise BadRequestError("Docker 集群不支持此操作", message_key="errors.cluster.unsupported_operation")
+        raise BadRequestError("仅 K8s 集群支持此操作", message_key="errors.cluster.unsupported_operation")
     from app.services.runtime.registries.compute_registry import require_k8s_client
     k8s = await require_k8s_client(cluster)
 
@@ -1356,7 +1239,7 @@ async def regenerate_gateway_token(instance_id: str, db: AsyncSession, org_id: s
         raise NotFoundError("集群不存在")
 
     if not cluster.is_k8s:
-        raise BadRequestError("Docker 集群不支持此操作", message_key="errors.cluster.unsupported_operation")
+        raise BadRequestError("仅 K8s 集群支持此操作", message_key="errors.cluster.unsupported_operation")
     from app.services.runtime.registries.compute_registry import require_k8s_client
     k8s = await require_k8s_client(cluster)
 

@@ -333,17 +333,6 @@ class HermesConfigAdapter(RuntimeConfigAdapter):
 
 async def _restart_container(instance: Instance, db: AsyncSession) -> dict:
     """Generic container restart via SIGTERM + wait."""
-    if instance.compute_provider == "docker":
-        from app.services.instance_service import _build_docker_handle, _get_docker_provider
-        try:
-            provider = _get_docker_provider()
-            handle = _build_docker_handle(instance)
-            await provider.restart_instance(handle)
-            return {"status": "ok", "message": "重启完成"}
-        except Exception as e:
-            logger.error("Docker 实例 %s 重启失败: %s", instance.name, e)
-            return {"status": "error", "message": f"Docker 重启失败: {e}"}
-
     import asyncio
     from app.services.nfs_mount import _get_k8s_client, _k8s_name
 

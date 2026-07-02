@@ -1689,7 +1689,6 @@ async def restart_runtime(instance: Instance, db: AsyncSession) -> dict:
 
     Strategy: try graceful SIGTERM first; if exec fails (pod crashed / not ready),
     fall back to Deployment rolling restart.
-    Docker: delegate to DockerComputeProvider.restart_instance.
 
     When instance.llm_config_pending is True, runs runtime-specific recovery.
     OpenClaw keeps its FORCE_RECONFIG flow; Hermes waits for an exec-capable
@@ -1709,9 +1708,6 @@ async def restart_runtime(instance: Instance, db: AsyncSession) -> dict:
                 "restart_runtime: plugin 同步失败（不阻断重启）: instance=%s error=%s",
                 instance.name, e,
             )
-
-    if instance.compute_provider == "docker":
-        return await _restart_runtime_docker(instance)
 
     k8s = await _get_k8s_client(instance, db)
     if k8s is None:
@@ -1886,20 +1882,6 @@ async def _restart_hermes_with_pending_config(
 
     logger.info("Hermes pending LLM 配置恢复完成: instance=%s", instance.name)
     return {"status": "ok", "message": "配置已恢复并重启完成"}
-
-
-async def _restart_runtime_docker(instance: Instance) -> dict:
-    """Restart a runtime Docker container."""
-    from app.services.instance_service import _build_docker_handle, _get_docker_provider
-    try:
-        provider = _get_docker_provider()
-        handle = _build_docker_handle(instance)
-        await provider.restart_instance(handle)
-        logger.info("Docker 实例 %s Runtime 重启完成", instance.name)
-        return {"status": "ok", "message": "重启完成"}
-    except Exception as e:
-        logger.error("Docker 实例 %s 重启失败: %s", instance.name, e)
-        return {"status": "error", "message": f"Docker 重启失败: {e}"}
 
 
 async def repair_channel_account_urls(db: AsyncSession) -> dict:
