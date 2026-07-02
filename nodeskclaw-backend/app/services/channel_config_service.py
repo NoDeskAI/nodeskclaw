@@ -254,16 +254,11 @@ async def _discover_openclaw_channels(
     """OpenClaw-specific: Node.js exec scan of plugin directories."""
     async with remote_fs(instance, db) as fs:
         try:
-            if instance.compute_provider == "docker":
-                from app.services.nfs_mount import DockerFS
-                assert isinstance(fs, DockerFS)
-                raw = await fs.exec_command(["node", "-e", _DISCOVER_SCRIPT])
-            else:
-                raw = await fs._k8s.exec_in_pod(
-                    fs._ns, fs._pod,
-                    ["node", "-e", _DISCOVER_SCRIPT],
-                    container=fs._container,
-                )
+            raw = await fs._k8s.exec_in_pod(
+                fs._ns, fs._pod,
+                ["node", "-e", _DISCOVER_SCRIPT],
+                container=fs._container,
+            )
         except Exception as e:
             logger.error("Channel discovery exec failed: %s", e)
             raise AppException(
@@ -534,18 +529,11 @@ async def install_npm_channel(
 
     async with remote_fs(instance, db) as fs:
         try:
-            if instance.compute_provider == "docker":
-                from app.services.nfs_mount import DockerFS
-                assert isinstance(fs, DockerFS)
-                output = await fs.exec_command(
-                    ["npx", "openclaw", "plugins", "install", package_name.strip()],
-                )
-            else:
-                output = await fs._k8s.exec_in_pod(
-                    fs._ns, fs._pod,
-                    ["npx", "openclaw", "plugins", "install", package_name.strip()],
-                    container=fs._container,
-                )
+            output = await fs._k8s.exec_in_pod(
+                fs._ns, fs._pod,
+                ["npx", "openclaw", "plugins", "install", package_name.strip()],
+                container=fs._container,
+            )
         except Exception as e:
             logger.error("npm channel install failed: %s", e)
             raise AppException(

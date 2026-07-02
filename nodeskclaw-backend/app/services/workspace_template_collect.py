@@ -99,9 +99,6 @@ async def collect_internal_template_payload(
             "mcp_servers": mcp_servers,
         })
 
-        if inst.compute_provider == "docker":
-            warnings.append(f"实例「{inst.name}」为 Docker 部署，已纳入模板")
-
     topo = await corridor_router.get_topology(workspace_id, db)
     human_specs: list[dict] = []
     corridor_nodes: list[dict] = []

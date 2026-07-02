@@ -1,7 +1,7 @@
 """Backup service: create / list / get / delete / restore / clone.
 
-备份流程：从 Pod/Docker 打包运行时数据 -> 上传 S3
-恢复流程：重建 K8s 资源 -> 从 S3 下载 -> 解压到 Pod/Docker
+备份流程：从 Pod 打包运行时数据 -> 上传 S3
+恢复流程：重建 K8s 资源 -> 从 S3 下载 -> 解压到 Pod
 克隆流程：备份源 -> 部署新实例 -> 恢复备份到新实例
 """
 
@@ -307,10 +307,7 @@ async def _execute_backup(backup_id: str, instance_id: str) -> None:
             backup_dirs, exclude_patterns = _get_runtime_backup_config(instance.runtime)
             storage_key = _build_storage_key(instance_id, backup_id)
 
-            if instance.compute_provider == "docker":
-                data = await _backup_docker(instance, backup_dirs, exclude_patterns)
-            else:
-                data = await _backup_k8s(instance, db, backup_dirs, exclude_patterns)
+            data = await _backup_k8s(instance, db, backup_dirs, exclude_patterns)
 
             from app.services import storage_service
             await storage_service.upload_raw(storage_key, data)
@@ -377,28 +374,6 @@ async def _backup_k8s(
     return b"".join(chunks)
 
 
-async def _backup_docker(
-    instance: Instance,
-    backup_dirs: tuple[str, ...], exclude_patterns: tuple[str, ...],
-) -> bytes:
-    """Backup Docker instance from host filesystem."""
-    from app.services.docker_constants import DOCKER_DATA_DIR
-
-    slug = instance.slug or instance.name
-    data_root = DOCKER_DATA_DIR / slug / "data"
-
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for d in backup_dirs:
-            full_path = data_root / d
-            if full_path.exists():
-                tar.add(
-                    str(full_path), arcname=d,
-                    filter=lambda ti: None if any(p in ti.name for p in exclude_patterns) else ti,
-                )
-    return buf.getvalue()
-
-
 # ── Internal: restore execution ───────────────────────────
 
 async def _execute_restore(record_id: str, instance_id: str, backup_id: str) -> None:
@@ -458,18 +433,14 @@ async def _execute_restore(record_id: str, instance_id: str, backup_id: str) -> 
                 from app.services import storage_service
                 data = await storage_service.download_raw(backup.storage_key)
 
-                if inst.compute_provider == "docker":
-                    await _restore_docker_data(inst, data)
-                else:
-                    await _restore_k8s_data(inst, db, data)
+                await _restore_k8s_data(inst, db, data)
 
                 from app.services.runtime.registries.compute_registry import require_k8s_client
-                if inst.compute_provider != "docker":
-                    c = (await db.execute(select(Cluster).where(Cluster.id == inst.cluster_id))).scalar_one()
-                    k8s = await require_k8s_client(c)
-                    pod = await _find_pod(k8s, inst.namespace, inst.slug or inst.name)
-                    await k8s.exec_in_pod(inst.namespace, pod, ["kill", "1"])
-                    logger.info("恢复数据后重启 Pod: %s/%s", inst.namespace, pod)
+                c = (await db.execute(select(Cluster).where(Cluster.id == inst.cluster_id))).scalar_one()
+                k8s = await require_k8s_client(c)
+                pod = await _find_pod(k8s, inst.namespace, inst.slug or inst.name)
+                await k8s.exec_in_pod(inst.namespace, pod, ["kill", "1"])
+                logger.info("恢复数据后重启 Pod: %s/%s", inst.namespace, pod)
                 rec = (await db.execute(
                     select(DeployRecord).where(DeployRecord.id == record_id, DeployRecord.deleted_at.is_(None))
                 )).scalar_one()
@@ -551,16 +522,6 @@ async def _restore_k8s_data(instance: Instance, db: AsyncSession, data: bytes) -
     )
 
 
-async def _restore_docker_data(instance: Instance, data: bytes) -> None:
-    from app.services.docker_constants import DOCKER_DATA_DIR
-    slug = instance.slug or instance.name
-    data_root = DOCKER_DATA_DIR / slug / "data"
-
-    buf = io.BytesIO(data)
-    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-        tar.extractall(path=str(data_root))
-
-
 # ── Internal: clone pipeline ──────────────────────────────
 
 async def _execute_clone_pipeline(ctx, backup_id: str, deploy_id: str) -> None:
@@ -586,19 +547,15 @@ async def _execute_clone_pipeline(ctx, backup_id: str, deploy_id: str) -> None:
         from app.services import storage_service
         data = await storage_service.download_raw(backup.storage_key)
 
-        if new_inst.compute_provider == "docker":
-            await _restore_docker_data(new_inst, data)
-        else:
-            await _restore_k8s_data(new_inst, db, data)
+        await _restore_k8s_data(new_inst, db, data)
 
-        if new_inst.compute_provider != "docker":
-            cluster = (await db.execute(
-                select(Cluster).where(Cluster.id == new_inst.cluster_id)
-            )).scalar_one()
-            from app.services.runtime.registries.compute_registry import require_k8s_client
-            k8s = await require_k8s_client(cluster)
-            pod = await _find_pod(k8s, new_inst.namespace, new_inst.slug or new_inst.name)
-            await k8s.exec_in_pod(new_inst.namespace, pod, ["kill", "1"])
+        cluster = (await db.execute(
+            select(Cluster).where(Cluster.id == new_inst.cluster_id)
+        )).scalar_one()
+        from app.services.runtime.registries.compute_registry import require_k8s_client
+        k8s = await require_k8s_client(cluster)
+        pod = await _find_pod(k8s, new_inst.namespace, new_inst.slug or new_inst.name)
+        await k8s.exec_in_pod(new_inst.namespace, pod, ["kill", "1"])
 
     logger.info("克隆完成: source_backup=%s new_instance=%s", backup_id, ctx.instance_id)
 

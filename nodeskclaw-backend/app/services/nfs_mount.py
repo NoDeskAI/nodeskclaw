@@ -7,7 +7,6 @@ is a single exec call to the target Pod — no temp dirs, no tar, no bulk sync.
 import base64
 import json
 import logging
-import pathlib
 import posixpath
 import shlex
 import shutil
@@ -362,166 +361,13 @@ async def _find_running_pod(
     return usable[0]["name"], container
 
 
-class DockerFS:
-    """Host filesystem proxy for Docker instances — files at DOCKER_DATA_DIR/{slug}/data/."""
-
-    def __init__(self, slug: str, home_prefix: str = ".openclaw"):
-        from app.services.docker_constants import DOCKER_DATA_DIR
-        self._slug = slug
-        self._base = DOCKER_DATA_DIR / slug / "data"
-        self._home_prefix = home_prefix.strip("/")
-        self._abs_prefix = f"/root/{self._home_prefix}"
-        import os
-        os.makedirs(str(self._base), exist_ok=True)
-
-    def _resolve(self, remote_path: str) -> pathlib.Path:
-        abs_slash = self._abs_prefix + "/"
-        if remote_path.startswith(abs_slash):
-            rel = remote_path[len(abs_slash):]
-        elif remote_path.startswith(self._abs_prefix):
-            rel = remote_path[len(self._abs_prefix):]
-        elif remote_path.startswith(self._home_prefix + "/"):
-            rel = remote_path[len(self._home_prefix) + 1:]
-        elif remote_path == self._home_prefix:
-            rel = ""
-        else:
-            rel = remote_path.lstrip("/")
-        return self._base / rel
-
-    async def read_text(self, remote_path: str) -> str | None:
-        """Read a file from local Docker data dir. Returns None if file does not exist."""
-        p = self._resolve(remote_path)
-        if not p.exists():
-            return None
-        return p.read_text(encoding="utf-8")
-
-    async def write_text(self, remote_path: str, content: str) -> None:
-        p = self._resolve(remote_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
-
-    async def read_binary(self, remote_path: str) -> bytes | None:
-        """Read a file as raw bytes. Returns None if file does not exist."""
-        p = self._resolve(remote_path)
-        if not p.exists():
-            return None
-        return p.read_bytes()
-
-    async def write_binary(self, remote_path: str, data: bytes) -> None:
-        p = self._resolve(remote_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(data)
-
-    async def remove(self, remote_path: str) -> None:
-        p = self._resolve(remote_path)
-        if not p.exists():
-            return
-        if p.is_dir():
-            shutil.rmtree(p)
-        else:
-            p.unlink()
-
-    async def exists(self, remote_path: str) -> bool:
-        return self._resolve(remote_path).exists()
-
-    async def mkdir(self, remote_path: str) -> None:
-        p = self._resolve(remote_path)
-        p.mkdir(parents=True, exist_ok=True)
-
-    async def list_dir(self, remote_path: str) -> list[dict] | None:
-        p = self._resolve(remote_path)
-        if not p.exists():
-            return None
-        items = []
-        for f in p.iterdir():
-            st = f.stat()
-            items.append({
-                "name": f.name,
-                "is_dir": f.is_dir(),
-                "size": st.st_size,
-                "modified_at": st.st_mtime,
-            })
-        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
-        return items
-
-    async def scan_skills(self, skills_dir_rel: str) -> list[dict]:
-        """Scan skills directory — returns [{name, content, file_count}]."""
-        skills_dir = self._resolve(skills_dir_rel)
-        if not skills_dir.exists():
-            return []
-        results = []
-        for skill_path in sorted(skills_dir.iterdir()):
-            if not skill_path.is_dir():
-                continue
-            skill_md = skill_path / "SKILL.md"
-            content = skill_md.read_text(encoding="utf-8") if skill_md.exists() else ""
-            file_count = sum(1 for f in skill_path.iterdir() if f.is_file())
-            results.append({"name": skill_path.name, "content": content, "file_count": file_count})
-        return results
-
-    async def file_stat(self, path: str) -> dict | None:
-        import mimetypes
-        p = self._resolve(path)
-        if not p.exists():
-            return None
-        st = p.stat()
-        mime, _ = mimetypes.guess_type(p.name)
-        return {
-            "size": st.st_size,
-            "modified_at": st.st_mtime,
-            "mime_type": mime or "application/octet-stream",
-        }
-
-    async def append_text(self, remote_path: str, content: str) -> None:
-        p = self._resolve(remote_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
-            f.write(content)
-
-    async def read_last_line(self, remote_path: str) -> str | None:
-        p = self._resolve(remote_path)
-        if not p.exists():
-            return None
-        lines = p.read_text(encoding="utf-8").strip().splitlines()
-        return lines[-1] if lines else None
-
-    async def exec_command(self, cmd: list[str]) -> str:
-        """Run a command inside the Docker container via docker exec."""
-        import asyncio
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", self._slug, *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
-            raise NFSMountError(f"docker exec 失败 (rc={proc.returncode}): {stdout.decode()[:500]}")
-        return stdout.decode() if stdout else ""
-
-
-RemoteFS = PodFS | DockerFS
-
-
-def _home_prefix_for_runtime(runtime: str) -> str:
-    from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
-    spec = RUNTIME_REGISTRY.get(runtime)
-    if spec:
-        return spec.data_dir_container_path.removeprefix("/root/").strip("/")
-    return ".openclaw"
+RemoteFS = PodFS
 
 
 @asynccontextmanager
 async def remote_fs(instance: Instance, db: AsyncSession) -> AsyncIterator[RemoteFS]:
-    """Yield a filesystem proxy connected to the instance.
-
-    Docker instances use DockerFS (direct host path access).
-    K8s instances use PodFS (kubectl exec).
-    """
-    if instance.compute_provider == "docker":
-        prefix = _home_prefix_for_runtime(instance.runtime)
-        yield DockerFS(instance.slug, home_prefix=prefix)
-    else:
-        k8s = await _get_k8s_client(instance, db)
-        pod_name, container = await _find_running_pod(k8s, instance)
-        logger.debug("remote_fs: pod=%s container=%s ns=%s", pod_name, container, instance.namespace)
-        yield PodFS(k8s, instance.namespace, pod_name, container)
+    """Yield a PodFS filesystem proxy connected to the instance (kubectl exec)."""
+    k8s = await _get_k8s_client(instance, db)
+    pod_name, container = await _find_running_pod(k8s, instance)
+    logger.debug("remote_fs: pod=%s container=%s ns=%s", pod_name, container, instance.namespace)
+    yield PodFS(k8s, instance.namespace, pod_name, container)

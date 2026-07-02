@@ -62,7 +62,7 @@ def _restore_instance() -> SimpleNamespace:
         env_vars=None,
         advanced_config=None,
         org_id="org-1",
-        compute_provider="docker",
+        compute_provider="k8s",
         runtime="hermes",
         status=InstanceStatus.restoring,
     )
@@ -79,10 +79,14 @@ async def test_restore_marks_success_after_data_restore(monkeypatch) -> None:
     backup = SimpleNamespace(storage_key="backups/instance-1/backup.tar.gz")
     session_factory = _SessionFactory([
         _Session([instance, _cluster(), backup]),
-        _Session([instance, record]),
+        _Session([instance, _cluster(), record]),
     ])
     calls: list[str] = []
     published: list[dict] = []
+
+    class FakeK8s:
+        async def exec_in_pod(self, *_args, **_kwargs):
+            calls.append("restart-pod")
 
     async def fake_execute_rebuild_pipeline(ctx, *, finalize_success=True):
         assert ctx.record_id == "deploy-1"
@@ -95,22 +99,30 @@ async def test_restore_marks_success_after_data_restore(monkeypatch) -> None:
         calls.append("download")
         return b"backup-data"
 
-    async def fake_restore_docker_data(inst, data):
+    async def fake_restore_k8s_data(inst, _db, data):
         assert inst is instance
         assert data == b"backup-data"
         assert record.status == DeployStatus.running
         assert record.finished_at is None
         calls.append("restore-data")
 
+    async def fake_require_k8s_client(_cluster):
+        return FakeK8s()
+
+    async def fake_find_pod(_k8s, _namespace, _name):
+        return "pod-demo"
+
     monkeypatch.setattr("app.core.deps.async_session_factory", session_factory)
     monkeypatch.setattr("app.services.deploy_service.execute_rebuild_pipeline", fake_execute_rebuild_pipeline)
     monkeypatch.setattr("app.services.storage_service.download_raw", fake_download_raw)
-    monkeypatch.setattr(backup_service, "_restore_docker_data", fake_restore_docker_data)
+    monkeypatch.setattr(backup_service, "_restore_k8s_data", fake_restore_k8s_data)
+    monkeypatch.setattr("app.services.runtime.registries.compute_registry.require_k8s_client", fake_require_k8s_client)
+    monkeypatch.setattr(backup_service, "_find_pod", fake_find_pod)
     monkeypatch.setattr(backup_service.event_bus, "publish", lambda _topic, payload: published.append(payload))
 
     await backup_service._execute_restore("deploy-1", "instance-1", "backup-1")
 
-    assert calls == ["rebuild", "download", "restore-data"]
+    assert calls == ["rebuild", "download", "restore-data", "restart-pod"]
     assert record.status == DeployStatus.success
     assert record.message == "恢复成功"
     assert record.finished_at is not None
@@ -139,13 +151,13 @@ async def test_restore_data_failure_publishes_failed_final_event(monkeypatch) ->
     async def fake_download_raw(_storage_key):
         return b"backup-data"
 
-    async def fail_restore_docker_data(_inst, _data):
+    async def fail_restore_k8s_data(_inst, _db, _data):
         raise RuntimeError("restore boom")
 
     monkeypatch.setattr("app.core.deps.async_session_factory", session_factory)
     monkeypatch.setattr("app.services.deploy_service.execute_rebuild_pipeline", fake_execute_rebuild_pipeline)
     monkeypatch.setattr("app.services.storage_service.download_raw", fake_download_raw)
-    monkeypatch.setattr(backup_service, "_restore_docker_data", fail_restore_docker_data)
+    monkeypatch.setattr(backup_service, "_restore_k8s_data", fail_restore_k8s_data)
     monkeypatch.setattr(backup_service.event_bus, "publish", lambda _topic, payload: published.append(payload))
 
     await backup_service._execute_restore("deploy-1", "instance-1", "backup-1")
