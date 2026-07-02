@@ -1,9 +1,6 @@
 """Cluster service: CRUD, KubeConfig encryption, connection test."""
 
-import asyncio
 import logging
-import os
-import sys
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,8 +32,13 @@ async def list_clusters(db: AsyncSession, org_id: str | None = None) -> list[Clu
 async def create_cluster(
     data: ClusterCreate, user: User, db: AsyncSession, org_id: str | None = None,
 ) -> ClusterInfo:
-    """统一集群创建入口，根据 compute_provider 分支处理 k8s / docker。"""
+    """集群创建入口，仅支持 K8s 集群。"""
     compute = data.compute_provider or "k8s"
+    if compute != "k8s":
+        raise BadRequestError(
+            message=f"不支持的集群类型 '{compute}'，仅支持 K8s 集群",
+            message_key="errors.cluster.compute_provider_not_supported",
+        )
 
     name_query = select(Cluster).where(
         Cluster.name == data.name, Cluster.deleted_at.is_(None),
@@ -46,9 +48,6 @@ async def create_cluster(
     existing = await db.execute(name_query)
     if existing.scalar_one_or_none():
         raise ConflictError(f"集群名称 '{data.name}' 已存在")
-
-    if compute == "docker":
-        return await _create_docker_cluster(data.name, user, org_id, db)
 
     if not data.kubeconfig:
         raise BadRequestError(
@@ -246,90 +245,11 @@ async def update_kubeconfig(
     return ClusterInfo.model_validate(cluster)
 
 
-def _docker_env_hint() -> str:
-    """Return a platform-specific hint for Docker connectivity issues."""
-    if sys.platform == "win32":
-        return "请确认 Docker Desktop 已启动且正在运行"
-    if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_DATA_DIR"):
-        return "请确认 Docker socket 已挂载到容器（/var/run/docker.sock）"
-    return "请确认 Docker daemon 正在运行"
-
-
-def _docker_cli_hint() -> str:
-    """Return a platform-specific hint for missing Docker CLI."""
-    if sys.platform == "win32":
-        return "Docker CLI 未安装，请安装 Docker Desktop"
-    if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_DATA_DIR"):
-        return "Docker CLI 未安装，请在 Dockerfile 中安装 docker-ce-cli"
-    return "Docker CLI 未安装，请先安装 Docker"
-
-
-async def _create_docker_cluster(
-    name: str, user: User, org_id: str | None, db: AsyncSession,
-) -> ClusterInfo:
-    """内部: 创建 Docker 运行环境集群。"""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "compose", "version",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-        if proc.returncode != 0:
-            err_text = stderr.decode().strip()
-            logger.warning(
-                "docker compose version failed: rc=%d, platform=%s, stdout=%s, stderr=%s",
-                proc.returncode, sys.platform,
-                stdout.decode().strip()[:200], err_text[:500],
-            )
-            if "permission denied" in err_text.lower() or "connect" in err_text.lower():
-                raise BadRequestError(
-                    message=f"无法连接 Docker daemon，{_docker_env_hint()}",
-                    message_key="errors.cluster.docker_socket_unavailable",
-                )
-            raise BadRequestError(
-                message=err_text or "Docker Compose 不可用",
-                message_key="errors.cluster.docker_unavailable",
-            )
-    except BadRequestError:
-        raise
-    except FileNotFoundError:
-        logger.warning("docker CLI not found: platform=%s", sys.platform)
-        raise BadRequestError(
-            message=_docker_cli_hint(),
-            message_key="errors.cluster.docker_cli_not_found",
-        )
-    except asyncio.TimeoutError:
-        logger.warning("docker compose version timed out: platform=%s", sys.platform)
-        raise BadRequestError(
-            message=f"Docker 环境检查超时，{_docker_env_hint()}",
-            message_key="errors.cluster.docker_check_timeout",
-        )
-
-    cluster = Cluster(
-        name=name or "local-docker",
-        compute_provider="docker",
-        credentials_encrypted=None,
-        provider_config={"cloud_vendor": "local"},
-        status=ClusterStatus.connected,
-        health_status="healthy",
-        created_by=user.id,
-        org_id=org_id,
-    )
-    db.add(cluster)
-    await db.commit()
-    await db.refresh(cluster)
-    return ClusterInfo.model_validate(cluster)
-
-
 async def test_connection(
     cluster_id: str, db: AsyncSession, org_id: str | None = None,
 ) -> ConnectionTestResult:
     """Test cluster connectivity."""
     cluster = await get_cluster(cluster_id, db, org_id)
-
-    if cluster.compute_provider == "docker":
-        return await _test_docker_connection(cluster, db)
 
     kubeconfig_plain = decrypt_kubeconfig(cluster.credentials_encrypted)
 
@@ -357,52 +277,6 @@ async def test_connection(
             version=info.git_version,
             nodes=len(nodes.items),
         )
-    except Exception as e:
-        cluster.status = ClusterStatus.disconnected
-        cluster.health_status = "unhealthy"
-        await db.commit()
-        return ConnectionTestResult(ok=False, message=str(e))
-
-
-async def _test_docker_connection(
-    cluster: Cluster, db: AsyncSession,
-) -> ConnectionTestResult:
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "compose", "version",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-        if proc.returncode != 0:
-            err_text = stderr.decode().strip()
-            logger.warning(
-                "docker compose version failed (test): rc=%d, platform=%s, stdout=%s, stderr=%s",
-                proc.returncode, sys.platform,
-                stdout.decode().strip()[:200], err_text[:500],
-            )
-            if "permission denied" in err_text.lower() or "connect" in err_text.lower():
-                err_text = f"无法连接 Docker daemon，{_docker_env_hint()}"
-            cluster.status = ClusterStatus.disconnected
-            cluster.health_status = "unhealthy"
-            await db.commit()
-            return ConnectionTestResult(ok=False, message=err_text)
-
-        version_str = stdout.decode().strip()
-        cluster.status = ClusterStatus.connected
-        cluster.health_status = "healthy"
-        await db.commit()
-        return ConnectionTestResult(ok=True, version=version_str)
-    except FileNotFoundError:
-        cluster.status = ClusterStatus.disconnected
-        cluster.health_status = "unhealthy"
-        await db.commit()
-        return ConnectionTestResult(ok=False, message=_docker_cli_hint())
-    except asyncio.TimeoutError:
-        cluster.status = ClusterStatus.disconnected
-        cluster.health_status = "unhealthy"
-        await db.commit()
-        return ConnectionTestResult(ok=False, message=f"Docker 环境检查超时，{_docker_env_hint()}")
     except Exception as e:
         cluster.status = ClusterStatus.disconnected
         cluster.health_status = "unhealthy"
