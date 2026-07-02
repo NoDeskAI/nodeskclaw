@@ -66,7 +66,6 @@ interface InstanceDetail {
 }
 
 const instance = ref<InstanceDetail | null>(null)
-const isDocker = computed(() => instance.value?.compute_provider === 'docker')
 
 interface EngineInfo {
   name: string
@@ -944,7 +943,7 @@ function toggleSkillEditor() {
             <div v-else class="text-sm text-muted-foreground space-y-2">
               <p>{{ t('instanceDetail.deleteConfirmQuestion', { name: getInstanceBasicDisplayName() }) }}</p>
               <ul class="list-disc list-inside space-y-1 text-xs">
-                <li>{{ t(isDocker ? 'instanceDetail.deleteImpactDocker' : 'instanceDetail.deleteImpactK8s') }}</li>
+                <li>{{ t('instanceDetail.deleteImpactK8s') }}</li>
                 <li>{{ t('instanceDetail.deleteImpactData') }}</li>
                 <li>{{ t('instanceDetail.deleteImpactIrreversible') }}</li>
               </ul>

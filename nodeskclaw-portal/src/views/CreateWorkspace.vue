@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Loader2, Palette, Bot, ChevronLeft, Server, Container, X } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Loader2, Palette, Bot, ChevronLeft, Server, X } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { WorkspaceTemplateItem } from '@/stores/workspace'
 import { useClusterStore, type ClusterInfo } from '@/stores/cluster'
@@ -234,10 +234,8 @@ async function handleCreate() {
 
           <template v-else-if="availableClusters.length === 1">
             <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border text-sm">
-              <Container v-if="availableClusters[0].compute_provider === 'docker'" class="w-4 h-4 text-blue-500 shrink-0" />
-              <Server v-else class="w-4 h-4 text-primary shrink-0" />
+              <Server class="w-4 h-4 text-primary shrink-0" />
               <span>{{ availableClusters[0].name }}</span>
-              <span class="text-xs text-muted-foreground">({{ availableClusters[0].compute_provider === 'docker' ? 'Docker' : 'K8s' }})</span>
             </div>
           </template>
 
@@ -248,10 +246,8 @@ async function handleCreate() {
                 @click="clusterDropdownOpen = !clusterDropdownOpen"
               >
                 <span v-if="selectedCluster" class="flex items-center gap-2">
-                  <Container v-if="selectedCluster.compute_provider === 'docker'" class="w-4 h-4 text-blue-500 shrink-0" />
-                  <Server v-else class="w-4 h-4 text-primary shrink-0" />
+                  <Server class="w-4 h-4 text-primary shrink-0" />
                   {{ selectedCluster.name }}
-                  <span class="text-xs text-muted-foreground">({{ selectedCluster.compute_provider === 'docker' ? 'Docker' : 'K8s' }})</span>
                 </span>
                 <span v-else class="text-muted-foreground">{{ t('createWorkspace.clusterPlaceholder') }}</span>
               </Button>
@@ -266,10 +262,8 @@ async function handleCreate() {
                   class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg"
                   @click="selectCluster(c)"
                 >
-                  <Container v-if="c.compute_provider === 'docker'" class="w-4 h-4 text-blue-500 shrink-0" />
-                  <Server v-else class="w-4 h-4 text-primary shrink-0" />
+                  <Server class="w-4 h-4 text-primary shrink-0" />
                   <span>{{ c.name }}</span>
-                  <span class="text-xs text-muted-foreground">({{ c.compute_provider === 'docker' ? 'Docker' : 'K8s' }})</span>
                 </Button>
               </div>
             </div>

@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import {
   Server,
-  Container,
   Plus,
   Loader2,
   Plug,
@@ -31,7 +30,7 @@ const loading = ref(true)
 const testingId = ref<string | null>(null)
 
 const showAddDialog = ref(false)
-const addForm = ref({ name: '', kubeconfig: '', computeProvider: 'k8s' as 'docker' | 'k8s' })
+const addForm = ref({ name: '', kubeconfig: '' })
 const adding = ref(false)
 const nameAutoFilled = ref(false)
 
@@ -55,7 +54,7 @@ const canAddCluster = computed(() => true)
 
 const addFormValid = computed(() => {
   if (!addForm.value.name.trim()) return false
-  if (addForm.value.computeProvider === 'k8s' && !addForm.value.kubeconfig.trim()) return false
+  if (!addForm.value.kubeconfig.trim()) return false
   return true
 })
 
@@ -77,19 +76,9 @@ watch(() => addForm.value.kubeconfig, (val) => {
 })
 
 function openAddDialog() {
-  addForm.value = { name: '', kubeconfig: '', computeProvider: 'k8s' }
+  addForm.value = { name: '', kubeconfig: '' }
   nameAutoFilled.value = false
   showAddDialog.value = true
-}
-
-function selectType(type: 'docker' | 'k8s') {
-  addForm.value.computeProvider = type
-  if (type === 'docker' && !addForm.value.name) {
-    addForm.value.name = 'local-docker'
-  }
-  if (type === 'k8s' && addForm.value.name === 'local-docker') {
-    addForm.value.name = ''
-  }
 }
 
 onMounted(async () => {
@@ -101,14 +90,11 @@ async function handleAdd() {
   if (!addFormValid.value) return
   adding.value = true
   try {
-    const payload: { name: string; compute_provider: string; kubeconfig?: string } = {
+    await clusterStore.createCluster({
       name: addForm.value.name.trim(),
-      compute_provider: addForm.value.computeProvider,
-    }
-    if (addForm.value.computeProvider === 'k8s') {
-      payload.kubeconfig = addForm.value.kubeconfig.trim()
-    }
-    await clusterStore.createCluster(payload)
+      compute_provider: 'k8s',
+      kubeconfig: addForm.value.kubeconfig.trim(),
+    })
     toast.success(t('clusters.addSuccess'))
     showAddDialog.value = false
   } catch (e) {
@@ -194,10 +180,6 @@ function goToDetail(id: string) {
   router.push({ name: 'ClusterDetail', params: { id } })
 }
 
-function isDockerCluster(cluster: ClusterInfo) {
-  return cluster.compute_provider === 'docker'
-}
-
 function statusDotClass(status: string) {
   if (status === 'connected') return 'bg-green-500'
   if (status === 'connecting') return 'bg-yellow-500 animate-pulse'
@@ -260,12 +242,11 @@ function statusDotClass(status: string) {
           v-for="cluster in clusterStore.clusters"
           :key="cluster.id"
           class="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:border-primary/20 transition-colors cursor-pointer"
-          @click="!isDockerCluster(cluster) && goToDetail(cluster.id)"
+          @click="goToDetail(cluster.id)"
         >
           <div class="flex items-center gap-3 min-w-0">
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="isDockerCluster(cluster) ? 'bg-blue-500/10' : 'bg-primary/10'">
-              <Container v-if="isDockerCluster(cluster)" class="w-4 h-4 text-blue-500" />
-              <Server v-else class="w-4 h-4 text-primary" />
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-primary/10">
+              <Server class="w-4 h-4 text-primary" />
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -273,14 +254,9 @@ function statusDotClass(status: string) {
                 <span class="w-2 h-2 rounded-full shrink-0" :class="statusDotClass(cluster.status)" />
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                <template v-if="isDockerCluster(cluster)">
-                  <span>{{ t('clusters.dockerLabel') }}</span>
-                </template>
-                <template v-else>
-                  <span class="truncate">{{ cluster.api_server_url || '-' }}</span>
-                  <span v-if="cluster.k8s_version" class="shrink-0">{{ cluster.k8s_version }}</span>
-                  <span class="shrink-0 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-[10px]">{{ cluster.provider }}</span>
-                </template>
+                <span class="truncate">{{ cluster.api_server_url || '-' }}</span>
+                <span v-if="cluster.k8s_version" class="shrink-0">{{ cluster.k8s_version }}</span>
+                <span class="shrink-0 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-[10px]">{{ cluster.provider }}</span>
               </div>
             </div>
           </div>
@@ -296,7 +272,6 @@ function statusDotClass(status: string) {
               <Plug v-else class="w-4 h-4" />
             </Button>
             <Button variant="unstyled" size="unstyled"
-              v-if="!isDockerCluster(cluster)"
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               :title="t('clusters.rename')"
               @click="openRename(cluster)"
@@ -330,44 +305,8 @@ function statusDotClass(status: string) {
             </Button>
           </div>
 
-          <!-- Type Selector -->
-          <div>
-            <label class="block text-sm text-muted-foreground mb-2">{{ t('clusters.clusterType') }}</label>
-            <div class="grid grid-cols-2 gap-3">
-              <Button variant="unstyled" size="unstyled"
-                class="flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left"
-                :class="addForm.computeProvider === 'k8s' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'"
-                @click="selectType('k8s')"
-              >
-                <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="addForm.computeProvider === 'k8s' ? 'bg-primary/15' : 'bg-primary/10'">
-                  <Server class="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div class="min-w-0">
-                  <div class="text-sm font-medium">{{ t('clusters.typeK8s') }}</div>
-                  <div class="text-xs text-muted-foreground">{{ t('clusters.k8sDesc') }}</div>
-                </div>
-              </Button>
-              <Button variant="unstyled" size="unstyled"
-                class="flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left"
-                :class="addForm.computeProvider === 'docker' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'"
-                @click="selectType('docker')"
-              >
-                <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="addForm.computeProvider === 'docker' ? 'bg-blue-500/15' : 'bg-blue-500/10'">
-                  <Container class="w-4.5 h-4.5 text-blue-500" />
-                </div>
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-sm font-medium">{{ t('clusters.typeDocker') }}</span>
-                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-600" :title="t('clusters.dockerComingSoonTooltip')">{{ t('clusters.dockerComingSoon') }}</span>
-                  </div>
-                  <div class="text-xs text-muted-foreground">{{ t('clusters.dockerDesc') }}</div>
-                </div>
-              </Button>
-            </div>
-          </div>
-
-          <!-- K8s: KubeConfig -->
-          <div v-if="addForm.computeProvider === 'k8s'" class="space-y-3">
+          <!-- KubeConfig -->
+          <div class="space-y-3">
             <div>
               <label class="block text-sm text-muted-foreground mb-1">KubeConfig</label>
               <Textarea

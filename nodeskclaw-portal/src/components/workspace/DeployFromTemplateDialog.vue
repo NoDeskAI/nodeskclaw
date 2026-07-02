@@ -66,7 +66,7 @@ const finalDone = computed(() => finalStatus.value !== null)
 const clusterOptions = computed(() =>
   (clusterStore.clusters || []).map((c) => ({
     value: c.id,
-    label: `${c.name} (${c.compute_provider})`,
+    label: c.name,
   })),
 )
 
@@ -77,7 +77,7 @@ const filteredClusters = computed(() => {
   if (!cp) return clusterOptions.value
   return (clusterStore.clusters || [])
     .filter((c) => c.compute_provider === cp)
-    .map((c) => ({ value: c.id, label: `${c.name} (${c.compute_provider})` }))
+    .map((c) => ({ value: c.id, label: c.name }))
 })
 
 const deploySelectedKeys = ref<Set<string>>(new Set())

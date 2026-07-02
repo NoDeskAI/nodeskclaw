@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, Loader2, Server, RefreshCw, Package, Dna, X, Container } from 'lucide-vue-next'
+import { Plus, Loader2, Server, RefreshCw, Package, Dna, X } from 'lucide-vue-next'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useGeneStore } from '@/stores/gene'
@@ -292,16 +292,7 @@ onMounted(() => {
             @click="router.push(`/instances/${inst.id}`)"
           >
             <TableCell class="px-4 py-3 font-medium">
-              <span class="inline-flex items-center gap-1.5">
-                {{ getInstanceDisplayName(inst) }}
-                <span
-                  v-if="inst.compute_provider === 'docker'"
-                  class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-400"
-                >
-                  <Container class="w-3 h-3" />
-                  Docker
-                </span>
-              </span>
+              {{ getInstanceDisplayName(inst) }}
             </TableCell>
             <TableCell class="px-4 py-3">
               <span class="inline-flex items-center gap-1.5">

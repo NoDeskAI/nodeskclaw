@@ -306,9 +306,7 @@ const scDropdownOpen = ref(false)
 const pvcAccessMode = ref<string>('ReadWriteOnce')
 
 const selectedClusterObj = computed(() => clusters.value.find(c => c.id === selectedCluster.value))
-const isK8sCluster = computed(() => selectedClusterObj.value?.compute_provider === 'k8s')
 const enabledStorageClasses = computed(() => storageClasses.value.filter(sc => sc.enabled))
-const showStorageClassSelector = computed(() => isK8sCluster.value)
 
 interface SpecPreset {
   key: string
@@ -465,8 +463,7 @@ watch(selectedRuntime, () => {
 })
 
 watch(selectedCluster, (id) => {
-  const cluster = clusters.value.find(c => c.id === id)
-  if (cluster?.compute_provider === 'k8s') {
+  if (id) {
     loadStorageClasses(id).catch(() => {})
   } else {
     storageClasses.value = []
@@ -981,7 +978,7 @@ async function handleDeploy() {
           </div>
 
           <!-- StorageClass 选择器（K8s 集群始终显示） -->
-          <div v-if="showStorageClassSelector" class="space-y-1.5">
+          <div class="space-y-1.5">
             <div v-if="storageClasses.length === 0" class="flex items-start gap-1.5 text-xs text-amber-500">
               <AlertCircle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{{ t('engine.storageClassNone') }}</span>
@@ -1032,7 +1029,7 @@ async function handleDeploy() {
           </div>
 
           <!-- PVC Access Mode 选择器（K8s 集群显示） -->
-          <div v-if="showStorageClassSelector" class="space-y-1.5">
+          <div class="space-y-1.5">
             <div class="flex items-center gap-2">
               <HardDrive class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <span class="text-xs text-muted-foreground">{{ t('engine.pvcAccessMode') }}:</span>

@@ -29,10 +29,7 @@ const logsVisible = ref(false)
 const logsContent = ref('')
 const logsLoading = ref(false)
 
-const isDocker = computed(() => data.value?.compute_provider === 'docker')
-const entityLabel = computed(() =>
-  isDocker.value ? t('instanceRuntime.container') : t('instanceRuntime.runtimeInstance'),
-)
+const entityLabel = computed(() => t('instanceRuntime.runtimeInstance'))
 
 async function fetchData() {
   loading.value = true
