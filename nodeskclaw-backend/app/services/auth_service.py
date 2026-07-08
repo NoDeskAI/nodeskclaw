@@ -1,4 +1,4 @@
-"""Auth service: email/password, phone/SMS login, JWT management."""
+"""Auth service: email/password login, JWT management."""
 
 import hashlib
 import hmac
@@ -178,32 +178,6 @@ async def login_with_email(email: str, password: str, db: AsyncSession) -> Login
     return await _issue_tokens(user, db)
 
 
-# ── 手机验证码登录 ───────────────────────────────────────
-
-async def send_sms_code(phone: str) -> dict:
-    """发送验证码（当前为 mock，生产环境接真实 SMS 服务）。"""
-    raise HTTPException(
-        status_code=503,
-        detail={
-            "error_code": 50320,
-            "message_key": "errors.auth.sms_not_available",
-            "message": "当前环境未接入短信验证码服务",
-        },
-    )
-
-
-async def login_with_phone(phone: str, code: str, db: AsyncSession) -> LoginResponse:
-    """手机号验证码登录（不存在则自动注册）。"""
-    raise HTTPException(
-        status_code=503,
-        detail={
-            "error_code": 50320,
-            "message_key": "errors.auth.sms_not_available",
-            "message": "当前环境未接入短信验证码服务",
-        },
-    )
-
-
 # ── 修改密码 ─────────────────────────────────────────────
 
 async def change_password(
@@ -322,21 +296,16 @@ async def login_with_account(
 
 
 async def send_verification_code(account: str, db: AsyncSession) -> dict:
-    """Send verification code. Email -> SMTP; phone -> SMS mock."""
-    account_type = _detect_account_type(account)
-
-    if account_type == "username":
+    """Send verification code via email (SMTP)."""
+    if _detect_account_type(account) != "email":
         raise HTTPException(
             status_code=400,
             detail={
                 "error_code": 40026,
-                "message_key": "errors.auth.verification_code_requires_email_or_phone",
-                "message": "验证码登录仅支持邮箱或手机号",
+                "message_key": "errors.auth.verification_code_requires_email",
+                "message": "验证码登录仅支持邮箱",
             },
         )
-
-    if account_type == "phone":
-        return await send_sms_code(account)
 
     _check_email_domain_allowed(account)
 
@@ -389,21 +358,16 @@ async def send_verification_code(account: str, db: AsyncSession) -> dict:
 async def login_with_verification_code(
     account: str, code: str, db: AsyncSession
 ) -> LoginResponse:
-    """Unified verification-code login. Phone auto-registers; email requires existing account."""
-    account_type = _detect_account_type(account)
-
-    if account_type == "username":
+    """Email verification-code login. Requires an existing registered account."""
+    if _detect_account_type(account) != "email":
         raise HTTPException(
             status_code=400,
             detail={
                 "error_code": 40026,
-                "message_key": "errors.auth.verification_code_requires_email_or_phone",
-                "message": "验证码登录仅支持邮箱或手机号",
+                "message_key": "errors.auth.verification_code_requires_email",
+                "message": "验证码登录仅支持邮箱",
             },
         )
-
-    if account_type == "phone":
-        return await login_with_phone(account, code, db)
 
     _check_email_domain_allowed(account)
 

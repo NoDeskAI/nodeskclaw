@@ -92,19 +92,6 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
-  async function sendSmsCode(phone: string) {
-    const res = await api.post('/auth/sms/send', { phone })
-    return res.data
-  }
-
-  async function smsLogin(phone: string, code: string) {
-    const res = await api.post('/auth/sms/login', { phone, code })
-    const data = res.data.data
-    setTokens(data.access_token, data.refresh_token)
-    user.value = data.user
-    return data
-  }
-
   async function accountLogin(account: string, password: string) {
     const res = await api.post('/auth/account-login', { account, password })
     const data = res.data.data
@@ -129,7 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token, refreshToken, user, systemInfo, isLoggedIn,
     setTokens, clearAuth,
-    emailLogin, sendSmsCode, smsLogin,
+    emailLogin,
     accountLogin, sendVerificationCode, verificationCodeLogin,
     fetchSystemInfo, fetchUser, logout,
   }

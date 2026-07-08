@@ -1,4 +1,4 @@
-"""Auth endpoints: OAuth, email/password, phone/SMS, token refresh, user info, logout, user management."""
+"""Auth endpoints: OAuth, email/password, token refresh, user info, logout, user management."""
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_, select
@@ -17,8 +17,6 @@ from app.schemas.auth import (
     EmailLoginRequest,
     LoginResponse,
     RefreshTokenRequest,
-    SmsLoginRequest,
-    SmsSendRequest,
     TokenResponse,
     UserInfo,
     VerificationCodeLoginRequest,
@@ -37,23 +35,6 @@ async def email_login(body: EmailLoginRequest, db: AsyncSession = Depends(get_db
     """邮箱密码登录。"""
     result = await auth_service.login_with_email(body.email, body.password, db)
     await hooks.emit("operation_audit", action="auth.login", target_type="user", target_id=result.user.id, actor_id=result.user.id, org_id=result.user.current_org_id, details={"method": "email"})
-    return ApiResponse(data=result)
-
-
-# ── 手机验证码 ───────────────────────────────────────────
-
-@router.post("/sms/send", response_model=ApiResponse)
-async def sms_send(body: SmsSendRequest):
-    """发送手机验证码。"""
-    result = await auth_service.send_sms_code(body.phone)
-    return ApiResponse(data=result, message=result["message"])
-
-
-@router.post("/sms/login", response_model=ApiResponse[LoginResponse])
-async def sms_login(body: SmsLoginRequest, db: AsyncSession = Depends(get_db)):
-    """手机验证码登录（自动注册）。"""
-    result = await auth_service.login_with_phone(body.phone, body.code, db)
-    await hooks.emit("operation_audit", action="auth.login", target_type="user", target_id=result.user.id, actor_id=result.user.id, org_id=result.user.current_org_id, details={"method": "sms"})
     return ApiResponse(data=result)
 
 

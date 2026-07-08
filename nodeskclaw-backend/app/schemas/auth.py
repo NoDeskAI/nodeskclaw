@@ -2,29 +2,12 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class EmailLoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-
-class SmsSendRequest(BaseModel):
-    phone: str
-
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        v = v.strip()
-        if not v or len(v) < 8:
-            raise ValueError("手机号格式不正确")
-        return v
-
-
-class SmsLoginRequest(BaseModel):
-    phone: str
-    code: str
 
 
 class TokenResponse(BaseModel):
