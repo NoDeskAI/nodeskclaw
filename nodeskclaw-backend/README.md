@@ -99,7 +99,7 @@ nodeskclaw-backend/
 │   │   │   ├── openclaw_gene_install_adapter.py # OpenClaw 基因安装适配器
 │   │   │   ├── noop_gene_install_adapter.py     # 无基因支持 runtime 的 fallback 空实现
 │   │   │   ├── context_bridges/  # 上下文注入桥接（ChannelPlugin/SystemPrompt/MCP）
-│   │   │   ├── compute/          # 计算资源提供者（K8s/Process）
+│   │   │   ├── compute/          # Kubernetes 计算资源提供者
 │   │   │   ├── transport/        # 消息投递适配器（Agent/Channel）
 │   │   │   ├── messaging/        # 消息系统核心
 │   │   │   │   ├── envelope.py   # CloudEvents 对齐的 MessageEnvelope
@@ -330,18 +330,15 @@ Agent 响应以 `delegate:<target>` 或 `escalate:<target>` 开头时，自动�
 
 ### 计算环境
 
-deploy_service 根据 Instance.compute_provider 字段分发部署：
+DeskClaw 只支持 Kubernetes 计算平台：
 
-| compute_provider | 实现 | 场景 | capabilities |
-|------------------|------|------|-------------|
-| k8s（默认） | K8sComputeProvider | 生产环境 | k8s_events, pod_logs, storage_classes, k8s_overview, configmap, exec |
-| process | ProcessComputeProvider | 单机调试 | (无) |
+| compute_provider | 实现 | capabilities |
+|------------------|------|--------------|
+| k8s | K8sComputeProvider | k8s_events, pod_logs, storage_classes, k8s_overview, configmap, exec |
 
-**Cluster 模型架构**：K8s 专属字段（`auth_type`, `ingress_class`, `k8s_version` 等）存储在 `provider_config: JSONB` 中，加密凭证存储在 `credentials_encrypted: Text`（加密的 kubeconfig）。通过 `@property` 方法保持 API 向后兼容。
+**Cluster 模型架构**：K8s 元数据（`auth_type`、`ingress_class`、`k8s_version` 等）存储在 `provider_config: JSONB` 中，加密 KubeConfig 存储在 `credentials_encrypted: Text`。`compute_provider` 字段为接口兼容及历史软删除记录保留，活动记录恒为 `k8s`。
 
-**统一入口**：`require_k8s_client(cluster)` 检查集群类型并获取 K8s 客户端，非 K8s 集群自动抛出 `BadRequestError`，替代了此前 20+ 处直接调用 `k8s_manager.get_or_create()` 的模式。
-
-远程文件操作通过 `PodFS`（kubectl exec）完成，由 `remote_fs()` 统一提供。
+**统一入口**：`require_k8s_client(cluster)` 获取 K8s 客户端。远程文件操作统一通过 `PodFS`（Pod 文件系统代理）执行。
 
 ### Agent 生命周期
 
@@ -501,25 +498,17 @@ S3 健康检查会验证 bucket 可访问、临时对象写入/删除、multipar
 uv run uvicorn app.main:app --reload --port 8000 --timeout-graceful-shutdown 3
 ```
 
-### Docker Compose 部署
+### Kubernetes 部署
 
-推荐使用项目根目录的 `docker-compose.yml` 一键部署（内置 PostgreSQL + Backend + Portal）：
+主控后端只支持部署到 Kubernetes。初始化 Namespace、Secret 和基础资源后，再部署指定镜像版本：
 
 ```bash
-cp .env.example .env
-# 编辑 .env，至少设置 JWT_SECRET
-cd ..
-docker compose up -d
+cd /path/to/NoDeskClaw
+./deploy/init.sh --prod --context <CTX>
+./deploy/deploy.sh deploy backend --tag <TAG> --prod --context <CTX>
 ```
 
-Docker Compose 部署注意事项：
-- `DATABASE_URL` 默认指向内置 PostgreSQL，无需手动配置
-- `DATABASE_NAME_SUFFIX` 在 Docker 部署时**必须留空**（compose 文件已强制覆盖为空字符串）。`auto` 模式会用容器 hostname（随机 ID）拼接库名导致连接失败
-- `CORS_ORIGINS` 需根据实际访问端口调整（Docker 默认 Portal 端口 80，Admin 端口 8001）
-- 如需使用外部数据库，在项目根目录 `.env` 设置 `DATABASE_URL`，然后 `docker compose up -d nodeskclaw-backend portal`
-- **共享文件存储**：S3 未配置时使用本地存储，`docker-compose.yml` 通过命名卷 `shared_files` 挂载到容器内 `/data/shared-files`（`LOCAL_STORAGE_DIR`），数据随卷持久化
-- **实例部署**：AI 实例统一部署在 K8s 集群上，Docker Compose 仅用于自托管平台自身（postgres + backend + llm-proxy + portal）
-- **CE/EE 模式**：`docker-compose.yml` 默认设置 `NODESKCLAW_EDITION=ce`；EE 部署使用 `docker compose -f docker-compose.yml -f docker-compose.ee.yml up -d`
+完整流程见根目录 `deploy/README.md`。
 
 ### Docker 构建（单独构建镜像）
 
@@ -528,10 +517,9 @@ Docker Compose 部署注意事项：
 ```bash
 cd /path/to/NoDeskClaw
 docker build --platform linux/amd64 -f nodeskclaw-backend/Dockerfile -t nodeskclaw-backend:latest .
-docker run -d -p 8000:8000 --env-file nodeskclaw-backend/.env nodeskclaw-backend:latest
 ```
 
-生产环境镜像通过发版脚本构建：`./deploy/release.sh create v0.x.x`；部署指定版本使用：`./deploy/deploy.sh deploy backend --tag v0.x.x --prod --context <CTX>`。
+该 Dockerfile 仅用于构建供 K8s 使用的 OCI 镜像，不提供 Docker 运行部署入口。生产环境镜像通过发版脚本构建：`./deploy/release.sh create v0.x.x`；部署指定版本使用：`./deploy/deploy.sh deploy backend --tag v0.x.x --prod --context <CTX>`。
 
 ## 日志
 
@@ -582,7 +570,7 @@ logs/
 4. **Commit 迁移文件**：迁移文件是代码的一部分，必须提交到 Git
 
 5. **应用迁移**（自动）：
-   - 应用启动时 lifespan 自动执行 `alembic upgrade head`（无论本地开发还是 Docker 部署）
+   - 应用启动时 lifespan 自动执行 `alembic upgrade head`（本地开发与 K8s 部署一致）
    - 无需手动执行迁移命令，启动即自动应用所有 pending 迁移
    - 如需手动执行：`uv run alembic upgrade head`
 

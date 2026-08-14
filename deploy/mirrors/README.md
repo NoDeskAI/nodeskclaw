@@ -22,12 +22,6 @@ Docker 构建过程中需要从 PyPI、npm、Debian/Alpine 软件源下载依赖
 echo 'MIRRORS=cn' >> deploy/.env.local
 ```
 
-### docker compose
-
-```bash
-docker compose --env-file deploy/mirrors/cn.env up -d --build
-```
-
 ### nodeskclaw-artifacts/build.sh
 
 ```bash

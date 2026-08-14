@@ -123,9 +123,9 @@ Full-stack internationalization covering Portal and Backend.
 
 ## Quick Start
 
-### Kubernetes (recommended)
+### Kubernetes
 
-DeskClaw is designed to run on Kubernetes. K8s is the primary deployment target for both staging and production. For local development, use `dev.sh` instead (see below).
+DeskClaw Team Edition supports Kubernetes as its only product deployment target. The control plane and all managed instances run on K8s. For local development, use `dev.sh` instead (see below).
 
 Requires a K8s cluster, a container registry, and an external PostgreSQL database.
 
@@ -299,15 +299,6 @@ K8s releases and deployments are managed by separate scripts. The typical workfl
 
 Database migrations run automatically when the new backend pod starts. See [deploy/README.md](deploy/README.md) for full CLI usage and options.
 
-### Docker Compose
-
-For quick self-hosted deployment without Kubernetes:
-
-```bash
-docker compose up -d                   # CE mode (default)
-docker compose up -d --build           # Rebuild images
-```
-
 ### Build Mirrors
 
 If pulling dependencies (PyPI, npm, Debian/Alpine packages) is slow in your region, use a mirror preset to speed up builds:
@@ -315,9 +306,6 @@ If pulling dependencies (PyPI, npm, Debian/Alpine packages) is slow in your regi
 ```bash
 # release.sh
 ./deploy/release.sh create v0.9.0 --mirrors cn
-
-# docker compose
-docker compose --env-file deploy/mirrors/cn.env up -d --build
 
 # artifacts (DeskClaw engine images)
 ./nodeskclaw-artifacts/build.sh openclaw --mirrors cn

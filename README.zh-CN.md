@@ -122,9 +122,9 @@ DeskClaw/
 
 ## 快速开始
 
-### Kubernetes 部署（推荐）
+### Kubernetes 部署
 
-DeskClaw 以 Kubernetes 为主要部署方式，适用于 Staging 和 Production 环境。本地开发请使用 `dev.sh`（见下方）。
+DeskClaw 团队版仅支持部署到 Kubernetes，主控服务与所有受管实例都运行在 K8s 上。本地开发请使用 `dev.sh`（见下方）。
 
 需要 K8s 集群、容器镜像仓库和外部 PostgreSQL 数据库。
 
@@ -298,15 +298,6 @@ K8s 发版和部署由独立脚本管理，标准流程为**先创建版本制�
 
 数据库迁移在新的后端 Pod 启动时自动执行。完整 CLI 用法见 [deploy/README.md](deploy/README.md)。
 
-### Docker Compose 部署
-
-无需 Kubernetes 的快速自部署方式：
-
-```bash
-docker compose up -d                   # CE 模式（默认）
-docker compose up -d --build           # 重新构建镜像
-```
-
 ### 构建镜像源加速
 
 如果拉取依赖（PyPI、npm、Debian/Alpine 软件包）较慢，可使用镜像源预设加速构建：
@@ -314,9 +305,6 @@ docker compose up -d --build           # 重新构建镜像
 ```bash
 # release.sh 发版
 ./deploy/release.sh create v0.9.0 --mirrors cn
-
-# docker compose 构建
-docker compose --env-file deploy/mirrors/cn.env up -d --build
 
 # DeskClaw 引擎镜像构建
 ./nodeskclaw-artifacts/build.sh openclaw --mirrors cn

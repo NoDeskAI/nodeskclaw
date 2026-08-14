@@ -41,17 +41,15 @@ NoDeskClaw/
 ./dev.sh ee      # 强制 EE 模式（backend + portal + admin）
 ```
 
-### Docker Compose 部署
+### Kubernetes 部署
 
 ```bash
-docker compose up -d                     # CE 模式（默认）
-docker compose -f docker-compose.yml -f docker-compose.ee.yml up -d  # EE 模式
-
-# 可选：需要自定义 JWT_SECRET / 飞书 SSO 等配置时
-# cp .env.example nodeskclaw-backend/.env && vi nodeskclaw-backend/.env
+./deploy/init.sh --prod --context <CTX>
+./deploy/init.sh --ee --prod --context <CTX>
+./deploy/deploy.sh deploy --tag <TAG> --prod --context <CTX>
 ```
 
-Docker Compose 仅用于自托管部署平台自身（postgres + backend + llm-proxy + portal），实例部署统一使用 K8s 集群（Docker 类型集群已移除）。本地共享文件通过命名卷持久化在 `LOCAL_STORAGE_DIR=/data/shared-files`，`NODESKCLAW_EDITION` 由 compose 文件自动设置。
+Kubernetes 是唯一产品部署目标。主控服务和受管实例均运行在 K8s；Docker 仅用于构建 OCI 镜像，本地开发可选用 `./dev.sh --docker-pg` 启动 PostgreSQL。
 
 ### 后端（Python）
 
