@@ -457,7 +457,7 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 | `S3_ACCESS_KEY_ID` | S3 Access Key |
 | `S3_SECRET_ACCESS_KEY` | S3 Secret Key |
 | `S3_KEY_PREFIX` | 对象 key 前缀（本地开发可设为 dev，生产留空） |
-| `LOCAL_STORAGE_DIR` | 本地文件存储目录。S3 未配置时自动启用本地存储：Docker Compose 部署默认 `/data/shared-files`（命名卷），本地开发默认 `~/.nodeskclaw/shared-files` |
+| `LOCAL_STORAGE_DIR` | 本地文件存储目录。本地开发默认 `~/.nodeskclaw/shared-files`；生产 K8s 应配置 S3 兼容对象存储，或将该目录挂载到持久卷 |
 
 上传策略配置：
 
