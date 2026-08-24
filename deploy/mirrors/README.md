@@ -25,7 +25,7 @@ echo 'MIRRORS=cn' >> deploy/.env.local
 ### nodeskclaw-artifacts/build.sh
 
 ```bash
-./nodeskclaw-artifacts/build.sh openclaw --mirrors cn
+./nodeskclaw-artifacts/build.sh openclaw --mirrors cn --registry registry.example.com/deskclaw
 ```
 
 ## 变量说明

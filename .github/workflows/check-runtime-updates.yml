@@ -123,9 +123,8 @@ jobs:
             **此 PR 由 GitHub Actions 自动创建。**
 
             合并后请：
-            1. 构建新镜像：`./build.sh openclaw --version ${{ steps.latest.outputs.version }}`
+            1. 构建新镜像：`./build.sh openclaw --version ${{ steps.latest.outputs.version }} --registry <registry-root>`
             2. 运行验证：`./verify.sh <image:tag>`
             3. 在引擎版本管理中发布新版本
           labels: |
             dependencies
-

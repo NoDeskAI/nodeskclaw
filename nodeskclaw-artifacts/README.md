@@ -53,24 +53,28 @@ cd nodeskclaw-artifacts/openclaw-image
 ```bash
 cd nodeskclaw-artifacts
 
-# 一键构建推送所有引擎最新版
-./build.sh all
+# 一键构建并推送所有引擎最新版到 Hosted Registry
+./build.sh all --registry registry.example.com/deskclaw
 
 # 所有引擎仅构建
 ./build.sh all --build-only
 
-# 单引擎（自动检测最新版）
-./build.sh openclaw
-./build.sh hermes
+# 单引擎推送到 Hosted Registry（自动检测最新版）
+./build.sh openclaw --registry registry.example.com/deskclaw
 
-# 指定版本
-./build.sh openclaw --version 2026.3.13
+# 单引擎推送到 Custom Registry 的完整仓库
+./build.sh openclaw --version 2026.3.13 \
+  --repository registry.example.com/team/openclaw
 
 # 仅构建不推送
 ./build.sh openclaw --build-only
 ```
 
 脚本自动完成：版本检测 → 版本校验 → `docker build --platform linux/amd64` → 打 `v{version}` tag → 推送 → 验证。
+
+`--registry` 接受仓库根路径并自动追加 `deskclaw-{runtime}`；`--repository` 接受完整的单引擎仓库地址。推送时必须显式指定其中之一，避免镜像被误推到预设厂商仓库。仅使用 `--build-only` 时可以省略，镜像会以本地 `deskclaw-{runtime}:tag` 命名。
+
+也可以通过 `DESKCLAW_ARTIFACT_REGISTRY` 或 `DESKCLAW_ARTIFACT_REPOSITORY` 环境变量提供同样的配置。执行推送前需先对目标主机运行 `docker login`。
 
 ### 安全层镜像构建
 

@@ -5,7 +5,7 @@
 # =============================================================================
 
 ARG BASE_TAG=latest
-ARG BASE_REGISTRY=nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-openclaw
+ARG BASE_REGISTRY=deskclaw-openclaw
 
 FROM ${BASE_REGISTRY}:${BASE_TAG}
 

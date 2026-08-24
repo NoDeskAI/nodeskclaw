@@ -5,7 +5,7 @@ set -euo pipefail
 # OpenClaw 实例镜像集成验证脚本
 #
 # 用法: ./verify.sh <image:tag>
-# 示例: ./verify.sh nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-openclaw:v2026.3.28
+# 示例: ./verify.sh registry.example.com/deskclaw/deskclaw-openclaw:v2026.3.28
 #
 # 验证项:
 #   1. 容器启动不 crash

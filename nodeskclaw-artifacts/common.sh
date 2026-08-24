@@ -6,13 +6,22 @@
 
 set -e
 
-# ── OCI 镜像仓库配置 ──────────────────────────────
-REGISTRY_HOST="nodesk-center-cn-beijing.cr.volces.com"
-REGISTRY_NAMESPACE="public"
-
 registry_for() {
   local runtime="$1"
-  echo "${REGISTRY_HOST}/${REGISTRY_NAMESPACE}/deskclaw-${runtime}"
+  if [ -n "${IMAGE_REPOSITORY:-}" ]; then
+    echo "${IMAGE_REPOSITORY}"
+    return
+  fi
+  if [ -n "${REGISTRY_ROOT:-}" ]; then
+    echo "${REGISTRY_ROOT}/deskclaw-${runtime}"
+    return
+  fi
+  if [ "${BUILD_ONLY:-false}" = true ]; then
+    echo "deskclaw-${runtime}"
+    return
+  fi
+  log_error "推送镜像必须显式指定 --registry 或 --repository"
+  exit 1
 }
 
 # ── 日志 ────────────────────────────────────────
@@ -89,7 +98,8 @@ print_done() {
 }
 
 # ── 解析通用参数 ─────────────────────────────────
-# 调用后设置: VERSION, BUILD_ONLY, SKIP_VERIFY, WITH_SECURITY, BASE_TAG, MIRRORS
+# 调用后设置: VERSION, BUILD_ONLY, SKIP_VERIFY, WITH_SECURITY, BASE_TAG, MIRRORS,
+# REGISTRY_ROOT, IMAGE_REPOSITORY
 parse_common_args() {
   VERSION=""
   BUILD_ONLY=false
@@ -97,6 +107,8 @@ parse_common_args() {
   WITH_SECURITY=false
   BASE_TAG=""
   MIRRORS=""
+  REGISTRY_ROOT="${DESKCLAW_ARTIFACT_REGISTRY:-}"
+  IMAGE_REPOSITORY="${DESKCLAW_ARTIFACT_REPOSITORY:-}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -124,9 +136,25 @@ parse_common_args() {
         MIRRORS="$2"
         shift 2
         ;;
+      --registry)
+        if [ -z "${2:-}" ] || [[ "$2" == --* ]]; then
+          log_error "--registry 需要仓库根路径"
+          exit 1
+        fi
+        REGISTRY_ROOT="$2"
+        shift 2
+        ;;
+      --repository)
+        if [ -z "${2:-}" ] || [[ "$2" == --* ]]; then
+          log_error "--repository 需要完整引擎仓库地址"
+          exit 1
+        fi
+        IMAGE_REPOSITORY="$2"
+        shift 2
+        ;;
       *)
         echo "未知参数: $1"
-        echo "用法: $0 [--version <ver>] [--build-only] [--skip-verify] [--with-security] [--base-tag <tag>] [--mirrors <preset>]"
+        echo "用法: $0 [--version <ver>] [--registry <root> | --repository <repo>] [--build-only] [--skip-verify] [--with-security] [--base-tag <tag>] [--mirrors <preset>]"
         exit 1
         ;;
     esac
@@ -134,6 +162,23 @@ parse_common_args() {
 
   if [ "${WITH_SECURITY}" = true ] && [ -z "${BASE_TAG}" ]; then
     log_error "--with-security 需要 --base-tag 指定 base 镜像 tag"
+    exit 1
+  fi
+
+  if [ -n "${REGISTRY_ROOT}" ] && [ -n "${IMAGE_REPOSITORY}" ]; then
+    log_error "--registry 与 --repository 不能同时使用"
+    exit 1
+  fi
+
+  REGISTRY_ROOT="${REGISTRY_ROOT#http://}"
+  REGISTRY_ROOT="${REGISTRY_ROOT#https://}"
+  REGISTRY_ROOT="${REGISTRY_ROOT%/}"
+  IMAGE_REPOSITORY="${IMAGE_REPOSITORY#http://}"
+  IMAGE_REPOSITORY="${IMAGE_REPOSITORY#https://}"
+  IMAGE_REPOSITORY="${IMAGE_REPOSITORY%/}"
+
+  if [[ "$REGISTRY_ROOT" == *" "* || "$REGISTRY_ROOT" == *"@"* || "$IMAGE_REPOSITORY" == *" "* || "$IMAGE_REPOSITORY" == *"@"* ]]; then
+    log_error "镜像仓库地址格式无效"
     exit 1
   fi
 }

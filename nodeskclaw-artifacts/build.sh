@@ -2,18 +2,17 @@
 # build.sh — DeskClaw 统一镜像构建入口
 #
 # 用法:
-#   ./build.sh <engine> [--version <ver>] [--build-only] [--skip-verify]
+#   ./build.sh <engine> [--version <ver>] [--registry <root> | --repository <repo>] [--build-only] [--skip-verify]
 #   ./build.sh <engine> --with-security --base-tag <tag> [--build-only]
 #   ./build.sh all [--build-only] [--skip-verify]
 #
 # 省略 --version 时自动检测各引擎最新稳定版（openclaw→npm, hermes→GitHub）
 #
 # 示例:
-#   ./build.sh all                                    # 所有引擎最新版，构建并推送
-#   ./build.sh all --build-only                       # 所有引擎最新版，仅构建
-#   ./build.sh openclaw                               # 自动检测最新 OpenClaw
-#   ./build.sh hermes                                 # 使用 Hermes 官方 release tag
-#   ./build.sh openclaw --with-security --base-tag v2026.3.13
+#   ./build.sh all --registry registry.example.com/deskclaw
+#   ./build.sh all --build-only
+#   ./build.sh openclaw --repository registry.example.com/team/openclaw
+#   ./build.sh openclaw --with-security --base-tag v2026.3.13 --build-only
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -46,13 +45,17 @@ PY
 
 ENGINE="$1"; shift || true
 if [ -z "${ENGINE}" ]; then
-  log_error "用法: ./build.sh <engine> [--version <ver>] [--build-only] [--skip-verify]"
+  log_error "用法: ./build.sh <engine> [--version <ver>] [--registry <root> | --repository <repo>] [--build-only] [--skip-verify]"
   log_info "可用引擎: openclaw, hermes, all"
   exit 1
 fi
 
 # ── all 模式: 依次构建所有引擎 ────────────────────────
 if [ "${ENGINE}" = "all" ]; then
+  if printf '%s\n' "$@" | grep -qx -- '--repository'; then
+    log_error "all 模式不支持 --repository，请使用 --registry"
+    exit 1
+  fi
   FAILED=0
   for e in openclaw hermes; do
     echo ""

@@ -86,12 +86,12 @@ if [ "${UPDATE}" = true ]; then
   echo "后续步骤:"
   echo "  1. git add nodeskclaw-artifacts/openclaw-image/Dockerfile"
   echo "  2. git commit -m \"chore(openclaw): 升级 OpenClaw 至 ${LATEST}\""
-  echo "  3. cd nodeskclaw-artifacts && ./build.sh openclaw"
+  echo "  3. cd nodeskclaw-artifacts && ./build.sh openclaw --registry <registry-root>"
 else
   echo ""
   echo "如需自动更新 Dockerfile，运行:"
   echo "  $0 --update"
   echo ""
   echo "或手动构建指定版本:"
-  echo "  cd nodeskclaw-artifacts && ./build.sh openclaw --version ${LATEST}"
+  echo "  cd nodeskclaw-artifacts && ./build.sh openclaw --version ${LATEST} --registry <registry-root>"
 fi
