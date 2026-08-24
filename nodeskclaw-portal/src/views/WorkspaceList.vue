@@ -4,24 +4,55 @@ import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { Plus, Loader2, Bot } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { useClusterStore } from '@/stores/cluster'
 import { useWorkspaceStore, type WorkspaceListItem } from '@/stores/workspace'
 import WorkspaceCard from '@/components/workspace/WorkspaceCard.vue'
 import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const router = useRouter()
 const store = useWorkspaceStore()
+const clusterStore = useClusterStore()
 const { activeTemplateDeploys } = storeToRefs(store)
 const { t } = useI18n()
 
 const resumeDialogOpen = ref(false)
 const resumeDeployId = ref<string | null>(null)
 const pendingWorkspaceId = ref<string | null>(null)
+const clusterCheckComplete = ref(false)
+const clusterCheckFailed = ref(false)
+
+const isCreateDisabled = computed(
+  () => !clusterCheckFailed.value && clusterStore.clusters.length === 0,
+)
+const showCreateDisabledTooltip = computed(
+  () =>
+    clusterCheckComplete.value &&
+    !clusterCheckFailed.value &&
+    clusterStore.clusters.length === 0,
+)
 
 onMounted(() => {
   store.fetchWorkspaces()
   void store.refreshActiveTemplateDeploys()
+  void checkClusters()
 })
+
+async function checkClusters() {
+  try {
+    await clusterStore.fetchClusters()
+  } catch {
+    clusterCheckFailed.value = true
+  } finally {
+    clusterCheckComplete.value = true
+  }
+}
 
 type ActiveDeployItem = (typeof activeTemplateDeploys.value)[number]
 
@@ -65,6 +96,7 @@ function onResumeLoadError() {
 }
 
 function createNew() {
+  if (isCreateDisabled.value) return
   router.push('/workspace/create')
 }
 </script>
@@ -77,13 +109,29 @@ function createNew() {
         <h1 class="text-2xl font-bold">{{ t('workspaceList.title') }}</h1>
         <p class="text-sm text-muted-foreground mt-1">{{ t('workspaceList.subtitle') }}</p>
       </div>
-      <Button variant="unstyled" size="unstyled"
-        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        @click="createNew"
-      >
-        <Plus class="w-4 h-4" />
-        {{ t('workspaceList.createNew') }}
-      </Button>
+      <TooltipProvider>
+        <Tooltip :disabled="!showCreateDisabledTooltip">
+          <TooltipTrigger as-child>
+            <span
+              class="inline-flex"
+              :class="{ 'cursor-not-allowed': isCreateDisabled }"
+              data-testid="create-workspace-header-trigger"
+            >
+              <Button variant="unstyled" size="unstyled"
+                class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="isCreateDisabled"
+                @click="createNew"
+              >
+                <Plus class="w-4 h-4" />
+                {{ t('workspaceList.createNew') }}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {{ t('workspaceList.createRequiresCluster') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
 
     <!-- Loading -->
@@ -103,12 +151,28 @@ function createNew() {
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
         {{ t('workspaceList.emptyDescription') }}
       </p>
-      <Button variant="unstyled" size="unstyled"
-        class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        @click="createNew"
-      >
-        {{ t('workspaceList.createFirst') }}
-      </Button>
+      <TooltipProvider>
+        <Tooltip :disabled="!showCreateDisabledTooltip">
+          <TooltipTrigger as-child>
+            <span
+              class="inline-flex mt-4"
+              :class="{ 'cursor-not-allowed': isCreateDisabled }"
+              data-testid="create-workspace-empty-trigger"
+            >
+              <Button variant="unstyled" size="unstyled"
+                class="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="isCreateDisabled"
+                @click="createNew"
+              >
+                {{ t('workspaceList.createFirst') }}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {{ t('workspaceList.createRequiresCluster') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
 
     <!-- Grid -->
