@@ -71,6 +71,9 @@ init_hosted_registry() {
   [[ -n "$username" ]] || { err "HOSTED_REGISTRY_USERNAME 未配置"; exit 1; }
   [[ -n "$password" ]] || { err "HOSTED_REGISTRY_PASSWORD 未配置"; exit 1; }
   [[ -n "$tls_secret" ]] || { err "HOSTED_REGISTRY_TLS_SECRET 未配置"; exit 1; }
+  [[ "$registry_url" =~ ^[a-zA-Z0-9.-]+(/[a-zA-Z0-9._/-]+)?$ ]] \
+    || { err "HOSTED_REGISTRY_URL 格式无效"; exit 1; }
+  [[ "$registry_url" != *"//"* ]] || { err "HOSTED_REGISTRY_URL 格式无效"; exit 1; }
   [[ "$registry_host" =~ ^[a-zA-Z0-9.-]+$ ]] || { err "Hosted Registry 域名格式无效"; exit 1; }
   [[ "$username" =~ ^[a-zA-Z0-9._-]+$ ]] || { err "Hosted Registry 用户名格式无效"; exit 1; }
   [[ "$tls_secret" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || { err "Hosted Registry TLS Secret 名称格式无效"; exit 1; }
@@ -110,6 +113,7 @@ init_hosted_registry() {
   fi
 
   $KUBECTL -n "$NAMESPACE" apply -f "$HOSTED_REGISTRY_MANIFEST_FILE"
+  $KUBECTL -n "$NAMESPACE" rollout restart deployment/nodeskclaw-hosted-registry
   $KUBECTL -n "$NAMESPACE" rollout status deployment/nodeskclaw-hosted-registry --timeout=180s
   rm -f "$HOSTED_REGISTRY_HTPASSWD_FILE" "$HOSTED_REGISTRY_MANIFEST_FILE"
   HOSTED_REGISTRY_HTPASSWD_FILE=""

@@ -130,6 +130,8 @@ HOSTED_REGISTRY_INGRESS_CLASS=nginx
 
 初始化会创建单副本 OCI Distribution、PVC（持久卷）、Basic Auth（基础认证）Secret、Service 和 TLS Ingress。仓库域名必须能被构建机和所有受管 K8s 节点访问并信任其证书。脚本不推送工作引擎镜像；推送方式见 `nodeskclaw-artifacts/README.md`。
 
+对已有安装执行时，脚本会滚动重启后端，使新增的 Hosted Registry 环境配置写入尚未存在的系统配置键；已有 `registry_mode` 不会被覆盖。初始化完成后如仍显示 Custom Registry，请在 Admin 或 Portal 的镜像仓库设置中切换为团队托管仓库。
+
 若省略 `HOSTED_REGISTRY_STORAGE_CLASS`，PVC 使用集群默认 StorageClass。Hosted Registry 首期只承载工作引擎镜像，主控组件初次启动仍需要外部仓库或离线预载镜像。
 
 ## 标准流程

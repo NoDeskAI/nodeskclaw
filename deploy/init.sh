@@ -50,6 +50,11 @@ cmd_init() {
   fi
   ok "Namespace $NAMESPACE 就绪"
 
+  local backend_preexisting=false
+  if $KUBECTL -n "$NAMESPACE" get deployment nodeskclaw-backend &>/dev/null; then
+    backend_preexisting=true
+  fi
+
   local clean_env; clean_env=$(mktemp)
   trap 'rm -f "$clean_env" "${clean_env}.tmp" "${HOSTED_REGISTRY_HTPASSWD_FILE:-}" "${HOSTED_REGISTRY_MANIFEST_FILE:-}"' EXIT
 
@@ -120,6 +125,13 @@ cmd_init() {
       ok "$f"
     fi
   done
+  if [[ "$WITH_HOSTED_REGISTRY" == true && "$backend_preexisting" == true ]]; then
+    log "重启后端以加载 Hosted Registry 环境配置..."
+    $KUBECTL -n "$NAMESPACE" rollout restart deployment/nodeskclaw-backend
+    $KUBECTL -n "$NAMESPACE" rollout status deployment/nodeskclaw-backend --timeout=180s
+    ok "后端已加载 Hosted Registry 环境配置"
+    log "如系统当前仍使用 Custom Registry，请在 Admin 或 Portal 的镜像仓库设置中切换为团队托管仓库。"
+  fi
   log "Ingress 需要单独配置域名后手动 apply:"
   log "  kubectl --context $KUBE_CONTEXT -n $NAMESPACE apply -f $DEPLOY_DIR/k8s/ingress.yaml"
 
