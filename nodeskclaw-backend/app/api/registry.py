@@ -19,6 +19,6 @@ async def get_image_tags(
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ):
-    """从 Docker Registry 获取可用镜像 Tag 列表。"""
+    """从 OCI Registry 获取可用镜像 Tag 列表。"""
     tags = await list_image_tags(db, registry_url, runtime=runtime)
     return ApiResponse(data=tags)

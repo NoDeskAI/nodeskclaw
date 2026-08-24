@@ -1120,6 +1120,9 @@ async def _execute_config_update(
                         }
                     },
                     "spec": {
+                        "imagePullSecrets": (
+                            [{"name": pull_secret_name}] if pull_secret_name else []
+                        ),
                         "containers": [{
                             "name": _k8s_name(instance),
                             "image": image,
@@ -1132,10 +1135,6 @@ async def _execute_config_update(
                 },
             }
         }
-        if pull_secret_name:
-            patch_body["spec"]["template"]["spec"]["imagePullSecrets"] = [
-                {"name": pull_secret_name}
-            ]
         k_name = _k8s_name(instance)
         await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
 
