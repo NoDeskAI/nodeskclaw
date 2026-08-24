@@ -151,6 +151,15 @@ class Settings(BaseSettings):
     # ── Platform Namespace（AI 员工 Pod NetworkPolicy 允许访问的后端命名空间）──
     PLATFORM_NAMESPACE: str = _detect_platform_namespace()
 
+    # ── Hosted Registry（托管 OCI 镜像仓库）──────────────
+    REGISTRY_MODE: str = "custom"
+    HOSTED_REGISTRY_URL: str = ""
+    HOSTED_REGISTRY_USERNAME: str = ""
+    HOSTED_REGISTRY_PASSWORD: str = ""
+    HOSTED_REGISTRY_TLS_SECRET: str = ""
+    HOSTED_REGISTRY_STORAGE_CLASS: str = ""
+    HOSTED_REGISTRY_STORAGE_SIZE: str = "100Gi"
+
     # ── Gene Seed ───────────────────────────────────────
     SEED_GENES: bool = True
 

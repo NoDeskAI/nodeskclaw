@@ -8,6 +8,7 @@
 
 import logging
 import re
+from dataclasses import dataclass
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,28 +20,89 @@ from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10.0
+REGISTRY_MODES = {"custom", "hosted"}
+
+
+@dataclass(frozen=True)
+class ResolvedRegistryConfig:
+    mode: str
+    image_registry: str | None
+    username: str | None
+    password: str | None
+
+    @property
+    def credentials(self) -> tuple[str, str] | None:
+        if not self.username or not self.password:
+            return None
+        return self.username, self.password
+
+
+def normalize_registry_repository(value: str | None) -> str | None:
+    repository = (value or "").strip().rstrip("/")
+    if not repository:
+        return None
+    if "://" in repository:
+        repository = repository.split("://", 1)[1]
+    return repository.rstrip("/") or None
+
+
+async def resolve_registry_config(
+    db: AsyncSession,
+    runtime: str | None = None,
+) -> ResolvedRegistryConfig:
+    mode = (await get_config("registry_mode", db) or "custom").strip().lower()
+    if mode not in REGISTRY_MODES:
+        mode = "custom"
+
+    if mode == "hosted":
+        root = normalize_registry_repository(await get_config("hosted_registry_url", db))
+        image_registry = f"{root}/deskclaw-{runtime}" if root and runtime else root
+        return ResolvedRegistryConfig(
+            mode=mode,
+            image_registry=image_registry,
+            username=await get_config("hosted_registry_username", db),
+            password=await get_config("hosted_registry_password", db),
+        )
+
+    image_registry: str | None = None
+    if runtime:
+        spec = RUNTIME_REGISTRY.get(runtime)
+        if spec:
+            image_registry = await get_config(spec.image_registry_key, db)
+    if not image_registry:
+        image_registry = await get_config("image_registry", db)
+    return ResolvedRegistryConfig(
+        mode=mode,
+        image_registry=normalize_registry_repository(image_registry),
+        username=await get_config("registry_username", db),
+        password=await get_config("registry_password", db),
+    )
 
 
 async def resolve_image_registry(
     db: AsyncSession, runtime: str | None = None,
 ) -> str | None:
-    """Per-engine 镜像仓库解析：优先使用引擎专属配置，回退到全局 image_registry。"""
-    if runtime:
-        spec = RUNTIME_REGISTRY.get(runtime)
-        if spec and spec.image_registry_key != "image_registry":
-            per_engine = await get_config(spec.image_registry_key, db)
-            if per_engine:
-                return per_engine
-    return await get_config("image_registry", db)
+    """解析当前模式下指定引擎的完整镜像仓库地址。"""
+    return (await resolve_registry_config(db, runtime)).image_registry
 
 
-async def _get_registry_auth(db: AsyncSession) -> tuple[str, str] | None:
-    """从数据库读取镜像仓库的认证凭证，返回 (username, password)。"""
-    username = await get_config("registry_username", db)
-    password = await get_config("registry_password", db)
-    if not username or not password:
+async def ensure_registry_pull_secret(
+    k8s,
+    namespace: str,
+    config: ResolvedRegistryConfig,
+) -> str | None:
+    if not config.image_registry or not config.credentials:
         return None
-    return (username, password)
+    from app.services.k8s.resource_builder import REGISTRY_SECRET_NAME, build_registry_secret
+
+    secret = build_registry_secret(
+        namespace,
+        config.image_registry,
+        config.credentials[0],
+        config.credentials[1],
+    )
+    await k8s.create_or_skip(k8s.core.create_namespaced_secret, namespace, secret)
+    return REGISTRY_SECRET_NAME
 
 
 def _parse_www_authenticate(header: str) -> dict[str, str]:
@@ -97,8 +159,19 @@ async def list_image_tags(
     1. 先尝试直接请求（可能带 Basic Auth）
     2. 如果返回 401 且有 Www-Authenticate: Bearer，走 Token 换取流程
     """
-    if not registry_url:
-        registry_url = await resolve_image_registry(db, runtime)
+    resolved = await resolve_registry_config(db, runtime)
+    credentials = resolved.credentials
+    if registry_url:
+        registry_url = normalize_registry_repository(registry_url)
+        custom_username = await get_config("registry_username", db)
+        custom_password = await get_config("registry_password", db)
+        credentials = (
+            (custom_username, custom_password)
+            if custom_username and custom_password
+            else None
+        )
+    else:
+        registry_url = resolved.image_registry
 
     registry = (registry_url or "").strip().rstrip("/")
     if not registry:
@@ -122,8 +195,6 @@ async def list_image_tags(
         repo = "library/openclaw"
 
     tags_url = f"{base_url}/v2/{repo}/tags/list"
-    credentials = await _get_registry_auth(db)
-
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, verify=False, trust_env=False) as client:
             # 第一次请求

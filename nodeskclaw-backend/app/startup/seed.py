@@ -27,17 +27,23 @@ async def run_seed(
     return {"ce_admin": ce_creds, "ee_admin": ee_creds}
 
 
-DEFAULT_REGISTRY_CONFIGS: dict[str, str] = {
-    "image_registry": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-openclaw",
-    "image_registry_hermes": "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-hermes",
-}
+DEFAULT_REGISTRY_CONFIGS: dict[str, str] = {"registry_mode": "custom"}
 
-LEGACY_REGISTRY_CONFIGS: dict[str, tuple[str, ...]] = {
-    "image_registry_hermes": (
-        "nousresearch/hermes-agent",
-        "ghcr.io/routin/deskclaw-hermes",
-    ),
-}
+
+def _registry_seed_configs() -> dict[str, str]:
+    values = dict(DEFAULT_REGISTRY_CONFIGS)
+    mode = settings.REGISTRY_MODE.strip().lower()
+    if mode in {"custom", "hosted"}:
+        values["registry_mode"] = mode
+    environment_values = {
+        "hosted_registry_url": settings.HOSTED_REGISTRY_URL,
+        "hosted_registry_username": settings.HOSTED_REGISTRY_USERNAME,
+        "hosted_registry_password": settings.HOSTED_REGISTRY_PASSWORD,
+    }
+    for key, value in environment_values.items():
+        if value.strip():
+            values[key] = value.strip()
+    return values
 
 DEFAULT_ENGINE_VERSION_SEEDS: tuple[dict[str, str | bool | None], ...] = (
     {
@@ -59,16 +65,14 @@ async def _seed_default_registry_configs(
 ) -> None:
     """Seed default image registry URLs so tag listing works out-of-the-box.
 
-    Only inserts when a key does NOT exist at all.  If the admin deliberately
-    cleared a value (row exists, value=None), we leave it untouched. Legacy
-    placeholder values are upgraded to the current runtime-specific defaults.
+    Only inserts when a key does NOT exist at all. If the admin deliberately
+    cleared a value (row exists, value=None), we leave it untouched.
     """
     from app.models.system_config import SystemConfig
 
     async with session_factory() as db:
         seeded = 0
-        upgraded = 0
-        for key, default_value in DEFAULT_REGISTRY_CONFIGS.items():
+        for key, default_value in _registry_seed_configs().items():
             row = (await db.execute(
                 select(SystemConfig).where(
                     SystemConfig.key == key,
@@ -80,17 +84,9 @@ async def _seed_default_registry_configs(
                 seeded += 1
                 continue
 
-            legacy_values = LEGACY_REGISTRY_CONFIGS.get(key, ())
-            if row.value in legacy_values:
-                row.value = default_value
-                upgraded += 1
-        if seeded or upgraded:
+        if seeded:
             await db.commit()
-            logger.info(
-                "种子数据：已内置 %d 条默认镜像仓库配置，升级 %d 条遗留镜像仓库配置",
-                seeded,
-                upgraded,
-            )
+            logger.info("种子数据：已写入 %d 条镜像仓库模式配置", seeded)
 
 
 async def _seed_initial_admin(

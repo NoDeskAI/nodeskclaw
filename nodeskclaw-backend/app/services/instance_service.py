@@ -1094,10 +1094,22 @@ async def _execute_config_update(
         from app.services.runtime.registries.compute_registry import require_k8s_client
         k8s = await require_k8s_client(cluster)
 
-        from app.services.registry_service import resolve_image_registry
+        from app.core.exceptions import RegistryError
+        from app.services.registry_service import (
+            ensure_registry_pull_secret,
+            resolve_registry_config,
+        )
 
-        image_registry = await resolve_image_registry(db, instance.runtime) or "openclaw"
+        registry_config = await resolve_registry_config(db, instance.runtime)
+        image_registry = registry_config.image_registry
+        if not image_registry:
+            raise RegistryError("镜像仓库未配置")
         image = f"{image_registry}:{instance.image_version}"
+        pull_secret_name = await ensure_registry_pull_secret(
+            k8s,
+            instance.namespace,
+            registry_config,
+        )
         patch_body = {
             "spec": {
                 "replicas": instance.replicas,
@@ -1120,6 +1132,10 @@ async def _execute_config_update(
                 },
             }
         }
+        if pull_secret_name:
+            patch_body["spec"]["template"]["spec"]["imagePullSecrets"] = [
+                {"name": pull_secret_name}
+            ]
         k_name = _k8s_name(instance)
         await k8s.apps.patch_namespaced_deployment(k_name, instance.namespace, patch_body)
 

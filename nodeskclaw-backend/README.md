@@ -198,19 +198,23 @@ API 路由同时挂载在两个前缀下：
 | `/api/v1/orgs/{org_id}/audit-logs` | 操作审计 | 审计日志分页查询（筛选：action/target_type/from_time/to_time） |
 | `/api/v1/orgs/{org_id}/audit-logs/export` | 操作审计 | 审计日志导出（CSV/JSON，最多 50000 条） |
 
-### Per-engine 镜像仓库配置
+### Hosted / Custom 镜像仓库配置
 
-不同 AI 工作引擎可配置独立的镜像仓库地址（存储在 `SystemConfig` 表）：
+系统支持两种 OCI Registry（OCI 镜像仓库）模式，配置存储在 `SystemConfig` 表：
 
-| 配置键 | 引擎 | 说明 |
+| 配置键 | 模式 | 说明 |
 |--------|------|------|
-| `image_registry` | OpenClaw | 全局默认，向后兼容 |
+| `registry_mode` | 全局 | `custom` 或 `hosted`，默认 `custom` |
+| `image_registry` / `image_registry_{runtime}` | custom | 自定义仓库的完整引擎仓库地址 |
+| `registry_username` / `registry_password` | custom | 自定义仓库凭证 |
+| `hosted_registry_url` | hosted | 托管仓库根地址，运行时自动追加 `deskclaw-{runtime}` |
+| `hosted_registry_username` / `hosted_registry_password` | hosted | 托管仓库凭证 |
 
-- **启动时自动内置默认值**：`seed.py` 中 `_seed_default_registry_configs()` 在每次启动时幂等写入上述三个 key 的默认公共仓库地址（仅在 key 不存在时写入，不覆盖管理员修改）
-- 部署和配置更新时通过 `resolve_image_registry(db, runtime)` 自动解析
-- 未配置引擎专属仓库时回退到全局 `image_registry`
-- `GET /registry/tags?runtime=hermes` 按引擎查询对应仓库的 Tag 列表
-- Settings API 动态支持 `image_registry_{runtime_id}` 键，新增引擎自动生效
+- `resolve_registry_config(db, runtime)` 统一返回当前模式的仓库地址和凭证，实例创建、重建与升级共用同一结果。
+- `GET /registry/tags?runtime=openclaw` 按当前模式查询 Tag。
+- Settings API 动态支持 `image_registry_{runtime_id}` 键，新增引擎无需扩展白名单。
+- 新安装不再内置任何云厂商 Registry 地址；Custom 地址由管理员填写，Hosted 初始配置可通过环境变量种子写入。
+- Hosted 环境变量只在数据库键不存在时写入，不覆盖管理员后续修改。
 
 ### StorageClass 配置
 

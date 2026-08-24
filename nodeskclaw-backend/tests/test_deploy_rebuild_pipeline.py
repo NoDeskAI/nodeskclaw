@@ -143,8 +143,13 @@ async def test_execute_rebuild_pipeline_uses_current_k8s_builder_signatures(monk
         }
         return values.get(key)
 
-    async def fake_resolve_image_registry(_db, _runtime):
-        return "registry.example.com/deskclaw-hermes"
+    async def fake_resolve_registry_config(_db, _runtime):
+        return registry_service.ResolvedRegistryConfig(
+            mode="custom",
+            image_registry="registry.example.com/deskclaw-hermes",
+            username="user",
+            password="pass",
+        )
 
     published: list[dict] = []
 
@@ -168,7 +173,7 @@ async def test_execute_rebuild_pipeline_uses_current_k8s_builder_signatures(monk
 
     monkeypatch.setattr(deps, "async_session_factory", lambda: _SessionFactory(db))
     monkeypatch.setattr(config_service, "get_config", fake_get_config)
-    monkeypatch.setattr(registry_service, "resolve_image_registry", fake_resolve_image_registry)
+    monkeypatch.setattr(registry_service, "resolve_registry_config", fake_resolve_registry_config)
     monkeypatch.setattr(compute_registry, "require_k8s_client", AsyncMock(return_value=fake_k8s))
 
     await deploy_service.execute_rebuild_pipeline(_ctx())
@@ -229,8 +234,13 @@ async def test_execute_rebuild_pipeline_copies_agent_bundle_secret_refs(monkeypa
         }
         return values.get(key)
 
-    async def fake_resolve_image_registry(_db, _runtime):
-        return "registry.example.com/deskclaw-hermes"
+    async def fake_resolve_registry_config(_db, _runtime):
+        return registry_service.ResolvedRegistryConfig(
+            mode="custom",
+            image_registry="registry.example.com/deskclaw-hermes",
+            username=None,
+            password=None,
+        )
 
     monkeypatch.setattr(deploy_service.settings, "PLATFORM_NAMESPACE", "nodeskclaw-system")
     monkeypatch.setattr(deploy_service.asyncio, "sleep", AsyncMock())
@@ -253,7 +263,7 @@ async def test_execute_rebuild_pipeline_copies_agent_bundle_secret_refs(monkeypa
 
     monkeypatch.setattr(deps, "async_session_factory", lambda: _SessionFactory(db))
     monkeypatch.setattr(config_service, "get_config", fake_get_config)
-    monkeypatch.setattr(registry_service, "resolve_image_registry", fake_resolve_image_registry)
+    monkeypatch.setattr(registry_service, "resolve_registry_config", fake_resolve_registry_config)
     monkeypatch.setattr(compute_registry, "require_k8s_client", AsyncMock(return_value=fake_k8s))
 
     ctx = _ctx()

@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError, RegistryError
 
 from app.models.cluster import Cluster
 from app.models.deploy_record import DeployAction, DeployRecord, DeployStatus
@@ -1336,25 +1336,30 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
 
             # Step 5: 创建 Deployment（含镜像拉取凭据）
             _publish(5, steps[4])
-            from app.services.registry_service import resolve_image_registry
+            from app.services.registry_service import (
+                ensure_registry_pull_secret,
+                resolve_registry_config,
+            )
             from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY as _RT_REG
-            image_registry = await resolve_image_registry(db, ctx.runtime) or "openclaw"
+            registry_config = await resolve_registry_config(db, ctx.runtime)
+            image_registry = registry_config.image_registry
+            if not image_registry:
+                raise RegistryError("镜像仓库未配置")
             image = f"{image_registry}:{ctx.image_version}"
             _rt_spec = _RT_REG.get(ctx.runtime)
             gw_port = _rt_spec.gateway_port if _rt_spec else 18789
 
-            # 创建镜像仓库拉取凭据 Secret（如果配置了仓库用户名密码）
-            registry_username = await get_config("registry_username", db)
-            registry_password = await get_config("registry_password", db)
-            pull_secret_name: str | None = None
-            if registry_username and registry_password and image_registry:
-                from app.services.k8s.resource_builder import build_registry_secret, REGISTRY_SECRET_NAME
-                secret = build_registry_secret(
-                    ctx.namespace, image_registry, registry_username, registry_password,
+            pull_secret_name = await ensure_registry_pull_secret(
+                k8s,
+                ctx.namespace,
+                registry_config,
+            )
+            if pull_secret_name:
+                logger.info(
+                    "已创建镜像拉取凭据 Secret: %s/%s",
+                    ctx.namespace,
+                    pull_secret_name,
                 )
-                await k8s.create_or_skip(k8s.core.create_namespaced_secret, ctx.namespace, secret)
-                pull_secret_name = REGISTRY_SECRET_NAME
-                logger.info("已创建镜像拉取凭据 Secret: %s/%s", ctx.namespace, REGISTRY_SECRET_NAME)
 
             _liveness_path = _rt_spec.health_probe_path if _rt_spec else "/healthz"
             _readiness_path = _rt_spec.readiness_probe_path if _rt_spec else None
@@ -1805,8 +1810,14 @@ async def execute_rebuild_pipeline(ctx: _DeployContext, *, finalize_success: boo
 
             # Deployment
             _publish(5, steps[4])
-            from app.services.registry_service import resolve_image_registry
-            image_registry = await resolve_image_registry(db, ctx.runtime) or "openclaw"
+            from app.services.registry_service import (
+                ensure_registry_pull_secret,
+                resolve_registry_config,
+            )
+            registry_config = await resolve_registry_config(db, ctx.runtime)
+            image_registry = registry_config.image_registry
+            if not image_registry:
+                raise RegistryError("镜像仓库未配置")
             image = f"{image_registry}:{ctx.image_version}"
 
             from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
@@ -1815,16 +1826,11 @@ async def execute_rebuild_pipeline(ctx: _DeployContext, *, finalize_success: boo
             health_path = rt_spec.health_probe_path if rt_spec else "/healthz"
             readiness_path = rt_spec.readiness_probe_path if rt_spec else None
 
-            from app.services.k8s.resource_builder import build_registry_secret, REGISTRY_SECRET_NAME
-            registry_username = await get_config("registry_username", db)
-            registry_password = await get_config("registry_password", db)
-            pull_secret_name: str | None = None
-            if registry_username and registry_password and image_registry:
-                reg_secret = build_registry_secret(
-                    ctx.namespace, image_registry, registry_username, registry_password,
-                )
-                await k8s.create_or_skip(k8s.core.create_namespaced_secret, ctx.namespace, reg_secret)
-                pull_secret_name = REGISTRY_SECRET_NAME
+            pull_secret_name = await ensure_registry_pull_secret(
+                k8s,
+                ctx.namespace,
+                registry_config,
+            )
             deployment = build_deployment(
                 name=ctx.name, namespace=ctx.namespace, image=image,
                 replicas=ctx.replicas, labels=labels,

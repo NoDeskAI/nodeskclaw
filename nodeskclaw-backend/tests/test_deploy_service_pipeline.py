@@ -939,8 +939,15 @@ async def test_k8s_deploy_marks_success_after_post_ready_steps(monkeypatch) -> N
     async def fake_require_k8s_client(_cluster):
         return FakeK8s()
 
-    async def fake_resolve_image_registry(_db, _runtime):
-        return "example/openclaw"
+    async def fake_resolve_registry_config(_db, _runtime):
+        from app.services.registry_service import ResolvedRegistryConfig
+
+        return ResolvedRegistryConfig(
+            mode="custom",
+            image_registry="example/openclaw",
+            username=None,
+            password=None,
+        )
 
     async def fake_post_ready(_ctx, _instance, _db, **_kwargs):
         assert record.status == DeployStatus.running
@@ -950,7 +957,10 @@ async def test_k8s_deploy_marks_success_after_post_ready_steps(monkeypatch) -> N
     monkeypatch.setattr(deploy_service.asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(deploy_service, "get_deploy_adapter", lambda: FakeAdapter())
     monkeypatch.setattr("app.services.runtime.registries.compute_registry.require_k8s_client", fake_require_k8s_client)
-    monkeypatch.setattr("app.services.registry_service.resolve_image_registry", fake_resolve_image_registry)
+    monkeypatch.setattr(
+        "app.services.registry_service.resolve_registry_config",
+        fake_resolve_registry_config,
+    )
     monkeypatch.setattr(deploy_service, "_run_post_ready_instance_steps", fake_post_ready)
     monkeypatch.setattr(
         deploy_service.event_bus,

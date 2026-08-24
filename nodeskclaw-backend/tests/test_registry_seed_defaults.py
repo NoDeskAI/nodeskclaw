@@ -4,6 +4,7 @@ from app.models.system_config import SystemConfig
 from app.startup.seed import (
     DEFAULT_ENGINE_VERSION_SEEDS,
     DEFAULT_REGISTRY_CONFIGS,
+    _registry_seed_configs,
     _seed_default_registry_configs,
     seed_engine_versions,
 )
@@ -76,24 +77,9 @@ class FakeEngineVersionSession:
         self.commit_count += 1
 
 
-@pytest.mark.parametrize(
-    "legacy_value",
-    [
-        "nousresearch/hermes-agent",
-        "ghcr.io/routin/deskclaw-hermes",
-    ],
-)
 @pytest.mark.asyncio
-async def test_seed_default_registry_configs_upgrades_legacy_hermes_registry(
-    legacy_value,
-):
-    rows = {
-        "image_registry_hermes": SystemConfig(
-            key="image_registry_hermes",
-            value=legacy_value,
-        ),
-        "legacy-marker": SystemConfig(key="legacy-marker", value="keep"),
-    }
+async def test_seed_default_registry_configs_only_adds_registry_mode():
+    rows = {"legacy-marker": SystemConfig(key="legacy-marker", value="keep")}
     sessions = []
 
     def session_factory():
@@ -103,16 +89,26 @@ async def test_seed_default_registry_configs_upgrades_legacy_hermes_registry(
 
     await _seed_default_registry_configs(session_factory)
 
-    assert (
-        rows["image_registry_hermes"].value
-        == DEFAULT_REGISTRY_CONFIGS["image_registry_hermes"]
-        == "nodesk-center-cn-beijing.cr.volces.com/public/deskclaw-hermes"
-    )
-    assert rows["image_registry"].value == DEFAULT_REGISTRY_CONFIGS["image_registry"]
-    assert "image_registry_nanobot" not in DEFAULT_REGISTRY_CONFIGS
-    assert "image_registry_nanobot" not in rows
+    assert rows["registry_mode"].value == "custom"
+    assert "image_registry" not in rows
     assert rows["legacy-marker"].value == "keep"
     assert sessions[0].commit_count == 1
+
+
+def test_registry_seed_configs_reads_hosted_environment(monkeypatch):
+    from app.startup import seed
+
+    monkeypatch.setattr(seed.settings, "REGISTRY_MODE", "hosted")
+    monkeypatch.setattr(seed.settings, "HOSTED_REGISTRY_URL", "registry.example.com/deskclaw")
+    monkeypatch.setattr(seed.settings, "HOSTED_REGISTRY_USERNAME", "registry-admin")
+    monkeypatch.setattr(seed.settings, "HOSTED_REGISTRY_PASSWORD", "secret")
+
+    assert _registry_seed_configs() == {
+        "registry_mode": "hosted",
+        "hosted_registry_url": "registry.example.com/deskclaw",
+        "hosted_registry_username": "registry-admin",
+        "hosted_registry_password": "secret",
+    }
 
 
 @pytest.mark.asyncio

@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_KEYS = {
-    "image_registry", "registry_username", "registry_password",
+    "registry_mode", "image_registry", "registry_username", "registry_password",
+    "hosted_registry_url", "hosted_registry_username", "hosted_registry_password",
     "ingress_base_domain", "ingress_subdomain_suffix", "tls_secret_name",
     "ingress_tls_enabled",
     "allowed_storage_classes",
@@ -35,7 +36,7 @@ _ALLOWED_KEYS = {
     *UPLOAD_CONFIG_KEYS,
 }
 
-_SENSITIVE_KEYS = {"registry_password", "smtp_password"}
+_SENSITIVE_KEYS = {"registry_password", "hosted_registry_password", "smtp_password"}
 
 
 def _is_allowed_key(key: str) -> bool:
@@ -77,6 +78,42 @@ async def update_setting(
     """更新指定系统配置项。"""
     if not _is_allowed_key(key):
         raise BadRequestError(f"不支持的配置项: {key}", "errors.settings.unsupported_key")
+
+    if key == "registry_mode":
+        mode = (body.value or "").strip().lower()
+        if mode not in {"custom", "hosted"}:
+            raise BadRequestError(
+                "镜像仓库模式仅支持 custom 或 hosted",
+                "errors.settings.invalid_registry_mode",
+            )
+        body.value = mode
+        if mode == "hosted":
+            hosted_url = await config_service.get_config("hosted_registry_url", db)
+            hosted_username = await config_service.get_config("hosted_registry_username", db)
+            hosted_password = await config_service.get_config("hosted_registry_password", db)
+            if not hosted_url or not hosted_username or not hosted_password:
+                raise BadRequestError(
+                    "Hosted Registry 配置不完整",
+                    "errors.settings.hosted_registry_incomplete",
+                )
+
+    if key == "hosted_registry_url" or key == "image_registry" or key.startswith("image_registry_"):
+        from app.services.registry_service import normalize_registry_repository
+
+        normalized = normalize_registry_repository(body.value)
+        if normalized and any(char in normalized for char in ("?", "#", "@", " ")):
+            raise BadRequestError(
+                "镜像仓库地址格式无效",
+                "errors.settings.invalid_registry_url",
+            )
+        if normalized and "/" in normalized:
+            final_segment = normalized.rsplit("/", 1)[-1]
+            if ":" in final_segment:
+                raise BadRequestError(
+                    "镜像仓库地址不能包含 Tag",
+                    "errors.settings.invalid_registry_url",
+                )
+        body.value = normalized
 
     if key == "instance_spec_presets" and body.value is not None:
         import json as _json
