@@ -135,7 +135,7 @@ Requires a K8s cluster and an external PostgreSQL database. Images can use an ex
 | Dependency         |                                                         |
 | ------------------ | ------------------------------------------------------- |
 | Kubernetes cluster | 1.24+ with Ingress Controller (e.g. ingress-nginx)      |
-| Container registry | Existing Docker V2 registry, or storage, DNS, and TLS for Hosted Registry |
+| Container registry | Existing OCI Distribution-compatible registry, or storage, DNS, and TLS for Hosted Registry |
 | PostgreSQL         | External database (e.g. AWS RDS, GCP Cloud SQL)         |
 | kubectl            | Configured with access to your cluster                  |
 | Docker             | For building images locally                             |

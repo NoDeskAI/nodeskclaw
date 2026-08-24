@@ -126,7 +126,7 @@ DeskClaw/
 
 DeskClaw 团队版仅支持部署到 Kubernetes，主控服务与所有受管实例都运行在 K8s 上。本地开发请使用 `dev.sh`（见下方）。
 
-需要 K8s 集群、容器镜像仓库和外部 PostgreSQL 数据库。
+需要 K8s 集群和外部 PostgreSQL 数据库。工作引擎镜像可使用已有的自定义仓库，也可使用随 DeskClaw 部署的可选托管仓库。
 
 #### 前置条件
 
@@ -134,13 +134,15 @@ DeskClaw 团队版仅支持部署到 Kubernetes，主控服务与所有受管实
 | 依赖            | 说明                                            |
 | ------------- | --------------------------------------------- |
 | Kubernetes 集群 | 1.24+，需安装 Ingress Controller（如 ingress-nginx） |
-| 容器镜像仓库        | 任意 Docker V2 仓库（Docker Hub、AWS ECR、GCR 等）     |
+| 容器镜像仓库        | 已有的 OCI Distribution 兼容仓库，或托管仓库所需的存储、DNS 和 TLS |
 | PostgreSQL    | 外部数据库（如 AWS RDS、GCP Cloud SQL）                |
 | kubectl       | 已配置集群访问权限                                     |
 | Docker        | 用于本地构建镜像                                      |
 
 
 #### 1. 配置镜像仓库和集群上下文
+
+使用已有的自定义仓库：
 
 ```bash
 # 创建 deploy/.env.local（已被 .gitignore 忽略）
@@ -173,6 +175,14 @@ cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env
 # 可选临时验证 namespace：
 ./deploy/init.sh --staging --context <CTX>
 ```
+
+如需使用可选的团队托管仓库，先在 `nodeskclaw-backend/.env` 中配置 `REGISTRY_MODE=hosted` 和 `HOSTED_REGISTRY_*` 参数，再显式初始化：
+
+```bash
+./deploy/init.sh --ee --with-hosted-registry --prod --context <CTX>
+```
+
+托管仓库提供持久化 OCI 镜像存储、Basic Auth（基础认证）和 TLS Ingress（TLS 入口）。仓库域名和证书必须能被所有受管 K8s 节点访问并信任。完整参数见 [deploy/README.md](deploy/README.md)。
 
 #### 4. 发版并部署
 
