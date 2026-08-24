@@ -101,7 +101,16 @@ async def ensure_registry_pull_secret(
         config.credentials[0],
         config.credentials[1],
     )
-    await k8s.create_or_skip(k8s.core.create_namespaced_secret, namespace, secret)
+    if hasattr(k8s, "apply") and hasattr(k8s.core, "patch_namespaced_secret"):
+        await k8s.apply(
+            k8s.core.create_namespaced_secret,
+            k8s.core.patch_namespaced_secret,
+            namespace,
+            REGISTRY_SECRET_NAME,
+            secret,
+        )
+    else:
+        await k8s.create_or_skip(k8s.core.create_namespaced_secret, namespace, secret)
     return REGISTRY_SECRET_NAME
 
 

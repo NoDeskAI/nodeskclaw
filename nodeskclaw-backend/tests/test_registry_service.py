@@ -56,9 +56,13 @@ async def test_resolve_registry_config_keeps_custom_per_runtime_repository(monke
 @pytest.mark.asyncio
 async def test_ensure_registry_pull_secret_uses_resolved_credentials():
     create_secret = AsyncMock()
+    patch_secret = AsyncMock()
     k8s = SimpleNamespace(
-        core=SimpleNamespace(create_namespaced_secret=create_secret),
-        create_or_skip=AsyncMock(),
+        core=SimpleNamespace(
+            create_namespaced_secret=create_secret,
+            patch_namespaced_secret=patch_secret,
+        ),
+        apply=AsyncMock(),
     )
     config = registry_service.ResolvedRegistryConfig(
         mode="hosted",
@@ -70,10 +74,12 @@ async def test_ensure_registry_pull_secret_uses_resolved_credentials():
     secret_name = await registry_service.ensure_registry_pull_secret(k8s, "workspace-1", config)
 
     assert secret_name == "nodeskclaw-registry"
-    args = k8s.create_or_skip.await_args.args
+    args = k8s.apply.await_args.args
     assert args[0] is create_secret
-    assert args[1] == "workspace-1"
-    secret = args[2]
+    assert args[1] is patch_secret
+    assert args[2] == "workspace-1"
+    assert args[3] == "nodeskclaw-registry"
+    secret = args[4]
     assert secret.metadata.namespace == "workspace-1"
     assert secret.metadata.name == "nodeskclaw-registry"
 
