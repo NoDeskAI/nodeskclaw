@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { Plus, Loader2, Bot } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useClusterStore } from '@/stores/cluster'
 import { useWorkspaceStore, type WorkspaceListItem } from '@/stores/workspace'
 import WorkspaceCard from '@/components/workspace/WorkspaceCard.vue'
@@ -18,6 +19,7 @@ import {
 
 const router = useRouter()
 const store = useWorkspaceStore()
+const authStore = useAuthStore()
 const clusterStore = useClusterStore()
 const { activeTemplateDeploys } = storeToRefs(store)
 const { t } = useI18n()
@@ -36,6 +38,11 @@ const showCreateDisabledTooltip = computed(
     clusterCheckComplete.value &&
     !clusterCheckFailed.value &&
     clusterStore.clusters.length === 0,
+)
+const createRequiresClusterKey = computed(() =>
+  authStore.systemInfo?.edition === 'ee'
+    ? 'workspaceList.createRequiresClusterEe'
+    : 'workspaceList.createRequiresCluster',
 )
 
 onMounted(() => {
@@ -128,7 +135,7 @@ function createNew() {
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {{ t('workspaceList.createRequiresCluster') }}
+            {{ t(createRequiresClusterKey) }}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -169,7 +176,7 @@ function createNew() {
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {{ t('workspaceList.createRequiresCluster') }}
+            {{ t(createRequiresClusterKey) }}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

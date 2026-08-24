@@ -6,9 +6,16 @@ import { useClusterStore, type ClusterInfo } from '@/stores/cluster'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const routerPush = vi.fn()
+const authStoreState = vi.hoisted(() => ({
+  systemInfo: { edition: 'ee' },
+}))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => authStoreState,
 }))
 
 vi.mock('@/stores/workspace', async () => {
@@ -99,9 +106,10 @@ async function mountWorkspaceList(cluster: ClusterInfo | null) {
 describe('WorkspaceList', () => {
   beforeEach(() => {
     routerPush.mockReset()
+    authStoreState.systemInfo.edition = 'ee'
   })
 
-  it('disables both create entries and provides a tooltip when no cluster exists', async () => {
+  it('uses the Admin Console tooltip in EE when no cluster exists', async () => {
     const wrapper = await mountWorkspaceList(null)
     const headerButton = wrapper.get('[data-testid="create-workspace-header-trigger"] button')
     const emptyButton = wrapper.get('[data-testid="create-workspace-empty-trigger"] button')
@@ -109,11 +117,19 @@ describe('WorkspaceList', () => {
     expect(headerButton.attributes('disabled')).toBeDefined()
     expect(emptyButton.attributes('disabled')).toBeDefined()
     expect(wrapper.findAll('[data-testid="tooltip-content"]')).toHaveLength(2)
-    expect(wrapper.text()).toContain('workspaceList.createRequiresCluster')
+    expect(wrapper.text()).toContain('workspaceList.createRequiresClusterEe')
 
     await headerButton.trigger('click')
     await emptyButton.trigger('click')
     expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('uses the Organization Settings tooltip in CE when no cluster exists', async () => {
+    authStoreState.systemInfo.edition = 'ce'
+    const wrapper = await mountWorkspaceList(null)
+
+    expect(wrapper.text()).toContain('workspaceList.createRequiresCluster')
+    expect(wrapper.text()).not.toContain('workspaceList.createRequiresClusterEe')
   })
 
   it('enables both create entries when a cluster exists', async () => {

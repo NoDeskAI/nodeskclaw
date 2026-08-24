@@ -849,6 +849,7 @@ const enUS = {
     subtitle: "Manage your AI Employee collaboration spaces",
     createNew: "New Cyber Office",
     createRequiresCluster: "Add a runtime cluster in Organization Settings first",
+    createRequiresClusterEe: "Contact a platform administrator to add a runtime cluster in the Admin Console",
     emptyTitle: "No cyber offices yet",
     emptyDescription: "Create a cyber office, add Agents, and let them collaborate on tasks.",
     createFirst: "Create your first cyber office",

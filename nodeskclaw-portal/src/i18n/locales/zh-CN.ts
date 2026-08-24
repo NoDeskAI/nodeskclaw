@@ -849,6 +849,7 @@ const zhCN = {
     subtitle: "管理你的 AI 员工协作空间",
     createNew: "新建赛博办公室",
     createRequiresCluster: "请先前往组织设置添加运行集群",
+    createRequiresClusterEe: "请联系平台管理员在管理后台添加运行集群",
     emptyTitle: "还没有赛博办公室",
     emptyDescription: "创建一个赛博办公室，添加 AI 员工，让它们互相协作，共同完成任务",
     createFirst: "创建第一个赛博办公室",
