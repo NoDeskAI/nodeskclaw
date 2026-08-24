@@ -127,7 +127,7 @@ Full-stack internationalization covering Portal and Backend.
 
 DeskClaw Team Edition supports Kubernetes as its only product deployment target. The control plane and all managed instances run on K8s. For local development, use `dev.sh` instead (see below).
 
-Requires a K8s cluster, a container registry, and an external PostgreSQL database.
+Requires a K8s cluster and an external PostgreSQL database. Images can use an existing Custom Registry or the optional Hosted Registry deployed with DeskClaw.
 
 #### Prerequisites
 
@@ -135,13 +135,15 @@ Requires a K8s cluster, a container registry, and an external PostgreSQL databas
 | Dependency         |                                                         |
 | ------------------ | ------------------------------------------------------- |
 | Kubernetes cluster | 1.24+ with Ingress Controller (e.g. ingress-nginx)      |
-| Container registry | Any Docker V2 registry (Docker Hub, AWS ECR, GCR, etc.) |
+| Container registry | Existing Docker V2 registry, or storage, DNS, and TLS for Hosted Registry |
 | PostgreSQL         | External database (e.g. AWS RDS, GCP Cloud SQL)         |
 | kubectl            | Configured with access to your cluster                  |
 | Docker             | For building images locally                             |
 
 
 #### 1. Configure Registry & Context
+
+For an existing Custom Registry:
 
 ```bash
 # Create deploy/.env.local (git-ignored)
@@ -174,6 +176,14 @@ Creates the namespace, uploads `.env` as a K8s Secret, and applies base Deployme
 # Optional temporary validation namespace:
 ./deploy/init.sh --staging --context <CTX>
 ```
+
+For the optional Hosted Registry, first configure `REGISTRY_MODE=hosted` and the `HOSTED_REGISTRY_*` values in `nodeskclaw-backend/.env`, then initialize it explicitly:
+
+```bash
+./deploy/init.sh --ee --with-hosted-registry --prod --context <CTX>
+```
+
+Hosted Registry provides persistent OCI image storage, Basic Auth, and a TLS Ingress. Its DNS name and certificate must be reachable and trusted by every managed K8s node. See [deploy/README.md](deploy/README.md) for the complete configuration.
 
 #### 4. Release & Deploy
 

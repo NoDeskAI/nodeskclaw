@@ -159,6 +159,7 @@ class Settings(BaseSettings):
     HOSTED_REGISTRY_TLS_SECRET: str = ""
     HOSTED_REGISTRY_STORAGE_CLASS: str = ""
     HOSTED_REGISTRY_STORAGE_SIZE: str = "100Gi"
+    HOSTED_REGISTRY_INGRESS_CLASS: str = "nginx"
 
     # ── Gene Seed ───────────────────────────────────────
     SEED_GENES: bool = True

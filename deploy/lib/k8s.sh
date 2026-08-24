@@ -31,6 +31,92 @@ sys.exit(0)
 " "$current_json" "$clean_env"
 }
 
+read_env_value() {
+  local key="$1" env_file="$2"
+  awk -v key="$key" 'index($0, key "=") == 1 {print substr($0, length(key) + 2)}' "$env_file" | tail -n 1
+}
+
+generate_hosted_registry_htpasswd() {
+  local username="$1" password="$2"
+  if command -v htpasswd >/dev/null 2>&1; then
+    printf '%s\n%s\n' "$password" "$password" | htpasswd -Bni "$username"
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    err "Hosted Registry 需要 htpasswd，或可运行 Docker 的环境"
+    exit 1
+  fi
+  printf '%s\n%s\n' "$password" "$password" \
+    | docker run --rm -i --platform linux/amd64 --entrypoint htpasswd \
+        httpd:2.4-alpine -Bni "$username"
+}
+
+init_hosted_registry() {
+  local env_file="$1"
+  local registry_url username password tls_secret storage_class storage_size ingress_class
+  registry_url="$(read_env_value HOSTED_REGISTRY_URL "$env_file")"
+  username="$(read_env_value HOSTED_REGISTRY_USERNAME "$env_file")"
+  password="$(read_env_value HOSTED_REGISTRY_PASSWORD "$env_file")"
+  tls_secret="$(read_env_value HOSTED_REGISTRY_TLS_SECRET "$env_file")"
+  storage_class="$(read_env_value HOSTED_REGISTRY_STORAGE_CLASS "$env_file")"
+  storage_size="$(read_env_value HOSTED_REGISTRY_STORAGE_SIZE "$env_file")"
+  ingress_class="$(read_env_value HOSTED_REGISTRY_INGRESS_CLASS "$env_file")"
+
+  registry_url="${registry_url#http://}"
+  registry_url="${registry_url#https://}"
+  registry_url="${registry_url%/}"
+  local registry_host="${registry_url%%/*}"
+
+  [[ -n "$registry_url" ]] || { err "HOSTED_REGISTRY_URL 未配置"; exit 1; }
+  [[ -n "$username" ]] || { err "HOSTED_REGISTRY_USERNAME 未配置"; exit 1; }
+  [[ -n "$password" ]] || { err "HOSTED_REGISTRY_PASSWORD 未配置"; exit 1; }
+  [[ -n "$tls_secret" ]] || { err "HOSTED_REGISTRY_TLS_SECRET 未配置"; exit 1; }
+  [[ "$registry_host" =~ ^[a-zA-Z0-9.-]+$ ]] || { err "Hosted Registry 域名格式无效"; exit 1; }
+  [[ "$username" =~ ^[a-zA-Z0-9._-]+$ ]] || { err "Hosted Registry 用户名格式无效"; exit 1; }
+  [[ "$tls_secret" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || { err "Hosted Registry TLS Secret 名称格式无效"; exit 1; }
+
+  storage_size="${storage_size:-100Gi}"
+  ingress_class="${ingress_class:-nginx}"
+  [[ "$storage_size" =~ ^[1-9][0-9]*(Mi|Gi|Ti)$ ]] || { err "HOSTED_REGISTRY_STORAGE_SIZE 格式无效"; exit 1; }
+  [[ "$ingress_class" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || { err "Hosted Registry Ingress Class 格式无效"; exit 1; }
+  if [[ -n "$storage_class" && ! "$storage_class" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]]; then
+    err "Hosted Registry StorageClass 名称格式无效"
+    exit 1
+  fi
+
+  if ! $KUBECTL -n "$NAMESPACE" get secret "$tls_secret" >/dev/null 2>&1; then
+    err "Hosted Registry TLS Secret 不存在: $NAMESPACE/$tls_secret"
+    exit 1
+  fi
+
+  HOSTED_REGISTRY_HTPASSWD_FILE="$(mktemp)"
+  HOSTED_REGISTRY_MANIFEST_FILE="$(mktemp)"
+  generate_hosted_registry_htpasswd "$username" "$password" > "$HOSTED_REGISTRY_HTPASSWD_FILE"
+
+  $KUBECTL -n "$NAMESPACE" create secret generic nodeskclaw-hosted-registry-auth \
+    --from-file=htpasswd="$HOSTED_REGISTRY_HTPASSWD_FILE" \
+    --dry-run=client -o yaml | $KUBECTL apply -f -
+
+  sed \
+    -e "s|<HOSTED_REGISTRY_STORAGE_CLASS>|${storage_class}|g" \
+    -e "s|<HOSTED_REGISTRY_STORAGE_SIZE>|${storage_size}|g" \
+    -e "s|<HOSTED_REGISTRY_INGRESS_CLASS>|${ingress_class}|g" \
+    -e "s|<HOSTED_REGISTRY_HOST>|${registry_host}|g" \
+    -e "s|<HOSTED_REGISTRY_TLS_SECRET>|${tls_secret}|g" \
+    "$DEPLOY_DIR/k8s/hosted-registry.yaml" > "$HOSTED_REGISTRY_MANIFEST_FILE"
+  if [[ -z "$storage_class" ]]; then
+    sed -i.bak '/^[[:space:]]*storageClassName:[[:space:]]*$/d' "$HOSTED_REGISTRY_MANIFEST_FILE"
+    rm -f "${HOSTED_REGISTRY_MANIFEST_FILE}.bak"
+  fi
+
+  $KUBECTL -n "$NAMESPACE" apply -f "$HOSTED_REGISTRY_MANIFEST_FILE"
+  $KUBECTL -n "$NAMESPACE" rollout status deployment/nodeskclaw-hosted-registry --timeout=180s
+  rm -f "$HOSTED_REGISTRY_HTPASSWD_FILE" "$HOSTED_REGISTRY_MANIFEST_FILE"
+  HOSTED_REGISTRY_HTPASSWD_FILE=""
+  HOSTED_REGISTRY_MANIFEST_FILE=""
+  ok "Hosted Registry 已初始化: https://${registry_host}"
+}
+
 deploy_to_k8s() {
   local component="$1"
   local image_name; image_name="$(get_image_name "$component")"

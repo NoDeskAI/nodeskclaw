@@ -19,6 +19,7 @@ usage() {
   --prod           生产环境
   --context CTX    覆盖默认 K8s 上下文
   --env-file FILE  指定 .env 文件（默认 nodeskclaw-backend/.env）
+  --with-hosted-registry  部署 Hosted Registry（配置从 env 文件读取）
   --force          跳过 Secret 差异确认
 EOF
   exit "$exit_code"
@@ -50,7 +51,7 @@ cmd_init() {
   ok "Namespace $NAMESPACE 就绪"
 
   local clean_env; clean_env=$(mktemp)
-  trap 'rm -f "$clean_env" "${clean_env}.tmp"' EXIT
+  trap 'rm -f "$clean_env" "${clean_env}.tmp" "${HOSTED_REGISTRY_HTPASSWD_FILE:-}" "${HOSTED_REGISTRY_MANIFEST_FILE:-}"' EXIT
 
   while IFS= read -r line; do
     stripped="${line%%#*}"
@@ -70,6 +71,13 @@ cmd_init() {
   mv "${clean_env}.tmp" "$clean_env"
   echo "NODESKCLAW_EDITION=${edition_val}" >> "$clean_env"
   log "NODESKCLAW_EDITION=${edition_val}（由 --ee 标志决定）"
+
+  if [[ "$WITH_HOSTED_REGISTRY" == true ]]; then
+    grep -v '^REGISTRY_MODE=' "$clean_env" > "${clean_env}.tmp" || true
+    mv "${clean_env}.tmp" "$clean_env"
+    echo "REGISTRY_MODE=hosted" >> "$clean_env"
+    log "REGISTRY_MODE=hosted（由 --with-hosted-registry 标志决定）"
+  fi
 
   local env_count; env_count=$(wc -l < "$clean_env" | xargs)
   local secret_name="nodeskclaw-backend-env"
@@ -95,6 +103,10 @@ cmd_init() {
       --from-env-file="$clean_env" \
       --dry-run=client -o yaml | $KUBECTL apply -f -
     ok "Secret $secret_name 已创建 ($env_count 个变量)"
+  fi
+
+  if [[ "$WITH_HOSTED_REGISTRY" == true ]]; then
+    init_hosted_registry "$clean_env"
   fi
 
   log "应用 K8s 部署清单（Deployment + Service）..."
@@ -130,6 +142,9 @@ IS_PROD=false
 IS_STAGING=false
 EE_MODE=false
 CE_ONLY=true
+WITH_HOSTED_REGISTRY=false
+HOSTED_REGISTRY_HTPASSWD_FILE=""
+HOSTED_REGISTRY_MANIFEST_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -138,6 +153,7 @@ while [[ $# -gt 0 ]]; do
     --prod)        IS_PROD=true; IS_STAGING=false ;;
     --context)     require_option_value "$1" "${2:-}"; KUBE_CONTEXT="$2"; shift ;;
     --env-file)    require_option_value "$1" "${2:-}"; ENV_FILE="$2"; shift ;;
+    --with-hosted-registry) WITH_HOSTED_REGISTRY=true ;;
     --force)       FORCE=true ;;
     --help|-h)     usage 0 ;;
     *)             err "未知参数: $1"; usage 1 ;;

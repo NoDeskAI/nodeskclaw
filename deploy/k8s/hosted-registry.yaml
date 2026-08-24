@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nodeskclaw-hosted-registry-data
+  labels:
+    app: nodeskclaw-hosted-registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: <HOSTED_REGISTRY_STORAGE_CLASS>
+  resources:
+    requests:
+      storage: <HOSTED_REGISTRY_STORAGE_SIZE>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodeskclaw-hosted-registry
+  labels:
+    app: nodeskclaw-hosted-registry
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nodeskclaw-hosted-registry
+  template:
+    metadata:
+      labels:
+        app: nodeskclaw-hosted-registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:3.1.1
+          ports:
+            - name: registry
+              containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: 0.0.0.0:5000
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+            - name: REGISTRY_AUTH
+              value: htpasswd
+            - name: REGISTRY_AUTH_HTPASSWD_REALM
+              value: DeskClaw Hosted Registry
+            - name: REGISTRY_AUTH_HTPASSWD_PATH
+              value: /auth/htpasswd
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: auth
+              mountPath: /auth
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            tcpSocket:
+              port: registry
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: registry
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nodeskclaw-hosted-registry-data
+        - name: auth
+          secret:
+            secretName: nodeskclaw-hosted-registry-auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodeskclaw-hosted-registry
+  labels:
+    app: nodeskclaw-hosted-registry
+spec:
+  selector:
+    app: nodeskclaw-hosted-registry
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: registry
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nodeskclaw-hosted-registry
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
+spec:
+  ingressClassName: <HOSTED_REGISTRY_INGRESS_CLASS>
+  tls:
+    - hosts:
+        - <HOSTED_REGISTRY_HOST>
+      secretName: <HOSTED_REGISTRY_TLS_SECRET>
+  rules:
+    - host: <HOSTED_REGISTRY_HOST>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nodeskclaw-hosted-registry
+                port:
+                  name: registry

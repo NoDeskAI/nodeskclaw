@@ -11,7 +11,7 @@ deploy/
 ├── init.sh            # 初始化：Namespace、Secret、基础 Deployment/Service
 ├── lib/               # 共享函数
 ├── .env.local         # 本地部署配置（不进 git）
-├── k8s/               # K8s Deployment / Service / Ingress 清单
+├── k8s/               # K8s Deployment / Service / Ingress 清单，含可选 Hosted Registry
 └── mirrors/           # 构建镜像源预设
 ```
 
@@ -106,6 +106,31 @@ kubectl --context <CTX> -n <NS> apply -f deploy/k8s/ingress.yaml
 | `UPLOAD_PROXY_READ_TIMEOUT_SECONDS`、`UPLOAD_PROXY_SEND_TIMEOUT_SECONDS` | 需与 Ingress 读写超时和 Portal Nginx 反代超时保持一致 |
 
 如果应用上限高于网关上限，Portal 的「组织设置 > 文件上传」会展示风险提示，但实际大文件仍会被 Nginx / Ingress 先拒绝。调整大文件能力时必须同时改 `.env`、`deploy/k8s/ingress.yaml` 和 `nodeskclaw-portal/nginx.conf`。
+
+### Hosted Registry（托管仓库）
+
+需要由 DeskClaw 托管工作引擎镜像时，在后端 env 文件中配置：
+
+```bash
+REGISTRY_MODE=hosted
+HOSTED_REGISTRY_URL=registry.example.com/deskclaw
+HOSTED_REGISTRY_USERNAME=registry-admin
+HOSTED_REGISTRY_PASSWORD=<STRONG_PASSWORD>
+HOSTED_REGISTRY_TLS_SECRET=registry-example-com-tls
+HOSTED_REGISTRY_STORAGE_CLASS=<STORAGE_CLASS>
+HOSTED_REGISTRY_STORAGE_SIZE=100Gi
+HOSTED_REGISTRY_INGRESS_CLASS=nginx
+```
+
+然后显式初始化：
+
+```bash
+./deploy/init.sh --ee --with-hosted-registry --prod --context <CTX>
+```
+
+初始化会创建单副本 OCI Distribution、PVC（持久卷）、Basic Auth（基础认证）Secret、Service 和 TLS Ingress。仓库域名必须能被构建机和所有受管 K8s 节点访问并信任其证书。脚本不推送工作引擎镜像；推送方式见 `nodeskclaw-artifacts/README.md`。
+
+若省略 `HOSTED_REGISTRY_STORAGE_CLASS`，PVC 使用集群默认 StorageClass。Hosted Registry 首期只承载工作引擎镜像，主控组件初次启动仍需要外部仓库或离线预载镜像。
 
 ## 标准流程
 
