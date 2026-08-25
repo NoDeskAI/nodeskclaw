@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import hooks
 from app.core.deps import get_current_org, get_db
+from app.schemas.cluster import ClusterInfo
 from app.schemas.common import ApiResponse
 from app.schemas.image_build import ImageBuildCreate, ImageBuildInfo, ImageBuildSummary
 from app.services import image_build_service
@@ -26,6 +27,21 @@ async def list_image_builds(
         db=db,
     )
     return ApiResponse(data=[ImageBuildSummary.model_validate(build) for build in builds])
+
+
+@image_build_read_router.get(
+    "/eligible-clusters",
+    response_model=ApiResponse[list[ClusterInfo]],
+)
+async def list_image_build_clusters(
+    db: AsyncSession = Depends(get_db),
+    org_ctx=Depends(get_current_org),
+):
+    from app.services import cluster_service
+
+    _user, org = org_ctx
+    clusters = await cluster_service.list_clusters(db, org.id)
+    return ApiResponse(data=clusters)
 
 
 @image_build_read_router.get("/{build_id}", response_model=ApiResponse[ImageBuildInfo])
