@@ -86,11 +86,13 @@ def build_image_job_manifest(
     if build.runtime == "openclaw":
         build_context = "/workspace/source/nodeskclaw-artifacts/openclaw-image"
         dockerfile_dir = build_context
+        source_paths = "nodeskclaw-artifacts/openclaw-image"
         version_arg_name = "OPENCLAW_VERSION"
         version_arg_value = build.version
     else:
         build_context = "/workspace/source"
         dockerfile_dir = "/workspace/source/nodeskclaw-artifacts/hermes-image"
+        source_paths = "nodeskclaw-artifacts/hermes-image hermes-nodeskclaw-bridge"
         version_arg_name = "HERMES_VERSION"
         version_arg_value = f"v{build.version}"
 
@@ -139,13 +141,15 @@ exec buildctl-daemonless.sh build \\
   --opt platform=linux/amd64 \\
   --opt \"build-arg:$VERSION_ARG_NAME=$VERSION_ARG_VALUE\" \\
   --opt \"build-arg:IMAGE_VERSION=$IMAGE_TAG\" \\
-  \"$@\" --output \"type=image,name=$IMAGE_REFERENCE,push=true\"
+  \"$@\" --opt \"build-arg:BASE_IMAGE_REGISTRY=$BASE_IMAGE_REGISTRY\" --output \"type=image,name=$IMAGE_REFERENCE,push=true\"
 """
     source_script = """set -eu
 attempt=1
 while [ "$attempt" -le 3 ]; do
   rm -rf /workspace/source
-  if git clone --depth 1 --branch "$SOURCE_REF" -- "$SOURCE_REPOSITORY" /workspace/source; then
+  if git clone --depth 1 --filter=blob:none --sparse --branch "$SOURCE_REF" \
+      -- "$SOURCE_REPOSITORY" /workspace/source &&
+      git -C /workspace/source sparse-checkout set $SOURCE_PATHS; then
     exit 0
   fi
   if [ "$attempt" -eq 3 ]; then
@@ -194,6 +198,7 @@ done
                                     "name": "SOURCE_REPOSITORY",
                                     "value": build.source_repository,
                                 },
+                                {"name": "SOURCE_PATHS", "value": source_paths},
                                 *proxy_env,
                             ],
                             "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
@@ -218,6 +223,10 @@ done
                                 {"name": "VERSION_ARG_VALUE", "value": version_arg_value},
                                 {"name": "IMAGE_TAG", "value": build.image_tag},
                                 {"name": "IMAGE_REFERENCE", "value": build.image_reference},
+                                {
+                                    "name": "BASE_IMAGE_REGISTRY",
+                                    "value": settings.IMAGE_BUILD_BASE_IMAGE_REGISTRY,
+                                },
                                 *proxy_env,
                             ],
                             "resources": {

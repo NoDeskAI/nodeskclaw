@@ -54,11 +54,20 @@ def test_build_openclaw_manifest_uses_rootless_amd64_buildkit() -> None:
     assert pod_spec["securityContext"]["seccompProfile"]["type"] == "Unconfined"
     assert source["command"] == ["/bin/sh", "-lc"]
     assert 'while [ "$attempt" -le 3 ]' in source["args"][0]
+    assert "--filter=blob:none --sparse" in source["args"][0]
+    assert (
+        _source_env_map(manifest)["SOURCE_PATHS"]
+        == "nodeskclaw-artifacts/openclaw-image"
+    )
     assert env["BUILDKITD_FLAGS"] == "--oci-worker-no-process-sandbox"
     assert env["BUILD_CONTEXT"].endswith("nodeskclaw-artifacts/openclaw-image")
     assert env["DOCKERFILE_DIR"] == env["BUILD_CONTEXT"]
     assert env["VERSION_ARG_NAME"] == "OPENCLAW_VERSION"
     assert env["VERSION_ARG_VALUE"] == "2026.8.25"
+    assert env["BASE_IMAGE_REGISTRY"] == "docker.io/library"
+    assert "build-arg:BASE_IMAGE_REGISTRY=$BASE_IMAGE_REGISTRY" in (
+        container["args"][0]
+    )
     assert "platform=linux/amd64" in container["args"][0]
     assert any(volume["name"] == "registry-auth" for volume in pod_spec["volumes"])
 
@@ -75,6 +84,9 @@ def test_build_hermes_manifest_uses_repository_root_context() -> None:
     assert env["DOCKERFILE_DIR"].endswith("nodeskclaw-artifacts/hermes-image")
     assert env["VERSION_ARG_NAME"] == "HERMES_VERSION"
     assert env["VERSION_ARG_VALUE"] == "v2026.8.25"
+    assert _source_env_map(manifest)["SOURCE_PATHS"] == (
+        "nodeskclaw-artifacts/hermes-image hermes-nodeskclaw-bridge"
+    )
     assert all(volume["name"] != "registry-auth" for volume in pod_spec["volumes"])
 
 

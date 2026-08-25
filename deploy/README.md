@@ -134,7 +134,7 @@ HOSTED_REGISTRY_INGRESS_CLASS=nginx
 
 若省略 `HOSTED_REGISTRY_STORAGE_CLASS`，PVC 使用集群默认 StorageClass。Hosted Registry 首期只承载工作引擎镜像，主控组件初次启动仍需要外部仓库或离线预载镜像。
 
-若构建集群无法直连 GitHub、Docker Hub、npm 或 PyPI，可在后端 env 文件中配置 `IMAGE_BUILD_PROXY_URL`（镜像构建代理地址）和 `IMAGE_BUILD_NO_PROXY`（无需代理的地址）。当代理地址使用 `127.0.0.1` 时，镜像构建 Pod 会启用宿主机网络以访问节点上的代理；只应在所有可选构建节点均运行可信代理时使用。
+若构建集群无法直连 GitHub、Docker Hub、npm 或 PyPI，可在后端 env 文件中配置 `IMAGE_BUILD_PROXY_URL`（镜像构建代理地址）、`IMAGE_BUILD_NO_PROXY`（无需代理的地址）和 `IMAGE_BUILD_BASE_IMAGE_REGISTRY`（基础镜像 Registry，默认 `docker.io/library`）。当代理地址使用 `127.0.0.1` 时，镜像构建 Pod 会启用宿主机网络以访问节点上的代理；只应在所有可选构建节点均运行可信代理时使用。
 
 ## 标准流程
 

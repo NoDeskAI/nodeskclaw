@@ -6,8 +6,9 @@
 # =============================================================================
 
 ARG NODE_VERSION=22
+ARG BASE_IMAGE_REGISTRY=docker.io/library
 
-FROM node:${NODE_VERSION}-bookworm-slim
+FROM ${BASE_IMAGE_REGISTRY}/node:${NODE_VERSION}-bookworm-slim
 
 # ---------- 构建参数 ----------
 ARG OPENCLAW_VERSION=2026.4.8
