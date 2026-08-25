@@ -107,7 +107,7 @@ async function fetchRuntimeOptions() {
 
 async function fetchClusters() {
   try {
-    const res = await api.get('/clusters')
+    const res = await api.get('/image-builds/eligible-clusters')
     clusters.value = ((res.data.data ?? []) as ClusterOption[]).filter(cluster => cluster.compute_provider === 'k8s')
     if (!buildForm.value.cluster_id && clusters.value.length > 0) {
       buildForm.value.cluster_id = clusters.value[0].id
