@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     IMAGE_BUILD_MEMORY_REQUEST: str = "1Gi"
     IMAGE_BUILD_CPU_LIMIT: str = "4"
     IMAGE_BUILD_MEMORY_LIMIT: str = "8Gi"
+    IMAGE_BUILD_PROXY_URL: str = ""
+    IMAGE_BUILD_NO_PROXY: str = "127.0.0.1,localhost,.svc,.cluster.local"
 
     # ── Gene Seed ───────────────────────────────────────
     SEED_GENES: bool = True

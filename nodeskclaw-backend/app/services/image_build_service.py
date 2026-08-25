@@ -29,6 +29,23 @@ _SOURCE_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _LOG_LIMIT = 200_000
 
 
+def _build_proxy_env() -> list[dict[str, str]]:
+    proxy_url = settings.IMAGE_BUILD_PROXY_URL.strip()
+    if not proxy_url:
+        return []
+    no_proxy = settings.IMAGE_BUILD_NO_PROXY.strip()
+    values = {
+        "HTTP_PROXY": proxy_url,
+        "HTTPS_PROXY": proxy_url,
+        "http_proxy": proxy_url,
+        "https_proxy": proxy_url,
+    }
+    if no_proxy:
+        values["NO_PROXY"] = no_proxy
+        values["no_proxy"] = no_proxy
+    return [{"name": name, "value": value} for name, value in values.items()]
+
+
 def normalize_version(value: str) -> str:
     version = value.strip().removeprefix("v")
     if not _VERSION_PATTERN.fullmatch(version):
@@ -59,6 +76,7 @@ def build_image_job_manifest(
     *,
     registry_secret_name: str | None,
 ) -> dict:
+    proxy_env = _build_proxy_env()
     labels = {
         "app.kubernetes.io/name": "nodeskclaw-image-build",
         "app.kubernetes.io/managed-by": "nodeskclaw",
@@ -106,6 +124,13 @@ def build_image_job_manifest(
         )
 
     build_script = """set -eu
+set --
+[ -z "${HTTP_PROXY:-}" ] || set -- "$@" --opt "build-arg:HTTP_PROXY=$HTTP_PROXY"
+[ -z "${HTTPS_PROXY:-}" ] || set -- "$@" --opt "build-arg:HTTPS_PROXY=$HTTPS_PROXY"
+[ -z "${http_proxy:-}" ] || set -- "$@" --opt "build-arg:http_proxy=$http_proxy"
+[ -z "${https_proxy:-}" ] || set -- "$@" --opt "build-arg:https_proxy=$https_proxy"
+[ -z "${NO_PROXY:-}" ] || set -- "$@" --opt "build-arg:NO_PROXY=$NO_PROXY"
+[ -z "${no_proxy:-}" ] || set -- "$@" --opt "build-arg:no_proxy=$no_proxy"
 exec buildctl-daemonless.sh build \\
   --frontend dockerfile.v0 \\
   --local context=\"$BUILD_CONTEXT\" \\
@@ -114,7 +139,7 @@ exec buildctl-daemonless.sh build \\
   --opt platform=linux/amd64 \\
   --opt \"build-arg:$VERSION_ARG_NAME=$VERSION_ARG_VALUE\" \\
   --opt \"build-arg:IMAGE_VERSION=$IMAGE_TAG\" \\
-  --output \"type=image,name=$IMAGE_REFERENCE,push=true\"
+  \"$@\" --output \"type=image,name=$IMAGE_REFERENCE,push=true\"
 """
     source_script = """set -eu
 attempt=1
@@ -130,7 +155,7 @@ while [ "$attempt" -le 3 ]; do
   attempt=$((attempt + 1))
 done
 """
-    return {
+    manifest = {
         "apiVersion": "batch/v1",
         "kind": "Job",
         "metadata": {
@@ -169,6 +194,7 @@ done
                                     "name": "SOURCE_REPOSITORY",
                                     "value": build.source_repository,
                                 },
+                                *proxy_env,
                             ],
                             "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                         }
@@ -192,6 +218,7 @@ done
                                 {"name": "VERSION_ARG_VALUE", "value": version_arg_value},
                                 {"name": "IMAGE_TAG", "value": build.image_tag},
                                 {"name": "IMAGE_REFERENCE", "value": build.image_reference},
+                                *proxy_env,
                             ],
                             "resources": {
                                 "requests": {
@@ -211,6 +238,12 @@ done
             },
         },
     }
+    pod_spec = manifest["spec"]["template"]["spec"]
+    proxy_url = settings.IMAGE_BUILD_PROXY_URL.strip()
+    if proxy_url.startswith(("http://127.0.0.1:", "https://127.0.0.1:")):
+        pod_spec["hostNetwork"] = True
+        pod_spec["dnsPolicy"] = "ClusterFirstWithHostNet"
+    return manifest
 
 
 async def start_build(

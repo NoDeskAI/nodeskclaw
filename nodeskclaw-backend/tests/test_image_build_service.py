@@ -34,6 +34,11 @@ def _env_map(manifest: dict) -> dict[str, str]:
     return {item["name"]: item["value"] for item in env}
 
 
+def _source_env_map(manifest: dict) -> dict[str, str]:
+    env = manifest["spec"]["template"]["spec"]["initContainers"][0]["env"]
+    return {item["name"]: item["value"] for item in env}
+
+
 def test_build_openclaw_manifest_uses_rootless_amd64_buildkit() -> None:
     manifest = image_build_service.build_image_job_manifest(
         _build("openclaw"),
@@ -71,6 +76,48 @@ def test_build_hermes_manifest_uses_repository_root_context() -> None:
     assert env["VERSION_ARG_NAME"] == "HERMES_VERSION"
     assert env["VERSION_ARG_VALUE"] == "v2026.8.25"
     assert all(volume["name"] != "registry-auth" for volume in pod_spec["volumes"])
+
+
+def test_build_manifest_uses_loopback_proxy_with_host_network(monkeypatch) -> None:
+    monkeypatch.setattr(
+        image_build_service.settings,
+        "IMAGE_BUILD_PROXY_URL",
+        "http://127.0.0.1:7890",
+    )
+    monkeypatch.setattr(
+        image_build_service.settings,
+        "IMAGE_BUILD_NO_PROXY",
+        "127.0.0.1,localhost,.svc",
+    )
+
+    manifest = image_build_service.build_image_job_manifest(
+        _build("openclaw"),
+        registry_secret_name=None,
+    )
+
+    pod_spec = manifest["spec"]["template"]["spec"]
+    builder_env = _env_map(manifest)
+    source_env = _source_env_map(manifest)
+    assert pod_spec["hostNetwork"] is True
+    assert pod_spec["dnsPolicy"] == "ClusterFirstWithHostNet"
+    assert builder_env["HTTPS_PROXY"] == "http://127.0.0.1:7890"
+    assert source_env["https_proxy"] == "http://127.0.0.1:7890"
+    assert 'set -- "$@" --opt "build-arg:HTTPS_PROXY=$HTTPS_PROXY"' in (
+        pod_spec["containers"][0]["args"][0]
+    )
+
+
+def test_build_manifest_omits_host_network_without_proxy(monkeypatch) -> None:
+    monkeypatch.setattr(image_build_service.settings, "IMAGE_BUILD_PROXY_URL", "")
+
+    manifest = image_build_service.build_image_job_manifest(
+        _build("openclaw"),
+        registry_secret_name=None,
+    )
+
+    pod_spec = manifest["spec"]["template"]["spec"]
+    assert "hostNetwork" not in pod_spec
+    assert "HTTPS_PROXY" not in _env_map(manifest)
 
 
 @pytest.mark.parametrize(
