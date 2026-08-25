@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.api import image_builds as image_build_api
 from app.core.exceptions import BadRequestError
 from app.models.image_build import ImageBuild
+from app.schemas.image_build import ImageBuildCreate
 from app.services import image_build_service
 
 
@@ -40,10 +42,13 @@ def test_build_openclaw_manifest_uses_rootless_amd64_buildkit() -> None:
 
     pod_spec = manifest["spec"]["template"]["spec"]
     container = pod_spec["containers"][0]
+    source = pod_spec["initContainers"][0]
     env = _env_map(manifest)
 
     assert pod_spec["securityContext"]["runAsUser"] == 1000
     assert pod_spec["securityContext"]["seccompProfile"]["type"] == "Unconfined"
+    assert source["command"] == ["/bin/sh", "-lc"]
+    assert 'while [ "$attempt" -le 3 ]' in source["args"][0]
     assert env["BUILDKITD_FLAGS"] == "--oci-worker-no-process-sandbox"
     assert env["BUILD_CONTEXT"].endswith("nodeskclaw-artifacts/openclaw-image")
     assert env["DOCKERFILE_DIR"] == env["BUILD_CONTEXT"]
@@ -121,3 +126,31 @@ async def test_refresh_completed_build_publishes_catalog_and_captures_logs(monke
     assert refreshed.engine_version_id == "version-1"
     assert refreshed.log_text == "[Source]\nbuild complete\n\n[BuildKit]\nbuild complete"
     publish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_api_refreshes_build_before_serializing(monkeypatch) -> None:
+    build = _build()
+    now = datetime.now(timezone.utc)
+    build.created_at = now
+    build.updated_at = now
+    db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+    monkeypatch.setattr(
+        image_build_api.image_build_service,
+        "start_build",
+        AsyncMock(return_value=build),
+    )
+    monkeypatch.setattr(image_build_api.hooks, "emit", AsyncMock())
+
+    response = await image_build_api.create_image_build(
+        ImageBuildCreate(
+            runtime="openclaw",
+            version="2026.8.25",
+            cluster_id="cluster-1",
+        ),
+        db=db,
+        org_ctx=(SimpleNamespace(id="user-1"), SimpleNamespace(id="org-1")),
+    )
+
+    db.refresh.assert_awaited_once_with(build)
+    assert response.data.id == build.id

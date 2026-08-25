@@ -54,6 +54,7 @@ async def get_image_build(
     build = await image_build_service.get_build(build_id, org_id=org.id, db=db)
     build = await image_build_service.refresh_build(build, db)
     await db.commit()
+    await db.refresh(build)
     return ApiResponse(data=ImageBuildInfo.model_validate(build))
 
 
@@ -67,6 +68,7 @@ async def get_image_build_logs(
     build = await image_build_service.get_build(build_id, org_id=org.id, db=db)
     build = await image_build_service.refresh_build_logs(build, db)
     await db.commit()
+    await db.refresh(build)
     return ApiResponse(data=ImageBuildInfo.model_validate(build))
 
 
@@ -88,6 +90,7 @@ async def create_image_build(
         db=db,
     )
     await db.commit()
+    await db.refresh(build)
     await hooks.emit(
         "operation_audit",
         action="image_build.created",

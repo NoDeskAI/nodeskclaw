@@ -116,6 +116,20 @@ exec buildctl-daemonless.sh build \\
   --opt \"build-arg:IMAGE_VERSION=$IMAGE_TAG\" \\
   --output \"type=image,name=$IMAGE_REFERENCE,push=true\"
 """
+    source_script = """set -eu
+attempt=1
+while [ "$attempt" -le 3 ]; do
+  rm -rf /workspace/source
+  if git clone --depth 1 --branch "$SOURCE_REF" -- "$SOURCE_REPOSITORY" /workspace/source; then
+    exit 0
+  fi
+  if [ "$attempt" -eq 3 ]; then
+    exit 1
+  fi
+  sleep $((attempt * 5))
+  attempt=$((attempt + 1))
+done
+"""
     return {
         "apiVersion": "batch/v1",
         "kind": "Job",
@@ -147,16 +161,14 @@ exec buildctl-daemonless.sh build \\
                             "name": "source",
                             "image": settings.IMAGE_BUILD_GIT_IMAGE,
                             "imagePullPolicy": "IfNotPresent",
-                            "command": ["git"],
-                            "args": [
-                                "clone",
-                                "--depth",
-                                "1",
-                                "--branch",
-                                build.source_ref,
-                                "--",
-                                build.source_repository,
-                                "/workspace/source",
+                            "command": ["/bin/sh", "-lc"],
+                            "args": [source_script],
+                            "env": [
+                                {"name": "SOURCE_REF", "value": build.source_ref},
+                                {
+                                    "name": "SOURCE_REPOSITORY",
+                                    "value": build.source_repository,
+                                },
                             ],
                             "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                         }
