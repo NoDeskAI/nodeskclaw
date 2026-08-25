@@ -74,6 +74,7 @@ def build_registry_secret(
     registry_url: str,
     username: str,
     password: str,
+    name: str = REGISTRY_SECRET_NAME,
 ) -> V1Secret:
     """构建 Docker Registry 认证 Secret（kubernetes.io/dockerconfigjson 类型）。
 
@@ -94,7 +95,7 @@ def build_registry_secret(
     }
 
     return V1Secret(
-        metadata=V1ObjectMeta(name=REGISTRY_SECRET_NAME, namespace=namespace),
+        metadata=V1ObjectMeta(name=name, namespace=namespace),
         type="kubernetes.io/dockerconfigjson",
         data={
             ".dockerconfigjson": base64.b64encode(

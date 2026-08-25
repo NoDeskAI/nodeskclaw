@@ -47,6 +47,7 @@ from app.api.engine_versions import (
     engine_version_read_router,
     engine_version_write_router,
 )
+from app.api.image_builds import image_build_read_router, image_build_write_router
 from app.api.invitations import invite_router, invite_public_router
 from app.api.portal.instances import router as portal_instance_router
 from app.api.portal.instance_members import router as portal_instance_members_router
@@ -156,6 +157,9 @@ api_router.include_router(engine_router, prefix="/engines", tags=["工作引擎"
 api_router.include_router(engine_version_read_router, prefix="/engine-versions", tags=["引擎版本"])
 api_router.include_router(engine_version_write_router, prefix="/engine-versions", tags=["引擎版本"],
     dependencies=[Depends(require_ce_edition), Depends(require_org_admin)])
+api_router.include_router(image_build_read_router, prefix="/image-builds", tags=["镜像构建"])
+api_router.include_router(image_build_write_router, prefix="/image-builds", tags=["镜像构建"],
+    dependencies=[Depends(require_ce_edition), Depends(require_org_admin)])
 api_router.include_router(invite_router, prefix="/orgs", tags=["邀请"])
 api_router.include_router(invite_public_router, prefix="/invite", tags=["邀请（公开）"])
 api_router.include_router(security_ws_router, tags=["安全评估"])
@@ -227,6 +231,12 @@ admin_router.include_router(engine_version_read_router, prefix="/engine-versions
     dependencies=[Depends(require_org_role("member"))])
 admin_router.include_router(engine_version_write_router, prefix="/engine-versions",
     tags=["Admin - 引擎版本(写)"],
+    dependencies=[Depends(require_org_role("admin"))])
+admin_router.include_router(image_build_read_router, prefix="/image-builds",
+    tags=["Admin - 镜像构建(读)"],
+    dependencies=[Depends(require_org_role("member"))])
+admin_router.include_router(image_build_write_router, prefix="/image-builds",
+    tags=["Admin - 镜像构建(写)"],
     dependencies=[Depends(require_org_role("admin"))])
 admin_router.include_router(tunnel_router, tags=["Admin - Agent Tunnel"],
     dependencies=[Depends(require_org_role("admin"))])

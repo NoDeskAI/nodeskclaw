@@ -37,6 +37,7 @@ class K8sClient:
         self._api = api_client
         self.core = k8s_client.CoreV1Api(api_client)
         self.apps = k8s_client.AppsV1Api(api_client)
+        self.batch = k8s_client.BatchV1Api(api_client)
         self.networking = k8s_client.NetworkingV1Api(api_client)
         self.version_api = k8s_client.VersionApi(api_client)
         self.custom = k8s_client.CustomObjectsApi(api_client)
@@ -316,6 +317,14 @@ class K8sClient:
         return await self.core.read_namespaced_pod_log(
             pod, ns, container=container, tail_lines=tail_lines
         )
+
+    # ── Job ──────────────────────────────────────────
+
+    async def create_job(self, namespace: str, body: dict):
+        return await self.batch.create_namespaced_job(namespace, body)
+
+    async def get_job(self, namespace: str, name: str):
+        return await self.batch.read_namespaced_job_status(name, namespace)
 
     async def stream_pod_logs(
         self, ns: str, pod: str, container: str | None = None, tail_lines: int = 50,

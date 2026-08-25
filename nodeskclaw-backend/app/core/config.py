@@ -161,6 +161,19 @@ class Settings(BaseSettings):
     HOSTED_REGISTRY_STORAGE_SIZE: str = "100Gi"
     HOSTED_REGISTRY_INGRESS_CLASS: str = "nginx"
 
+    # ── K8s 镜像构建 ─────────────────────────────────────
+    IMAGE_BUILD_SOURCE_REPOSITORY: str = "https://github.com/NoDeskAI/nodeskclaw.git"
+    IMAGE_BUILD_SOURCE_REF: str = "main"
+    IMAGE_BUILD_GIT_IMAGE: str = "alpine/git:v2.49.1"
+    IMAGE_BUILDER_IMAGE: str = "moby/buildkit:v0.30.0-rootless"
+    IMAGE_BUILD_NAMESPACE: str = "nodeskclaw-builds"
+    IMAGE_BUILD_TIMEOUT_SECONDS: int = 3600
+    IMAGE_BUILD_TTL_SECONDS: int = 86400
+    IMAGE_BUILD_CPU_REQUEST: str = "500m"
+    IMAGE_BUILD_MEMORY_REQUEST: str = "1Gi"
+    IMAGE_BUILD_CPU_LIMIT: str = "4"
+    IMAGE_BUILD_MEMORY_LIMIT: str = "8Gi"
+
     # ── Gene Seed ───────────────────────────────────────
     SEED_GENES: bool = True
 

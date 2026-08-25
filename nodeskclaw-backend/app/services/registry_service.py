@@ -90,28 +90,31 @@ async def ensure_registry_pull_secret(
     k8s,
     namespace: str,
     config: ResolvedRegistryConfig,
+    secret_name: str | None = None,
 ) -> str | None:
     if not config.image_registry or not config.credentials:
         return None
     from app.services.k8s.resource_builder import REGISTRY_SECRET_NAME, build_registry_secret
 
+    effective_name = secret_name or REGISTRY_SECRET_NAME
     secret = build_registry_secret(
         namespace,
         config.image_registry,
         config.credentials[0],
         config.credentials[1],
+        effective_name,
     )
     if hasattr(k8s, "apply") and hasattr(k8s.core, "patch_namespaced_secret"):
         await k8s.apply(
             k8s.core.create_namespaced_secret,
             k8s.core.patch_namespaced_secret,
             namespace,
-            REGISTRY_SECRET_NAME,
+            effective_name,
             secret,
         )
     else:
         await k8s.create_or_skip(k8s.core.create_namespaced_secret, namespace, secret)
-    return REGISTRY_SECRET_NAME
+    return effective_name
 
 
 def _parse_www_authenticate(header: str) -> dict[str, str]:

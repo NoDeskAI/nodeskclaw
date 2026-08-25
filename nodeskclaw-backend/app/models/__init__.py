@@ -28,6 +28,7 @@ from app.models.gene import (  # noqa: F401
     InstanceGene,
 )
 from app.models.idempotency_cache import IdempotencyCache  # noqa: F401
+from app.models.image_build import ImageBuild  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
 from app.models.invitation import Invitation  # noqa: F401
 from app.models.instance_template import InstanceTemplate, TemplateItem  # noqa: F401
