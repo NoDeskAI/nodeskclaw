@@ -46,6 +46,20 @@ def _build_proxy_env() -> list[dict[str, str]]:
     return [{"name": name, "value": value} for name, value in values.items()]
 
 
+def _build_mirror_env() -> list[dict[str, str]]:
+    values = {
+        "PIP_INDEX_URL": settings.IMAGE_BUILD_PIP_INDEX_URL.strip(),
+        "PIP_TRUSTED_HOST": settings.IMAGE_BUILD_PIP_TRUSTED_HOST.strip(),
+        "NPM_REGISTRY": settings.IMAGE_BUILD_NPM_REGISTRY.strip(),
+        "APT_MIRROR": settings.IMAGE_BUILD_APT_MIRROR.strip(),
+    }
+    return [
+        {"name": name, "value": value}
+        for name, value in values.items()
+        if value
+    ]
+
+
 def normalize_version(value: str) -> str:
     version = value.strip().removeprefix("v")
     if not _VERSION_PATTERN.fullmatch(version):
@@ -77,6 +91,7 @@ def build_image_job_manifest(
     registry_secret_name: str | None,
 ) -> dict:
     proxy_env = _build_proxy_env()
+    mirror_env = _build_mirror_env()
     labels = {
         "app.kubernetes.io/name": "nodeskclaw-image-build",
         "app.kubernetes.io/managed-by": "nodeskclaw",
@@ -133,6 +148,10 @@ set --
 [ -z "${https_proxy:-}" ] || set -- "$@" --opt "build-arg:https_proxy=$https_proxy"
 [ -z "${NO_PROXY:-}" ] || set -- "$@" --opt "build-arg:NO_PROXY=$NO_PROXY"
 [ -z "${no_proxy:-}" ] || set -- "$@" --opt "build-arg:no_proxy=$no_proxy"
+[ -z "${PIP_INDEX_URL:-}" ] || set -- "$@" --opt "build-arg:PIP_INDEX_URL=$PIP_INDEX_URL"
+[ -z "${PIP_TRUSTED_HOST:-}" ] || set -- "$@" --opt "build-arg:PIP_TRUSTED_HOST=$PIP_TRUSTED_HOST"
+[ -z "${NPM_REGISTRY:-}" ] || set -- "$@" --opt "build-arg:NPM_REGISTRY=$NPM_REGISTRY"
+[ -z "${APT_MIRROR:-}" ] || set -- "$@" --opt "build-arg:APT_MIRROR=$APT_MIRROR"
 exec buildctl-daemonless.sh build \\
   --frontend dockerfile.v0 \\
   --local context=\"$BUILD_CONTEXT\" \\
@@ -227,6 +246,7 @@ done
                                     "name": "BASE_IMAGE_REGISTRY",
                                     "value": settings.IMAGE_BUILD_BASE_IMAGE_REGISTRY,
                                 },
+                                *mirror_env,
                                 *proxy_env,
                             ],
                             "resources": {

@@ -176,6 +176,10 @@ class Settings(BaseSettings):
     IMAGE_BUILD_PROXY_URL: str = ""
     IMAGE_BUILD_NO_PROXY: str = "127.0.0.1,localhost,.svc,.cluster.local"
     IMAGE_BUILD_BASE_IMAGE_REGISTRY: str = "docker.io/library"
+    IMAGE_BUILD_PIP_INDEX_URL: str = ""
+    IMAGE_BUILD_PIP_TRUSTED_HOST: str = ""
+    IMAGE_BUILD_NPM_REGISTRY: str = ""
+    IMAGE_BUILD_APT_MIRROR: str = ""
 
     # ── Gene Seed ───────────────────────────────────────
     SEED_GENES: bool = True

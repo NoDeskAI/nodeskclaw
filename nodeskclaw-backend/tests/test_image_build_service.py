@@ -132,6 +132,28 @@ def test_build_manifest_omits_host_network_without_proxy(monkeypatch) -> None:
     assert "HTTPS_PROXY" not in _env_map(manifest)
 
 
+def test_build_manifest_passes_dependency_mirrors(monkeypatch) -> None:
+    mirror_values = {
+        "IMAGE_BUILD_PIP_INDEX_URL": "https://pypi.example.com/simple/",
+        "IMAGE_BUILD_PIP_TRUSTED_HOST": "pypi.example.com",
+        "IMAGE_BUILD_NPM_REGISTRY": "https://npm.example.com",
+        "IMAGE_BUILD_APT_MIRROR": "apt.example.com",
+    }
+    for name, value in mirror_values.items():
+        monkeypatch.setattr(image_build_service.settings, name, value)
+
+    manifest = image_build_service.build_image_job_manifest(
+        _build("openclaw"),
+        registry_secret_name=None,
+    )
+
+    env = _env_map(manifest)
+    script = manifest["spec"]["template"]["spec"]["containers"][0]["args"][0]
+    assert env["PIP_INDEX_URL"] == "https://pypi.example.com/simple/"
+    assert env["NPM_REGISTRY"] == "https://npm.example.com"
+    assert "build-arg:APT_MIRROR=$APT_MIRROR" in script
+
+
 @pytest.mark.parametrize(
     "value",
     ["", "../main", "feature//bad", "-bad", "bad ref", "feature/bad/"],

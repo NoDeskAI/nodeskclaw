@@ -136,6 +136,8 @@ HOSTED_REGISTRY_INGRESS_CLASS=nginx
 
 若构建集群无法直连 GitHub、Docker Hub、npm 或 PyPI，可在后端 env 文件中配置 `IMAGE_BUILD_PROXY_URL`（镜像构建代理地址）、`IMAGE_BUILD_NO_PROXY`（无需代理的地址）和 `IMAGE_BUILD_BASE_IMAGE_REGISTRY`（基础镜像 Registry，默认 `docker.io/library`）。当代理地址使用 `127.0.0.1` 时，镜像构建 Pod 会启用宿主机网络以访问节点上的代理；只应在所有可选构建节点均运行可信代理时使用。
 
+需要单独加速构建依赖时，可配置 `IMAGE_BUILD_APT_MIRROR`（APT 镜像主机）、`IMAGE_BUILD_NPM_REGISTRY`（npm 镜像地址）、`IMAGE_BUILD_PIP_INDEX_URL`（PyPI 镜像地址）和 `IMAGE_BUILD_PIP_TRUSTED_HOST`（PyPI 信任主机），其含义与 `deploy/mirrors/*.env` 保持一致。
+
 ## 标准流程
 
 本地验证：
