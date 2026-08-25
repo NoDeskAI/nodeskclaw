@@ -211,7 +211,7 @@ onMounted(() => {
                 <div class="min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium">{{ t('orgSettings.registryHostedTitle') }}</span>
-                    <Badge v-if="registryMode === 'hosted'" variant="secondary">{{ t('orgSettings.registryCurrent') }}</Badge>
+                    <Badge v-if="persistedRegistryMode === 'hosted'" variant="secondary">{{ t('orgSettings.registryCurrent') }}</Badge>
                   </div>
                   <p class="mt-1 text-xs text-muted-foreground">{{ t('orgSettings.registryHostedDescription') }}</p>
                 </div>
@@ -230,7 +230,7 @@ onMounted(() => {
                 <div class="min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium">{{ t('orgSettings.registryCustomTitle') }}</span>
-                    <Badge v-if="registryMode === 'custom'" variant="secondary">{{ t('orgSettings.registryCurrent') }}</Badge>
+                    <Badge v-if="persistedRegistryMode === 'custom'" variant="secondary">{{ t('orgSettings.registryCurrent') }}</Badge>
                   </div>
                   <p class="mt-1 text-xs text-muted-foreground">{{ t('orgSettings.registryCustomDescription') }}</p>
                 </div>
