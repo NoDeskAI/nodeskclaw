@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   K8S_DEPLOY_BACKEND_STEP_NAMES,
+  hasUsableStorageClass,
+  storageIndexToValue,
+  storageValueToIndex,
   backendStepToPortalIndex,
   buildDeployProgressStepMapping,
   buildDefaultBackendStepNames,
@@ -68,6 +71,27 @@ function t(key: string, params?: Record<string, unknown>) {
 }
 
 describe('instanceFlow', () => {
+  it('keeps storage slider indexes aligned with displayed values', () => {
+    expect(storageValueToIndex(20)).toBe(0)
+    expect(storageValueToIndex(100)).toBe(8)
+    expect(storageValueToIndex(200)).toBe(18)
+    expect(storageIndexToValue(0)).toBe(20)
+    expect(storageIndexToValue(8)).toBe(100)
+    expect(storageIndexToValue(18)).toBe(200)
+  })
+
+  it('requires the selected StorageClass to be enabled', () => {
+    const storageClasses = [
+      { name: 'disabled-storage', enabled: false },
+      { name: 'enabled-storage', enabled: true },
+    ]
+
+    expect(hasUsableStorageClass([], null)).toBe(false)
+    expect(hasUsableStorageClass(storageClasses, null)).toBe(false)
+    expect(hasUsableStorageClass(storageClasses, 'disabled-storage')).toBe(false)
+    expect(hasUsableStorageClass(storageClasses, 'enabled-storage')).toBe(true)
+  })
+
   it('builds localized default spec presets', () => {
     expect(buildDefaultSpecPresets(t)[0]).toMatchObject({
       key: 'small',

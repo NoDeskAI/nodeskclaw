@@ -22,6 +22,32 @@ export interface EngineInfo {
 
 export type Translator = (key: string, params?: Record<string, unknown>) => string
 
+export const INSTANCE_STORAGE_ANCHORS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200] as const
+
+export interface StorageClassSelection {
+  name: string
+  enabled: boolean
+}
+
+export function storageValueToIndex(value: number): number {
+  const index = INSTANCE_STORAGE_ANCHORS.indexOf(value as typeof INSTANCE_STORAGE_ANCHORS[number])
+  return index >= 0 ? index : 0
+}
+
+export function storageIndexToValue(index: number): number {
+  return INSTANCE_STORAGE_ANCHORS[index] ?? INSTANCE_STORAGE_ANCHORS[0]
+}
+
+export function hasUsableStorageClass(
+  storageClasses: StorageClassSelection[],
+  selectedStorageClass: string | null,
+): boolean {
+  return Boolean(
+    selectedStorageClass
+    && storageClasses.some(storageClass => storageClass.enabled && storageClass.name === selectedStorageClass),
+  )
+}
+
 export const K8S_DEPLOY_BACKEND_STEP_NAMES = [
   '预检',
   '创建命名空间',

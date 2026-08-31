@@ -13,7 +13,13 @@ import { useOrgStore } from '@/stores/org'
 import { useI18n } from 'vue-i18n'
 import { useEdition } from '@/composables/useFeature'
 import { getRuntimeCaps, setRuntimeEngines, type RuntimeEnginePayload } from '@/utils/runtimeCapabilities'
-import { buildDefaultSpecPresets } from '@/utils/instanceFlow'
+import {
+  INSTANCE_STORAGE_ANCHORS,
+  buildDefaultSpecPresets,
+  hasUsableStorageClass,
+  storageIndexToValue,
+  storageValueToIndex,
+} from '@/utils/instanceFlow'
 import {
   PROVIDERS, PROVIDER_LABELS, PROVIDER_DEFAULT_URLS,
   BUILTIN_PROVIDERS, ALL_KNOWN_PROVIDERS,
@@ -87,12 +93,6 @@ const slugTooLong = computed(() => fullSlug.value.length > 0 && (
   fullSlug.value.length + NS_PREFIX_BASE + orgSlugLen.value > K8S_NAME_MAX ||
   fullSlug.value.length > DEPLOY_NAME_MAX
 ))
-
-const canGoNext = computed(() =>
-  !!name.value.trim() && !nameHasEdgeSpaces.value
-  && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
-  && !!selectedImage.value && !!selectedCluster.value
-)
 
 // ── LLM config ──
 interface LlmConfigEntry {
@@ -275,7 +275,7 @@ async function handleTestKey(idx: number) {
   }
 }
 
-const storageAnchors = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
+const storageAnchors: readonly number[] = INSTANCE_STORAGE_ANCHORS
 const storageLabels = [20, 60, 100, 150, 200]
 
 interface EngineVersionItem {
@@ -307,6 +307,13 @@ const pvcAccessMode = ref<string>('ReadWriteOnce')
 
 const selectedClusterObj = computed(() => clusters.value.find(c => c.id === selectedCluster.value))
 const enabledStorageClasses = computed(() => storageClasses.value.filter(sc => sc.enabled))
+const storageReady = computed(() => hasUsableStorageClass(storageClasses.value, selectedStorageClass.value))
+
+const canGoNext = computed(() =>
+  !!name.value.trim() && !nameHasEdgeSpaces.value
+  && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
+  && !!selectedImage.value && !!selectedCluster.value && storageReady.value
+)
 
 interface SpecPreset {
   key: string
@@ -333,12 +340,9 @@ function selectSpec(key: string) {
 }
 
 const storageIndex = computed({
-  get: () => {
-    const idx = storageAnchors.indexOf(storageGi.value)
-    return idx >= 0 ? idx : 0
-  },
+  get: () => storageValueToIndex(storageGi.value),
   set: (idx: number) => {
-    storageGi.value = storageAnchors[idx] ?? storageAnchors[0]
+    storageGi.value = storageIndexToValue(idx)
   },
 })
 
@@ -577,7 +581,7 @@ const llmReady = computed(() => getLlmDeployBlockReason() === null)
 
 const canDeploy = computed(() =>
   !!name.value.trim() && !!slug.value && slugValid.value && !slugConflict.value && !slugChecking.value && !slugTooLong.value
-  && !!selectedImage.value && !!selectedCluster.value && clusters.value.length > 0 && !deploying.value
+  && !!selectedImage.value && !!selectedCluster.value && clusters.value.length > 0 && storageReady.value && !deploying.value
 )
 
 function validateLlmConfigsBeforeDeploy(): string | null {
@@ -595,6 +599,12 @@ async function handleDeploy() {
   }
   if (!selectedCluster.value || clusters.value.length === 0) {
     error.value = t('createInstance.noClusterError')
+    return
+  }
+  if (!storageReady.value) {
+    error.value = storageClasses.value.length === 0
+      ? t('engine.storageClassNone')
+      : t('engine.storageClassNoneEnabled')
     return
   }
   const llmError = validateLlmConfigsBeforeDeploy()
@@ -1059,9 +1069,9 @@ async function handleDeploy() {
               :min="0"
               :max="storageAnchors.length - 1"
               :step="1"
-              :value="storageIndex"
+              :model-value="storageIndex"
               class="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-muted"
-              @input="(e: Event) => storageIndex = Number((e.target as HTMLInputElement).value)"
+              @update:model-value="(value: string | number) => storageIndex = Number(value)"
             />
             <div class="relative h-5 text-xs text-muted-foreground">
               <span
